@@ -1,0 +1,16 @@
+version: "3.8"
+
+# Mode A: Same Machine — OpenClaw + ROS2 on the robot itself.
+# The plugin uses LocalTransport (direct DDS, no network needed).
+
+services:
+  # ROS2 stack + OpenClaw + AgenticROS plugin, all in one container
+  agenticros:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.agenticros
+    image: agenticros/plugin:latest
+    environment:
+      - AGENTICROS_TRANSPORT_MODE=local
+      - ROS_DOMAIN_ID=0
+    network_mode: host

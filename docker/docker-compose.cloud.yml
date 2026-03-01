@@ -1,0 +1,51 @@
+version: "3.8"
+
+# Mode C: Cloud-side — OpenClaw + AgenticROS plugin on a cloud VPS.
+# Connects to the robot via WebRTC through the signaling server.
+
+services:
+  # AgenticROS plugin (cloud-side, WebRTC transport)
+  agenticros:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.agenticros
+    image: agenticros/plugin:latest
+    environment:
+      - AGENTICROS_TRANSPORT_MODE=webrtc
+      - AGENTICROS_WEBRTC_SIGNALING_URL=wss://signaling-server:8443/ws
+      - AGENTICROS_WEBRTC_API_URL=https://signaling-server:8443
+      - AGENTICROS_WEBRTC_ROBOT_ID=${ROBOT_ID}
+      - AGENTICROS_WEBRTC_ROBOT_KEY=${ROBOT_KEY}
+    depends_on:
+      - signaling-server
+    networks:
+      - agenticros
+
+  # WebRTC signaling server (existing webrtc-py FastAPI server)
+  signaling-server:
+    build:
+      context: ../../webrtc-server/webrtc-py
+      dockerfile: Dockerfile
+    image: agenticros/signaling:latest
+    ports:
+      - "8443:8443"
+    environment:
+      - ROBOT_TOKEN=${ROBOT_TOKEN}
+    networks:
+      - agenticros
+
+  # TURN relay server (optional — for networks where P2P fails)
+  coturn:
+    image: coturn/coturn:latest
+    ports:
+      - "3478:3478/udp"
+      - "3478:3478/tcp"
+    environment:
+      - TURN_USERNAME=${TURN_USERNAME:-agenticros}
+      - TURN_PASSWORD=${TURN_PASSWORD:-agenticros}
+    networks:
+      - agenticros
+
+networks:
+  agenticros:
+    driver: bridge

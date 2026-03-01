@@ -1,0 +1,23 @@
+{
+  "name": "@agenticros/agenticros",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "AgenticROS OpenClaw plugin — ROS2 tools, commands, and routes for the OpenClaw gateway",
+  "openclaw": {
+    "id": "agenticros",
+    "extensions": ["./src/index.ts"]
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@agenticros/core": "workspace:*",
+    "@sinclair/typebox": "^0.34.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "typescript": "^5.7.0"
+  },
+  "author": "PlaiPin",
+  "license": "Apache-2.0"
+}

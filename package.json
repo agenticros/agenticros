@@ -1,0 +1,20 @@
+{
+  "name": "agenticros",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "AgenticROS — ROS2 integration for AI agent platforms (OpenClaw and others)",
+  "scripts": {
+    "build": "pnpm -r build",
+    "clean": "pnpm -r exec rm -rf dist tsconfig.tsbuildinfo",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.4",
+  "author": "PlaiPin",
+  "license": "Apache-2.0"
+}

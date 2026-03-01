@@ -1,0 +1,36 @@
+{
+  "name": "@agenticros/core",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "AgenticROS core — platform-agnostic ROS2 transport, types, and config",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@eclipse-zenoh/zenoh-ts": "^1.7.2",
+    "@foxglove/cdr": "^3.5.0",
+    "node-datachannel": "^0.12.0",
+    "ws": "^8.18.0",
+    "zod": "^3.24.0"
+  },
+  "optionalDependencies": {
+    "rclnodejs": "^1.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "@types/ws": "^8.5.13",
+    "typescript": "^5.7.0"
+  },
+  "author": "PlaiPin",
+  "license": "Apache-2.0"
+}
