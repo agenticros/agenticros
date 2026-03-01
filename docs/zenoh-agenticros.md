@@ -63,6 +63,19 @@ If the tap or package names differ, see [Eclipse Zenoh installation](https://zen
 
 5. **Restart the OpenClaw gateway.** The plugin will connect to the same zenohd via WebSocket and see the same keys as native clients using `tcp/7447`.
 
+**Important:** The AgenticROS plugin uses **zenoh-ts**, which connects only via **WebSocket**. In plugin config, set **Zenoh Router Endpoint** to `ws://localhost:10000` (not `tcp/localhost:7447`). Native Zenoh clients use TCP; the plugin must use the remote-api WebSocket port.
+
+## Zenoh teleop (camera in web UI)
+
+For **video in the teleop page** (`/agenticros/teleop/`):
+
+1. **Zenoh endpoint** — Must be `ws://localhost:10000` (or `ws://<router-ip>:10000`). Not `tcp/...`.
+2. **zenohd** — Running with **zenoh-plugin-remote-api** (WebSocket on port 10000). Example: `zenohd -c scripts/zenohd-rosclaw.json5`.
+3. **Robot bridge** — **zenoh-bridge-ros2dds** on the robot with `publishers: [".+"]` (or include camera topic patterns) so ROS2 camera topics are bridged to Zenoh. The example `zenoh-bridge-ros2dds-robot.json5` uses `".+"` for publishers, so camera is allowed.
+4. **Camera topic** — On the robot, a **CompressedImage** topic must be published (e.g. `/camera/image_raw/compressed` or RealSense `/camera/camera/color/image_raw/compressed`). Set **teleop.cameraTopic** or **robot.cameraTopic** in the plugin config to match your topic if it differs from the default.
+5. **Discovery** — The teleop "sources" list is built from `listTopics()` (Zenoh wildcard subscribe for ~2.5s). If no camera frames are published during that window, the list can be empty. You can set **teleop.cameraTopics** explicitly in config with `[{ "topic": "/camera/image_raw/compressed", "label": "Camera" }]` so the dropdown has an option without relying on discovery.
+6. **Restart gateway** after config changes.
+
 ## Using zenoh-bridge-ros2dds
 
 - On the **Mac**: run **zenohd only** (the router), with `zenohd-agenticros.json5`. Do not run the bridge on the Mac.
