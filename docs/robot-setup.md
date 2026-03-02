@@ -7,7 +7,7 @@ This guide gets the AgenticROS project running on your robot (Ubuntu + ROS2 + Op
 For a **new robot**, use the setup scripts after cloning the repo:
 
 ```bash
-git clone https://github.com/chrismatthieu/agenticros.git
+git clone https://github.com/agenticros/agenticros.git
 cd agenticros
 ```
 
@@ -59,7 +59,7 @@ On the robot (or on your dev machine if you’ll copy the built workspace to the
 
 ```bash
 cd ~  # or your preferred path
-git clone https://github.com/chrismatthieu/agenticros.git
+git clone https://github.com/agenticros/agenticros.git
 cd agenticros
 ```
 
