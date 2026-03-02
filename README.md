@@ -1,5 +1,7 @@
 # AgenticROS
 
+This project was inspired by ROSClaw’s hackathon prototype but built as an agent-agnostic ROS interface layer
+
 AgenticROS connects ROS2 robots to AI agent platforms so you can control and query robots via natural language. It ships with an **OpenClaw** adapter (plugin) and is structured so additional adapters for other agent platforms can be added later.
 
 ## Architecture

@@ -1,6 +1,6 @@
 # AgenticROS System Architecture
 
-AgenticROS supports three deployment modes depending on where OpenClaw runs
+AgenticROS supports four deployment modes depending on where OpenClaw runs
 relative to the robot. The AI Gateway layer and ROS2 layer remain the same
 across all modes — only the transport between them changes.
 
