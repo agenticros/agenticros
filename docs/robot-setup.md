@@ -32,15 +32,16 @@ Then start the bridges on the robot with `./scripts/run_demo_native.sh` and rest
 
 ---
 
-## Two ways to run it
+## Deployment modes
 
 | Setup | OpenClaw runs on | Robot runs | Use case |
 |-------|------------------|------------|----------|
 | **Mode A** (same machine) | The robot | ROS2 + (optional) rosbridge on localhost | Single robot, all-in-one demo |
 | **Mode B** (network) | Your laptop or server | ROS2 + rosbridge_server | Dev/testing, multi-robot |
-| **Mode D** (Zenoh) | Any | ROS2 with rmw_zenoh_cpp + Zenoh router | Zenoh-based stacks |
+| **Mode C** (cloud / remote) | Cloud or VPS | ROS2 + agenticros_agent (WebRTC node) | Remote ops, robot behind NAT |
+| **Mode D** (Zenoh) | Any | ROS2 with zenoh-bridge-ros2dds or Zenoh RMW | Zenoh-based stacks |
 
-Choose **Mode A** if OpenClaw is installed on the robot. Choose **Mode B** if OpenClaw runs on another machine and connects to the robot over the network. Choose **Mode D** if your robot uses Zenoh RMW and a Zenoh router.
+Choose **Mode A** if OpenClaw is installed on the robot. Choose **Mode B** if OpenClaw runs on another machine on the same network. Choose **Mode C** if OpenClaw is in the cloud and the robot is behind NAT (see [Architecture](architecture.md#deployment-mode-c-cloud--remote)). Choose **Mode D** if your robot uses Zenoh.
 
 ---
 
@@ -183,6 +184,10 @@ This sources the workspace and starts `rosbridge_server`. In another terminal, r
    ```
 5. Start OpenClaw and your messaging app; the plugin will connect to the robot at that URL.
 
+### If using cloud + WebRTC (Mode C)
+
+OpenClaw runs in the cloud; the robot runs the **AgenticROS Agent Node** (`agenticros_agent`) and connects via WebRTC (STUN/TURN). Setup is different from A/B/D: the robot does **not** run rosbridge or Zenoh — it runs the WebRTC agent node and talks to the cloud plugin over a data channel. For full steps, see [Deployment Mode C: Cloud / Remote](architecture.md#deployment-mode-c-cloud--remote) in the Architecture doc. Configure the plugin with **Transport mode:** `webrtc` and the appropriate signaling URL, API URL, robot ID, and key.
+
 ### If using Zenoh (Mode D)
 
 1. Run a Zenoh router (**zenohd**) with **zenoh-plugin-remote-api** so the plugin can connect. AgenticROS uses **zenoh-ts**, which connects only via **WebSocket** (e.g. `ws://localhost:10000`), not native TCP. If you only start `zenohd` with default TCP (7447), native tools like `z_sub -e tcp/127.0.0.1:7447` will see traffic but AgenticROS will not. See [Zenoh setup for AgenticROS](zenoh-agenticros.md) for a config that enables the remote-api WebSocket on port 10000.
@@ -285,6 +290,7 @@ Or with flags:
 |------|---------|
 | Mode A (OpenClaw on robot) | `--mode A` |
 | Mode B (robot on network) | `--mode B --robot-ip 192.168.1.50` |
+| Mode C (cloud + WebRTC) | `--mode C` (then set signaling/API/robot in config) |
 | Mode D (Zenoh) | `--mode D --zenoh-endpoint ws://localhost:10000` |
 | Robot namespace | `--namespace robot-uuid` (topics like `/robot-uuid/cmd_vel`) |
 | Demo with Docker (Mode B + local rosbridge) | `--docker` |
