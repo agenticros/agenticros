@@ -1,6 +1,6 @@
 # Phase 3: Teleop Web App
 
-**Pages not loading?** OpenClaw **2026.3.1** changed handler order so the Control UI runs before plugin routes; `/agenticros/` often shows the chat. Use **`/plugins/agenticros/`** (or `/api/agenticros/`) for the plugin. If you get **Unauthorized**, use the **local proxy** (port **18790**), which adds the token:
+**Pages not loading?** OpenClaw **2026.3.1** had a regression (fixed in **2026.3.2**) where the Control UI ran before plugin routes; use **`/plugins/agenticros/`** (or `/api/agenticros/`). With token auth, plugin routes require the Bearer token — use the **local proxy** (port **18790**), which adds it. See [openclaw-releases-and-plugin-routes.md](openclaw-releases-and-plugin-routes.md) for release impact.
 
 ```bash
 node scripts/agenticros-proxy.cjs 18790

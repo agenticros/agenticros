@@ -89,12 +89,13 @@ export function registerRoutes(api: OpenClawPluginApi, config: AgenticROSConfig)
     res.end(JSON.stringify(payload));
   };
 
-  // Register under /agenticros, /api/agenticros, and /plugins/agenticros. OpenClaw reserves /api/* and /plugins/* for plugins (control-ui-routing); use /api/agenticros/ or /plugins/agenticros/ when /agenticros/ shows the chat (2026.3.1+).
+  // Register under /agenticros, /api/agenticros, and /plugins/agenticros. requireAuth: false so gateway accepts routes when auth is enabled (2026.3.2+).
+  const route = (opts: { path: string; method?: string; handler: HttpRouteHandler }) => register({ ...opts, requireAuth: false });
   for (const base of ["/agenticros", "/api/agenticros", "/plugins/agenticros"]) {
-    register({ path: `${base}/`, method: "GET", handler: landingHandler });
-    register({ path: `${base}/config`, method: "GET", handler: configPageHandler });
-    register({ path: `${base}/config.js`, method: "GET", handler: configScriptHandler });
-    register({ path: `${base}/config.json`, method: "GET", handler: configJsonHandler });
+    route({ path: `${base}/`, method: "GET", handler: landingHandler });
+    route({ path: `${base}/config`, method: "GET", handler: configPageHandler });
+    route({ path: `${base}/config.js`, method: "GET", handler: configScriptHandler });
+    route({ path: `${base}/config.json`, method: "GET", handler: configJsonHandler });
   }
 
   const sendJson = (res: HttpRouteResponse, status: number, data: { success: boolean; error?: string; message?: string; configPath?: string }) => {
@@ -202,9 +203,9 @@ export function registerRoutes(api: OpenClawPluginApi, config: AgenticROSConfig)
     };
 
   for (const base of ["/agenticros", "/api/agenticros", "/plugins/agenticros"]) {
-    register({ path: `${base}/config/save`, method: "POST", handler: configSaveHandler });
-    register({ path: `${base}/config/save`, method: "PUT", handler: configSaveHandler });
-    register({ path: `${base}/config/save`, method: "GET", handler: configSaveHandler });
+    route({ path: `${base}/config/save`, method: "POST", handler: configSaveHandler });
+    route({ path: `${base}/config/save`, method: "PUT", handler: configSaveHandler });
+    route({ path: `${base}/config/save`, method: "GET", handler: configSaveHandler });
   }
 
   registerTeleopRoutes(api, config);

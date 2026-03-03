@@ -114,6 +114,8 @@ export function registerTeleopRoutes(api: OpenClawPluginApi, config: AgenticROSC
     api.logger.info("AgenticROS teleop: registerHttpRoute not available, skipping routes");
     return;
   }
+  const route = (opts: { path: string; method?: string; handler: (req: HttpRouteRequest, res: HttpRouteResponse) => void | Promise<void> }) =>
+    register({ ...opts, requireAuth: false });
 
   /** Use config from file so namespace/camera/topics apply without gateway restart; fallback to initial config. */
   function getCurrentConfig(): AgenticROSConfig {
@@ -153,10 +155,10 @@ export function registerTeleopRoutes(api: OpenClawPluginApi, config: AgenticROSC
   };
 
   for (const base of ["/agenticros", "/api/agenticros", "/plugins/agenticros"]) {
-    register({ path: `${base}/teleop/ping`, method: "GET", handler: pingHandler });
-    register({ path: `${base}/teleop/status`, method: "GET", handler: statusHandler });
-    register({ path: `${base}/teleop/reconnect`, method: "GET", handler: reconnectHandler });
-    register({ path: `${base}/teleop/reconnect`, method: "POST", handler: reconnectHandler });
+    route({ path: `${base}/teleop/ping`, method: "GET", handler: pingHandler });
+    route({ path: `${base}/teleop/status`, method: "GET", handler: statusHandler });
+    route({ path: `${base}/teleop/reconnect`, method: "GET", handler: reconnectHandler });
+    route({ path: `${base}/teleop/reconnect`, method: "POST", handler: reconnectHandler });
   }
 
   // GET .../teleop/sources — JSON list of camera topics. Always returns at least one option (default camera) when discovery is empty or transport fails.
@@ -216,7 +218,7 @@ export function registerTeleopRoutes(api: OpenClawPluginApi, config: AgenticROSC
   };
 
   for (const base of ["/agenticros", "/api/agenticros", "/plugins/agenticros"]) {
-    register({ path: `${base}/teleop/sources`, method: "GET", handler: sourcesHandler });
+    route({ path: `${base}/teleop/sources`, method: "GET", handler: sourcesHandler });
   }
 
   // GET .../teleop/camera?topic=...&type=compressed|image
@@ -367,7 +369,7 @@ export function registerTeleopRoutes(api: OpenClawPluginApi, config: AgenticROSC
   };
 
   for (const base of ["/agenticros", "/api/agenticros", "/plugins/agenticros"]) {
-    register({ path: `${base}/teleop/camera`, method: "GET", handler: cameraHandler });
+    route({ path: `${base}/teleop/camera`, method: "GET", handler: cameraHandler });
   }
 
   // Shared: publish twist and send JSON response
@@ -536,8 +538,8 @@ export function registerTeleopRoutes(api: OpenClawPluginApi, config: AgenticROSC
   };
 
   for (const base of ["/agenticros", "/api/agenticros", "/plugins/agenticros"]) {
-    register({ path: `${base}/teleop/twist`, method: "POST", handler: twistPostHandler });
-    register({ path: `${base}/teleop/twist`, method: "GET", handler: twistGetHandler });
+    route({ path: `${base}/teleop/twist`, method: "POST", handler: twistPostHandler });
+    route({ path: `${base}/teleop/twist`, method: "GET", handler: twistGetHandler });
   }
 
   // GET .../teleop/ and .../teleop/index.html
@@ -551,8 +553,8 @@ export function registerTeleopRoutes(api: OpenClawPluginApi, config: AgenticROSC
   };
 
   for (const base of ["/agenticros", "/api/agenticros", "/plugins/agenticros"]) {
-    register({ path: `${base}/teleop/`, method: "GET", handler: servePage });
-    register({ path: `${base}/teleop/index.html`, method: "GET", handler: servePage });
+    route({ path: `${base}/teleop/`, method: "GET", handler: servePage });
+    route({ path: `${base}/teleop/index.html`, method: "GET", handler: servePage });
   }
 
   api.logger.info("AgenticROS teleop routes registered (GET /agenticros/teleop/, /ping, /sources, /camera; GET/POST /twist)");
