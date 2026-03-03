@@ -22,8 +22,8 @@ export function getLandingPageHtml(): string {
   <h1>AgenticROS</h1>
   <p>ROS2 + OpenClaw — natural language control of robots.</p>
   <nav>
-    <a href="/agenticros/config">Config</a>
-    <a href="/agenticros/teleop/">Teleop</a>
+    <a href="config">Config</a>
+    <a href="teleop/">Teleop</a>
   </nav>
 </body>
 </html>`;

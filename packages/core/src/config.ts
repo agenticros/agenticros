@@ -16,7 +16,8 @@ export const AgenticROSConfigSchema = z.object({
 
   zenoh: z
     .object({
-      routerEndpoint: z.string().default("tcp/localhost:7447"),
+      /** WebSocket URL for zenoh-ts (zenoh-plugin-remote-api). Not tcp/ — use e.g. ws://localhost:10000 */
+      routerEndpoint: z.string().default("ws://localhost:10000"),
       domainId: z.number().default(0),
       /** "ros2dds" = zenoh-bridge-ros2dds key format (slashes kept). "rmw_zenoh" = rmw_zenoh key format (domain + %). */
       keyFormat: z.enum(["ros2dds", "rmw_zenoh"]).default("ros2dds"),

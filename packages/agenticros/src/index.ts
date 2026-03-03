@@ -1,5 +1,6 @@
 import type { OpenClawPluginApi } from "./plugin-api.js";
 import { parseConfig, isCdrTypeSupported } from "@agenticros/core";
+import { readAgenticROSConfigFromFile } from "./config-file.js";
 import { registerService } from "./service.js";
 import { registerTools } from "./tools/index.js";
 import { registerSafetyHook } from "./safety/validator.js";
@@ -20,7 +21,18 @@ export default {
     const imageSupported = isCdrTypeSupported("sensor_msgs/msg/CompressedImage");
     api.logger.info(`AgenticROS: Zenoh CDR Image/CompressedImage supported=${imageSupported}`);
 
-    const config = parseConfig(api.pluginConfig ?? {});
+    let config: ReturnType<typeof parseConfig>;
+    try {
+      config = readAgenticROSConfigFromFile();
+      api.logger.info("AgenticROS: using config from file (transport, namespace, etc.)");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      api.logger.warn("AgenticROS: could not read config from file: " + msg + " — using gateway pluginConfig.");
+      config = parseConfig(api.pluginConfig ?? {});
+    }
+    const mode = config.transport?.mode ?? "rosbridge";
+    const zenohEndpoint = config.zenoh?.routerEndpoint ?? "";
+    api.logger.info(`AgenticROS: transport mode=${mode}${mode === "zenoh" && zenohEndpoint ? ` endpoint=${zenohEndpoint}` : ""}`);
 
     // Register the rosbridge WebSocket connection as a managed service
     registerService(api, config);

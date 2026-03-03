@@ -53,7 +53,7 @@ User (messaging app) → OpenClaw Gateway → AgenticROS OpenClaw plugin → Cor
 
 4. **Install and test the OpenClaw plugin**
 
-   Point the OpenClaw gateway at this repo’s `packages/agenticros` (or at a built package). Configure the plugin under `plugins.entries.agenticros.config` in your OpenClaw config file. Run `./scripts/setup_gateway_plugin.sh` from the repo root to register the plugin and print next steps. **Quick test:** open `http://<gateway-host>:<port>/agenticros/config` for the plugin config UI, or `/agenticros/teleop/ping` for `{"ok":true,"agenticros":"teleop"}`.
+   Point the OpenClaw gateway at this repo’s `packages/agenticros` (or at a built package). Configure the plugin under `plugins.entries.agenticros.config` in your OpenClaw config file. Run `./scripts/setup_gateway_plugin.sh` from the repo root to register the plugin and print next steps. **Quick test:** open `http://<gateway-host>:<port>/plugins/agenticros/` for the landing page (OpenClaw 2026.3.1+ often serves the chat at `/agenticros/`; use `/plugins/agenticros/` or `/api/agenticros/`). With token auth, run `node scripts/agenticros-proxy.cjs 18790` and open `http://127.0.0.1:18790/plugins/agenticros/`. See **docs/teleop.md**.
 
 See **`docs/`** for robot setup, missions, teleop, and Docker.
 

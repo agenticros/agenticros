@@ -29,5 +29,5 @@ export type {
   TransportConfig,
 } from "./transport/types.js";
 
-export { toNamespacedTopic } from "./topic-utils.js";
+export { toNamespacedTopic, toNamespacedTopicFull } from "./topic-utils.js";
 export { isCdrTypeSupported } from "./transport/zenoh/cdr.js";

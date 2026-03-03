@@ -33,3 +33,23 @@ export function toNamespacedTopic(config: AgenticROSConfig, topic: string): stri
   const segment = normalized.replace(/^\/+/, "");
   return `/${ns}/${segment}`;
 }
+
+/**
+ * Apply robot namespace to any topic when configured (for transport subscribe/publish).
+ * Use this when the robot publishes/subscribes all topics under a namespace (e.g. Zenoh with
+ * zenoh-bridge-ros2dds or rmw_zenoh). If config.robot.namespace is set, returns /<namespace>/<topic>
+ * unless the topic already starts with /<namespace>/.
+ *
+ * Example: namespace "robot-uuid", topic "/cmd_vel" -> "/robot-uuid/cmd_vel"
+ * Example: namespace "robot-uuid", topic "/camera/camera/color/image_raw/compressed" -> "/robot-uuid/camera/camera/color/image_raw/compressed"
+ * Example: namespace "robot-uuid", topic "/robot-uuid/odom" -> "/robot-uuid/odom" (unchanged)
+ */
+export function toNamespacedTopicFull(config: AgenticROSConfig, topic: string): string {
+  const normalized = normalizeTopic(topic);
+  const ns = (config.robot?.namespace ?? "").trim();
+  if (!ns) return normalized;
+  const withoutLeading = normalized.replace(/^\/+/, "");
+  if (!withoutLeading) return normalized;
+  if (withoutLeading.startsWith(`${ns}/`) || withoutLeading === ns) return normalized;
+  return `/${ns}/${withoutLeading}`;
+}

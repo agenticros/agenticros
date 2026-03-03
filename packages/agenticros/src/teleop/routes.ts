@@ -1,7 +1,8 @@
 import type { OpenClawPluginApi, HttpRouteRequest, HttpRouteResponse } from "../plugin-api.js";
 import type { AgenticROSConfig } from "@agenticros/core";
-import { toNamespacedTopic } from "@agenticros/core";
-import { getTransport } from "../service.js";
+import { toNamespacedTopic, toNamespacedTopicFull } from "@agenticros/core";
+import { getTransport, getTransportOrNull, getTransportMode, tryReconnectFromFile } from "../service.js";
+import { readAgenticROSConfigFromFile } from "../config-file.js";
 import { getTeleopPageHtml } from "./page.js";
 
 const COMPRESSED_IMAGE_TYPE = "sensor_msgs/msg/CompressedImage";
@@ -41,7 +42,7 @@ function getDefaultCameraTopic(config: AgenticROSConfig): string {
 function getCmdVelTopic(config: AgenticROSConfig): string {
   const t = (config.teleop?.cmdVelTopic ?? "").trim();
   if (t) return t;
-  return toNamespacedTopic(config, "/cmd_vel");
+  return toNamespacedTopicFull(config, "/cmd_vel");
 }
 
 function clampTwist(
@@ -99,6 +100,9 @@ type CameraCacheState = {
   firstFrameTimeout: ReturnType<typeof setTimeout> | null;
 };
 let cameraCacheState: CameraCacheState | null = null;
+/** Throttle camera timeout logs to avoid flooding (log at most once per 15s per topic). */
+let lastCameraTimeoutLog: { topic: string; at: number } = { topic: "", at: 0 };
+const CAMERA_TIMEOUT_LOG_INTERVAL_MS = 15_000;
 
 /**
  * Register Phase 3 teleop HTTP routes (sources, camera, twist, index page).
@@ -111,28 +115,69 @@ export function registerTeleopRoutes(api: OpenClawPluginApi, config: AgenticROSC
     return;
   }
 
-  // GET /agenticros/teleop/ping — diagnostic: confirms plugin HTTP routes are mounted
-  register({
-    path: "/agenticros/teleop/ping",
-    method: "GET",
-    handler: (_req, res) => {
+  /** Use config from file so namespace/camera/topics apply without gateway restart; fallback to initial config. */
+  function getCurrentConfig(): AgenticROSConfig {
+    try {
+      return readAgenticROSConfigFromFile();
+    } catch {
+      return config;
+    }
+  }
+
+  const pingHandler = (_req: HttpRouteRequest, res: HttpRouteResponse) => {
+    res.setHeader("Content-Type", "application/json");
+    res.statusCode = 200;
+    res.end(JSON.stringify({ ok: true, agenticros: "teleop" }));
+  };
+
+  const statusHandler = (_req: HttpRouteRequest, res: HttpRouteResponse) => {
+    const t = getTransportOrNull();
+    const mode = getTransportMode();
+    const connected = t ? t.getStatus() === "connected" : false;
+    res.setHeader("Content-Type", "application/json");
+    res.statusCode = 200;
+    res.end(JSON.stringify({ mode: mode ?? "none", connected }));
+  };
+
+  const reconnectHandler = async (_req: HttpRouteRequest, res: HttpRouteResponse) => {
+    try {
+      const result = await tryReconnectFromFile(api);
       res.setHeader("Content-Type", "application/json");
       res.statusCode = 200;
-      res.end(JSON.stringify({ ok: true, agenticros: "teleop" }));
-    },
-  });
+      res.end(JSON.stringify(result));
+    } catch (e) {
+      res.setHeader("Content-Type", "application/json");
+      res.statusCode = 500;
+      res.end(JSON.stringify({ ok: false, error: e instanceof Error ? e.message : String(e) }));
+    }
+  };
 
-  // GET /agenticros/teleop/sources — JSON list of camera topics
-  register({
-    path: "/agenticros/teleop/sources",
-    method: "GET",
-    handler: async (_req, res) => {
+  for (const base of ["/agenticros", "/api/agenticros", "/plugins/agenticros"]) {
+    register({ path: `${base}/teleop/ping`, method: "GET", handler: pingHandler });
+    register({ path: `${base}/teleop/status`, method: "GET", handler: statusHandler });
+    register({ path: `${base}/teleop/reconnect`, method: "GET", handler: reconnectHandler });
+    register({ path: `${base}/teleop/reconnect`, method: "POST", handler: reconnectHandler });
+  }
+
+  // GET .../teleop/sources — JSON list of camera topics. Always returns at least one option (default camera) when discovery is empty or transport fails.
+  const sourcesHandler = async (_req: HttpRouteRequest, res: HttpRouteResponse) => {
+    const fallbackList = (): Array<{ topic: string; label?: string }> => {
       try {
-        let list: Array<{ topic: string; label?: string }>;
-        const explicit = config.teleop?.cameraTopics ?? [];
-        if (explicit.length > 0) {
-          list = explicit.map((o) => ({ topic: o.topic, label: o.label }));
-        } else {
+        const cfg = getCurrentConfig();
+        const topic = getDefaultCameraTopic(cfg);
+        return [{ topic, label: "Default camera" }];
+      } catch {
+        return [{ topic: "/camera/camera/color/image_raw/compressed", label: "Default camera" }];
+      }
+    };
+    try {
+      const currentConfig = getCurrentConfig();
+      let list: Array<{ topic: string; label?: string }>;
+      const explicit = currentConfig.teleop?.cameraTopics ?? [];
+      if (explicit.length > 0) {
+        list = explicit.map((o) => ({ topic: o.topic, label: o.label }));
+      } else {
+        try {
           const transport = getTransport();
           const topics = await transport.listTopics();
           const imageTopics = topics.filter((t) => {
@@ -142,39 +187,59 @@ export function registerTeleopRoutes(api: OpenClawPluginApi, config: AgenticROSC
             }
             return false;
           });
-          imageTopics.sort((a, b) => {
+          const compressedOnly = imageTopics.filter((t) => !/\/zstd\/?$/i.test(t.name));
+          const toList = compressedOnly.length > 0 ? compressedOnly : imageTopics;
+          toList.sort((a, b) => {
             const aCompressed = /compressed/i.test(a.name) ? 1 : 0;
             const bCompressed = /compressed/i.test(b.name) ? 1 : 0;
             return bCompressed - aCompressed;
           });
-          list = imageTopics.map((t) => ({
+          list = toList.map((t) => ({
             topic: t.name,
             label: t.name.replace(/^\//, "").replace(/\//g, " / "),
           }));
+          if (list.length === 0) list = fallbackList();
+        } catch (e) {
+          api.logger.warn("Teleop sources (discovery failed, using default): " + (e instanceof Error ? e.message : String(e)));
+          list = fallbackList();
         }
-        res.setHeader("Content-Type", "application/json");
-        res.statusCode = 200;
-        res.end(JSON.stringify(list));
-      } catch (e) {
-        api.logger.warn("Teleop sources error: " + (e instanceof Error ? e.message : String(e)));
-        res.setHeader("Content-Type", "application/json");
-        res.statusCode = 500;
-        res.end(JSON.stringify({ error: "Failed to list camera sources" }));
       }
-    },
-  });
+      res.setHeader("Content-Type", "application/json");
+      res.statusCode = 200;
+      res.end(JSON.stringify(list));
+    } catch (e) {
+      api.logger.warn("Teleop sources error: " + (e instanceof Error ? e.message : String(e)));
+      res.setHeader("Content-Type", "application/json");
+      res.statusCode = 200;
+      res.end(JSON.stringify(fallbackList()));
+    }
+  };
 
-  // GET /agenticros/teleop/camera?topic=...&type=compressed|image
-  register({
-    path: "/agenticros/teleop/camera",
-    method: "GET",
-    handler: async (req, res) => {
+  for (const base of ["/agenticros", "/api/agenticros", "/plugins/agenticros"]) {
+    register({ path: `${base}/teleop/sources`, method: "GET", handler: sourcesHandler });
+  }
+
+  // GET .../teleop/camera?topic=...&type=compressed|image
+  const cameraHandler = async (req: HttpRouteRequest, res: HttpRouteResponse) => {
+      const currentConfig = getCurrentConfig();
       const { searchParams } = parseUrl(req);
       let topic = searchParams.get("topic")?.trim();
-      if (!topic) topic = getDefaultCameraTopic(config);
+      if (topic) topic = topic.replace(/\?.*$/, "").replace(/#.*$/, "").trim();
+      if (!topic) topic = getDefaultCameraTopic(currentConfig);
+      if (topic && /\/zstd\/?$/i.test(topic)) {
+        topic = topic.replace(/\/zstd\/?$/i, "/compressed");
+      }
+      if (topic && /image_raw$/i.test(topic) && !/compressed|zstd/i.test(topic)) {
+        topic = topic.replace(/\/?$/, "") + "/compressed";
+      }
       const typeParam = (searchParams.get("type") ?? "compressed").toLowerCase();
       const useImage = typeParam === "image";
-      const resolvedTopic = toNamespacedTopic(config, topic);
+      // Camera topics from zenoh-bridge-ros2dds are typically NOT namespaced (e.g. camera/camera/color/image_raw/compressed).
+      // Only apply namespace to root-level topics so we subscribe to the key the robot actually publishes.
+      const resolvedTopic = toNamespacedTopic(currentConfig, topic);
+      if (cameraCacheState?.topic !== resolvedTopic) {
+        api.logger.info(`Teleop camera: topic=${topic} resolvedTopic=${resolvedTopic} namespace=${(currentConfig.robot?.namespace ?? "").trim() || "(none)"}`);
+      }
 
       if (useImage) {
         res.setHeader("Content-Type", "application/json");
@@ -225,28 +290,36 @@ export function registerTeleopRoutes(api: OpenClawPluginApi, config: AgenticROSC
                 state.firstFrameReject = null;
                 state.firstFrameTimeout = null;
               }
-            }, 5000);
+            }, 8000);
           });
-          state.sub = transport.subscribe(
-            { topic: resolvedTopic, type: COMPRESSED_IMAGE_TYPE },
-            (msg: Record<string, unknown>) => {
-              const data = msg["data"];
-              const buf = imageDataToBuffer(data);
-              if (!buf || buf.length === 0) return;
-              const format = String(msg["format"] ?? "jpeg").toLowerCase();
-              state.mime = format === "png" ? "image/png" : "image/jpeg";
-              state.cache = buf;
-              if (state.firstFrameTimeout) {
-                clearTimeout(state.firstFrameTimeout);
-                state.firstFrameTimeout = null;
-              }
-              if (state.firstFrameResolve) {
-                state.firstFrameResolve({ buf, mime: state.mime });
-                state.firstFrameResolve = null;
-                state.firstFrameReject = null;
-              }
-            },
-          );
+          const handler = (msg: Record<string, unknown>) => {
+            const data = msg["data"];
+            const buf = imageDataToBuffer(data);
+            if (!buf || buf.length === 0) return;
+            const format = String(msg["format"] ?? "jpeg").toLowerCase();
+            state.mime = format === "png" ? "image/png" : "image/jpeg";
+            state.cache = buf;
+            if (state.firstFrameTimeout) {
+              clearTimeout(state.firstFrameTimeout);
+              state.firstFrameTimeout = null;
+            }
+            if (state.firstFrameResolve) {
+              state.firstFrameResolve({ buf, mime: state.mime });
+              state.firstFrameResolve = null;
+              state.firstFrameReject = null;
+            }
+          };
+          if (typeof (transport as { subscribeAsync?: unknown }).subscribeAsync === "function") {
+            state.sub = await (transport as { subscribeAsync(opts: { topic: string; type: string }, h: (msg: Record<string, unknown>) => void): Promise<{ unsubscribe(): void }> }).subscribeAsync(
+              { topic: resolvedTopic, type: COMPRESSED_IMAGE_TYPE },
+              handler,
+            );
+          } else {
+            state.sub = transport.subscribe(
+              { topic: resolvedTopic, type: COMPRESSED_IMAGE_TYPE },
+              handler,
+            );
+          }
           const { buf, mime } = await firstFramePromise;
           res.setHeader("Content-Type", mime);
           res.setHeader("Cache-Control", "no-store");
@@ -276,93 +349,211 @@ export function registerTeleopRoutes(api: OpenClawPluginApi, config: AgenticROSC
         res.statusCode = 200;
         res.end(buf);
       } catch (e) {
-        const msg = e instanceof Error ? e.message : "Failed to get camera frame";
-        api.logger.warn("Teleop camera error: " + msg);
+        const raw = e instanceof Error ? e.message : String(e);
+        const isTimeout = /timeout/i.test(raw);
+        const now = Date.now();
+        if (!isTimeout || resolvedTopic !== lastCameraTimeoutLog.topic || now - lastCameraTimeoutLog.at >= CAMERA_TIMEOUT_LOG_INTERVAL_MS) {
+          api.logger.warn("Teleop camera error: " + raw);
+          if (isTimeout) lastCameraTimeoutLog = { topic: resolvedTopic, at: now };
+        }
         res.setHeader("Content-Type", "application/json");
-        res.statusCode = 500;
-        res.end(JSON.stringify({ error: msg }));
+        res.statusCode = 503;
+        const userMsg =
+          /session|transport|not initialized|undefined/i.test(raw)
+            ? "Camera unavailable. Transport may be on another gateway worker — try opening teleop on the gateway directly or run the gateway with a single worker."
+            : raw;
+        res.end(JSON.stringify({ error: userMsg }));
       }
-    },
-  });
+  };
 
-  // POST /agenticros/teleop/twist
-  register({
-    path: "/agenticros/teleop/twist",
-    method: "POST",
-    handler: async (req, res) => {
-      let body: Record<string, unknown> = {};
-      try {
-        if (typeof req.readJsonBody === "function") {
-          body = (await req.readJsonBody()) ?? {};
+  for (const base of ["/agenticros", "/api/agenticros", "/plugins/agenticros"]) {
+    register({ path: `${base}/teleop/camera`, method: "GET", handler: cameraHandler });
+  }
+
+  // Shared: publish twist and send JSON response
+  async function publishTwistAndRespond(
+    res: HttpRouteResponse,
+    lx: number,
+    ly: number,
+    lz: number,
+    ax: number,
+    ay: number,
+    az: number,
+  ): Promise<void> {
+    const currentConfig = getCurrentConfig();
+    const clamped = clampTwist(currentConfig, lx, ly, lz, ax, ay, az);
+    const topic = getCmdVelTopic(currentConfig);
+    api.logger.info(`Teleop twist: publishing linear.x=${clamped.linear.x} angular.z=${clamped.angular.z} to topic=${topic}`);
+    try {
+      const transport = getTransport();
+      const status = transport.getStatus?.();
+      if (status && status !== "connected") {
+        res.setHeader("Content-Type", "application/json");
+        res.statusCode = 503;
+        res.end(JSON.stringify({ error: `ROS2 transport not connected (status: ${status}). Check Zenoh router and gateway logs.` }));
+        return;
+      }
+      const publishResult = transport.publish({
+        topic,
+        type: TWIST_TYPE,
+        msg: {
+          linear: clamped.linear,
+          angular: clamped.angular,
+        },
+      });
+      await Promise.resolve(publishResult);
+      res.setHeader("Content-Type", "application/json");
+      res.statusCode = 200;
+      res.end(JSON.stringify({ ok: true, topic }));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      api.logger.warn("Teleop twist error: " + msg);
+      res.setHeader("Content-Type", "application/json");
+      const isUnavailable = /not initialized|not connected/i.test(msg);
+      res.statusCode = isUnavailable ? 503 : 500;
+      res.end(JSON.stringify({ error: isUnavailable ? "ROS2 transport not ready. Start the gateway service and ensure Zenoh/rosbridge is connected." : "Failed to publish twist" }));
+    }
+  }
+
+  const twistPostHandler = async (req: HttpRouteRequest, res: HttpRouteResponse) => {
+    let body: Record<string, unknown> = {};
+    try {
+      if (typeof req.readJsonBody === "function") {
+        body = (await req.readJsonBody()) ?? {};
+      }
+      if (Object.keys(body).length === 0) {
+        const raw = (req as { body?: unknown }).body;
+        if (typeof raw === "object" && raw !== null) {
+          body = raw as Record<string, unknown>;
+        } else if (raw && typeof (raw as Promise<unknown>).then === "function") {
+          const parsed = await (raw as Promise<Record<string, unknown>>);
+          if (parsed && typeof parsed === "object") body = parsed;
         }
-        if (Object.keys(body).length === 0) {
-          const raw = (req as { body?: unknown }).body;
-          if (typeof raw === "object" && raw !== null) {
-            body = raw as Record<string, unknown>;
-          } else if (raw && typeof (raw as Promise<unknown>).then === "function") {
-            const parsed = await (raw as Promise<Record<string, unknown>>);
-            if (parsed && typeof parsed === "object") body = parsed;
-          }
-        }
-        if (Object.keys(body).length === 0 && typeof (req as { on?: (e: string, cb: (c?: Buffer) => void) => void }).on === "function") {
-          const rawBody = await readRequestBody(req as unknown as NodeJS.ReadableStream);
-          if (rawBody.trim()) {
+      }
+      if (Object.keys(body).length === 0 && typeof (req as { on?: (e: string, cb: (c?: Buffer) => void) => void }).on === "function") {
+        const rawBody = await readRequestBody(req as unknown as NodeJS.ReadableStream);
+        if (rawBody.trim()) {
+          try {
+            body = JSON.parse(rawBody) as Record<string, unknown>;
+          } catch {
             try {
-              body = JSON.parse(rawBody) as Record<string, unknown>;
+              for (const part of rawBody.split("&")) {
+                const eq = part.indexOf("=");
+                const k = eq >= 0 ? decodeURIComponent(part.slice(0, eq).replace(/\+/g, " ")) : decodeURIComponent(part.replace(/\+/g, " "));
+                const v = eq >= 0 ? decodeURIComponent(part.slice(eq + 1).replace(/\+/g, " ")) : "";
+                if (k) body[k] = v;
+              }
             } catch {
               // leave body empty
             }
           }
         }
-      } catch {
-        res.setHeader("Content-Type", "application/json");
-        res.statusCode = 400;
-        res.end(JSON.stringify({ error: "Invalid JSON body" }));
-        return;
       }
-
-      const lx = Number(body.linear_x ?? (body as Record<string, unknown>).linearX ?? 0);
-      const ly = Number(body.linear_y ?? (body as Record<string, unknown>).linearY ?? 0);
-      const lz = Number(body.linear_z ?? (body as Record<string, unknown>).linearZ ?? 0);
-      const ax = Number(body.angular_x ?? (body as Record<string, unknown>).angularX ?? 0);
-      const ay = Number(body.angular_y ?? (body as Record<string, unknown>).angularY ?? 0);
-      const az = Number(body.angular_z ?? (body as Record<string, unknown>).angularZ ?? 0);
-
-      const clamped = clampTwist(config, lx, ly, lz, ax, ay, az);
-      const topic = getCmdVelTopic(config);
-
-      try {
-        const transport = getTransport();
-        transport.publish({
-          topic,
-          type: TWIST_TYPE,
-          msg: {
-            linear: clamped.linear,
-            angular: clamped.angular,
-          },
-        });
-        res.setHeader("Content-Type", "application/json");
-        res.statusCode = 200;
-        res.end(JSON.stringify({ ok: true, topic }));
-      } catch (e) {
-        api.logger.warn("Teleop twist error: " + (e instanceof Error ? e.message : String(e)));
-        res.setHeader("Content-Type", "application/json");
-        res.statusCode = 500;
-        res.end(JSON.stringify({ error: "Failed to publish twist" }));
+    } catch {
+      res.setHeader("Content-Type", "application/json");
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: "Invalid JSON body" }));
+      return;
+    }
+    let lx = Number(body.linear_x ?? (body as Record<string, unknown>).linearX ?? 0);
+    let ly = Number(body.linear_y ?? (body as Record<string, unknown>).linearY ?? 0);
+    let lz = Number(body.linear_z ?? (body as Record<string, unknown>).linearZ ?? 0);
+    let ax = Number(body.angular_x ?? (body as Record<string, unknown>).angularX ?? 0);
+    let ay = Number(body.angular_y ?? (body as Record<string, unknown>).angularY ?? 0);
+    let az = Number(body.angular_z ?? (body as Record<string, unknown>).angularZ ?? 0);
+    const bodyAllZero = lx === 0 && ly === 0 && lz === 0 && ax === 0 && ay === 0 && az === 0;
+    if (bodyAllZero) {
+      const fromQuery = getTwistParamsFromQuery(req);
+      if (fromQuery.source !== "none") {
+        lx = fromQuery.lx;
+        ly = fromQuery.ly;
+        lz = fromQuery.lz;
+        ax = fromQuery.ax;
+        ay = fromQuery.ay;
+        az = fromQuery.az;
+        api.logger.info(`Teleop twist POST: linear_x=${lx} linear_y=${ly} angular_z=${az} (from ${fromQuery.source}, body was empty/zeros)`);
+      } else {
+        api.logger.info(`Teleop twist POST: linear_x=0 linear_y=0 angular_z=0 (body empty/zeros, no query — open via proxy so query is forwarded)`);
       }
-    },
-  });
+    } else {
+      api.logger.info(`Teleop twist POST: linear_x=${lx} linear_y=${ly} angular_z=${az}`);
+    }
+    await publishTwistAndRespond(res, lx, ly, lz, ax, ay, az);
+  };
 
-  // GET /agenticros/teleop/ and /agenticros/teleop/index.html
+  /** Get a header value (case-insensitive). */
+  function getHeader(req: HttpRouteRequest, name: string): string | undefined {
+    const h = (req as { headers?: Record<string, string | string[] | undefined> }).headers;
+    if (!h) return undefined;
+    const lower = name.toLowerCase();
+    for (const [k, v] of Object.entries(h)) {
+      if (k.toLowerCase() === lower) {
+        return typeof v === "string" ? v : Array.isArray(v) ? (v[0] as string) : undefined;
+      }
+    }
+    return undefined;
+  }
+
+  /** Parse twist params from URL query string or X-AgenticROS-Query (used by GET and as POST fallback when body is zeros). */
+  function getTwistParamsFromQuery(req: HttpRouteRequest): { lx: number; ly: number; lz: number; ax: number; ay: number; az: number; source: string } {
+    const rawUrl = (req as { url?: string; originalUrl?: string }).url ?? (req as { originalUrl?: string }).originalUrl ?? "";
+    const forwardedQuery = getHeader(req, "x-agenticros-query");
+    const { searchParams } = parseUrl(req);
+    const q = (req as { query?: Record<string, string | string[] | undefined> }).query;
+    const getParam = (name: string, alt: string): string | undefined => {
+      const fromUrl = searchParams.get(name) ?? searchParams.get(alt);
+      if (fromUrl != null) return fromUrl;
+      if (q) {
+        const v = q[name] ?? q[alt];
+        return Array.isArray(v) ? v[0] : v;
+      }
+      const queryString = rawUrl.includes("?") ? rawUrl.slice(rawUrl.indexOf("?") + 1) : forwardedQuery;
+      if (queryString) {
+        try {
+          const params = new URLSearchParams(queryString);
+          return params.get(name) ?? params.get(alt) ?? undefined;
+        } catch {
+          // ignore
+        }
+      }
+      return undefined;
+    };
+    const lx = Number(getParam("linear_x", "linearX") ?? 0);
+    const ly = Number(getParam("linear_y", "linearY") ?? 0);
+    const lz = Number(getParam("linear_z", "linearZ") ?? 0);
+    const ax = Number(getParam("angular_x", "angularX") ?? 0);
+    const ay = Number(getParam("angular_y", "angularY") ?? 0);
+    const az = Number(getParam("angular_z", "angularZ") ?? 0);
+    const source = rawUrl.includes("?") ? "url" : forwardedQuery ? "header" : "none";
+    return { lx, ly, lz, ax, ay, az, source };
+  }
+
+  const twistGetHandler = async (req: HttpRouteRequest, res: HttpRouteResponse) => {
+    const { lx, ly, lz, ax, ay, az, source } = getTwistParamsFromQuery(req);
+    const allZero = lx === 0 && ly === 0 && lz === 0 && ax === 0 && ay === 0 && az === 0;
+    api.logger.info(`Teleop twist GET: linear_x=${lx} linear_y=${ly} angular_z=${az} (source: ${source})${allZero && source === "none" ? " — params missing: open teleop via proxy (http://127.0.0.1:18790/plugins/agenticros/) so twist query is forwarded" : ""}`);
+    await publishTwistAndRespond(res, lx, ly, lz, ax, ay, az);
+  };
+
+  for (const base of ["/agenticros", "/api/agenticros", "/plugins/agenticros"]) {
+    register({ path: `${base}/teleop/twist`, method: "POST", handler: twistPostHandler });
+    register({ path: `${base}/teleop/twist`, method: "GET", handler: twistGetHandler });
+  }
+
+  // GET .../teleop/ and .../teleop/index.html
   const servePage = (_req: HttpRouteRequest, res: HttpRouteResponse) => {
-    const html = getTeleopPageHtml(config);
+    const html = getTeleopPageHtml(getCurrentConfig());
     res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
     res.statusCode = 200;
     res.end(html);
   };
 
-  register({ path: "/agenticros/teleop/", method: "GET", handler: servePage });
-  register({ path: "/agenticros/teleop/index.html", method: "GET", handler: servePage });
+  for (const base of ["/agenticros", "/api/agenticros", "/plugins/agenticros"]) {
+    register({ path: `${base}/teleop/`, method: "GET", handler: servePage });
+    register({ path: `${base}/teleop/index.html`, method: "GET", handler: servePage });
+  }
 
-  api.logger.info("AgenticROS teleop routes registered (GET /agenticros/teleop/, /ping, /sources, /camera; POST /twist)");
+  api.logger.info("AgenticROS teleop routes registered (GET /agenticros/teleop/, /ping, /sources, /camera; GET/POST /twist)");
 }

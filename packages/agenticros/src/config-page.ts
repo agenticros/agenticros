@@ -1,6 +1,6 @@
 /**
  * Returns the AgenticROS config page HTML.
- * Page fetches /agenticros/config.json, renders an editable form, and on Save POSTs to /agenticros/config/save.
+ * Page fetches config.json (relative), renders an editable form, and on Save POSTs to config/save. Served under /plugins/agenticros/ or /api/agenticros/.
  */
 export function getConfigPageHtml(): string {
   return `<!DOCTYPE html>
@@ -18,6 +18,7 @@ export function getConfigPageHtml(): string {
     .banner { border-radius: 8px; padding: 12px; margin-bottom: 16px; font-size: 0.9rem; }
     .banner.success { background: #1e3a1e; color: #9f9; border: 1px solid #2a5a2a; }
     .banner.error { background: #3a1e1e; color: #f99; border: 1px solid #5a2a2a; }
+    .banner.saving { background: #2a2a2a; color: #ccc; border: 1px solid #555; }
     .banner.hidden { display: none; }
     section { margin-bottom: 24px; }
     section h2 { font-size: 1.1rem; margin: 0 0 8px 0; color: #ccc; }
@@ -34,7 +35,7 @@ export function getConfigPageHtml(): string {
 </head>
 <body>
   <h1>AgenticROS Config</h1>
-  <p><a href="/agenticros/">Back to AgenticROS</a></p>
+  <p><a href="/plugins/agenticros/">Back to AgenticROS</a></p>
   <div id="banner" class="banner hidden"></div>
   <form id="config-form">
     <section>
@@ -103,18 +104,37 @@ export function getConfigPageHtml(): string {
       <div class="field"><label for="followMe.depthTopic">Depth topic</label><input type="text" id="followMe.depthTopic" name="followMe.depthTopic" /></div>
       <div class="field"><label for="followMe.visionCallbackUrl">Vision callback URL</label><input type="url" id="followMe.visionCallbackUrl" name="followMe.visionCallbackUrl" /></div>
     </section>
-    <p><button type="submit" id="save-btn">Save config</button></p>
+    <p><button type="button" id="save-btn">Save config</button><span id="save-status"></span></p>
   </form>
+  <script src="config.js"></script>
+</body>
+</html>`;
+}
 
-  <script>
-(function() {
+/** Returns the config page script (served as config.js so it runs under CSP). */
+export function getConfigPageScript(): string {
+  return CONFIG_PAGE_SCRIPT;
+}
+
+const CONFIG_PAGE_SCRIPT = `(function() {
   var form = document.getElementById('config-form');
   var banner = document.getElementById('banner');
   var saveBtn = document.getElementById('save-btn');
-
+  var saveStatus = document.getElementById('save-status');
+  if (!form || !banner || !saveBtn) {
+    if (banner) { banner.className = 'banner error'; banner.textContent = 'Config form or save button not found.'; }
+    return;
+  }
+  function setSaveStatus(msg, isError) {
+    if (saveStatus) {
+      saveStatus.textContent = msg;
+      saveStatus.style.color = isError ? '#f99' : (msg.indexOf('Saved') !== -1 ? '#9f9' : '#aaa');
+      saveStatus.style.marginLeft = '10px';
+    }
+    if (saveBtn && msg) saveBtn.textContent = msg.indexOf('Saving') !== -1 ? 'Saving…' : 'Save config';
+  }
   var NUM_FIELDS = ['rosbridge.reconnectInterval','zenoh.domainId','local.domainId','teleop.speedDefault','teleop.cameraPollMs','safety.maxLinearVelocity','safety.maxAngularVelocity','followMe.targetDistance','followMe.rateHz','followMe.minLinearVelocity'];
   var BOOL_FIELDS = ['rosbridge.reconnect','followMe.useOllama'];
-
   function setByPath(obj, path, value) {
     var parts = path.split('.');
     var cur = obj;
@@ -125,7 +145,6 @@ export function getConfigPageHtml(): string {
     }
     cur[parts[parts.length - 1]] = value;
   }
-
   function getByPath(obj, path) {
     var parts = path.split('.');
     var cur = obj;
@@ -135,17 +154,14 @@ export function getConfigPageHtml(): string {
     }
     return cur;
   }
-
   function showBanner(className, text) {
     banner.className = 'banner ' + className;
     banner.textContent = text;
     banner.classList.remove('hidden');
   }
-
   function hideBanner() {
     banner.classList.add('hidden');
   }
-
   function getFormElement(name) {
     var el = form.elements[name];
     if (!el && typeof CSS !== 'undefined' && CSS.escape) {
@@ -154,7 +170,6 @@ export function getConfigPageHtml(): string {
     if (!el) try { el = document.getElementById(name); } catch (_) {}
     return el || null;
   }
-
   function setFieldValue(name, value) {
     var el = getFormElement(name);
     if (!el) return;
@@ -164,7 +179,6 @@ export function getConfigPageHtml(): string {
       el.value = value;
     }
   }
-
   function getFieldValue(name) {
     var el = getFormElement(name);
     if (!el) return undefined;
@@ -176,7 +190,6 @@ export function getConfigPageHtml(): string {
     }
     return el.value;
   }
-
   function payloadFromForm() {
     var payload = { transport: {}, robot: {}, rosbridge: {}, zenoh: {}, local: {}, webrtc: {}, teleop: {}, safety: {}, followMe: {} };
     var names = ['transport.mode','robot.name','robot.namespace','robot.cameraTopic','rosbridge.url','rosbridge.reconnect','rosbridge.reconnectInterval','zenoh.routerEndpoint','zenoh.domainId','zenoh.keyFormat','local.domainId','webrtc.signalingUrl','webrtc.apiUrl','webrtc.robotId','teleop.cameraTopic','teleop.cmdVelTopic','teleop.speedDefault','teleop.cameraPollMs','safety.maxLinearVelocity','safety.maxAngularVelocity','followMe.useOllama','followMe.ollamaUrl','followMe.vlmModel','followMe.cameraTopic','followMe.cmdVelTopic','followMe.targetDistance','followMe.rateHz','followMe.minLinearVelocity','followMe.depthTopic','followMe.visionCallbackUrl'];
@@ -186,7 +199,6 @@ export function getConfigPageHtml(): string {
     }
     return payload;
   }
-
   function populateForm(c) {
     var names = ['transport.mode','robot.name','robot.namespace','robot.cameraTopic','rosbridge.url','rosbridge.reconnect','rosbridge.reconnectInterval','zenoh.routerEndpoint','zenoh.domainId','zenoh.keyFormat','local.domainId','webrtc.signalingUrl','webrtc.apiUrl','webrtc.robotId','teleop.cameraTopic','teleop.cmdVelTopic','teleop.speedDefault','teleop.cameraPollMs','safety.maxLinearVelocity','safety.maxAngularVelocity','followMe.useOllama','followMe.ollamaUrl','followMe.vlmModel','followMe.cameraTopic','followMe.cmdVelTopic','followMe.targetDistance','followMe.rateHz','followMe.minLinearVelocity','followMe.depthTopic','followMe.visionCallbackUrl'];
     for (var i = 0; i < names.length; i++) {
@@ -199,7 +211,6 @@ export function getConfigPageHtml(): string {
     document.getElementById('section-local').style.display = mode === 'local' ? 'block' : 'none';
     document.getElementById('section-webrtc').style.display = mode === 'webrtc' ? 'block' : 'none';
   }
-
   document.getElementById('transport.mode').addEventListener('change', function() {
     var mode = this.value;
     document.getElementById('section-rosbridge').style.display = mode === 'rosbridge' ? 'block' : 'none';
@@ -207,53 +218,108 @@ export function getConfigPageHtml(): string {
     document.getElementById('section-local').style.display = mode === 'local' ? 'block' : 'none';
     document.getElementById('section-webrtc').style.display = mode === 'webrtc' ? 'block' : 'none';
   });
-
-  form.addEventListener('submit', function(e) {
-    e.preventDefault();
-    hideBanner();
-    saveBtn.disabled = true;
-    var payload = payloadFromForm();
-    fetch('/agenticros/config/save', {
-      method: 'POST',
+  function doSave(method, payload) {
+    payload = payload || payloadFromForm();
+    if (method === 'GET') {
+      var json = JSON.stringify(payload);
+      var base64 = btoa(unescape(encodeURIComponent(json))).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');
+      if (base64.length > 1800) {
+        return Promise.resolve({ status: 413, data: { success: false, error: 'Config too large for GET. Edit ~/.openclaw/openclaw.json manually.' } });
+      }
+      return fetch('config/save?payload=' + encodeURIComponent(base64), { method: 'GET' })
+        .then(function(r) { return r.text().then(function(text) {
+          var data;
+          try { data = text ? JSON.parse(text) : {}; } catch (_) {
+            return { status: r.status, data: { success: false, error: (text || '').slice(0, 200) } };
+          }
+          return { status: r.status, data: data };
+        }); });
+    }
+    return fetch('config/save', {
+      method: method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
-    })
-    .then(function(r) { return r.text().then(function(text) {
+    }).then(function(r) { return r.text().then(function(text) {
       var data;
       try { data = text ? JSON.parse(text) : {}; } catch (_) {
         if (r.ok) {
-          return { status: r.status, data: { success: false, error: (text && text.trim().indexOf('<!') === 0) ? 'Server returned the config page instead of JSON. The gateway may not route POST by method—try again or check gateway.' : 'Server returned non-JSON (status 200). Check Network tab: POST /agenticros/config/save' } };
+          var msg = (text && text.trim().indexOf('<!') === 0)
+            ? 'Server returned a page instead of JSON. Edit ~/.openclaw/openclaw.json (plugins.entries.agenticros.config) and restart the gateway.'
+            : 'Server returned non-JSON (status 200).';
+          return { status: r.status, data: { success: false, error: msg } };
         }
-        return { status: r.status, data: { success: false, error: (text && text.trim().indexOf('<!') === 0) ? 'Server returned an error page. Check gateway logs or try again after restart.' : (text || 'No response body').slice(0, 200) } };
+        var errText = (text && text.trim().indexOf('<!') === 0) ? 'Server returned an error page.' : (text || 'No response body').slice(0, 300);
+        if (r.status === 401) errText = 'Unauthorized. Use the proxy (node scripts/agenticros-proxy.cjs 18790) and open the config page from there.';
+        if (r.status === 405) errText = 'Method not allowed. Will try PUT then GET.';
+        return { status: r.status, data: { success: false, error: errText } };
       }
       return { status: r.status, data: data };
-    }); })
-    .then(function(_) {
-      var status = _.status;
-      var res = _.data || {};
-      if (res.success) {
-        showBanner('success', res.message + (res.configPath ? ' Saved to: ' + res.configPath : ''));
-      } else {
-        var errMsg = res.error || ('Save failed (status ' + status + '). Check browser Network tab: POST /agenticros/config/save');
-        if (status >= 400) errMsg = (status + ' ' + (status === 400 ? 'Bad Request' : status === 503 ? 'Service Unavailable' : 'Error') + ': ') + (res.error || errMsg);
-        showBanner('error', errMsg);
-        if (!res.error) console.error('AgenticROS config save: unexpected response', status, res);
-      }
-    })
+    }); });
+  }
+  function handleSaveResult(_, retryGet) {
+    var status = _.status;
+    var res = _.data || {};
+    if (res.success) {
+      showBanner('success', res.message + (res.configPath ? ' Saved to: ' + res.configPath : ''));
+      setSaveStatus('Saved. Restart gateway for changes.', false);
+      return Promise.resolve();
+    }
+    if (status === 405 && retryGet !== false) {
+      setSaveStatus('Trying PUT…', false);
+      return doSave('PUT').then(function(p) {
+        if (p.status === 200 && p.data && p.data.success) {
+          showBanner('success', p.data.message + (p.data.configPath ? ' Saved to: ' + p.data.configPath : ''));
+          setSaveStatus('Saved. Restart gateway for changes.', false);
+          return;
+        }
+        if (p.status === 405) {
+          setSaveStatus('Trying GET…', false);
+          return doSave('GET').then(function(g) {
+            if (g.status === 200 && g.data && g.data.success) {
+              showBanner('success', g.data.message + (g.data.configPath ? ' Saved to: ' + g.data.configPath : ''));
+              setSaveStatus('Saved. Restart gateway for changes.', false);
+              return;
+            }
+            var err = g.data && g.data.error ? g.data.error : 'Save failed (GET).';
+            showBanner('error', err);
+            setSaveStatus(err.slice(0, 80), true);
+          });
+        }
+        var putErr = p.data && p.data.error ? p.data.error : 'Save failed (PUT).';
+        showBanner('error', putErr);
+        setSaveStatus(putErr.slice(0, 80), true);
+      });
+    }
+    var errMsg = res.error || ('Save failed (status ' + status + ').');
+    if (status >= 400) errMsg = (status + ' ' + (status === 400 ? 'Bad Request' : status === 503 ? 'Service Unavailable' : status === 413 ? 'Payload too large' : 'Error') + ': ') + (res.error || errMsg);
+    showBanner('error', errMsg);
+    setSaveStatus(errMsg.slice(0, 80), true);
+    return Promise.resolve();
+  }
+  function runSave() {
+    hideBanner();
+    setSaveStatus('Saving…', false);
+    saveBtn.textContent = 'Saving…';
+    saveBtn.disabled = true;
+    doSave('POST')
+    .then(function(r) { return handleSaveResult(r); })
     .catch(function(err) {
-      showBanner('error', 'Request failed: ' + (err.message || String(err)));
+      var msg = 'Request failed: ' + (err.message || String(err));
+      showBanner('error', msg);
+      setSaveStatus(msg.slice(0, 80), true);
     })
-    .then(function() { saveBtn.disabled = false; });
-  });
-
-  fetch('/agenticros/config.json')
+    .then(function() {
+      saveBtn.disabled = false;
+      if (saveBtn.textContent === 'Saving…') saveBtn.textContent = 'Save config';
+    });
+  }
+  window.agenticrosSave = runSave;
+  saveBtn.addEventListener('click', runSave);
+  form.addEventListener('submit', function(e) { e.preventDefault(); if (window.agenticrosSave) window.agenticrosSave(); });
+  fetch('config.json')
     .then(function(r) { return r.json(); })
     .then(function(c) { populateForm(c); })
     .catch(function(e) {
       showBanner('error', 'Failed to load config: ' + (e.message || 'Unknown error'));
     });
-})();
-  </script>
-</body>
-</html>`;
-}
+})();`;

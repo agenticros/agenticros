@@ -42,11 +42,14 @@ export interface RosTransport {
   /** Optional: advertise topic with type (rosbridge uses this so publish works when topic not yet established). */
   advertise?(options: AdvertiseOptions): void;
 
-  /** Publish a message to a ROS2 topic. */
-  publish(options: PublishOptions): void;
+  /** Publish a message to a ROS2 topic. May return a Promise so callers can await delivery (e.g. Zenoh put). */
+  publish(options: PublishOptions): void | Promise<void>;
 
   /** Subscribe to a ROS2 topic. Returns a Subscription handle. */
   subscribe(options: SubscribeOptions, handler: MessageHandler): Subscription;
+
+  /** Optional: async subscribe so the subscriber is declared before returning (Zenoh). Use when waiting for first message immediately. */
+  subscribeAsync?(options: SubscribeOptions, handler: MessageHandler): Promise<Subscription>;
 
   // --- Services ---
 

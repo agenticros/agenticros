@@ -34,14 +34,19 @@ export function getTeleopPageHtml(config: AgenticROSConfig): string {
     button:not(.stop):active, button:not(.stop).active { background: #0c9; }
     button.stop { background: #822; }
     button.stop:active { background: #c33; }
-    .status { font-size: 0.85rem; color: #888; margin-top: 8px; }
+    .conn-badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 500; margin-bottom: 8px; }
+    .conn-badge.connected { background: #0a5; color: #000; }
+    .conn-badge.disconnected { background: #822; color: #fff; }
+    .status-wrap { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .status { font-size: 0.85rem; color: #888; }
     a { color: #0c9; text-decoration: none; }
     a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
   <h1>AgenticROS Teleop</h1>
-  <p><a href="/agenticros/">Back to AgenticROS</a></p>
+  <p><a href="/plugins/agenticros/">Back to AgenticROS</a></p>
+  <div id="conn-badge" class="conn-badge disconnected" title="Transport connection">○ Checking…</div>
   <div class="camera-wrap">
     <img id="camera" src="" alt="Camera" style="display:none" />
     <div id="no-feed" class="no-feed">Select a camera source (or waiting for feed)</div>
@@ -55,6 +60,7 @@ export function getTeleopPageHtml(config: AgenticROSConfig): string {
     <select id="source" class="source-select" style="display:none">
       <option value="">—</option>
     </select>
+    <span class="status" style="font-size:0.8rem; color:#666;">Use a topic ending in <code>/compressed</code> for the feed.</span>
   </div>
   <div class="btn-wrap">
     <div class="btn-row"><button type="button" id="btn-fwd" data-linear-x="1">Fwd</button></div>
@@ -65,7 +71,11 @@ export function getTeleopPageHtml(config: AgenticROSConfig): string {
     </div>
     <div class="btn-row"><button type="button" id="btn-back" data-linear-x="-1">Back</button></div>
   </div>
-  <div id="status" class="status"></div>
+  <div class="status-wrap">
+    <span id="status" class="status"></span>
+    <button type="button" id="btn-reconnect" style="display:none; margin-left: 12px; padding: 6px 12px; font-size: 0.85rem;">Reconnect</button>
+  </div>
+  <p style="font-size:0.75rem; color:#888; margin-top:8px;">If Fwd/Back send 0s, open this page via the proxy: <code>http://127.0.0.1:18790/plugins/agenticros/</code> → Teleop.</p>
 
   <script>
 (function() {
@@ -77,9 +87,14 @@ export function getTeleopPageHtml(config: AgenticROSConfig): string {
   const speedEl = document.getElementById('speed');
   const speedVal = document.getElementById('speed-val');
   const statusEl = document.getElementById('status');
+  const reconnectBtn = document.getElementById('btn-reconnect');
+  const connBadge = document.getElementById('conn-badge');
 
   let selectedTopic = '';
   let pollTimer = null;
+  let statusInterval = null;
+  let lastConnected = null;
+  let disconnectedCount = 0;
 
   function setStatus(msg) { statusEl.textContent = msg; }
   function getSpeed() { return parseFloat(speedEl?.value || SPEED_DEFAULT); }
@@ -87,7 +102,7 @@ export function getTeleopPageHtml(config: AgenticROSConfig): string {
 
   function cameraUrl() {
     if (!selectedTopic) return '';
-    const u = '/agenticros/teleop/camera?topic=' + encodeURIComponent(selectedTopic) + '&type=compressed&t=' + Date.now();
+    const u = 'camera?topic=' + encodeURIComponent(selectedTopic) + '&type=compressed&t=' + Date.now();
     return u;
   }
 
@@ -96,13 +111,21 @@ export function getTeleopPageHtml(config: AgenticROSConfig): string {
     if (!selectedTopic) { noFeedEl.style.display = 'flex'; cameraEl.style.display = 'none'; return; }
     noFeedEl.style.display = 'none';
     cameraEl.style.display = 'block';
-    cameraEl.onerror = function() { setStatus('Camera failed (use a CompressedImage topic, e.g. .../image_raw/compressed)'); };
+    cameraEl.onerror = function() {
+      if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+      fetch(cameraUrl())
+        .then(function(r) {
+          if (r.status >= 400) return r.json().then(function(j) { setStatus('Camera: ' + (j && j.error ? j.error : r.statusText)); });
+          setStatus('Camera failed (use a CompressedImage topic, e.g. .../image_raw/compressed)');
+        })
+        .catch(function() { setStatus('Camera request failed. Check transport (Reconnect) and gateway logs.'); });
+    };
     cameraEl.src = cameraUrl();
     pollTimer = setInterval(function() { cameraEl.src = cameraUrl(); }, POLL_MS);
   }
 
   function loadSources() {
-    fetch('/agenticros/teleop/sources')
+    fetch('sources')
       .then(function(r) { return r.json(); })
       .then(function(arr) {
         if (!Array.isArray(arr) || arr.length === 0) {
@@ -124,26 +147,89 @@ export function getTeleopPageHtml(config: AgenticROSConfig): string {
       .catch(function(e) { setStatus('Failed to load sources: ' + e.message); });
   }
 
+  function setConnBadge(connected, mode) {
+    if (!connBadge) return;
+    if (connected) {
+      disconnectedCount = 0;
+      lastConnected = true;
+    } else {
+      disconnectedCount = (lastConnected === false ? disconnectedCount + 1 : 1);
+      lastConnected = false;
+    }
+    var showConnected = connected || disconnectedCount < 2;
+    connBadge.className = 'conn-badge ' + (showConnected ? 'connected' : 'disconnected');
+    connBadge.textContent = showConnected ? '● Connected (' + (mode || 'ros2') + ')' : '○ Disconnected (mode: ' + (mode || 'none') + ')';
+    connBadge.title = showConnected ? 'Transport connected' : 'Start Zenoh router (ws://localhost:10000) or rosbridge, then click Reconnect';
+  }
+
+  function updateConnectionStatus() {
+    fetch('status')
+      .then(function(r) { return r.json(); })
+      .then(function(j) {
+        var connected = !!j.connected;
+        var mode = j.mode || 'none';
+        setConnBadge(connected, mode);
+        if (!connected) {
+          setStatus('ROS2 transport not connected. Set transport.mode and Zenoh endpoint (ws://localhost:10000) in config, start the Zenoh router, then click Reconnect or restart the gateway.');
+          if (reconnectBtn) { reconnectBtn.style.display = 'inline-block'; }
+          return;
+        }
+        if (reconnectBtn) { reconnectBtn.style.display = 'none'; }
+        setStatus('');
+        loadSources();
+      })
+      .catch(function() {
+        setConnBadge(false, 'none');
+        if (reconnectBtn) reconnectBtn.style.display = 'none';
+        loadSources();
+      });
+  }
+
+  function refreshStatus() {
+    fetch('status').then(function(r) { return r.json(); }).then(function(j) {
+      var c = !!j.connected;
+      var m = j.mode || 'none';
+      setConnBadge(c, m);
+    }).catch(function() { setConnBadge(false, 'none'); });
+  }
+
+  reconnectBtn?.addEventListener('click', function() {
+    setStatus('Reconnecting...');
+    fetch('reconnect', { method: 'GET' })
+      .then(function(r) {
+        const ct = (r.headers.get('Content-Type') || '').toLowerCase();
+        if (ct.includes('application/json')) return r.json();
+        return r.text().then(function(t) { throw new Error(t || r.statusText || 'Non-JSON response'); });
+      })
+      .then(function(j) {
+        if (j && j.ok) { setStatus('Connected.'); updateConnectionStatus(); }
+        else { setStatus('Reconnect failed: ' + (j && j.error ? j.error : 'unknown')); }
+      })
+      .catch(function(e) { setStatus('Reconnect failed: ' + (e.message || String(e))); });
+  });
+
   sourceEl.addEventListener('change', function() {
     selectedTopic = this.value || '';
     startPoll();
   });
 
+  // Twist: GET only. POST body is often not passed to the plugin by the gateway. Use the proxy (http://127.0.0.1:18790/plugins/agenticros/) so the query is forwarded in X-AgenticROS-Query.
   function sendTwist(linearX, linearY, linearZ, angularX, angularY, angularZ) {
     const s = getSpeed();
-    const body = {
-      linear_x: (linearX ?? 0) * s,
-      linear_y: (linearY ?? 0) * s,
-      linear_z: linearZ ?? 0,
-      angular_x: angularX ?? 0,
-      angular_y: angularY ?? 0,
-      angular_z: (angularZ ?? 0) * s
-    };
-    fetch('/agenticros/teleop/twist', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    }).catch(function(e) { setStatus('Twist error: ' + e.message); });
+    const lx = (linearX ?? 0) * s;
+    const ly = (linearY ?? 0) * s;
+    const lz = linearZ ?? 0;
+    const ax = angularX ?? 0;
+    const ay = angularY ?? 0;
+    const az = (angularZ ?? 0) * s;
+    var q = 'linear_x=' + encodeURIComponent(lx) + '&linear_y=' + encodeURIComponent(ly) + '&linear_z=' + encodeURIComponent(lz) + '&angular_x=' + encodeURIComponent(ax) + '&angular_y=' + encodeURIComponent(ay) + '&angular_z=' + encodeURIComponent(az);
+    fetch('twist?' + q, { method: 'GET' })
+      .then(function(r) {
+        if (r.status === 502) { setStatus('Twist: 502 — use proxy (http://127.0.0.1:18790/plugins/agenticros/) or single gateway worker.'); return; }
+        if (!r.ok) return r.json().then(function(j) { setStatus('Twist: ' + (j && j.error ? j.error : r.statusText)); });
+        setStatus('');
+      })
+      .catch(function(e) { setStatus('Twist error: ' + e.message); });
   }
 
   function stop() {
@@ -165,7 +251,9 @@ export function getTeleopPageHtml(config: AgenticROSConfig): string {
   });
   document.getElementById('btn-stop')?.addEventListener('click', function() { stop(); });
 
-  loadSources();
+  updateConnectionStatus();
+  statusInterval = setInterval(refreshStatus, 5000);
+  window.addEventListener('visibilitychange', function() { if (document.visibilityState === 'visible') refreshStatus(); });
 })();
   </script>
 </body>

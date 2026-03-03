@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import type { AgenticROSConfig } from "@agenticros/core";
+import { parseConfig } from "@agenticros/core";
 
 /**
  * Resolve the OpenClaw config file path.
@@ -109,4 +111,26 @@ export function writeAgenticROSConfig(pluginConfig: Record<string, unknown>): vo
       "EACCES",
     );
   }
+}
+
+/**
+ * Read the current AgenticROS plugin config from the OpenClaw config file.
+ * Use this when handling requests so teleop/tools use the latest saved config (e.g. robot.namespace)
+ * without requiring a gateway restart.
+ * Preserves webrtc.robotKey from the file if set.
+ */
+export function readAgenticROSConfigFromFile(): AgenticROSConfig {
+  const full = readOpenClawConfig();
+  const plugins = full.plugins as Record<string, unknown> | undefined;
+  const entries = plugins?.entries as Record<string, unknown> | undefined;
+  const agenticrosEntry = entries?.agenticros as Record<string, unknown> | undefined;
+  const raw = agenticrosEntry?.config;
+  const obj = raw && typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : {};
+  const parsed = parseConfig(obj);
+  const existing = agenticrosEntry?.config as Record<string, unknown> | undefined;
+  const existingKey = (existing?.webrtc as Record<string, unknown> | undefined)?.robotKey;
+  if (typeof existingKey === "string" && existingKey.length > 0) {
+    parsed.webrtc.robotKey = existingKey;
+  }
+  return parsed;
 }

@@ -43,6 +43,12 @@ export class ZenohTransport implements RosTransport {
       keyFormat: "ros2dds",
       ...config,
     };
+    this.publish = this.publish.bind(this);
+    this.subscribe = this.subscribe.bind(this);
+    this.subscribeAsync = this.subscribeAsync.bind(this);
+    this.getStatus = this.getStatus.bind(this);
+    this.connect = this.connect.bind(this);
+    this.disconnect = this.disconnect.bind(this);
   }
 
   private setStatus(s: ConnectionStatus): void {
@@ -66,15 +72,33 @@ export class ZenohTransport implements RosTransport {
   async connect(): Promise<void> {
     if (this.session && !this.session.isClosed()) return;
     this.setStatus("connecting");
-    const locator = this.config.routerEndpoint;
+    const locator = (this.config.routerEndpoint ?? "").trim();
+    if (!locator) {
+      this.setStatus("disconnected");
+      throw new Error(
+        "Zenoh router endpoint is empty. Set zenoh.routerEndpoint in config (e.g. ws://localhost:10000). See docs/zenoh-agenticros.md.",
+      );
+    }
+    if (!/^wss?:\/\//i.test(locator)) {
+      this.setStatus("disconnected");
+      throw new Error(
+        `Zenoh router endpoint must be a WebSocket URL (ws:// or wss://). Got: "${locator}". Use e.g. ws://localhost:10000 (zenoh-plugin-remote-api).`,
+      );
+    }
     try {
       const config = new Config(locator);
       this.session = await Session.open(config);
       this.setStatus("connected");
-      console.info(`[RosClaw] Zenoh connected to ${locator}`);
+      console.info(`[AgenticROS] Zenoh connected to ${locator}`);
     } catch (e) {
       this.setStatus("disconnected");
-      console.error(`[RosClaw] Zenoh connection failed to ${locator}:`, e);
+      const msg = e instanceof Error ? e.message : String(e);
+      if (/invalid url|invalid uri/i.test(msg)) {
+        throw new Error(
+          `Zenoh endpoint "${locator}" is not a valid URL. Use a WebSocket URL, e.g. ws://localhost:10000.`,
+        );
+      }
+      console.error(`[AgenticROS] Zenoh connection failed to ${locator}:`, e);
       throw e;
     }
   }
@@ -100,7 +124,8 @@ export class ZenohTransport implements RosTransport {
     return () => this.connectionHandlers.delete(handler);
   }
 
-  publish(options: PublishOptions): void {
+  publish(options: PublishOptions): Promise<void> {
+    if (this == null) throw new Error("Zenoh transport not connected");
     const s = this.session;
     if (!s || s.isClosed()) {
       throw new Error("Zenoh transport not connected");
@@ -112,14 +137,15 @@ export class ZenohTransport implements RosTransport {
       );
     }
     const payload = encodeCdr(options.type, options.msg);
-    console.info(`[RosClaw] Zenoh publish: key=${key} topic=${options.topic}`);
-    s.put(key, payload).catch((err) => {
-      console.error("[RosClaw] Zenoh put failed:", key, err);
+    console.info(`[AgenticROS] Zenoh publish: key=${key} topic=${options.topic}`);
+    return s.put(key, payload).catch((err: unknown) => {
+      console.error("[AgenticROS] Zenoh put failed:", key, err);
       throw new Error(`Zenoh put failed: ${err}`);
     });
   }
 
   subscribe(options: SubscribeOptions, handler: MessageHandler): Subscription {
+    if (this == null) throw new Error("Zenoh transport not connected");
     const s = this.session;
     if (!s || s.isClosed()) {
       throw new Error("Zenoh transport not connected");
@@ -135,6 +161,7 @@ export class ZenohTransport implements RosTransport {
 
     const subKey = `${options.topic}\0${type}`;
     const ref: { undeclare: () => Promise<void> } = { undeclare: async () => {} };
+    let decodeErrorLogged = false;
 
     s.declareSubscriber(key, {
       handler: (sample: Sample) => {
@@ -142,14 +169,61 @@ export class ZenohTransport implements RosTransport {
         try {
           const msg = decodeCdr(type, payload);
           handler(msg);
-        } catch (_e) {
-          // ignore decode errors
+        } catch (e) {
+          if (!decodeErrorLogged) {
+            decodeErrorLogged = true;
+            console.warn("[AgenticROS] Zenoh CDR decode failed for", options.topic, type, e instanceof Error ? e.message : String(e));
+          }
         }
       },
     }).then((sub) => {
       ref.undeclare = () => sub.undeclare();
       this.subscribers.set(subKey, ref);
     });
+
+    return {
+      unsubscribe: () => {
+        const entry = this.subscribers.get(subKey);
+        if (entry) {
+          entry.undeclare().catch(() => {});
+          this.subscribers.delete(subKey);
+        }
+      },
+    };
+  }
+
+  async subscribeAsync(options: SubscribeOptions, handler: MessageHandler): Promise<Subscription> {
+    if (this == null) throw new Error("Zenoh transport not connected");
+    const s = this.session;
+    if (!s || s.isClosed()) {
+      throw new Error("Zenoh transport not connected");
+    }
+    const key = this.key(options.topic);
+    const type = options.type ?? "geometry_msgs/msg/Twist";
+
+    if (!isCdrTypeSupported(type)) {
+      throw new Error(
+        `Zenoh CDR subscribe not implemented for type: ${type}. Supported: geometry_msgs/msg/Twist, sensor_msgs/msg/Image, sensor_msgs/msg/CompressedImage`,
+      );
+    }
+
+    const subKey = `${options.topic}\0${type}`;
+    let decodeErrorLogged = false;
+    const sub = await s.declareSubscriber(key, {
+      handler: (sample: Sample) => {
+        const payload = sample.payload().toBytes();
+        try {
+          const msg = decodeCdr(type, payload);
+          handler(msg);
+        } catch (e) {
+          if (!decodeErrorLogged) {
+            decodeErrorLogged = true;
+            console.warn("[AgenticROS] Zenoh CDR decode failed for", options.topic, type, e instanceof Error ? e.message : String(e));
+          }
+        }
+      },
+    });
+    this.subscribers.set(subKey, { undeclare: () => sub.undeclare() });
 
     return {
       unsubscribe: () => {
@@ -183,7 +257,7 @@ export class ZenohTransport implements RosTransport {
   async listTopics(): Promise<TopicInfo[]> {
     const s = this.session;
     if (!s || s.isClosed()) {
-      console.warn("[RosClaw] Zenoh listTopics: not connected");
+      console.warn("[AgenticROS] Zenoh listTopics: not connected");
       return [];
     }
     const keys = new Set<string>();
@@ -200,7 +274,7 @@ export class ZenohTransport implements RosTransport {
       type: "unknown",
     }));
     if (topics.length > 0) {
-      console.info(`[RosClaw] Zenoh listTopics: found ${topics.length} keys`);
+      console.info(`[AgenticROS] Zenoh listTopics: found ${topics.length} keys`);
     }
     return topics;
   }
