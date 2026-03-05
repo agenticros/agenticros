@@ -92,17 +92,17 @@ export function getConfigPageHtml(): string {
       <div class="field"><label for="safety.maxAngularVelocity">Max angular velocity</label><input type="number" id="safety.maxAngularVelocity" name="safety.maxAngularVelocity" min="0" step="0.1" /></div>
     </section>
     <section>
-      <h2>Follow Me</h2>
-      <div class="field"><label><input type="checkbox" id="followMe.useOllama" name="followMe.useOllama" /> Use Ollama (VLM)</label></div>
-      <div class="field"><label for="followMe.ollamaUrl">Ollama URL</label><input type="url" id="followMe.ollamaUrl" name="followMe.ollamaUrl" /></div>
-      <div class="field"><label for="followMe.vlmModel">VLM model</label><input type="text" id="followMe.vlmModel" name="followMe.vlmModel" /></div>
-      <div class="field"><label for="followMe.cameraTopic">Camera topic</label><input type="text" id="followMe.cameraTopic" name="followMe.cameraTopic" /></div>
-      <div class="field"><label for="followMe.cmdVelTopic">cmd_vel topic</label><input type="text" id="followMe.cmdVelTopic" name="followMe.cmdVelTopic" /></div>
-      <div class="field"><label for="followMe.targetDistance">Target distance (m)</label><input type="number" id="followMe.targetDistance" name="followMe.targetDistance" min="0" step="0.1" /></div>
-      <div class="field"><label for="followMe.rateHz">Rate (Hz)</label><input type="number" id="followMe.rateHz" name="followMe.rateHz" min="1" max="15" /></div>
-      <div class="field"><label for="followMe.minLinearVelocity">Min linear velocity</label><input type="number" id="followMe.minLinearVelocity" name="followMe.minLinearVelocity" min="0" max="1" step="0.1" /></div>
-      <div class="field"><label for="followMe.depthTopic">Depth topic</label><input type="text" id="followMe.depthTopic" name="followMe.depthTopic" /></div>
-      <div class="field"><label for="followMe.visionCallbackUrl">Vision callback URL</label><input type="url" id="followMe.visionCallbackUrl" name="followMe.visionCallbackUrl" /></div>
+      <h2>Skills</h2>
+      <div class="field">
+        <label for="skillPackages">Skill packages (comma-separated)</label>
+        <input type="text" id="skillPackages" name="skillPackages" placeholder="e.g. agenticros-skill-followme" />
+        <div class="field-hint">Npm package names to load as skills. Restart gateway after change.</div>
+      </div>
+      <div class="field">
+        <label for="skillPaths">Skill paths (comma-separated)</label>
+        <input type="text" id="skillPaths" name="skillPaths" placeholder="e.g. /path/to/skills" />
+        <div class="field-hint">Directories to scan for skill packages (package.json with agenticrosSkill: true).</div>
+      </div>
     </section>
     <p><button type="button" id="save-btn">Save config</button><span id="save-status"></span></p>
   </form>
@@ -133,8 +133,8 @@ const CONFIG_PAGE_SCRIPT = `(function() {
     }
     if (saveBtn && msg) saveBtn.textContent = msg.indexOf('Saving') !== -1 ? 'Saving…' : 'Save config';
   }
-  var NUM_FIELDS = ['rosbridge.reconnectInterval','zenoh.domainId','local.domainId','teleop.speedDefault','teleop.cameraPollMs','safety.maxLinearVelocity','safety.maxAngularVelocity','followMe.targetDistance','followMe.rateHz','followMe.minLinearVelocity'];
-  var BOOL_FIELDS = ['rosbridge.reconnect','followMe.useOllama'];
+  var NUM_FIELDS = ['rosbridge.reconnectInterval','zenoh.domainId','local.domainId','teleop.speedDefault','teleop.cameraPollMs','safety.maxLinearVelocity','safety.maxAngularVelocity'];
+  var BOOL_FIELDS = ['rosbridge.reconnect'];
   function setByPath(obj, path, value) {
     var parts = path.split('.');
     var cur = obj;
@@ -190,21 +190,30 @@ const CONFIG_PAGE_SCRIPT = `(function() {
     }
     return el.value;
   }
+  function toArray(val) {
+    if (Array.isArray(val)) return val;
+    if (typeof val === 'string') return val.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+    return [];
+  }
   function payloadFromForm() {
-    var payload = { transport: {}, robot: {}, rosbridge: {}, zenoh: {}, local: {}, webrtc: {}, teleop: {}, safety: {}, followMe: {} };
-    var names = ['transport.mode','robot.name','robot.namespace','robot.cameraTopic','rosbridge.url','rosbridge.reconnect','rosbridge.reconnectInterval','zenoh.routerEndpoint','zenoh.domainId','zenoh.keyFormat','local.domainId','webrtc.signalingUrl','webrtc.apiUrl','webrtc.robotId','teleop.cameraTopic','teleop.cmdVelTopic','teleop.speedDefault','teleop.cameraPollMs','safety.maxLinearVelocity','safety.maxAngularVelocity','followMe.useOllama','followMe.ollamaUrl','followMe.vlmModel','followMe.cameraTopic','followMe.cmdVelTopic','followMe.targetDistance','followMe.rateHz','followMe.minLinearVelocity','followMe.depthTopic','followMe.visionCallbackUrl'];
+    var payload = { transport: {}, robot: {}, rosbridge: {}, zenoh: {}, local: {}, webrtc: {}, teleop: {}, safety: {}, skillPackages: [], skillPaths: [] };
+    var names = ['transport.mode','robot.name','robot.namespace','robot.cameraTopic','rosbridge.url','rosbridge.reconnect','rosbridge.reconnectInterval','zenoh.routerEndpoint','zenoh.domainId','zenoh.keyFormat','local.domainId','webrtc.signalingUrl','webrtc.apiUrl','webrtc.robotId','teleop.cameraTopic','teleop.cmdVelTopic','teleop.speedDefault','teleop.cameraPollMs','safety.maxLinearVelocity','safety.maxAngularVelocity'];
     for (var i = 0; i < names.length; i++) {
       var v = getFieldValue(names[i]);
       if (v !== undefined) setByPath(payload, names[i], v);
     }
+    payload.skillPackages = toArray(getFieldValue('skillPackages'));
+    payload.skillPaths = toArray(getFieldValue('skillPaths'));
     return payload;
   }
   function populateForm(c) {
-    var names = ['transport.mode','robot.name','robot.namespace','robot.cameraTopic','rosbridge.url','rosbridge.reconnect','rosbridge.reconnectInterval','zenoh.routerEndpoint','zenoh.domainId','zenoh.keyFormat','local.domainId','webrtc.signalingUrl','webrtc.apiUrl','webrtc.robotId','teleop.cameraTopic','teleop.cmdVelTopic','teleop.speedDefault','teleop.cameraPollMs','safety.maxLinearVelocity','safety.maxAngularVelocity','followMe.useOllama','followMe.ollamaUrl','followMe.vlmModel','followMe.cameraTopic','followMe.cmdVelTopic','followMe.targetDistance','followMe.rateHz','followMe.minLinearVelocity','followMe.depthTopic','followMe.visionCallbackUrl'];
+    var names = ['transport.mode','robot.name','robot.namespace','robot.cameraTopic','rosbridge.url','rosbridge.reconnect','rosbridge.reconnectInterval','zenoh.routerEndpoint','zenoh.domainId','zenoh.keyFormat','local.domainId','webrtc.signalingUrl','webrtc.apiUrl','webrtc.robotId','teleop.cameraTopic','teleop.cmdVelTopic','teleop.speedDefault','teleop.cameraPollMs','safety.maxLinearVelocity','safety.maxAngularVelocity'];
     for (var i = 0; i < names.length; i++) {
       var v = getByPath(c, names[i]);
       setFieldValue(names[i], v);
     }
+    setFieldValue('skillPackages', Array.isArray(c.skillPackages) ? c.skillPackages.join(', ') : (c.skillPackages || ''));
+    setFieldValue('skillPaths', Array.isArray(c.skillPaths) ? c.skillPaths.join(', ') : (c.skillPaths || ''));
     var mode = (c.transport && c.transport.mode) || 'rosbridge';
     document.getElementById('section-rosbridge').style.display = mode === 'rosbridge' ? 'block' : 'none';
     document.getElementById('section-zenoh').style.display = mode === 'zenoh' ? 'block' : 'none';

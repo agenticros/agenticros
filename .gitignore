@@ -46,3 +46,7 @@ docker/.env
 # Logs
 *.log
 npm-debug.log*
+
+# Local skill installs (skills are separate repos; do not commit into core repo)
+skills/
+/agenticros-skill-*/

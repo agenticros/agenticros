@@ -2,6 +2,7 @@ import type { OpenClawPluginApi } from "../plugin-api.js";
 import type { AgenticROSConfig } from "@agenticros/core";
 import type { TopicInfo, ServiceInfo, ActionInfo } from "@agenticros/core";
 import { getTransport } from "../service.js";
+import { getLoadedSkillIds } from "../skill-loader.js";
 
 /** Cached discovery results with TTL. */
 interface DiscoveryCache {
@@ -191,10 +192,20 @@ function buildDynamicContext(
     context += "\n";
   }
 
-  context += `### Missions
-- **Follow Me** (native): The user can say "follow me", "start following", "stop following". Use the **\`follow_robot\`** tool (action: \`start\` to begin, \`stop\` to halt, \`status\` to check). By default Follow Me uses **depth only** (no Ollama)—the plugin cannot call the chat's vision model from its loop. Set followMe.useOllama to true to use Qwen for person detection. Use **\`follow_me_see\`** when useOllama is on and the user asks what the tracker sees.
+  const skillIds = getLoadedSkillIds();
+  if (skillIds.length > 0) {
+    context += "### Available skills\n";
+    for (const id of skillIds) {
+      if (id === "followme") {
+        context += `- **followme**: Use the **\`follow_robot\`** tool with action \`start\`, \`stop\`, or \`status\` to control person-following. There is no separate follow-robot HTTP service or port—everything runs inside this gateway via Zenoh/ROS2. For \"follow me\" or \"start following\", call \`follow_robot\` with action \`start\`; to stop, use action \`stop\`. Optional: \`follow_me_see\` (what the tracker sees), \`ollama_status\` (if using Ollama).\n`;
+      } else {
+        context += `- **${id}**: Loaded; use the tools provided by this skill as documented in the skill.\n`;
+      }
+    }
+    context += "\n";
+  }
 
-### Safety Limits
+  context += `### Safety Limits
 - Maximum linear velocity: 1.0 m/s
 - Maximum angular velocity: 1.5 rad/s
 - All velocity commands are validated before execution
@@ -217,6 +228,19 @@ function buildFallbackContext(
   cameraTopicHint: string,
 ): string {
   const prefix = namespace ? `${namespace}/` : "/";
+  const skillIds = getLoadedSkillIds();
+  const skillsSection =
+    skillIds.length > 0
+      ? "### Available skills\n" +
+        skillIds
+          .map((id) =>
+            id === "followme"
+              ? "- **followme**: Use the **`follow_robot`** tool with action `start`, `stop`, or `status` to control person-following. There is no separate follow-robot HTTP service or port—everything runs inside this gateway via Zenoh/ROS2. For \"follow me\" or \"start following\", call `follow_robot` with action `start`; to stop, use action `stop`. Optional: `follow_me_see`, `ollama_status`."
+              : `- **${id}**: Loaded; use the tools provided by this skill as documented in the skill.`,
+          )
+          .join("\n") +
+        "\n\n"
+      : "";
 
   return `
 ## Robot: ${name}
@@ -233,10 +257,7 @@ ${USER_INTERFACE_BLURB}
 - \`${prefix}battery_state\` (sensor_msgs/msg/BatteryState) — Battery status
 - RealSense: \`/camera/camera/color/image_raw\` (Image), \`/camera/camera/color/image_raw/compressed\` (CompressedImage), \`/camera/camera/depth/image_rect_raw\` (depth). Use \`ros2_camera_snapshot\` for RGB; use \`ros2_depth_distance\` for distance in meters.
 
-### Missions
-- **Follow Me** (native): Use **\`follow_robot\`** with action \`start\` / \`stop\` / \`status\` when the user says "follow me", "start following", or "stop following". Default is **depth only** (no Ollama). Set followMe.useOllama for Qwen. Use **\`follow_me_see\`** when useOllama is on to report what the tracker sees.
-
-### Safety Limits
+${skillsSection}### Safety Limits
 - Maximum linear velocity: 1.0 m/s
 - Maximum angular velocity: 1.5 rad/s
 - All velocity commands are validated before execution
@@ -248,7 +269,6 @@ ${USER_INTERFACE_BLURB}
 - Use \`ros2_list_topics\` to discover all available topics
 - Use \`ros2_subscribe_once\` to read the current value of any topic
 - Use \`ros2_camera_snapshot\` to see what the robot sees
-- Use \`ollama_status\` to check if Ollama is reachable and the Follow Me vision model is available when Follow Me has no detections or the user asks if Qwen is running
 - The user can say /estop at any time to immediately stop the robot
 `.trim();
 }

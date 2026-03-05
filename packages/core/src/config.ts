@@ -92,27 +92,14 @@ export const AgenticROSConfigSchema = z.object({
     })
     .default({}),
 
-  /** Native Follow Me: depth (and optional Ollama VLM) + cmd_vel. No external apps. */
-  followMe: z
-    .object({
-      /** If false (default), use depth only—no Ollama. The chat's "what do you see" uses the assistant's vision model; Follow Me does not call it. Set true to use Qwen for person detection and left/right steering. */
-      useOllama: z.boolean().default(false),
-      ollamaUrl: z.string().default("http://localhost:11434"),
-      vlmModel: z.string().default("qwen3-vl:2b"),
-      cameraTopic: z.string().default("/camera/image_raw/compressed"),
-      cameraMessageType: z.enum(["CompressedImage", "Image"]).default("CompressedImage"),
-      /** Override cmd_vel topic (e.g. /robot3946.../cmd_vel). If set, used instead of robot.namespace + /cmd_vel. */
-      cmdVelTopic: z.string().default(""),
-      targetDistance: z.number().default(0.5),
-      rateHz: z.number().min(1).max(15).default(5),
-      /** Minimum linear speed (m/s) when moving forward/back so the base actually moves. Many bases need ~0.3. */
-      minLinearVelocity: z.number().min(0).max(1).default(0.3),
-      /** Optional depth image topic (e.g. RealSense /camera/camera/depth/image_rect_raw). If set, Follow Me uses real distance vs targetDistance instead of VLM distance_hint only. */
-      depthTopic: z.string().default(""),
-      /** Optional HTTP callback for human detection (e.g. OpenAI proxy). POST body: { "image": "<base64>" }. Expect JSON: { "person_visible": boolean, "position"?: "left"|"center"|"right", "distance_hint"?: "close"|"medium"|"far" }. Distance for follow is always from RealSense depth; this is for person_visible and left/right. */
-      visionCallbackUrl: z.string().default(""),
-    })
-    .default({}),
+  /** Per-skill config. Keys are skill ids (e.g. followme). Each skill validates its own slice. */
+  skills: z.record(z.string(), z.unknown()).default({}),
+
+  /** Directories to scan for skill packages (package.json with "agenticrosSkill": true). Resolved at gateway start. */
+  skillPaths: z.array(z.string()).default([]),
+
+  /** Npm (or local) package names to load as skills. Resolved via require.resolve from plugin context. */
+  skillPackages: z.array(z.string()).default([]),
 });
 
 export type AgenticROSConfig = z.infer<typeof AgenticROSConfigSchema>;
@@ -120,9 +107,20 @@ export type AgenticROSConfig = z.infer<typeof AgenticROSConfigSchema>;
 /**
  * Parse and validate raw config against the schema.
  * Returns a fully-defaulted, typed config object.
+ * Backward compat: if raw.followMe is set, it is merged into raw.skills.followme before parsing.
  */
 export function parseConfig(raw: Record<string, unknown>): AgenticROSConfig {
-  return AgenticROSConfigSchema.parse(raw);
+  const normalized = { ...raw };
+  const followMe = raw.followMe;
+  if (followMe !== undefined && followMe !== null && typeof followMe === "object") {
+    const skills = (normalized.skills as Record<string, unknown>) ?? {};
+    if (!(typeof skills === "object" && skills !== null && !Array.isArray(skills))) {
+      (normalized as Record<string, unknown>).skills = { followme: followMe };
+    } else if (!("followme" in skills)) {
+      (normalized as Record<string, unknown>).skills = { ...skills, followme: followMe };
+    }
+  }
+  return AgenticROSConfigSchema.parse(normalized);
 }
 
 /**

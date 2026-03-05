@@ -18,7 +18,7 @@ User (messaging app) → OpenClaw Gateway → AgenticROS OpenClaw plugin → Cor
 - **`packages/core`** — Transport, types, config (Zod). Used by all adapters.
 - **`packages/agenticros`** — OpenClaw plugin: tools, commands, config page, teleop routes.
 - **`ros2_ws/`** — ROS2 workspace: `agenticros_msgs`, `agenticros_discovery`, `agenticros_agent`, `agenticros_follow_me`.
-- **`docs/`** — Architecture, missions, robot setup, Zenoh, teleop.
+- **`docs/`** — Architecture, skills, robot setup, Zenoh, teleop.
 - **`scripts/`** — Workspace setup, gateway plugin config, run demos.
 - **`docker/`** — Docker Compose and Dockerfiles for ROS2 + plugin images.
 - **`examples/`** — Example projects.
@@ -57,7 +57,16 @@ User (messaging app) → OpenClaw Gateway → AgenticROS OpenClaw plugin → Cor
 
 **With token auth:** Run `node scripts/agenticros-proxy.cjs 18790` and open http://127.0.0.1:18790/plugins/agenticros/. See **docs/teleop.md**.
 
-See **`docs/`** for robot setup, missions, teleop, and Docker.
+See **`docs/`** for robot setup, skills, teleop, and Docker.
+
+## Skills
+
+AgenticROS **skills** are optional packages that add tools and behaviors to the plugin. They are loaded at gateway start.
+
+- **Install**: In the OpenClaw config file, under `plugins.entries.agenticros.config`, set **`skillPackages`** (e.g. `["agenticros-skill-followme"]`) and ensure the package is installed where the gateway runs, or set **`skillPaths`** to directories containing skill packages. Restart the gateway after changes.
+- **Config**: Each skill reads its options from **`config.skills.<skillId>`** (e.g. `config.skills.followme`).
+- **Contract and creating a skill**: See **[docs/skills.md](docs/skills.md)** for the full contract, install steps, and how to build a third-party skill.
+- **Reference skill**: **[agenticros-skill-followme](https://github.com/your-org/agenticros-skill-followme)** — Follow Me (depth + optional Ollama), with tools `follow_robot`, `follow_me_see`, and `ollama_status`. Use its README as a template for new skills.
 
 ## License
 

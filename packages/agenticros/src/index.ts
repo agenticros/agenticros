@@ -3,6 +3,7 @@ import { parseConfig, isCdrTypeSupported } from "@agenticros/core";
 import { readAgenticROSConfigFromFile } from "./config-file.js";
 import { registerService } from "./service.js";
 import { registerTools } from "./tools/index.js";
+import { loadSkills } from "./skill-loader.js";
 import { registerSafetyHook } from "./safety/validator.js";
 import { registerRobotContext } from "./context/robot-context.js";
 import { registerEstopCommand } from "./commands/estop.js";
@@ -16,7 +17,7 @@ export default {
   id: "agenticros",
   name: "AgenticROS",
 
-  register(api: OpenClawPluginApi): void {
+  async register(api: OpenClawPluginApi): Promise<void> {
     api.logger.info("AgenticROS plugin loading...");
     const imageSupported = isCdrTypeSupported("sensor_msgs/msg/CompressedImage");
     api.logger.info(`AgenticROS: Zenoh CDR Image/CompressedImage supported=${imageSupported}`);
@@ -37,8 +38,11 @@ export default {
     // Register the rosbridge WebSocket connection as a managed service
     registerService(api, config);
 
-    // Register all ROS2 tools and mission tools with the AI agent
+    // Register core ROS2 tools (no Follow Me — that lives in agenticros-skill-followme)
     registerTools(api, config);
+
+    // Load optional skills from skillPackages and skillPaths
+    await loadSkills(api, config);
 
     // Register safety validation hook (before_tool_call)
     registerSafetyHook(api, config);
@@ -57,3 +61,6 @@ export default {
     api.logger.info("AgenticROS plugin loaded successfully");
   },
 };
+
+export type { OpenClawPluginApi } from "./plugin-api.js";
+export type { SkillContext, RegisterSkill, DepthSampleResult, DepthSectorsResult } from "./skill-api.js";

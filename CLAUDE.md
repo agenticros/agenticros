@@ -19,7 +19,7 @@ AgenticROS is a ROS2 integration for AI agent platforms. It provides a **core** 
 | `ros2_ws/src/agenticros_discovery` | Capability discovery node |
 | `ros2_ws/src/agenticros_agent` | WebRTC agent node (Mode C) |
 | `ros2_ws/src/agenticros_follow_me` | Follow Me mission node |
-| `docs/` | Architecture, missions, setup |
+| `docs/` | Architecture, skills, setup |
 | `scripts/` | Workspace and gateway setup |
 | `docker/` | Docker Compose and images |
 

@@ -39,7 +39,8 @@ function getDefaultCameraTopic(config: AgenticROSConfig): string {
   return "/camera/camera/color/image_raw/compressed";
 }
 
-function getCmdVelTopic(config: AgenticROSConfig): string {
+/** Resolve cmd_vel topic from config (teleop override or robot namespace). Used by estop and teleop. */
+export function getCmdVelTopic(config: AgenticROSConfig): string {
   const t = (config.teleop?.cmdVelTopic ?? "").trim();
   if (t) return t;
   return toNamespacedTopicFull(config, "/cmd_vel");

@@ -1,7 +1,7 @@
 import type { OpenClawPluginApi } from "../plugin-api.js";
 import type { AgenticROSConfig } from "@agenticros/core";
 import { getTransport } from "../service.js";
-import { getFollowMeCmdVelTopic } from "../follow-me/loop.js";
+import { getCmdVelTopic } from "../teleop/routes.js";
 
 const TWIST_TYPE = "geometry_msgs/msg/Twist";
 const ZERO_TWIST = {
@@ -12,9 +12,8 @@ const ZERO_TWIST = {
 /**
  * Register the /estop command.
  * This command bypasses the AI agent and immediately sends a zero-velocity
- * command to stop the robot. Uses the same cmd_vel topic as Follow Me so
- * estop reliably stops the base when Follow Me (or other missions) use a
- * custom topic.
+ * command to stop the robot. Uses the same cmd_vel topic as teleop/skills
+ * (config.teleop.cmdVelTopic or robot namespace).
  */
 export function registerEstopCommand(api: OpenClawPluginApi, config: AgenticROSConfig): void {
   api.registerCommand({
@@ -24,7 +23,7 @@ export function registerEstopCommand(api: OpenClawPluginApi, config: AgenticROSC
     async handler(_ctx) {
       try {
         const transport = getTransport();
-        const topic = getFollowMeCmdVelTopic(config);
+        const topic = getCmdVelTopic(config);
 
         // Send zero repeatedly so the base reliably stops
         for (let i = 0; i < 5; i++) {

@@ -80,6 +80,109 @@ function median(sorted: number[]): number {
   return (sorted[m - 1] + sorted[m]) / 2;
 }
 
+/** Sample a vertical band (x0..x1) of the depth image; returns distances in meters. */
+function sampleBand(
+  width: number,
+  height: number,
+  step: number,
+  encoding: string,
+  data: Uint8Array,
+  x0: number,
+  x1: number,
+  heightFraction = 0.5,
+): number[] {
+  const values: number[] = [];
+  const isBigEndian = false;
+  const cy = height / 2;
+  const halfH = Math.max(1, Math.floor((height * heightFraction) / 2));
+  const y0 = Math.max(0, Math.floor(cy - halfH));
+  const y1 = Math.min(height, Math.floor(cy + halfH));
+  const ix0 = Math.max(0, Math.floor(x0));
+  const ix1 = Math.min(width, Math.floor(x1));
+
+  if (encoding === "16UC1" || encoding === "16uC1") {
+    for (let y = y0; y < y1; y++) {
+      for (let x = ix0; x < ix1; x++) {
+        const off = y * step + x * 2;
+        if (off + 2 > data.length) continue;
+        const lo = data[off];
+        const hi = data[off + 1];
+        const v = isBigEndian ? (lo << 8) | hi : (hi << 8) | lo;
+        if (v > 0) values.push(v / 1000);
+      }
+    }
+  } else if (encoding === "32FC1" || encoding === "32fC1") {
+    for (let y = y0; y < y1; y++) {
+      for (let x = ix0; x < ix1; x++) {
+        const off = y * step + x * 4;
+        if (off + 4 > data.length) continue;
+        const v = new DataView(data.buffer, data.byteOffset + off, 4).getFloat32(0, !isBigEndian);
+        if (Number.isFinite(v) && v > 0) values.push(v);
+      }
+    }
+  }
+  return values;
+}
+
+export interface DepthSectorsResult {
+  left_m: number;
+  center_m: number;
+  right_m: number;
+  valid: boolean;
+  topic: string;
+}
+
+/**
+ * Sample left, center, and right thirds of a depth image; return median distance per sector.
+ * Used by Follow Me to turn toward the person when not using Ollama.
+ */
+export async function getDepthSectors(
+  transport: RosTransport,
+  topic: string,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+): Promise<DepthSectorsResult> {
+  const result = await new Promise<Record<string, unknown>>((resolve, reject) => {
+    const sub = transport.subscribe(
+      { topic, type: IMAGE_TYPE },
+      (msg: Record<string, unknown>) => {
+        clearTimeout(timer);
+        sub.unsubscribe();
+        resolve(msg);
+      },
+    );
+    const timer = setTimeout(() => {
+      sub.unsubscribe();
+      reject(new Error(`Depth sectors timeout on ${topic}`));
+    }, timeoutMs);
+  });
+
+  const width = Number(result.width) || 0;
+  const height = Number(result.height) || 0;
+  const step = Number(result.step) || width * 2;
+  const encoding = (result.encoding as string) ?? "16UC1";
+  const data = toByteArray(result.data);
+
+  const third = width / 3;
+  const leftV = sampleBand(width, height, step, encoding, data, 0, third);
+  const centerV = sampleBand(width, height, step, encoding, data, third, 2 * third);
+  const rightV = sampleBand(width, height, step, encoding, data, 2 * third, width);
+
+  const left_m = median(leftV.slice().sort((a, b) => a - b));
+  const center_m = median(centerV.slice().sort((a, b) => a - b));
+  const right_m = median(rightV.slice().sort((a, b) => a - b));
+
+  const round = (x: number) => (Number.isFinite(x) ? Math.round(x * 1000) / 1000 : NaN);
+  const valid = leftV.length > 0 || centerV.length > 0 || rightV.length > 0;
+
+  return {
+    left_m: round(left_m),
+    center_m: round(center_m),
+    right_m: round(right_m),
+    valid,
+    topic,
+  };
+}
+
 export interface DepthSampleResult {
   distance_m: number;
   valid: boolean;
