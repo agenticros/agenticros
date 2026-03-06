@@ -37,6 +37,9 @@ export function getTeleopPageHtml(config: AgenticROSConfig): string {
     .conn-badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 500; margin-bottom: 8px; }
     .conn-badge.connected { background: #0a5; color: #000; }
     .conn-badge.disconnected { background: #822; color: #fff; }
+    .gamepad-badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 500; margin-bottom: 8px; margin-left: 8px; }
+    .gamepad-badge.active { background: #07a; color: #fff; }
+    .gamepad-badge.inactive { background: #444; color: #888; }
     .status-wrap { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
     .status { font-size: 0.85rem; color: #888; }
     a { color: #0c9; text-decoration: none; }
@@ -47,6 +50,7 @@ export function getTeleopPageHtml(config: AgenticROSConfig): string {
   <h1>AgenticROS Teleop</h1>
   <p><a href="/plugins/agenticros/">Back to AgenticROS</a></p>
   <div id="conn-badge" class="conn-badge disconnected" title="Transport connection">○ Checking…</div>
+  <div id="gamepad-badge" class="gamepad-badge inactive" title="Gamepad status">🎮 No gamepad</div>
   <div class="camera-wrap">
     <img id="camera" src="" alt="Camera" style="display:none" />
     <div id="no-feed" class="no-feed">Select a camera source (or waiting for feed)</div>
@@ -75,7 +79,7 @@ export function getTeleopPageHtml(config: AgenticROSConfig): string {
     <span id="status" class="status"></span>
     <button type="button" id="btn-reconnect" style="display:none; margin-left: 12px; padding: 6px 12px; font-size: 0.85rem;">Reconnect</button>
   </div>
-  <p style="font-size:0.75rem; color:#888; margin-top:8px;">WASD keys also drive (W=Forward, A=Left, S=Back, D=Right). If Fwd/Back send 0s, open this page via the proxy: <code>http://127.0.0.1:18790/plugins/agenticros/</code> → Teleop.</p>
+  <p style="font-size:0.75rem; color:#888; margin-top:8px;">WASD keys and Bluetooth gamepads also drive (W=Forward, A=Left, S=Back, D=Right). If Fwd/Back send 0s, open this page via the proxy: <code>http://127.0.0.1:18790/plugins/agenticros/</code> → Teleop.</p>
 
   <script>
 (function() {
@@ -279,6 +283,130 @@ export function getTeleopPageHtml(config: AgenticROSConfig): string {
   document.addEventListener('keyup', function(e) {
     if (keyToButton[e.key.toLowerCase()]) { e.preventDefault(); applyKey(e.key, false); }
   });
+
+  // Gamepad (Bluetooth controller) support
+  var gamepadBadge = document.getElementById('gamepad-badge');
+  var gamepadPollInterval = null;
+  var lastGamepadDirection = 'STOP';
+
+  function setGamepadBadge(active, name) {
+    if (!gamepadBadge) return;
+    if (active) {
+      gamepadBadge.className = 'gamepad-badge active';
+      gamepadBadge.textContent = '🎮 ' + (name || 'Gamepad');
+      gamepadBadge.title = 'Gamepad connected: ' + (name || 'Unknown');
+    } else {
+      gamepadBadge.className = 'gamepad-badge inactive';
+      gamepadBadge.textContent = '🎮 No gamepad';
+      gamepadBadge.title = 'Connect a Bluetooth gamepad to use joystick control';
+    }
+  }
+
+  function clearGamepadButtons() {
+    ['btn-fwd','btn-back','btn-left','btn-right'].forEach(function(id) {
+      var btn = document.getElementById(id);
+      if (btn) btn.classList.remove('active');
+    });
+  }
+
+  function applyGamepadDirection(direction) {
+    if (direction === lastGamepadDirection) return;
+    lastGamepadDirection = direction;
+    clearGamepadButtons();
+
+    var dirToButton = { FORWARD: 'btn-fwd', BACKWARD: 'btn-back', LEFT: 'btn-left', RIGHT: 'btn-right' };
+    var btnId = dirToButton[direction];
+    if (btnId) {
+      var btn = document.getElementById(btnId);
+      if (btn) {
+        btn.classList.add('active');
+        var lx = parseFloat(btn.dataset.linearX);
+        var az = parseFloat(btn.dataset.angularZ);
+        sendTwist(lx || 0, 0, 0, 0, 0, az || 0);
+      }
+    } else {
+      sendTwist(0, 0, 0, 0, 0, 0);
+    }
+  }
+
+  function pollGamepad() {
+    var gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+    var controller = null;
+    for (var i = 0; i < gamepads.length; i++) {
+      if (gamepads[i]) { controller = gamepads[i]; break; }
+    }
+    if (!controller) {
+      setGamepadBadge(false);
+      if (lastGamepadDirection !== 'STOP') {
+        applyGamepadDirection('STOP');
+      }
+      return;
+    }
+
+    setGamepadBadge(true, controller.id.split('(')[0].trim());
+
+    var x = Math.trunc(controller.axes[0] * 100) / 100;
+    var y = Math.trunc(controller.axes[1] * 100) / 100;
+
+    var direction = 'STOP';
+    if (Math.abs(x) < 0.1 && Math.abs(y) < 0.1) {
+      direction = 'STOP';
+    } else if (x > 0.2) {
+      direction = 'RIGHT';
+    } else if (x < -0.2) {
+      direction = 'LEFT';
+    } else if (y > 0.2) {
+      direction = 'BACKWARD';
+    } else if (y < -0.2) {
+      direction = 'FORWARD';
+    }
+
+    applyGamepadDirection(direction);
+  }
+
+  function startGamepadPolling() {
+    if (gamepadPollInterval) return;
+    gamepadPollInterval = setInterval(pollGamepad, 100);
+  }
+
+  function stopGamepadPolling() {
+    if (gamepadPollInterval) {
+      clearInterval(gamepadPollInterval);
+      gamepadPollInterval = null;
+    }
+  }
+
+  window.addEventListener('gamepadconnected', function(e) {
+    setGamepadBadge(true, e.gamepad.id.split('(')[0].trim());
+    startGamepadPolling();
+  });
+
+  window.addEventListener('gamepaddisconnected', function() {
+    var gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+    var hasGamepad = false;
+    for (var i = 0; i < gamepads.length; i++) {
+      if (gamepads[i]) { hasGamepad = true; break; }
+    }
+    if (!hasGamepad) {
+      setGamepadBadge(false);
+      stopGamepadPolling();
+      if (lastGamepadDirection !== 'STOP') {
+        applyGamepadDirection('STOP');
+      }
+    }
+  });
+
+  // Check for already-connected gamepads on page load
+  (function checkInitialGamepads() {
+    var gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+    for (var i = 0; i < gamepads.length; i++) {
+      if (gamepads[i]) {
+        setGamepadBadge(true, gamepads[i].id.split('(')[0].trim());
+        startGamepadPolling();
+        break;
+      }
+    }
+  })();
 
   updateConnectionStatus();
   statusInterval = setInterval(refreshStatus, 5000);
