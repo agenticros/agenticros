@@ -75,7 +75,7 @@ export function getTeleopPageHtml(config: AgenticROSConfig): string {
     <span id="status" class="status"></span>
     <button type="button" id="btn-reconnect" style="display:none; margin-left: 12px; padding: 6px 12px; font-size: 0.85rem;">Reconnect</button>
   </div>
-  <p style="font-size:0.75rem; color:#888; margin-top:8px;">If Fwd/Back send 0s, open this page via the proxy: <code>http://127.0.0.1:18790/plugins/agenticros/</code> → Teleop.</p>
+  <p style="font-size:0.75rem; color:#888; margin-top:8px;">WASD keys also drive (W=Forward, A=Left, S=Back, D=Right). If Fwd/Back send 0s, open this page via the proxy: <code>http://127.0.0.1:18790/plugins/agenticros/</code> → Teleop.</p>
 
   <script>
 (function() {
@@ -250,6 +250,35 @@ export function getTeleopPageHtml(config: AgenticROSConfig): string {
     btn.addEventListener('pointerleave', stop);
   });
   document.getElementById('btn-stop')?.addEventListener('click', function() { stop(); });
+
+  // WASD keyboard: same as green directional buttons (ignore repeat via keysDown set)
+  var keysDown = {};
+  var keyToButton = { w: 'btn-fwd', a: 'btn-left', s: 'btn-back', d: 'btn-right' };
+  function applyKey(key, down) {
+    var k = key.toLowerCase();
+    if (!keyToButton[k]) return;
+    if (down) {
+      if (keysDown[k]) return;
+      keysDown[k] = true;
+      var btn = document.getElementById(keyToButton[k]);
+      if (btn) {
+        btn.classList.add('active');
+        var lx = parseFloat(btn.dataset.linearX);
+        var az = parseFloat(btn.dataset.angularZ);
+        sendTwist(lx || 0, 0, 0, 0, 0, az || 0);
+      }
+    } else {
+      if (!keysDown[k]) return;
+      delete keysDown[k];
+      stop();
+    }
+  }
+  document.addEventListener('keydown', function(e) {
+    if (keyToButton[e.key.toLowerCase()]) { e.preventDefault(); applyKey(e.key, true); }
+  });
+  document.addEventListener('keyup', function(e) {
+    if (keyToButton[e.key.toLowerCase()]) { e.preventDefault(); applyKey(e.key, false); }
+  });
 
   updateConnectionStatus();
   statusInterval = setInterval(refreshStatus, 5000);
