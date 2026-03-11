@@ -89,7 +89,7 @@ export class ZenohTransport implements RosTransport {
       const config = new Config(locator);
       this.session = await Session.open(config);
       this.setStatus("connected");
-      console.info(`[AgenticROS] Zenoh connected to ${locator}`);
+      console.warn(`[AgenticROS] Zenoh connected to ${locator}`);
     } catch (e) {
       this.setStatus("disconnected");
       const msg = e instanceof Error ? e.message : String(e);
@@ -130,14 +130,26 @@ export class ZenohTransport implements RosTransport {
     if (!s || s.isClosed()) {
       throw new Error("Zenoh transport not connected");
     }
-    const key = this.key(options.topic);
+    // Normalize cmd_vel: /<uuid>/cmd_vel → /robot<uuid-no-dashes>/cmd_vel so bridge/subscribers see the robot-prefixed topic (robot often expects UUID without dashes)
+    const topicRaw = (options.topic ?? "").trim();
+    const cmdVelMatch = topicRaw.match(/^\/([^/]+)\/cmd_vel$/i);
+    const segment = cmdVelMatch?.[1] ?? "";
+    const topic =
+      cmdVelMatch && !segment.toLowerCase().startsWith("robot")
+        ? `/robot${segment.replace(/-/g, "")}/cmd_vel`
+        : topicRaw;
+    const effectiveTopic = topic || (options.topic ?? "").trim();
+    const key = this.key(effectiveTopic);
     if (!isCdrTypeSupported(options.type)) {
       throw new Error(
         `Zenoh CDR publish not implemented for type: ${options.type}. Supported: geometry_msgs/msg/Twist (Image/CompressedImage are decode-only).`,
       );
     }
+    if (!key) {
+      throw new Error(`Zenoh publish: topic is empty (options.topic=${JSON.stringify(options.topic)})`);
+    }
     const payload = encodeCdr(options.type, options.msg);
-    console.info(`[AgenticROS] Zenoh publish: key=${key} topic=${options.topic}`);
+    console.warn(`[AgenticROS] Zenoh publish: key=${key} topic=${effectiveTopic}`);
     return s.put(key, payload).catch((err: unknown) => {
       console.error("[AgenticROS] Zenoh put failed:", key, err);
       throw new Error(`Zenoh put failed: ${err}`);
@@ -266,7 +278,8 @@ export class ZenohTransport implements RosTransport {
         keys.add(sample.keyexpr().toString());
       },
     });
-    await new Promise((r) => setTimeout(r, 2500));
+    // Short wait so we finish before remote-api/MCP timeouts (~1s is enough for active publishers)
+    await new Promise((r) => setTimeout(r, 1000));
     await sub.undeclare();
     const format = this.keyFormat();
     const topics = Array.from(keys).map((key) => ({
@@ -274,7 +287,7 @@ export class ZenohTransport implements RosTransport {
       type: "unknown",
     }));
     if (topics.length > 0) {
-      console.info(`[AgenticROS] Zenoh listTopics: found ${topics.length} keys`);
+      console.warn(`[AgenticROS] Zenoh listTopics: found ${topics.length} keys`);
     }
     return topics;
   }

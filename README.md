@@ -8,15 +8,18 @@ AgenticROS connects ROS2 robots to AI Agent platforms so you can control and que
 
 - **Core** (`packages/core`): Platform-agnostic ROS2 transport (rosbridge, Zenoh, local, WebRTC), config schema, and shared types. No dependency on any specific AI platform.
 - **Adapters** (`packages/agenticros`, and later others): Implement the contract for each AI platform. The OpenClaw adapter registers tools, commands, and HTTP routes with the OpenClaw gateway and uses the core for all ROS2 communication.
+- **`packages/agenticros-claude-code`** — MCP server for **Claude Code CLI**: use Claude from the terminal to talk to your robot (e.g. “what do you see?”, “move 1m forward”). See [packages/agenticros-claude-code/README.md](packages/agenticros-claude-code/README.md).
 
 ```
 User (messaging app) → OpenClaw Gateway → AgenticROS OpenClaw plugin → Core → ROS2 robots
+Claude Code CLI → agenticros MCP server → Core → ROS2 robots (Zenoh/rosbridge)
 ```
 
 ## Repository layout
 
 - **`packages/core`** — Transport, types, config (Zod). Used by all adapters.
 - **`packages/agenticros`** — OpenClaw plugin: tools, commands, config page, teleop routes.
+- **`packages/agenticros-claude-code`** — Claude Code CLI MCP server (tools only; no config UI).
 - **`ros2_ws/`** — ROS2 workspace: `agenticros_msgs`, `agenticros_discovery`, `agenticros_agent`, `agenticros_follow_me`.
 - **`docs/`** — Architecture, skills, robot setup, Zenoh, teleop.
 - **`scripts/`** — Workspace setup, gateway plugin config, run demos.
@@ -58,6 +61,22 @@ User (messaging app) → OpenClaw Gateway → AgenticROS OpenClaw plugin → Cor
 **With token auth:** Run `node scripts/agenticros-proxy.cjs 18790` and open http://127.0.0.1:18790/plugins/agenticros/. See **docs/teleop.md**.
 
 See **`docs/`** for robot setup, skills, teleop, and Docker.
+
+## Claude Code CLI (terminal)
+
+Use **Claude Code** in the terminal to control and query your robot via natural language (e.g. “move forward 1 meter”, “what do you see?”).
+
+1. **Build** (from repo root): `pnpm install && pnpm build`
+2. **Config**: Create `~/.agenticros/config.json` (see [packages/agenticros-claude-code/README.md](packages/agenticros-claude-code/README.md) for shape). Set `zenoh.routerEndpoint` (e.g. `ws://localhost:10000`) and `robot.namespace` if your robot uses a namespaced `cmd_vel`.
+3. **Start Zenoh**: Run `zenohd` with the remote-api plugin so port 10000 is listening (see `scripts/zenohd-agenticros.json5` or [docs/zenoh-agenticros.md](docs/zenoh-agenticros.md)).
+4. **Register MCP** (project scope, from repo root):
+   ```bash
+   claude mcp add --transport stdio --scope project agenticros -- node packages/agenticros-claude-code/dist/index.js
+   ```
+   Or add the server via `.mcp.json` (see package README). To avoid multiple MCP processes, run `pnpm mcp:kill` before starting a fresh `claude` session after rebuilding.
+5. **Run Claude**: `claude` then e.g. “List ROS2 topics”, “What do you see?”, “Move the robot forward 1 meter.”
+
+Full steps, troubleshooting, and permissions are in **[packages/agenticros-claude-code/README.md](packages/agenticros-claude-code/README.md)**.
 
 ## Skills
 

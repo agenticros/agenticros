@@ -1,0 +1,9 @@
+{
+  "transport": { "mode": "zenoh" },
+  "zenoh": { "routerEndpoint": "ws://localhost:10000" },
+  "robot": {
+    "name": "MyRobot",
+    "namespace": "",
+    "cameraTopic": "/camera/camera/color/image_raw/compressed"
+  }
+}

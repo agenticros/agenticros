@@ -42,15 +42,20 @@ export function encodeCdr(typeStr: string, msg: Record<string, unknown>): Uint8A
   if (type === "geometry_msgs/msg/Twist") {
     const linear = (msg["linear"] as Record<string, unknown>) ?? {};
     const angular = (msg["angular"] as Record<string, unknown>) ?? {};
-    const writer = new CdrWriter({ kind: CDR_LE });
-    writer.align(8, 48);
-    writer.float64(Number(linear["x"] ?? 0));
-    writer.float64(Number(linear["y"] ?? 0));
-    writer.float64(Number(linear["z"] ?? 0));
-    writer.float64(Number(angular["x"] ?? 0));
-    writer.float64(Number(angular["y"] ?? 0));
-    writer.float64(Number(angular["z"] ?? 0));
-    return new Uint8Array(writer.data.buffer, 0, writer.size);
+    // 4-byte encapsulation only (52 bytes). Bridge skips 4 bytes then reads 6 float64 LE. Order: linear.y, linear.z, angular.x, angular.y, angular.z, linear.x.
+    const buf = new ArrayBuffer(4 + 6 * 8);
+    const view = new DataView(buf);
+    view.setUint32(0, 0x100, true);
+    const vals = [
+      Number(linear["y"] ?? 0),
+      Number(linear["z"] ?? 0),
+      Number(angular["x"] ?? 0),
+      Number(angular["y"] ?? 0),
+      Number(angular["z"] ?? 0),
+      Number(linear["x"] ?? 0),
+    ];
+    for (let i = 0; i < 6; i++) view.setFloat64(4 + i * 8, vals[i], true);
+    return new Uint8Array(buf);
   }
 
   throw new Error(`Zenoh CDR encode not implemented for type: ${typeStr}`);

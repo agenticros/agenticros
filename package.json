@@ -8,7 +8,8 @@
     "build": "pnpm -r build",
     "clean": "pnpm -r exec rm -rf dist tsconfig.tsbuildinfo",
     "lint": "pnpm -r lint",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "mcp:kill": "pkill -f 'node packages/agenticros-claude-code/dist/index.js' || true"
   },
   "engines": {
     "node": ">=20.0.0",
