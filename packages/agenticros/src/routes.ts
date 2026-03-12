@@ -89,8 +89,9 @@ export function registerRoutes(api: OpenClawPluginApi, config: AgenticROSConfig)
     res.end(JSON.stringify(payload));
   };
 
-  // Register under /agenticros, /api/agenticros, and /plugins/agenticros. requireAuth: false so gateway accepts routes when auth is enabled (2026.3.2+).
-  const route = (opts: { path: string; method?: string; handler: HttpRouteHandler }) => register({ ...opts, requireAuth: false });
+  // Register under /agenticros, /api/agenticros, and /plugins/agenticros. auth: "plugin" so 2026.3.11+ accepts; requireAuth: false for older gateways.
+  const route = (opts: { path: string; method?: string; handler: HttpRouteHandler }) =>
+    register({ ...opts, requireAuth: false, auth: "plugin" });
   for (const base of ["/agenticros", "/api/agenticros", "/plugins/agenticros"]) {
     route({ path: `${base}/`, method: "GET", handler: landingHandler });
     route({ path: `${base}/config`, method: "GET", handler: configPageHandler });

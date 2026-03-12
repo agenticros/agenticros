@@ -116,7 +116,7 @@ export function registerTeleopRoutes(api: OpenClawPluginApi, config: AgenticROSC
     return;
   }
   const route = (opts: { path: string; method?: string; handler: (req: HttpRouteRequest, res: HttpRouteResponse) => void | Promise<void> }) =>
-    register({ ...opts, requireAuth: false });
+    register({ ...opts, requireAuth: false, auth: "plugin" });
 
   /** Use config from file so namespace/camera/topics apply without gateway restart; fallback to initial config. */
   function getCurrentConfig(): AgenticROSConfig {

@@ -35,6 +35,11 @@ export default {
     const zenohEndpoint = config.zenoh?.routerEndpoint ?? "";
     api.logger.info(`AgenticROS: transport mode=${mode}${mode === "zenoh" && zenohEndpoint ? ` endpoint=${zenohEndpoint}` : ""}`);
 
+    // Register HTTP routes before any await so OpenClaw gateways that don't await register() still mount them (e.g. 2026.3.11 "async registration is ignored")
+    if (typeof api.registerHttpRoute === "function") {
+      registerRoutes(api, config);
+    }
+
     // Register the rosbridge WebSocket connection as a managed service
     registerService(api, config);
 
@@ -53,10 +58,6 @@ export default {
     // Register direct commands (bypass AI)
     registerEstopCommand(api, config);
     registerTransportCommand(api, config);
-
-    if (typeof api.registerHttpRoute === "function") {
-      registerRoutes(api, config);
-    }
 
     api.logger.info("AgenticROS plugin loaded successfully");
   },

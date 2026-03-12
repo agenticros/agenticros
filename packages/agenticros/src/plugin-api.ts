@@ -152,6 +152,8 @@ export interface HttpRouteOptions {
   handler: HttpRouteHandler;
   /** When false, gateway should not require Bearer auth for this route (OpenClaw 2026.3.2+ may reject registration if missing). */
   requireAuth?: boolean;
+  /** OpenClaw 2026.3.11+ requires explicit auth: "gateway" (use gateway token) or "plugin" (plugin-managed / no gateway auth). */
+  auth?: "gateway" | "plugin";
 }
 
 // --- Plugin API ---
