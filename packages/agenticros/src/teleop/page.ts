@@ -69,9 +69,9 @@ export function getTeleopPageHtml(config: AgenticROSConfig): string {
   <div class="btn-wrap">
     <div class="btn-row"><button type="button" id="btn-fwd" data-linear-x="1">Fwd</button></div>
     <div class="btn-row">
-      <button type="button" id="btn-left" data-angular-z="1">Left</button>
+      <button type="button" id="btn-left" data-linear-x="-1">Left</button>
       <button type="button" id="btn-stop" class="stop">Stop</button>
-      <button type="button" id="btn-right" data-angular-z="-1">Right</button>
+      <button type="button" id="btn-right" data-linear-x="1">Right</button>
     </div>
     <div class="btn-row"><button type="button" id="btn-back" data-linear-x="-1">Back</button></div>
   </div>
