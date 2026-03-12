@@ -59,14 +59,11 @@ If you see **“not found”** for `/plugins/agenticros/` even when using the pr
 
 **OpenClaw 2026.3.11** is the recommended version: plugin HTTP routes (e.g. http://127.0.0.1:18789/plugins/agenticros/) work correctly. The AgenticROS plugin registers routes synchronously and uses `auth: "plugin"` for compatibility.
 
-1. **Check out the test branch:** `git checkout test-openclaw-2026.3.11`
-2. **Install 2026.3.11:** `./scripts/use-openclaw-2026.3.11.sh`
-3. **Restart the gateway:** `openclaw gateway`
+- **Install 2026.3.11:** `./scripts/use-openclaw-2026.3.11.sh` (or use latest: `npm install -g openclaw@latest`)
+- **Restart the gateway:** `openclaw gateway`
+- **Open:** http://127.0.0.1:18789/plugins/agenticros/ (and http://127.0.0.1:18789/ for web chat)
 
-**To roll back** if 2026.3.11 doesn’t work:
-
-- **Back to latest OpenClaw:** `git checkout main`, then `npm install -g openclaw@latest`, then restart the gateway.
-- **Back to 2026.2.26 (known-good plugin routes):** `git checkout main`, then `./scripts/use-openclaw-2026.2.26.sh`, then restart the gateway.
+**Rollback** to 2026.2.26 if you hit issues: `./scripts/use-openclaw-2026.2.26.sh`, then restart the gateway.
 
 ---
 
