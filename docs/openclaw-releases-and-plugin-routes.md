@@ -53,6 +53,22 @@ If you see **“not found”** for `/plugins/agenticros/` even when using the pr
 | 2026.2.26        | Yes                      | Plugin routes work. Web chat may need token in URL — see [Web chat on 2026.2.26](#web-chat-not-loading-on-2026226) below. |
 | 2026.3.1         | **No** (Control UI first) | Workaround: `gateway.controlUi.enabled: false` |
 | 2026.3.2+        | Yes (fixed)              | Plugin routes go through gateway auth; use proxy (18790) when using token auth |
+| 2026.3.11        | Yes (test branch)       | Use branch `test-openclaw-2026.3.11` and `./scripts/use-openclaw-2026.3.11.sh`; see [Testing OpenClaw 2026.3.11](#testing-openclaw-2026311-and-rolling-back) to roll back. |
+
+### Testing OpenClaw 2026.3.11 and rolling back
+
+To try **OpenClaw 2026.3.11** (Gateway/Control UI and auth fixes), use the test branch and script:
+
+1. **Check out the test branch:** `git checkout test-openclaw-2026.3.11`
+2. **Install 2026.3.11:** `./scripts/use-openclaw-2026.3.11.sh`
+3. **Restart the gateway:** `openclaw gateway`
+
+**To roll back** if 2026.3.11 doesn’t work:
+
+- **Back to latest OpenClaw:** `git checkout main`, then `npm install -g openclaw@latest`, then restart the gateway.
+- **Back to 2026.2.26 (known-good plugin routes):** `git checkout main`, then `./scripts/use-openclaw-2026.2.26.sh`, then restart the gateway.
+
+---
 
 **Local dev (recommended):** Run **`node scripts/setup-openclaw-local.cjs`** to set `gateway.auth.mode` to `"none"`, then restart the gateway. Web chat and AgenticROS pages then work at **http://127.0.0.1:18789/** and **http://127.0.0.1:18789/plugins/agenticros/** without the proxy.
 
