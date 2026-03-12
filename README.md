@@ -56,7 +56,7 @@ Claude Code CLI → agenticros MCP server → Core → ROS2 robots (Zenoh/rosbri
 
 4. **Install and test the OpenClaw plugin**
 
-   Point the OpenClaw gateway at this repo’s `packages/agenticros` (or at a built package). Configure the plugin under `plugins.entries.agenticros.config` in your OpenClaw config file. Run `./scripts/setup_gateway_plugin.sh` from the repo root to register the plugin and print next steps. **If web chat and AgenticROS URLs don't load** (gateway logs "missing or invalid auth"): run **`./scripts/use-openclaw-2026.2.26.sh`**, then restart the gateway. Then open http://127.0.0.1:18789/ (web chat) and http://127.0.0.1:18789/plugins/agenticros/ (config, teleop). See **docs/openclaw-releases-and-plugin-routes.md**.
+   Point the OpenClaw gateway at this repo’s `packages/agenticros` (or at a built package). Configure the plugin under `plugins.entries.agenticros.config` in your OpenClaw config file. Run `./scripts/setup_gateway_plugin.sh` from the repo root to register the plugin and print next steps. **Recommended:** OpenClaw **2026.3.11** or later — plugin routes work at http://127.0.0.1:18789/plugins/agenticros/ (config, teleop). For local dev without token auth, run **`node scripts/setup-openclaw-local.cjs`** then restart the gateway. **If URLs don't load** (e.g. gateway logs "missing or invalid auth" on older versions): run **`./scripts/use-openclaw-2026.2.26.sh`** as fallback. See **docs/openclaw-releases-and-plugin-routes.md**.
 
 **With token auth:** Run `node scripts/agenticros-proxy.cjs 18790` and open http://127.0.0.1:18790/plugins/agenticros/. See **docs/teleop.md**.
 

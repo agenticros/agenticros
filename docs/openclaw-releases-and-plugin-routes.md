@@ -53,11 +53,11 @@ If you see **“not found”** for `/plugins/agenticros/` even when using the pr
 | 2026.2.26        | Yes                      | Plugin routes work. Web chat may need token in URL — see [Web chat on 2026.2.26](#web-chat-not-loading-on-2026226) below. |
 | 2026.3.1         | **No** (Control UI first) | Workaround: `gateway.controlUi.enabled: false` |
 | 2026.3.2+        | Yes (fixed)              | Plugin routes go through gateway auth; use proxy (18790) when using token auth |
-| 2026.3.11        | Yes (test branch)       | Use branch `test-openclaw-2026.3.11` and `./scripts/use-openclaw-2026.3.11.sh`; see [Testing OpenClaw 2026.3.11](#testing-openclaw-2026311-and-rolling-back) to roll back. |
+| 2026.3.11+       | **Yes (recommended)**    | Plugin routes work with sync registration and `auth: "plugin"`. Use `./scripts/use-openclaw-2026.3.11.sh` to pin to 2026.3.11, or `npm install -g openclaw@latest`. **Rollback:** `./scripts/use-openclaw-2026.2.26.sh` if needed. |
 
-### Testing OpenClaw 2026.3.11 and rolling back
+### OpenClaw 2026.3.11 (recommended)
 
-To try **OpenClaw 2026.3.11** (Gateway/Control UI and auth fixes), use the test branch and script:
+**OpenClaw 2026.3.11** is the recommended version: plugin HTTP routes (e.g. http://127.0.0.1:18789/plugins/agenticros/) work correctly. The AgenticROS plugin registers routes synchronously and uses `auth: "plugin"` for compatibility.
 
 1. **Check out the test branch:** `git checkout test-openclaw-2026.3.11`
 2. **Install 2026.3.11:** `./scripts/use-openclaw-2026.3.11.sh`
