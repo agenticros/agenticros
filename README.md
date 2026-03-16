@@ -82,6 +82,8 @@ Full steps, troubleshooting, and permissions are in **[packages/agenticros-claud
 
 AgenticROS **skills** are optional packages that add tools and behaviors to the plugin. They are loaded at gateway start.
 
+**[AgenticROS Skills](https://github.com/agenticros/agenticros-skills)** is a curated list of skills — use it to discover skills for your robot and to submit your own via pull request.
+
 - **Install**: In the OpenClaw config file, under `plugins.entries.agenticros.config`, set **`skillPackages`** (e.g. `["agenticros-skill-followme"]`) and ensure the package is installed where the gateway runs, or set **`skillPaths`** to directories containing skill packages. Restart the gateway after changes.
 - **Config**: Each skill reads its options from **`config.skills.<skillId>`** (e.g. `config.skills.followme`).
 - **Contract and creating a skill**: See **[docs/skills.md](docs/skills.md)** for the full contract, install steps, and how to build a third-party skill.
