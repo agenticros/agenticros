@@ -89,6 +89,24 @@ AgenticROS **skills** are optional packages that add tools and behaviors to the 
 - **Contract and creating a skill**: See **[docs/skills.md](docs/skills.md)** for the full contract, install steps, and how to build a third-party skill.
 - **Reference skill**: **[agenticros-skill-followme](https://github.com/your-org/agenticros-skill-followme)** — Follow Me (depth + optional Ollama), with tools `follow_robot`, `follow_me_see`, and `ollama_status`. Use its README as a template for new skills.
 
+## Running AgenticROS on NemoClaw
+
+[NVIDIA NemoClaw](https://github.com/NVIDIA/NemoClaw) runs OpenClaw inside an OpenShell sandbox with policy-enforced egress and inference. AgenticROS uses the same OpenClaw plugin API, so it is compatible—but you must add and configure the plugin inside the sandbox. No code changes are required.
+
+1. **Add the AgenticROS plugin to the NemoClaw sandbox**  
+   Make the AgenticROS package available inside the sandbox (bake it into the sandbox image or mount this repo). Ensure the OpenClaw gateway inside the sandbox can load it (e.g. `plugins.load.paths` or `openclaw plugins install -l` pointing at `packages/agenticros`).
+
+2. **Configure OpenClaw in the sandbox**  
+   In the sandbox’s OpenClaw config (e.g. `~/.openclaw/openclaw.json`), add the AgenticROS plugin: set **`plugins.entries.agenticros`** with the plugin path and **`plugins.entries.agenticros.config`** (transport mode, Zenoh endpoint or rosbridge URL, robot namespace, etc.). Same shape as [Quick start](#quick-start) step 4.
+
+3. **Allow network access to the robot**  
+   The sandbox restricts egress. In NemoClaw/OpenShell network policy, allow outbound connections to your robot’s Zenoh router (e.g. WebSocket port) or rosbridge host/port so the plugin can reach the robot.
+
+4. **Restart the gateway**  
+   Restart the OpenClaw gateway inside the sandbox so it loads both NemoClaw and AgenticROS. Then use the TUI or your channel to chat; the agent can use AgenticROS tools.
+
+See **[NemoClaw](https://github.com/NVIDIA/NemoClaw)** for install, sandbox lifecycle, and network policies.
+
 ## License
 
 Apache-2.0
