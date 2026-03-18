@@ -1,0 +1,25 @@
+{
+  "name": "@agenticros/gemini",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "AgenticROS Gemini adapter — chat with your ROS2 robot using Google Gemini",
+  "main": "./dist/index.js",
+  "bin": {
+    "agenticros-gemini": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@agenticros/core": "workspace:*",
+    "@google/genai": "^1.0.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "typescript": "^5.7.0"
+  },
+  "author": "PlaiPin",
+  "license": "Apache-2.0"
+}

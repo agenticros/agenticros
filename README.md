@@ -9,10 +9,12 @@ AgenticROS connects ROS2 robots to AI Agent platforms so you can control and que
 - **Core** (`packages/core`): Platform-agnostic ROS2 transport (rosbridge, Zenoh, local, WebRTC), config schema, and shared types. No dependency on any specific AI platform.
 - **Adapters** (`packages/agenticros`, and later others): Implement the contract for each AI platform. The OpenClaw adapter registers tools, commands, and HTTP routes with the OpenClaw gateway and uses the core for all ROS2 communication.
 - **`packages/agenticros-claude-code`** — MCP server for **Claude Code CLI**: use Claude from the terminal to talk to your robot (e.g. “what do you see?”, “move 1m forward”). See [packages/agenticros-claude-code/README.md](packages/agenticros-claude-code/README.md).
+- **`packages/agenticros-gemini`** — **Gemini CLI**: use Google Gemini to chat with your robot from the terminal (same ROS2 tools, no MCP). See [packages/agenticros-gemini/README.md](packages/agenticros-gemini/README.md).
 
 ```
 User (messaging app) → OpenClaw Gateway → AgenticROS OpenClaw plugin → Core → ROS2 robots
 Claude Code CLI → agenticros MCP server → Core → ROS2 robots (Zenoh/rosbridge)
+Gemini CLI → @agenticros/gemini (function calling) → Core → ROS2 robots
 ```
 
 ## Repository layout
@@ -20,6 +22,7 @@ Claude Code CLI → agenticros MCP server → Core → ROS2 robots (Zenoh/rosbri
 - **`packages/core`** — Transport, types, config (Zod). Used by all adapters.
 - **`packages/agenticros`** — OpenClaw plugin: tools, commands, config page, teleop routes.
 - **`packages/agenticros-claude-code`** — Claude Code CLI MCP server (tools only; no config UI).
+- **`packages/agenticros-gemini`** — Gemini CLI (function calling; no MCP).
 - **`ros2_ws/`** — ROS2 workspace: `agenticros_msgs`, `agenticros_discovery`, `agenticros_agent`, `agenticros_follow_me`.
 - **`docs/`** — Architecture, skills, robot setup, Zenoh, teleop.
 - **`scripts/`** — Workspace setup, gateway plugin config, run demos.
@@ -77,6 +80,19 @@ Use **Claude Code** in the terminal to control and query your robot via natural 
 5. **Run Claude**: `claude` then e.g. “List ROS2 topics”, “What do you see?”, “Move the robot forward 1 meter.”
 
 Full steps, troubleshooting, and permissions are in **[packages/agenticros-claude-code/README.md](packages/agenticros-claude-code/README.md)**.
+
+## Gemini CLI
+
+Use **Google Gemini** to chat with your robot from the terminal (same ROS2 tools as Claude Code, no MCP).
+
+1. **Build**: `pnpm install && pnpm build`
+2. **Config**: Same as Claude Code — `~/.agenticros/config.json` with `zenoh.routerEndpoint`, `robot.namespace`, etc.
+3. **Run**: Set `GEMINI_API_KEY` (or `GOOGLE_API_KEY`) and run:
+   ```bash
+   GEMINI_API_KEY=xxx pnpm --filter @agenticros/gemini exec agenticros-gemini "What do you see?"
+   ```
+
+See **[packages/agenticros-gemini/README.md](packages/agenticros-gemini/README.md)** for details.
 
 ## Skills
 

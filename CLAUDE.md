@@ -16,6 +16,7 @@ AgenticROS is a ROS2 integration for AI agent platforms. It provides a **core** 
 | `packages/core` | @agenticros/core — transport, types, config |
 | `packages/agenticros` | @agenticros/agenticros — OpenClaw plugin (id: agenticros) |
 | `packages/agenticros-claude-code` | @agenticros/claude-code — Claude Code CLI MCP server (stdio) |
+| `packages/agenticros-gemini` | @agenticros/gemini — Gemini CLI (function calling, no MCP) |
 | `ros2_ws/src/agenticros_msgs` | ROS2 messages and services |
 | `ros2_ws/src/agenticros_discovery` | Capability discovery node |
 | `ros2_ws/src/agenticros_agent` | WebRTC agent node (Mode C) |
@@ -37,6 +38,7 @@ AgenticROS is a ROS2 integration for AI agent platforms. It provides a **core** 
 
 - **OpenClaw** (`packages/agenticros`): Plugin for the OpenClaw gateway — tools, config UI, teleop web page. See “Loading the OpenClaw plugin” below.
 - **Claude Code CLI** (`packages/agenticros-claude-code`): MCP server over stdio so you can use Claude Code to chat with your ROS2 robot. No config/teleop UI. Setup: [packages/agenticros-claude-code/README.md](packages/agenticros-claude-code/README.md).
+- **Gemini CLI** (`packages/agenticros-gemini`): Standalone CLI using Google Gemini and function calling to chat with the robot (no MCP). Setup: [packages/agenticros-gemini/README.md](packages/agenticros-gemini/README.md). Requires `GEMINI_API_KEY` or `GOOGLE_API_KEY`.
 
 **Claude Code: use MCP tools for the robot (not the ros2 CLI).** When controlling the robot from Claude Code, use the agenticros MCP tools (e.g. `ros2_publish`, `ros2_list_topics`, `ros2_camera_snapshot`). Do not run `ros2 topic pub` or other `ros2` CLI commands in Bash — the `ros2` CLI is not installed on this machine; the robot is reached via the AgenticROS MCP server over Zenoh.
 
