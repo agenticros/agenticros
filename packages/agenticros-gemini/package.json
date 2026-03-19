@@ -9,7 +9,9 @@
   },
   "scripts": {
     "build": "tsc",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "smoke-api": "node scripts/smoke-api.mjs",
+    "chat": "node dist/index.js"
   },
   "dependencies": {
     "@agenticros/core": "workspace:*",

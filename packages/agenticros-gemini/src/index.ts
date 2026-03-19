@@ -7,6 +7,7 @@
  *   GEMINI_API_KEY=xxx agenticros-gemini   # read message from stdin
  *
  * Config: AGENTICROS_CONFIG_PATH or ~/.agenticros/config.json (same as other adapters).
+ * Optional: GEMINI_MODEL (default gemini-2.5-flash) if you hit quota on a specific model.
  */
 
 import { loadConfig } from "./config.js";
@@ -15,9 +16,10 @@ import { chatWithRobot } from "./chat.js";
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
+  const normalizedArgs = args.length > 0 && args[0] === "--" ? args.slice(1) : args;
   let userMessage: string;
-  if (args.length >= 1 && args[0].trim().length > 0) {
-    userMessage = args.join(" ").trim();
+  if (normalizedArgs.length >= 1 && normalizedArgs[0].trim().length > 0) {
+    userMessage = normalizedArgs.join(" ").trim();
   } else {
     userMessage = await readStdin();
   }

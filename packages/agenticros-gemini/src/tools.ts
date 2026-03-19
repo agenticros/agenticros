@@ -13,6 +13,8 @@ import { getDepthDistance } from "./depth.js";
 const COMPRESSED_IMAGE_TYPE = "sensor_msgs/msg/CompressedImage";
 const IMAGE_TYPE = "sensor_msgs/msg/Image";
 const DEFAULT_DEPTH_TOPIC = "/camera/camera/depth/image_rect_raw";
+const ENABLE_MULTIMODAL_FUNCTION_RESPONSE =
+  (process.env.GEMINI_ENABLE_MULTIMODAL_TOOL_RESPONSE ?? "").toLowerCase() === "true";
 
 function imageDataToBase64(data: unknown): string {
   if (data == null) return "";
@@ -132,6 +134,7 @@ export const GEMINI_TOOLS = [{ functionDeclarations: GEMINI_FUNCTION_DECLARATION
 export interface ToolResult {
   output: string;
   parts?: FunctionResponsePart[];
+  inlineImage?: { data: string; mimeType: string };
 }
 
 export async function executeTool(
@@ -344,9 +347,19 @@ export async function executeTool(
       const summary = `Captured one frame from ${topic}${result.width != null ? ` (${result.width}×${result.height})` : ""}.`;
       const parts: FunctionResponsePart[] = [];
       if (base64 && /^[A-Za-z0-9+/=]+$/.test(base64) && base64.length >= 100) {
-        parts.push(createFunctionResponsePartFromBase64(base64, mimeType));
+        if (ENABLE_MULTIMODAL_FUNCTION_RESPONSE) {
+          parts.push(createFunctionResponsePartFromBase64(base64, mimeType));
+        }
       } else if (!base64) {
         return { output: summary + " (No image data received—topic may be idle or transport returned empty.)" };
+      }
+      if (!ENABLE_MULTIMODAL_FUNCTION_RESPONSE) {
+        return {
+          output:
+            summary +
+            " (Image bytes captured; multimodal function response disabled for compatibility with models that reject it.)",
+          inlineImage: { data: base64, mimeType },
+        };
       }
       return { output: summary, parts };
     }

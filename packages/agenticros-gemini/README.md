@@ -41,6 +41,30 @@ pnpm build
 
 Or only this package: `pnpm --filter @agenticros/core build && pnpm --filter @agenticros/gemini build`.
 
+**Important:** Run `pnpm build` with nothing after it on the same line. If you paste extra words (e.g. from a comment like “if you haven’t already”), pnpm passes them to `tsc` and the build fails.
+
+### Quick API test (no ROS)
+
+After building, with a **real** key from [Google AI Studio](https://aistudio.google.com/apikey):
+
+```bash
+cd packages/agenticros-gemini
+export GEMINI_API_KEY="your-key-here"
+pnpm run smoke-api
+```
+
+You should see `Gemini: OK` (or similar). If you see `API_KEY_INVALID`, the key is wrong, revoked, or still the placeholder `YOUR_NEW_KEY_HERE`.
+
+### HTTP 429 / “quota exceeded” / `RESOURCE_EXHAUSTED`
+
+Your key is valid, but Google’s **free-tier limits** for that model are used up (or set to 0 for the project). This is **not** an AgenticROS bug.
+
+- Wait and retry (errors often include a suggested delay, e.g. ~12s).
+- Try another model: `export GEMINI_MODEL=gemini-2.5-flash` or `gemini-2.0-flash` (defaults may change; see [models](https://ai.google.dev/gemini-api/docs/models)).
+- Check usage and limits: [rate limits](https://ai.google.dev/gemini-api/docs/rate-limits), [AI Studio](https://aistudio.google.com/), and enable billing if you need higher quotas.
+
+The main CLI also respects **`GEMINI_MODEL`** (same as the smoke script after rebuild).
+
 ## Usage
 
 Set **`GEMINI_API_KEY`** (or **`GOOGLE_API_KEY`**) and run the CLI:

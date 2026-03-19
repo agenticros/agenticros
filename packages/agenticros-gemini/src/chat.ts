@@ -3,14 +3,25 @@
  */
 
 import type { Content } from "@google/genai";
-import { createPartFromFunctionResponse, createUserContent } from "@google/genai";
+import {
+  createPartFromBase64,
+  createPartFromFunctionResponse,
+  createPartFromText,
+  createUserContent,
+} from "@google/genai";
 import { GoogleGenAI } from "@google/genai";
 import type { AgenticROSConfig } from "@agenticros/core";
 import { GEMINI_TOOLS } from "./tools.js";
 import { executeTool } from "./tools.js";
 
-const DEFAULT_MODEL = "gemini-2.0-flash";
+/** Override with env GEMINI_MODEL (e.g. gemini-2.5-flash, gemini-2.0-flash). */
+const DEFAULT_MODEL = "gemini-2.5-flash";
 const MAX_TURNS = 20;
+
+function resolveModel(explicit?: string): string {
+  const fromEnv = process.env.GEMINI_MODEL?.trim();
+  return explicit ?? (fromEnv && fromEnv.length > 0 ? fromEnv : DEFAULT_MODEL);
+}
 
 export interface ChatOptions {
   apiKey?: string;
@@ -33,7 +44,7 @@ export async function chatWithRobot(
   }
 
   const ai = new GoogleGenAI({ apiKey });
-  const model = options.model ?? DEFAULT_MODEL;
+  const model = resolveModel(options.model);
 
   const generateConfig = {
     tools: GEMINI_TOOLS,
@@ -42,14 +53,30 @@ export async function chatWithRobot(
 
   let contents: Content[] = [createUserContent(userMessage)];
   let turns = 0;
+  let lastToolOutputs: string[] = [];
 
   while (turns < MAX_TURNS) {
     turns++;
-    const response = await ai.models.generateContent({
-      model,
-      contents,
-      config: generateConfig,
-    });
+    let response;
+    try {
+      response = await ai.models.generateContent({
+        model,
+        contents,
+        config: generateConfig,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (
+        (message.includes("429") || message.includes("RESOURCE_EXHAUSTED") || message.toLowerCase().includes("quota")) &&
+        lastToolOutputs.length > 0
+      ) {
+        return (
+          `${lastToolOutputs.join("\n")}\n\n` +
+          "(Gemini quota hit while composing final response. Returning latest tool output directly.)"
+        );
+      }
+      throw err;
+    }
 
     const functionCalls = response.functionCalls;
     if (!functionCalls || functionCalls.length === 0) {
@@ -65,6 +92,8 @@ export async function chatWithRobot(
 
     // Execute each function call and build function response parts.
     const responseParts = [];
+    lastToolOutputs = [];
+    const additionalUserContents: Content[] = [];
     for (const fc of functionCalls) {
       const name = fc.name ?? "unknown";
       const args = (fc.args ?? {}) as Record<string, unknown>;
@@ -78,11 +107,22 @@ export async function chatWithRobot(
         const result = await executeTool(name, args, config);
         output = result.output;
         parts = result.parts;
+        if (result.inlineImage) {
+          // Models that reject multimodal function responses can still reason over
+          // image bytes when provided in a regular user multimodal turn.
+          additionalUserContents.push(
+            createUserContent([
+              createPartFromText(`Image returned by tool ${name}. Use it to answer the user request.`),
+              createPartFromBase64(result.inlineImage.data, result.inlineImage.mimeType),
+            ]),
+          );
+        }
       } catch (err) {
         output = err instanceof Error ? err.message : String(err);
       }
       const part = createPartFromFunctionResponse(id, name, { output }, parts);
       responseParts.push(part);
+      lastToolOutputs.push(output);
     }
 
     // Next turn: previous conversation + model's function-call turn + our function responses as user content.
@@ -90,6 +130,7 @@ export async function chatWithRobot(
       ...contents,
       modelContent,
       createUserContent(responseParts),
+      ...additionalUserContents,
     ];
   }
 
