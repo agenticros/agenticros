@@ -92,7 +92,7 @@ Use **Google Gemini** to chat with your robot from the terminal (same ROS2 tools
    GEMINI_API_KEY=xxx pnpm --filter @agenticros/gemini exec agenticros-gemini "What do you see?"
    ```
 
-See **[packages/agenticros-gemini/README.md](packages/agenticros-gemini/README.md)** for details.
+See **[packages/agenticros-gemini/README.md](packages/agenticros-gemini/README.md)** for details and tested command examples (camera snapshot/description, depth distance, forward Twist, and stop).
 
 ## Skills
 

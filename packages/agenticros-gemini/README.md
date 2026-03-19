@@ -87,6 +87,22 @@ cd packages/agenticros-gemini
 GEMINI_API_KEY=xxx node dist/index.js "Move the robot forward 0.2 m/s for 2 seconds then stop."
 ```
 
+## Tested examples
+
+From the repo root:
+
+```bash
+pnpm --filter @agenticros/gemini run chat -- "Use ros2_camera_snapshot on /camera/camera/color/image_raw/compressed with message_type CompressedImage, then describe what you see in detail."
+
+pnpm --filter @agenticros/gemini run chat -- "Use ros2_depth_distance and report meters."
+
+pnpm --filter @agenticros/gemini run chat -- "Publish geometry_msgs/msg/Twist to /cmd_vel with linear.x=0.2, linear.y=0, linear.z=0, angular.x=0, angular.y=0, angular.z=0."
+
+pnpm --filter @agenticros/gemini run chat -- "Publish a stop command to cmd_vel."
+```
+
+For motion tests, send an explicit stop command as a separate command right after forward motion.
+
 ## Tools
 
 The same ROS2 tools as the OpenClaw and Claude Code adapters:
