@@ -8,12 +8,12 @@ AgenticROS connects ROS2 robots to AI Agent platforms so you can control and que
 
 - **Core** (`packages/core`): Platform-agnostic ROS2 transport (rosbridge, Zenoh, local, WebRTC), config schema, and shared types. No dependency on any specific AI platform.
 - **Adapters** (`packages/agenticros`, and later others): Implement the contract for each AI platform. The OpenClaw adapter registers tools, commands, and HTTP routes with the OpenClaw gateway and uses the core for all ROS2 communication.
-- **`packages/agenticros-claude-code`** — MCP server for **Claude Code CLI**: use Claude from the terminal to talk to your robot (e.g. “what do you see?”, “move 1m forward”). See [packages/agenticros-claude-code/README.md](packages/agenticros-claude-code/README.md).
+- **`packages/agenticros-claude-code`** — MCP server for **Claude Code** (terminal), **Claude desktop** (macOS), and **Dispatch** (iOS paired to Mac). See [packages/agenticros-claude-code/README.md](packages/agenticros-claude-code/README.md).
 - **`packages/agenticros-gemini`** — **Gemini CLI**: use Google Gemini to chat with your robot from the terminal (same ROS2 tools, no MCP). See [packages/agenticros-gemini/README.md](packages/agenticros-gemini/README.md).
 
 ```
 User (messaging app) → OpenClaw Gateway → AgenticROS OpenClaw plugin → Core → ROS2 robots
-Claude Code CLI → agenticros MCP server → Core → ROS2 robots (Zenoh/rosbridge)
+Claude (Code / desktop / Dispatch) → agenticros MCP server → Core → ROS2 robots (Zenoh/rosbridge)
 Gemini CLI → @agenticros/gemini (function calling) → Core → ROS2 robots
 ```
 
@@ -21,7 +21,7 @@ Gemini CLI → @agenticros/gemini (function calling) → Core → ROS2 robots
 
 - **`packages/core`** — Transport, types, config (Zod). Used by all adapters.
 - **`packages/agenticros`** — OpenClaw plugin: tools, commands, config page, teleop routes.
-- **`packages/agenticros-claude-code`** — Claude Code CLI MCP server (tools only; no config UI).
+- **`packages/agenticros-claude-code`** — MCP server for Claude Code + Claude desktop / Dispatch (tools only; no config UI).
 - **`packages/agenticros-gemini`** — Gemini CLI (function calling; no MCP).
 - **`ros2_ws/`** — ROS2 workspace: `agenticros_msgs`, `agenticros_discovery`, `agenticros_agent`, `agenticros_follow_me`.
 - **`docs/`** — Architecture, skills, robot setup, Zenoh, teleop.
@@ -65,21 +65,61 @@ Gemini CLI → @agenticros/gemini (function calling) → Core → ROS2 robots
 
 See **`docs/`** for robot setup, skills, teleop, and Docker.
 
-## Claude Code CLI (terminal)
+## Claude + AgenticROS (MCP)
 
-Use **Claude Code** in the terminal to control and query your robot via natural language (e.g. “move forward 1 meter”, “what do you see?”).
+The same **AgenticROS MCP server** (`@agenticros/claude-code`) can drive the robot from **Claude Code** (terminal) or from the **Claude desktop app** on macOS (including **Claude Dispatch** on iPhone when paired to Claude on your Mac). Both use MCP; they use **different config files**.
+
+Shared setup:
 
 1. **Build** (from repo root): `pnpm install && pnpm build`
-2. **Config**: Create `~/.agenticros/config.json` (see [packages/agenticros-claude-code/README.md](packages/agenticros-claude-code/README.md) for shape). Set `zenoh.routerEndpoint` (e.g. `ws://localhost:10000`) and `robot.namespace` if your robot uses a namespaced `cmd_vel`.
-3. **Start Zenoh**: Run `zenohd` with the remote-api plugin so port 10000 is listening (see `scripts/zenohd-agenticros.json5` or [docs/zenoh-agenticros.md](docs/zenoh-agenticros.md)).
-4. **Register MCP** (project scope, from repo root):
+2. **AgenticROS config**: `~/.agenticros/config.json` — set `zenoh.routerEndpoint`, `robot.namespace`, `robot.cameraTopic`, etc. (see [packages/agenticros-claude-code/README.md](packages/agenticros-claude-code/README.md)).
+3. **Zenoh**: Run `zenohd` with the remote-api plugin (e.g. port 10000) — see `scripts/zenohd-agenticros.json5` or [docs/zenoh-agenticros.md](docs/zenoh-agenticros.md).
+
+Optional: override `robot.namespace` per MCP launch with env **`AGENTICROS_ROBOT_NAMESPACE`** (must match the robot’s topic namespace exactly; many setups use **no dashes** in the UUID segment).
+
+### Claude Code CLI (terminal)
+
+1. **Register MCP** (project scope, from repo root):
+
    ```bash
    claude mcp add --transport stdio --scope project agenticros -- node packages/agenticros-claude-code/dist/index.js
    ```
-   Or add the server via `.mcp.json` (see package README). To avoid multiple MCP processes, run `pnpm mcp:kill` before starting a fresh `claude` session after rebuilding.
-5. **Run Claude**: `claude` then e.g. “List ROS2 topics”, “What do you see?”, “Move the robot forward 1 meter.”
 
-Full steps, troubleshooting, and permissions are in **[packages/agenticros-claude-code/README.md](packages/agenticros-claude-code/README.md)**.
+   Or add the server via `.mcp.json` in the repo. To avoid multiple MCP processes, run `pnpm mcp:kill` before starting a fresh `claude` session after rebuilding.
+
+2. **Run**: `claude` — e.g. “List ROS2 topics”, “What do you see?”, “Publish a stop to cmd_vel.”
+
+### Claude desktop app + Dispatch (iOS)
+
+Claude Code stores MCP in `~/.claude.json` or project `.mcp.json`. The **Claude desktop app** uses a separate file:
+
+- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+
+1. Copy your **agenticros** MCP entry from Claude Code / `.mcp.json` into `mcpServers` in `claude_desktop_config.json`.
+2. Use an **absolute path** to `packages/agenticros-claude-code/dist/index.js` (the desktop app’s working directory is not your repo root, so relative `node packages/...` paths will fail).
+3. **Fully quit** the Claude desktop app (not just close the window) and reopen it. The **agenticros** tools should appear in the desktop app and in **Dispatch** when your phone is paired to Claude on the Mac.
+
+Example `mcpServers` entry (adjust the path and namespace to your machine):
+
+```json
+{
+  "mcpServers": {
+    "agenticros": {
+      "command": "sh",
+      "args": [
+        "-c",
+        "node /ABSOLUTE/PATH/TO/agenticros/packages/agenticros-claude-code/dist/index.js 2>>/tmp/agenticros-mcp.log"
+      ],
+      "env": {
+        "AGENTICROS_ROBOT_NAMESPACE": "robotYOUR_NAMESPACE_NO_DASHES"
+      }
+    }
+  }
+}
+```
+
+Full steps, permissions (`mcp__agenticros`), and troubleshooting are in **[packages/agenticros-claude-code/README.md](packages/agenticros-claude-code/README.md)**.
 
 ## Gemini CLI
 

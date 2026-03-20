@@ -5,7 +5,7 @@
       "command": "sh",
       "args": ["-c", "node packages/agenticros-claude-code/dist/index.js 2>>/tmp/agenticros-mcp.log"],
       "env": {
-        "AGENTICROS_ROBOT_NAMESPACE": "robot3946b404-c33e-4aa3-9a8d-16deb1c5c593"
+        "AGENTICROS_ROBOT_NAMESPACE": "robot3946b404c33e4aa39a8d16deb1c5c593"
       }
     }
   }

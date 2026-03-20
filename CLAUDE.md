@@ -37,7 +37,7 @@ AgenticROS is a ROS2 integration for AI agent platforms. It provides a **core** 
 ## Adapters
 
 - **OpenClaw** (`packages/agenticros`): Plugin for the OpenClaw gateway — tools, config UI, teleop web page. See “Loading the OpenClaw plugin” below.
-- **Claude Code CLI** (`packages/agenticros-claude-code`): MCP server over stdio so you can use Claude Code to chat with your ROS2 robot. No config/teleop UI. Setup: [packages/agenticros-claude-code/README.md](packages/agenticros-claude-code/README.md).
+- **Claude Code CLI** (`packages/agenticros-claude-code`): MCP server over stdio for **Claude Code** (terminal) and the **Claude desktop app** on macOS (and **Claude Dispatch** on iPhone when paired to the Mac). Desktop MCP config: `~/Library/Application Support/Claude/claude_desktop_config.json` — use an absolute path to `dist/index.js`. Setup: [packages/agenticros-claude-code/README.md](packages/agenticros-claude-code/README.md).
 - **Gemini CLI** (`packages/agenticros-gemini`): Standalone CLI using Google Gemini and function calling to chat with the robot (no MCP). Setup: [packages/agenticros-gemini/README.md](packages/agenticros-gemini/README.md). Requires `GEMINI_API_KEY` or `GOOGLE_API_KEY`.
 
 **Claude Code: use MCP tools for the robot (not the ros2 CLI).** When controlling the robot from Claude Code, use the agenticros MCP tools (e.g. `ros2_publish`, `ros2_list_topics`, `ros2_camera_snapshot`). Do not run `ros2 topic pub` or other `ros2` CLI commands in Bash — the `ros2` CLI is not installed on this machine; the robot is reached via the AgenticROS MCP server over Zenoh.

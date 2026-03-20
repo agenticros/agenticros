@@ -1,6 +1,6 @@
 # AgenticROS Claude Code adapter
 
-MCP (Model Context Protocol) server that exposes AgenticROS ROS2 tools to **Claude Code CLI**. Use Claude Code to chat with your ROS2 robot from the terminal (e.g. "what do you see?", "move 1m forward").
+MCP (Model Context Protocol) server that exposes AgenticROS ROS2 tools to **Claude Code CLI** and to the **Claude desktop app** on macOS (including **Claude Dispatch** on iPhone when paired to Claude on your Mac). Use natural language to control and query your ROS2 robot (e.g. "what do you see?", "move 1m forward").
 
 This adapter does **not** provide the config or teleop web UI; use the [OpenClaw plugin](../../packages/agenticros) for that, or run the gateway for the browser-based teleop page.
 
@@ -8,7 +8,7 @@ This adapter does **not** provide the config or teleop web UI; use the [OpenClaw
 
 - Node.js 20+
 - ROS2 transport available (Zenoh router, rosbridge, or local DDS)
-- Claude Code CLI installed
+- **Claude Code CLI** and/or **Claude desktop app** (MCP-enabled)
 
 ## Config
 
@@ -32,7 +32,9 @@ Config shape is the same as the OpenClaw plugin (transport mode, Zenoh endpoint,
 }
 ```
 
-**Where to put `robot.namespace`:** The MCP server **only** reads the paths above. It does **not** read `.mcp.json` or config files in the repo (e.g. `config.example.json`). Put `robot.namespace`, `zenoh.routerEndpoint`, etc. in **`~/.agenticros/config.json`**, or set **`AGENTICROS_CONFIG_PATH`** to the path of your JSON file. To use a custom path when using Claude Code, add `"env": { "AGENTICROS_CONFIG_PATH": "/absolute/path/to/your.json" }` to the `agenticros` entry in `.mcp.json`.
+**Where to put `robot.namespace`:** Put `robot.namespace`, `zenoh.routerEndpoint`, etc. in **`~/.agenticros/config.json`**, or set **`AGENTICROS_CONFIG_PATH`** to the path of your JSON file. To override namespace only for a given MCP launch (e.g. desktop app vs another project), set env **`AGENTICROS_ROBOT_NAMESPACE`** on the MCP server entry — it overrides `robot.namespace` after the JSON is loaded. The value must match the robot’s ROS namespace exactly (many robots use **no hyphens** in the UUID part of `/robot<uuid>/cmd_vel`).
+
+The MCP server does **not** read arbitrary keys from `.mcp.json` except **`env`** passed to the process; AgenticROS settings still come from `~/.agenticros/config.json` (or `AGENTICROS_CONFIG_PATH` / OpenClaw fallback) plus optional **`AGENTICROS_ROBOT_NAMESPACE`** in `env`.
 
 **Zenoh:** The MCP server connects to the URL in `zenoh.routerEndpoint` (e.g. `ws://localhost:10000`). That must be the machine where **this** process runs: either start a Zenoh router on your Mac (`zenohd --listen tcp/0.0.0.0:7447 --listen ws/0.0.0.0:10000`) or, if the router runs on another host (e.g. the robot), set `routerEndpoint` to that host (e.g. `ws://192.168.1.5:10000`). If nothing is listening on that host:port, you will see "Remote api request timeout".
 
@@ -91,6 +93,40 @@ claude
 ```
 
 Scope options: `--scope user` (default), `--scope project` (shared via `.mcp.json`).
+
+## Claude desktop app + Claude Dispatch (iOS)
+
+The Claude **desktop** app uses a different MCP config file than Claude Code:
+
+| Platform | MCP config file |
+|----------|-----------------|
+| macOS | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Windows | `%APPDATA%\Claude\claude_desktop_config.json` |
+
+1. Add an **`agenticros`** entry under **`mcpServers`** with the same shape as in `.mcp.json`, but use an **absolute path** to the built server:
+
+   ```json
+   {
+     "mcpServers": {
+       "agenticros": {
+         "command": "sh",
+         "args": [
+           "-c",
+           "node /ABSOLUTE/PATH/TO/agenticros/packages/agenticros-claude-code/dist/index.js 2>>/tmp/agenticros-mcp.log"
+         ],
+         "env": {
+           "AGENTICROS_ROBOT_NAMESPACE": "robot3946b404c33e4aa39a8d16deb1c5c593"
+         }
+       }
+     }
+   }
+   ```
+
+   Replace the `node` path with your clone’s path. Relative paths like `packages/agenticros-claude-code/dist/index.js` usually **fail** from the desktop app because its working directory is not the repo root.
+
+2. **Fully quit** Claude (Cmd+Q on macOS) and restart — not just closing the window.
+
+3. **Claude Dispatch** on iPhone: when paired to Claude on your Mac, the same MCP tools available in the desktop app (including **agenticros**) can be used from Dispatch, subject to Claude app permissions and tool approval.
 
 ## Tools
 

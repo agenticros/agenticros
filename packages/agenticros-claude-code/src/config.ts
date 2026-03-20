@@ -5,6 +5,23 @@ import type { AgenticROSConfig } from "@agenticros/core";
 import { parseConfig } from "@agenticros/core";
 
 /**
+ * Optional MCP / process env override: set `robot.namespace` without editing JSON.
+ * Useful in `claude_desktop_config.json` or `.mcp.json` under `env`.
+ * Must match the robot’s ROS namespace exactly (often no dashes in the UUID segment).
+ */
+function applyMcpEnvOverrides(config: AgenticROSConfig): AgenticROSConfig {
+  const ns = process.env.AGENTICROS_ROBOT_NAMESPACE?.trim();
+  if (!ns) return config;
+  return {
+    ...config,
+    robot: {
+      ...config.robot,
+      namespace: ns,
+    },
+  };
+}
+
+/**
  * Resolve path to AgenticROS config file.
  * Prefer AGENTICROS_CONFIG_PATH; else ~/.agenticros/config.json.
  * Optional: fallback to OpenClaw config and read plugins.entries.agenticros.config.
@@ -59,14 +76,14 @@ export function loadConfig(): AgenticROSConfig {
       if (process.stderr && typeof process.stderr.write === "function") {
         process.stderr.write(`[AgenticROS] Config from ${primaryPath}\n`);
       }
-      return cfg;
+      return applyMcpEnvOverrides(cfg);
     }
   } catch (err) {
     const nodeErr = err as NodeJS.ErrnoException;
     if (nodeErr.code === "ENOENT") {
       const openclawConfig = tryOpenClawConfig();
       if (openclawConfig) {
-        return parseConfig(openclawConfig);
+        return applyMcpEnvOverrides(parseConfig(openclawConfig));
       }
       throw new Error(
         `AgenticROS config not found at ${primaryPath}. Create it or set AGENTICROS_CONFIG_PATH. ` +
@@ -75,5 +92,5 @@ export function loadConfig(): AgenticROSConfig {
     }
     throw err;
   }
-  return parseConfig({});
+  return applyMcpEnvOverrides(parseConfig({}));
 }
