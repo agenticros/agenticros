@@ -13,6 +13,9 @@ importers:
       '@agenticros/core':
         specifier: workspace:*
         version: link:../core
+      '@agenticros/ros-camera':
+        specifier: workspace:*
+        version: link:../ros-camera
       '@sinclair/typebox':
         specifier: ^0.34.0
         version: 0.34.48
@@ -29,6 +32,9 @@ importers:
       '@agenticros/core':
         specifier: workspace:*
         version: link:../core
+      '@agenticros/ros-camera':
+        specifier: workspace:*
+        version: link:../ros-camera
       '@modelcontextprotocol/sdk':
         specifier: ^1.0.0
         version: 1.27.1(zod@3.25.76)
@@ -48,6 +54,9 @@ importers:
       '@agenticros/core':
         specifier: workspace:*
         version: link:../core
+      '@agenticros/ros-camera':
+        specifier: workspace:*
+        version: link:../ros-camera
       '@google/genai':
         specifier: ^1.0.0
         version: 1.46.0(@modelcontextprotocol/sdk@1.27.1(zod@3.25.76))
@@ -90,6 +99,25 @@ importers:
       '@types/ws':
         specifier: ^8.5.13
         version: 8.18.1
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  packages/ros-camera:
+    dependencies:
+      fzstd:
+        specifier: ^0.1.1
+        version: 0.1.1
+      pngjs:
+        specifier: ^7.0.0
+        version: 7.0.0
+    devDependencies:
+      '@types/node':
+        specifier: ^20.17.0
+        version: 20.19.35
+      '@types/pngjs':
+        specifier: ^6.0.5
+        version: 6.0.5
       typescript:
         specifier: ^5.7.0
         version: 5.9.3
@@ -241,6 +269,9 @@ packages:
 
   '@types/node@20.19.35':
     resolution: {integrity: sha512-Uarfe6J91b9HAUXxjvSOdiO2UPOKLm07Q1oh0JHxoZ1y8HoqxDAu3gVrsrOHeiio0kSsoVBt4wFrKOm0dKxVPQ==}
+
+  '@types/pngjs@6.0.5':
+    resolution: {integrity: sha512-0k5eKfrA83JOZPppLtS2C7OUtyNAl2wKNxfyYl9Q5g9lPkgBl/9hNyAu6HuEH2J4XmIv2znEpkDd0SaZVxW6iQ==}
 
   '@types/retry@0.12.0':
     resolution: {integrity: sha512-wWKOClTTiizcZhXnPY4wikVAwmdYHp8q6DmC+EJUzAMsycb7HB32Kh9RN4+0gExjmPmZSAQjgURXIGATPegAvA==}
@@ -613,6 +644,9 @@ packages:
   function-bind@1.1.2:
     resolution: {integrity: sha512-7XHNxH7qX9xG5mIwxkhumTox/MIRNcOgDrxWsMt2pAr23WHp6MrRlN7FBSFpCpr+oVO0F744iUgR82nJMfG2SA==}
 
+  fzstd@0.1.1:
+    resolution: {integrity: sha512-dkuVSOKKwh3eas5VkJy1AW1vFpet8TA/fGmVA5krThl8YcOVE/8ZIoEA1+U1vEn5ckxxhLirSdY837azmbaNHA==}
+
   gaxios@7.1.4:
     resolution: {integrity: sha512-bTIgTsM2bWn3XklZISBTQX7ZSddGW+IO3bMdGaemHZ3tbqExMENHLx6kKZ/KlejgrMtj8q7wBItt51yegqalrA==}
     engines: {node: '>=18'}
@@ -902,6 +936,10 @@ packages:
   pkce-challenge@5.0.1:
     resolution: {integrity: sha512-wQ0b/W4Fr01qtpHlqSqspcj3EhBvimsdh0KlHhH8HRZnMsEa0ea2fTULOXOS9ccQr3om+GcGRk4e+isrZWV8qQ==}
     engines: {node: '>=16.20.0'}
+
+  pngjs@7.0.0:
+    resolution: {integrity: sha512-LKWqWJRhstyYo9pGvgor/ivk2w94eSjE3RGVuzLGlr3NmD8bf7RcYGze1mNdEHRP6TRP6rMuDHk5t44hnTRyow==}
+    engines: {node: '>=14.19.0'}
 
   prebuild-install@7.1.3:
     resolution: {integrity: sha512-8Mf2cbV7x1cXPUILADGI3wuhfqWvtiLA1iclTDbFRZkgRQS0NqsPZphna9V+HyTEadheuPmjaJMsbzKQFOzLug==}
@@ -1316,6 +1354,10 @@ snapshots:
   '@types/node@20.19.35':
     dependencies:
       undici-types: 6.21.0
+
+  '@types/pngjs@6.0.5':
+    dependencies:
+      '@types/node': 20.19.35
 
   '@types/retry@0.12.0': {}
 
@@ -1736,6 +1778,8 @@ snapshots:
 
   function-bind@1.1.2: {}
 
+  fzstd@0.1.1: {}
+
   gaxios@7.1.4:
     dependencies:
       extend: 3.0.2
@@ -2004,6 +2048,8 @@ snapshots:
   path-to-regexp@8.3.0: {}
 
   pkce-challenge@5.0.1: {}
+
+  pngjs@7.0.0: {}
 
   prebuild-install@7.1.3:
     dependencies:

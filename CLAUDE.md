@@ -14,6 +14,7 @@ AgenticROS is a ROS2 integration for AI agent platforms. It provides a **core** 
 | Path | Purpose |
 |------|---------|
 | `packages/core` | @agenticros/core — transport, types, config |
+| `packages/ros-camera` | @agenticros/ros-camera — shared camera snapshot encoding (Image / CompressedImage) for adapters |
 | `packages/agenticros` | @agenticros/agenticros — OpenClaw plugin (id: agenticros) |
 | `packages/agenticros-claude-code` | @agenticros/claude-code — Claude Code CLI MCP server (stdio) |
 | `packages/agenticros-gemini` | @agenticros/gemini — Gemini CLI (function calling, no MCP) |
@@ -46,7 +47,7 @@ AgenticROS is a ROS2 integration for AI agent platforms. It provides a **core** 
 
 Point the OpenClaw gateway at the plugin so it loads at startup:
 
-- **From source**: Set the gateway’s plugin path to this repo’s `packages/agenticros` (OpenClaw loads `.ts` via jiti). Ensure `pnpm install` has been run at repo root so `@agenticros/core` is available.
+- **From source**: Set the gateway’s plugin path to this repo’s `packages/agenticros` (OpenClaw loads `.ts` via jiti). Run `pnpm install` and **`pnpm build`** (or `pnpm --filter @agenticros/ros-camera build`) at repo root so `@agenticros/core` and `@agenticros/ros-camera` resolve to built `dist/` entrypoints.
 - **Config**: In the OpenClaw config file (e.g. `~/.openclaw/openclaw.json` or `OPENCLAW_CONFIG`), the AgenticROS plugin config lives under `plugins.entries.agenticros.config`. The config UI is at `/agenticros/config` when the gateway is running.
 
 ## Commands
@@ -59,4 +60,4 @@ pnpm build
 
 ## Adding another adapter
 
-Add `packages/<platform>/` that depends on `@agenticros/core`, implements that platform’s plugin API, and registers tools/commands by delegating to the core.
+Add `packages/<platform>/` that depends on `@agenticros/core` (and `@agenticros/ros-camera` if you need `ros2_camera_snapshot`), implements that platform’s plugin API, and registers tools/commands by delegating to the core.

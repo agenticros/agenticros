@@ -46,7 +46,7 @@ export function registerRobotContext(api: OpenClawPluginApi, config: AgenticROSC
     const capabilities = await discoverCapabilities(api, robotNamespace);
     const cameraTopicHint =
       (config.robot?.cameraTopic ?? "").trim() || "/camera/camera/color/image_raw/compressed";
-    const context = buildRobotContext(robotName, robotNamespace, capabilities, cameraTopicHint);
+    const context = buildRobotContext(config, robotName, robotNamespace, capabilities, cameraTopicHint);
     return { prependContext: context };
   });
 }
@@ -109,6 +109,7 @@ async function discoverCapabilities(
  * Build the robot context string that gets injected into the agent's system prompt.
  */
 function buildRobotContext(
+  config: AgenticROSConfig,
   name: string,
   namespace: string,
   capabilities: DiscoveryCache,
@@ -118,26 +119,70 @@ function buildRobotContext(
 
   // If discovery returned results, use them
   if (topics.length > 0 || services.length > 0 || actions.length > 0) {
-    return buildDynamicContext(name, namespace, topics, services, actions);
+    return buildDynamicContext(config, name, namespace, topics, services, actions);
   }
 
   // Fall back to hardcoded defaults if discovery failed
-  return buildFallbackContext(name, namespace, cameraTopicHint);
+  return buildFallbackContext(config, name, namespace, cameraTopicHint);
 }
 
-const USER_INTERFACE_BLURB = `
+function transportMode(config: AgenticROSConfig): "local" | "rosbridge" | "webrtc" | "zenoh" {
+  const m = config.transport?.mode;
+  if (m === "local" || m === "rosbridge" || m === "webrtc" || m === "zenoh") return m;
+  return "rosbridge";
+}
+
+/** How AgenticROS reaches ROS 2 — matches plugin transport.mode (injected into the model). */
+function buildUserInterfaceBlurb(config: AgenticROSConfig): string {
+  const mode = transportMode(config);
+  const rosbridgeUrl = (config.rosbridge?.url ?? "ws://localhost:9090").trim() || "ws://localhost:9090";
+  const zenohEp = (config.zenoh?.routerEndpoint ?? "ws://localhost:10000").trim() || "ws://localhost:10000";
+  const domainId = config.local?.domainId ?? 0;
+
+  let connectionLine: string;
+  let pairingLine: string;
+  switch (mode) {
+    case "local":
+      connectionLine = `It connects to ROS 2 on the **same machine** as this gateway using **local DDS** (direct participant via rclnodejs, ROS_DOMAIN_ID **${domainId}** by default). No rosbridge WebSocket and no Zenoh router are used in this mode.`;
+      pairingLine = `If the user says "nodes status shows zero" or "how do I pair the robot": explain that the robot stack is reached through **local DDS** on this host. There is **no** OpenClaw device pairing step for ROS. Ensure ROS 2 nodes and OpenClaw share the **same domain ID** and that the AgenticROS transport is connected—\`openclaw nodes status\` counts **OpenClaw mobile/desktop nodes**, not your ROS graph.`;
+      break;
+    case "zenoh":
+      connectionLine = `It connects to ROS 2 through **Zenoh** (zenoh-ts), typically at **${zenohEp}** (WebSocket to zenoh-plugin-remote-api — use \`ws://\`, not raw \`tcp/\` for the plugin).`;
+      pairingLine = `If the user says "nodes status shows zero" or "how do I pair the robot": explain that the robot is reached via the **Zenoh router** endpoint above. No OpenClaw node pairing is required for AgenticROS. If the plugin is loaded and Zenoh/your bridge see ROS traffic, the robot is connected—\`openclaw nodes status\` is irrelevant for AgenticROS.`;
+      break;
+    case "webrtc":
+      connectionLine = `It connects to the robot over **WebRTC** (signaling and robot id configured in the plugin). There is typically **no** rosbridge on this path.`;
+      pairingLine = `If the user says "nodes status shows zero" or "how do I pair the robot": explain that **OpenClaw device pairing** is unrelated; WebRTC robot connectivity uses the plugin's signaling/robot configuration.`;
+      break;
+    default:
+      connectionLine = `It connects to ROS 2 via **rosbridge** (WebSocket to \`rosbridge_server\`, e.g. **${rosbridgeUrl}**).`;
+      pairingLine = `If the user says "nodes status shows zero" or "how do I pair the robot": explain that the robot is already connected through the AgenticROS plugin's **rosbridge** URL (e.g. **${rosbridgeUrl}**). No pairing step is required. If the plugin is loaded and rosbridge is reachable, the robot is connected—\`openclaw nodes status\` is irrelevant for AgenticROS.`;
+  }
+
+  return `
 ### User-facing interface (tell users this when they ask)
 - **There is no separate robot GUI, dashboard, or URL.** The interface is this chat.
 - The user controls the robot by typing here (e.g. "move forward 1 meter", "what do you see?", "check the battery"). You execute commands with the ros2_* tools and reply in chat.
 - For telemetry: use \`ros2_subscribe_once\` or \`ros2_camera_snapshot\` and describe or show the result in your reply. There is no separate feed URL—you are the feed. If they want a "controller app," this chat is it.
 
 ### OpenClaw "nodes" — do not confuse with AgenticROS
-- AgenticROS is an **OpenClaw plugin** that runs inside this gateway. It connects to the robot via **rosbridge** (WebSocket to the robot's rosbridge_server). There is **no separate "AgenticROS agent" or "node" to pair**.
-- **Never tell users** to run \`openclaw node pair\`, \`openclaw nodes status\`, QR codes, or auth tokens for robot control. Those apply to OpenClaw's node/device pairing feature, not to AgenticROS.
-- If the user says "nodes status shows zero" or "how do I pair the robot": explain that the robot is already connected through the AgenticROS plugin's rosbridge connection (configured in the plugin as e.g. ws://localhost:9090). No pairing step is required. If the plugin is loaded and rosbridge is running on the robot, the robot is connected—\`openclaw nodes status\` is irrelevant for AgenticROS.
+- AgenticROS is an **OpenClaw plugin** that runs inside this gateway. ${connectionLine} There is **no separate "AgenticROS agent" or OpenClaw "node"** to pair for ROS control.
+- **Never tell users** to run \`openclaw node pair\`, \`openclaw nodes status\`, QR codes, or auth tokens **for ROS / robot control**. Those apply to OpenClaw's **companion device pairing**, not to AgenticROS talking to ROS 2.
+- ${pairingLine}
 `.trim();
+}
+
+/** For camera / image tips — all transports AgenticROS supports. */
+function imageTransportHint(config: AgenticROSConfig): string {
+  const mode = transportMode(config);
+  if (mode === "local") {
+    return "AgenticROS supports `sensor_msgs/msg/Image` and `sensor_msgs/msg/CompressedImage` over **local DDS** (this mode), and the same types over Zenoh or rosbridge when those transports are selected.";
+  }
+  return "AgenticROS supports `sensor_msgs/msg/Image` and `sensor_msgs/msg/CompressedImage` over **local DDS**, **Zenoh**, and **rosbridge**.";
+}
 
 function buildDynamicContext(
+  config: AgenticROSConfig,
   name: string,
   namespace: string,
   topics: TopicInfo[],
@@ -149,7 +194,7 @@ function buildDynamicContext(
   if (namespace) {
     context += `**Velocity commands:** Use \`ros2_publish\` with topic \`/cmd_vel\`; the plugin sends them to \`/${namespace}/cmd_vel\`.\n\n`;
   }
-  context += `${USER_INTERFACE_BLURB}\n\n`;
+  context += `${buildUserInterfaceBlurb(config)}\n\n`;
 
   // Cap injected lists to avoid huge context (rate limits / token burn)
   const MAX_TOPICS = 25;
@@ -197,7 +242,7 @@ function buildDynamicContext(
     context += "### Available skills\n";
     for (const id of skillIds) {
       if (id === "followme") {
-        context += `- **followme**: Use the **\`follow_robot\`** tool with action \`start\`, \`stop\`, or \`status\` to control person-following. There is no separate follow-robot HTTP service or port—everything runs inside this gateway via Zenoh/ROS2. For \"follow me\" or \"start following\", call \`follow_robot\` with action \`start\`; to stop, use action \`stop\`. Optional: \`follow_me_see\` (what the tracker sees), \`ollama_status\` (if using Ollama).\n`;
+        context += `- **followme**: Use the **\`follow_robot\`** tool with action \`start\`, \`stop\`, or \`status\` to control person-following. There is no separate follow-robot HTTP service or port—everything runs inside this gateway via ROS2 (Zenoh, local DDS, or rosbridge depending on transport). For \"follow me\" or \"start following\", call \`follow_robot\` with action \`start\`; to stop, use action \`stop\`. Optional: \`follow_me_see\` (what the tracker sees), \`ollama_status\` (if using Ollama).\n`;
       } else {
         context += `- **${id}**: Loaded; use the tools provided by this skill as documented in the skill.\n`;
       }
@@ -211,7 +256,7 @@ function buildDynamicContext(
 - All velocity commands are validated before execution
 
 ### Camera / "What does the robot see?"
-- When the user asks what the robot sees (or for a photo, camera view, or snapshot), **always call \`ros2_camera_snapshot\`** (or \`ros2_subscribe_once\` on a camera topic). Prefer a topic from the list above that contains **color** and **compressed** (e.g. \`/camera/camera/color/image_raw/compressed\`) for RGB. Do not assume the transport cannot decode images—AgenticROS supports \`sensor_msgs/msg/Image\` and \`sensor_msgs/msg/CompressedImage\` over Zenoh and rosbridge. If the tool returns an error, report it; otherwise show or describe the image.
+- When the user asks what the robot sees (or for a photo, camera view, or snapshot), **always call \`ros2_camera_snapshot\`** (or \`ros2_subscribe_once\` on a camera topic). Prefer a topic from the list above that contains **color** and **compressed** (e.g. \`/camera/camera/color/image_raw/compressed\`) for RGB. Do not assume the transport cannot decode images—${imageTransportHint(config)} If the tool returns an error, report it; otherwise show or describe the image.
 
 ### Tips
 - Use \`ros2_list_topics\` to discover all available topics
@@ -223,6 +268,7 @@ function buildDynamicContext(
 }
 
 function buildFallbackContext(
+  config: AgenticROSConfig,
   name: string,
   namespace: string,
   cameraTopicHint: string,
@@ -235,7 +281,7 @@ function buildFallbackContext(
         skillIds
           .map((id) =>
             id === "followme"
-              ? "- **followme**: Use the **`follow_robot`** tool with action `start`, `stop`, or `status` to control person-following. There is no separate follow-robot HTTP service or port—everything runs inside this gateway via Zenoh/ROS2. For \"follow me\" or \"start following\", call `follow_robot` with action `start`; to stop, use action `stop`. Optional: `follow_me_see`, `ollama_status`."
+              ? "- **followme**: Use the **`follow_robot`** tool with action `start`, `stop`, or `status` to control person-following. There is no separate follow-robot HTTP service or port—everything runs inside this gateway via ROS2 (Zenoh, local DDS, or rosbridge depending on transport). For \"follow me\" or \"start following\", call `follow_robot` with action `start`; to stop, use action `stop`. Optional: `follow_me_see`, `ollama_status`."
               : `- **${id}**: Loaded; use the tools provided by this skill as documented in the skill.`,
           )
           .join("\n") +
@@ -247,7 +293,7 @@ function buildFallbackContext(
 
 You are connected to a ROS2 robot named "${name}". You can control it using the ros2_* tools.
 
-${USER_INTERFACE_BLURB}
+${buildUserInterfaceBlurb(config)}
 
 ### Available Topics
 - \`${prefix}cmd_vel\` (geometry_msgs/msg/Twist) — Velocity commands
@@ -263,7 +309,10 @@ ${skillsSection}### Safety Limits
 - All velocity commands are validated before execution
 
 ### Camera / "What does the robot see?"
-- When the user asks what the robot sees (or for a photo, camera view, or snapshot), **always call \`ros2_camera_snapshot\`** (or \`ros2_subscribe_once\` on a camera topic). Do not assume the transport cannot decode images—AgenticROS supports \`sensor_msgs/msg/Image\` and \`sensor_msgs/msg/CompressedImage\` over Zenoh and rosbridge. If the tool returns an error, report it; otherwise show or describe the image.
+- When the user asks what the robot sees (or for a photo, camera view, or snapshot), **always call \`ros2_camera_snapshot\`** (or \`ros2_subscribe_once\` on a camera topic). Do not assume the transport cannot decode images—${imageTransportHint(config)} If the tool returns an error, report it; otherwise show or describe the image.
+
+### Distance / "How far am I?"
+- When the user asks how far they are from the robot (or depth / distance in meters), **call \`ros2_depth_distance\`** on a raw depth Image topic (e.g. RealSense \`/camera/camera/depth/image_rect_raw\`). Report the tool result or **quote the exact error text** if it fails (do not claim a generic "decode" failure without the tool message). If the result is valid, give **distance_m** as the measured answer.
 
 ### Tips
 - Use \`ros2_list_topics\` to discover all available topics

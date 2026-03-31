@@ -4,25 +4,18 @@
 
 import type { AgenticROSConfig } from "@agenticros/core";
 import { toNamespacedTopic } from "@agenticros/core";
+import {
+  ROS_MSG_COMPRESSED_IMAGE,
+  ROS_MSG_IMAGE,
+  cameraSnapshotFromPlainMessage,
+  mimeTypeForSnapshotBase64,
+  rosNumericField,
+} from "@agenticros/ros-camera";
 import { getTransport } from "./transport.js";
 import { checkPublishSafety } from "./safety.js";
 import { getDepthDistance } from "./depth.js";
 
-const COMPRESSED_IMAGE_TYPE = "sensor_msgs/msg/CompressedImage";
-const IMAGE_TYPE = "sensor_msgs/msg/Image";
 const DEFAULT_DEPTH_TOPIC = "/camera/camera/depth/image_rect_raw";
-
-function imageDataToBase64(data: unknown): string {
-  if (data == null) return "";
-  if (typeof data === "string") return data;
-  if (data instanceof Uint8Array) return Buffer.from(data).toString("base64");
-  if (Array.isArray(data)) {
-    const bytes = new Uint8Array(data.length);
-    for (let i = 0; i < data.length; i++) bytes[i] = Number(data[i]) & 0xff;
-    return Buffer.from(bytes).toString("base64");
-  }
-  throw new Error("Image data must be string (base64), Uint8Array, or array of bytes");
-}
 
 export interface McpTool {
   name: string;
@@ -323,7 +316,7 @@ export async function handleToolCall(
       const rawMsgType = args["message_type"] as string | undefined;
       const messageType: "CompressedImage" | "Image" = rawMsgType === "Image" ? "Image" : "CompressedImage";
       const timeout = (args["timeout"] as number | undefined) ?? 10000;
-      const type = messageType === "Image" ? IMAGE_TYPE : COMPRESSED_IMAGE_TYPE;
+      const type = messageType === "Image" ? ROS_MSG_IMAGE : ROS_MSG_COMPRESSED_IMAGE;
 
       const result = await new Promise<Record<string, unknown>>((resolve, reject) => {
         const subscription = transport.subscribe(
@@ -331,25 +324,18 @@ export async function handleToolCall(
           (msg: Record<string, unknown>) => {
             clearTimeout(timer);
             subscription.unsubscribe();
-            if (messageType === "Image") {
-              const data = msg["data"];
-              const encoding = (msg["encoding"] as string) ?? "rgb8";
+            try {
+              const payload = cameraSnapshotFromPlainMessage(messageType, msg);
               resolve({
                 success: true,
                 topic,
-                format: encoding,
-                data: imageDataToBase64(data),
-                width: msg["width"],
-                height: msg["height"],
+                format: payload.formatLabel,
+                data: payload.dataBase64,
+                width: payload.width,
+                height: payload.height,
               });
-            } else {
-              const raw = msg["data"];
-              resolve({
-                success: true,
-                topic,
-                format: msg["format"] ?? "jpeg",
-                data: typeof raw === "string" ? raw : imageDataToBase64(raw),
-              });
+            } catch (e) {
+              reject(e instanceof Error ? e : new Error(String(e)));
             }
           },
         );
@@ -361,12 +347,18 @@ export async function handleToolCall(
 
       const base64 = (result.data as string) ?? "";
       const format = String((result.format as string) ?? "jpeg").toLowerCase();
-      const mimeType =
-        format === "png" ? "image/png" : format === "gif" ? "image/gif" : format === "webp" ? "image/webp" : "image/jpeg";
-      const summary = `Captured one frame from ${topic}${result.width != null ? ` (${result.width}×${result.height})` : ""}.`;
+      const mimeType = mimeTypeForSnapshotBase64(base64, format);
+      const wNum = result.width != null ? rosNumericField(result.width, "width") : undefined;
+      const hNum = result.height != null ? rosNumericField(result.height, "height") : undefined;
+      const summary = `Captured one frame from ${topic}${wNum != null && hNum != null ? ` (${wNum}×${hNum})` : ""}.`;
       const content: ToolContent[] = [{ type: "text", text: summary }];
       if (base64 && /^[A-Za-z0-9+/=]+$/.test(base64) && base64.length >= 100) {
         content.push({ type: "image", data: base64, mimeType });
+      } else if (base64 && (!/^[A-Za-z0-9+/=]+$/.test(base64) || base64.length < 100)) {
+        content.push({
+          type: "text",
+          text: " (Image payload was present but not valid base64 or too small—check topic, message_type, or transport.)",
+        });
       } else if (!base64) {
         content.push({
           type: "text",

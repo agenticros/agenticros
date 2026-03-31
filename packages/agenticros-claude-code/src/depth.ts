@@ -4,20 +4,30 @@
  */
 
 import type { RosTransport } from "@agenticros/core";
+import {
+  ROS_MSG_IMAGE,
+  coerceRosImageDataToBuffer,
+  normalizeDepthImageEncoding,
+  rosBoolField,
+  rosNumericField,
+  rosStringField,
+} from "@agenticros/ros-camera";
 
-const IMAGE_TYPE = "sensor_msgs/msg/Image";
+function depthImageDataBytes(data: unknown): Uint8Array {
+  try {
+    return new Uint8Array(coerceRosImageDataToBuffer(data));
+  } catch (e) {
+    const hint = e instanceof Error ? e.message : String(e);
+    const kind =
+      data == null
+        ? "null"
+        : `${typeof data}${typeof data === "object" && data !== null ? ` (${(data as object).constructor?.name ?? "Object"})` : ""}`;
+    throw new Error(`Depth image bytes: ${hint} (data field: ${kind})`);
+  }
+}
 
-function toByteArray(data: unknown): Uint8Array {
-  if (data == null) throw new Error("Depth image has no data");
-  if (typeof data === "string") {
-    return new Uint8Array(Buffer.from(data, "base64"));
-  }
-  if (Array.isArray(data)) {
-    const out = new Uint8Array(data.length);
-    for (let i = 0; i < data.length; i++) out[i] = Number(data[i]) & 0xff;
-    return out;
-  }
-  throw new Error("Depth data must be string (base64) or array of bytes");
+function bytesPerPixelForDepthEncoding(encoding: string): number {
+  return normalizeDepthImageEncoding(encoding) === "32FC1" ? 4 : 2;
 }
 
 export function sampleDepthMeters(
@@ -27,9 +37,10 @@ export function sampleDepthMeters(
   encoding: string,
   data: Uint8Array,
   centerFraction = 0.3,
+  isBigEndian = false,
 ): number[] {
+  const enc = normalizeDepthImageEncoding(encoding);
   const values: number[] = [];
-  const isBigEndian = false;
   const cx = width / 2;
   const cy = height / 2;
   const halfW = Math.max(1, Math.floor((width * centerFraction) / 2));
@@ -39,7 +50,7 @@ export function sampleDepthMeters(
   const y0 = Math.max(0, Math.floor(cy - halfH));
   const y1 = Math.min(height, Math.floor(cy + halfH));
 
-  if (encoding === "16UC1" || encoding === "16uC1") {
+  if (enc === "16UC1") {
     for (let y = y0; y < y1; y++) {
       for (let x = x0; x < x1; x++) {
         const off = y * step + x * 2;
@@ -50,7 +61,7 @@ export function sampleDepthMeters(
         if (v > 0) values.push(v / 1000);
       }
     }
-  } else if (encoding === "32FC1" || encoding === "32fC1") {
+  } else if (enc === "32FC1") {
     for (let y = y0; y < y1; y++) {
       for (let x = x0; x < x1; x++) {
         const off = y * step + x * 4;
@@ -60,7 +71,9 @@ export function sampleDepthMeters(
       }
     }
   } else {
-    throw new Error(`Unsupported depth encoding: ${encoding}. Use 16UC1 (mm) or 32FC1 (m).`);
+    throw new Error(
+      `Unsupported depth encoding: "${encoding}" (interpreted as "${enc}"). Use 16UC1/mono16 (mm) or 32FC1 (m).`,
+    );
   }
   return values;
 }
@@ -91,7 +104,7 @@ export async function getDepthDistance(
 ): Promise<DepthSampleResult> {
   const result = await new Promise<Record<string, unknown>>((resolve, reject) => {
     const sub = transport.subscribe(
-      { topic, type: IMAGE_TYPE },
+      { topic, type: ROS_MSG_IMAGE },
       (msg: Record<string, unknown>) => {
         clearTimeout(timer);
         sub.unsubscribe();
@@ -100,17 +113,26 @@ export async function getDepthDistance(
     );
     const timer = setTimeout(() => {
       sub.unsubscribe();
-      reject(new Error(`Depth snapshot timeout on ${topic}`));
+      reject(
+        new Error(
+          `Depth snapshot timeout on ${topic} (${timeoutMs}ms). No sensor_msgs/Image received—check topic and that it publishes raw depth (not CompressedImage only). With Zenoh, check the gateway log for CDR decode warnings.`,
+        ),
+      );
     }, timeoutMs);
   });
 
-  const width = Number(result.width) || 0;
-  const height = Number(result.height) || 0;
-  const step = Number(result.step) || width * 2;
-  const encoding = (result.encoding as string) ?? "16UC1";
-  const data = toByteArray(result.data);
+  const encoding = normalizeDepthImageEncoding(rosStringField(result.encoding, "16UC1"));
+  const bpp = bytesPerPixelForDepthEncoding(encoding);
+  const width = rosNumericField(result.width, "width");
+  const height = rosNumericField(result.height, "height");
+  const step =
+    result.step != null && result.step !== ""
+      ? rosNumericField(result.step, "step")
+      : width * bpp;
+  const isBigEndian = rosBoolField(result.is_bigendian);
+  const data = depthImageDataBytes(result.data);
 
-  const values = sampleDepthMeters(width, height, step, encoding, data);
+  const values = sampleDepthMeters(width, height, step, encoding, data, 0.3, isBigEndian);
   const sorted = values.slice().sort((a, b) => a - b);
   const distance_m = median(sorted);
   const min_m = sorted.length ? sorted[0] : NaN;

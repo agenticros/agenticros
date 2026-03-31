@@ -52,7 +52,7 @@ export class EntityCache {
         MessageClass,
         topic,
         (msg: any) => {
-          const plain = fromRosMessage(msg);
+          const plain = fromRosMessage(msg, typeStr);
           for (const h of handlers) {
             h(plain);
           }

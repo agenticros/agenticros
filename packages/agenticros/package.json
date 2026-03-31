@@ -5,13 +5,16 @@
   "description": "AgenticROS OpenClaw plugin — ROS2 tools, commands, and routes for the OpenClaw gateway",
   "openclaw": {
     "id": "agenticros",
-    "extensions": ["./src/index.ts"]
+    "extensions": [
+      "./src/index.ts"
+    ]
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@agenticros/core": "workspace:*",
+    "@agenticros/ros-camera": "workspace:*",
     "@sinclair/typebox": "^0.34.0"
   },
   "devDependencies": {

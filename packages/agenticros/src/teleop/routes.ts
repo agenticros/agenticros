@@ -4,9 +4,8 @@ import { toNamespacedTopic, toNamespacedTopicFull } from "@agenticros/core";
 import { getTransport, getTransportOrNull, getTransportMode, tryReconnectFromFile } from "../service.js";
 import { readAgenticROSConfigFromFile } from "../config-file.js";
 import { getTeleopPageHtml } from "./page.js";
+import { ROS_MSG_COMPRESSED_IMAGE } from "@agenticros/ros-camera";
 
-const COMPRESSED_IMAGE_TYPE = "sensor_msgs/msg/CompressedImage";
-const IMAGE_TYPE = "sensor_msgs/msg/Image";
 const TWIST_TYPE = "geometry_msgs/msg/Twist";
 
 /** Image/CompressedImage type names (for filtering topics). */
@@ -314,12 +313,12 @@ export function registerTeleopRoutes(api: OpenClawPluginApi, config: AgenticROSC
           };
           if (typeof (transport as { subscribeAsync?: unknown }).subscribeAsync === "function") {
             state.sub = await (transport as { subscribeAsync(opts: { topic: string; type: string }, h: (msg: Record<string, unknown>) => void): Promise<{ unsubscribe(): void }> }).subscribeAsync(
-              { topic: resolvedTopic, type: COMPRESSED_IMAGE_TYPE },
+              { topic: resolvedTopic, type: ROS_MSG_COMPRESSED_IMAGE },
               handler,
             );
           } else {
             state.sub = transport.subscribe(
-              { topic: resolvedTopic, type: COMPRESSED_IMAGE_TYPE },
+              { topic: resolvedTopic, type: ROS_MSG_COMPRESSED_IMAGE },
               handler,
             );
           }

@@ -89,13 +89,187 @@ function assignFields(target: any, source: Record<string, unknown>): void {
 }
 
 /**
+ * True for message shapes whose `data` must stay as raw bytes.
+ * rclnodejs `toPlainObject()` often expands or mis-serializes `uint8[]` / sequences
+ * (e.g. sensor_msgs Image / CompressedImage), which breaks camera snapshot and similar tools.
+ *
+ * Use `in` / typeof — fields may be accessors on the prototype (not own properties).
+ */
+function isSensorImageLikeForExtraction(msg: any): boolean {
+  if (msg == null || typeof msg !== "object") return false;
+  if (!("data" in msg)) return false;
+  // sensor_msgs/msg/Image — PointCloud2 has width/height/data but no `encoding`.
+  // Width/height may be ref-wrapped in rclnodejs; only require presence + string encoding.
+  if (typeof msg.encoding === "string" && "width" in msg && "height" in msg) {
+    return true;
+  }
+  // sensor_msgs/msg/CompressedImage — `format` + `data`; no top-level `encoding` (unlike Image).
+  if (typeof msg.format === "string" && !(typeof msg.encoding === "string")) {
+    return true;
+  }
+  return false;
+}
+
+/** std_msgs/Header — read by name; stamp may be a nested ROS object. */
+function copyHeaderField(header: any): Record<string, unknown> {
+  if (header == null || typeof header !== "object") return {};
+  const out: Record<string, unknown> = {};
+  if ("frame_id" in header) out.frame_id = header.frame_id;
+  if ("stamp" in header && header.stamp != null && typeof header.stamp === "object") {
+    const s = header.stamp;
+    const stamp: { sec?: number; nanosec?: number } = {};
+    if (typeof s.sec === "number" || typeof s.sec === "bigint") stamp.sec = Number(s.sec);
+    if (typeof s.nanosec === "number" || typeof s.nanosec === "bigint") {
+      stamp.nanosec = Number(s.nanosec);
+    }
+    out.stamp = stamp;
+  }
+  return out;
+}
+
+/** rclnodejs / ref-array `uint8[]` — numeric `.length` and indexed elements. */
+function tryBufferFromArrayLike(value: unknown): Buffer | null {
+  if (value == null || typeof value !== "object") return null;
+  const v = value as Record<string, unknown> & { length?: unknown };
+  const len = v.length;
+  if (typeof len !== "number" || !Number.isFinite(len) || len < 0 || len > 200_000_000) {
+    return null;
+  }
+  try {
+    const anyVal = value as Record<number, unknown>;
+    const u8 = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      const el = anyVal[i];
+      const n = typeof el === "number" ? el : Number(el);
+      if (!Number.isFinite(n)) return null;
+      u8[i] = n & 0xff;
+    }
+    return Buffer.from(u8);
+  } catch {
+    return null;
+  }
+}
+
+function tryBufferFromIterable(value: unknown): Buffer | null {
+  if (value == null || typeof value !== "object") return null;
+  if (typeof Buffer !== "undefined" && Buffer.isBuffer(value)) return Buffer.from(value);
+  if (typeof (value as any)[Symbol.iterator] !== "function") return null;
+  try {
+    const arr = Uint8Array.from(value as Iterable<number>);
+    if (arr.length === 0) return null;
+    return Buffer.from(arr);
+  } catch {
+    return null;
+  }
+}
+
+/** Unwrap `data` for Image / CompressedImage (Buffer, views, JSON Buffer, nested `{ data }`). */
+function coerceSensorImageDataField(value: unknown, depth = 0): unknown {
+  if (value == null || depth > 4) return value;
+  if (typeof Buffer !== "undefined" && Buffer.isBuffer(value)) {
+    return Buffer.from(value);
+  }
+  if (typeof ArrayBuffer !== "undefined" && ArrayBuffer.isView(value)) {
+    const view = value as ArrayBufferView;
+    return Buffer.from(view.buffer, view.byteOffset, view.byteLength);
+  }
+  if (Array.isArray(value)) return value;
+  if (typeof value === "object") {
+    const rec = value as Record<string, unknown>;
+    if (rec["type"] === "Buffer" && Array.isArray(rec["data"])) {
+      return coerceSensorImageDataField(rec["data"], depth + 1);
+    }
+    if ("data" in rec && rec["data"] !== undefined) {
+      return coerceSensorImageDataField(rec["data"], depth + 1);
+    }
+  }
+  const fromIterable = tryBufferFromIterable(value);
+  if (fromIterable !== null) return fromIterable;
+  const fromArrayLike = tryBufferFromArrayLike(value);
+  if (fromArrayLike !== null) return fromArrayLike;
+  return value;
+}
+
+/**
+ * Copy one field value from an rclnodejs message for plain-object consumers.
+ * Preserves byte blobs; recurses into typical nested ROS structs (not full generic graph).
+ */
+function copyValueForPlainTransport(value: any): unknown {
+  if (value === null || value === undefined) return value;
+  if (typeof value === "function") return undefined;
+  if (typeof Buffer !== "undefined" && Buffer.isBuffer(value)) {
+    return Buffer.from(value);
+  }
+  if (typeof ArrayBuffer !== "undefined" && ArrayBuffer.isView(value)) {
+    const view = value as ArrayBufferView;
+    return Buffer.from(view.buffer, view.byteOffset, view.byteLength);
+  }
+  if (Array.isArray(value)) {
+    return value.map((item: any) =>
+      typeof item === "object" && item !== null ? copyValueForPlainTransport(item) : item,
+    );
+  }
+  if (typeof value === "object") {
+    if (value.constructor && value.constructor.name !== "Object") {
+      return extractFields(value);
+    }
+    return value;
+  }
+  return value;
+}
+
+/**
+ * rclnodejs often exposes Image/CompressedImage fields via prototype getters, so
+ * `Object.keys(msg)` is empty and `extractFields` produced `{}`. Read the known
+ * sensor_msgs field names explicitly.
+ */
+function extractSensorImageToPlain(msg: any): Record<string, unknown> {
+  const keys = [
+    "header",
+    "format",
+    "encoding",
+    "height",
+    "width",
+    "is_bigendian",
+    "step",
+    "data",
+  ] as const;
+  const result: Record<string, unknown> = {};
+  for (const key of keys) {
+    if (!(key in msg)) continue;
+    const value = msg[key];
+    if (typeof value === "function") continue;
+    if (key === "header") {
+      result.header = copyHeaderField(value);
+    } else if (key === "data") {
+      result.data = coerceSensorImageDataField(value);
+    } else {
+      result[key] = copyValueForPlainTransport(value);
+    }
+  }
+  return result;
+}
+
+/**
  * Convert an rclnodejs message instance to a plain JS object.
  *
  * Uses `toPlainObject()` if available (rclnodejs >= 0.21), otherwise
  * falls back to manual recursive field extraction.
  */
-export function fromRosMessage(msg: any): Record<string, unknown> {
+export function fromRosMessage(msg: any, rosTypeHint?: string): Record<string, unknown> {
   if (msg === null || msg === undefined) return {};
+
+  const hinted = rosTypeHint ? normalizeType(rosTypeHint) : "";
+  if (
+    hinted === "sensor_msgs/msg/Image" ||
+    hinted === "sensor_msgs/msg/CompressedImage"
+  ) {
+    return extractSensorImageToPlain(msg);
+  }
+
+  if (isSensorImageLikeForExtraction(msg)) {
+    return extractSensorImageToPlain(msg);
+  }
 
   // Preferred path: rclnodejs provides toPlainObject()
   if (typeof msg.toPlainObject === "function") {
@@ -126,6 +300,12 @@ function extractFields(msg: any): Record<string, unknown> {
 
     if (value === null || value === undefined) {
       result[key] = value;
+    } else if (typeof Buffer !== "undefined" && Buffer.isBuffer(value)) {
+      // Keep raw byte blobs intact (sensor_msgs Image/CompressedImage `data`, etc.).
+      result[key] = Buffer.from(value);
+    } else if (typeof ArrayBuffer !== "undefined" && ArrayBuffer.isView(value)) {
+      const view = value as ArrayBufferView;
+      result[key] = Buffer.from(view.buffer, view.byteOffset, view.byteLength);
     } else if (Array.isArray(value)) {
       result[key] = value.map((item: any) =>
         typeof item === "object" && item !== null ? extractFields(item) : item,

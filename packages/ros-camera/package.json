@@ -1,0 +1,30 @@
+{
+  "name": "@agenticros/ros-camera",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "Shared ROS2 camera snapshot encoding (sensor_msgs Image / CompressedImage) for AgenticROS adapters",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "fzstd": "^0.1.1",
+    "pngjs": "^7.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "@types/pngjs": "^6.0.5",
+    "typescript": "^5.7.0"
+  },
+  "author": "PlaiPin",
+  "license": "Apache-2.0"
+}
