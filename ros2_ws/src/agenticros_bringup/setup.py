@@ -15,6 +15,11 @@ setup(
         ("share/" + package_name + "/rviz", glob("rviz/*.rviz")),
     ],
     install_requires=["setuptools"],
+    entry_points={
+        "console_scripts": [
+            "cmd_vel_relay = agenticros_bringup.cmd_vel_relay:main",
+        ],
+    },
     zip_safe=True,
     maintainer="PlaiPin",
     maintainer_email="team@plaipin.com",

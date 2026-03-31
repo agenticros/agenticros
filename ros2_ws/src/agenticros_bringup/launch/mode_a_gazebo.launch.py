@@ -26,6 +26,16 @@ def generate_launch_description():
                 name="ROS_DOMAIN_ID",
                 value=LaunchConfiguration("ros_domain_id"),
             ),
+            DeclareLaunchArgument(
+                "robot_namespace",
+                default_value="",
+                description="Same as AgenticROS robot.namespace; relays /<ns>/cmd_vel -> /cmd_vel",
+            ),
+            DeclareLaunchArgument(
+                "turtlebot3_model",
+                default_value="burger",
+                description="TurtleBot3 model: burger | waffle | waffle_pi",
+            ),
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
                     PathJoinSubstitution(
@@ -36,6 +46,10 @@ def generate_launch_description():
                         ]
                     )
                 ),
+                launch_arguments={
+                    "robot_namespace": LaunchConfiguration("robot_namespace"),
+                    "turtlebot3_model": LaunchConfiguration("turtlebot3_model"),
+                }.items(),
             ),
         ]
     )

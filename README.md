@@ -71,6 +71,8 @@ The package **`agenticros_bringup`** provides launch files and an RViz2 config s
 
 **Install** (Ubuntu / ROS 2 Jazzy): `sudo apt install ros-jazzy-turtlebot3-gazebo ros-jazzy-rviz2 ros-jazzy-rosbridge-suite` (or rely on the Docker image, which already includes them). **`colcon build` does not install this** — if you see `package 'turtlebot3_gazebo' not found`, run the `apt` line above, then verify with `ros2 pkg prefix turtlebot3_gazebo` after sourcing `/opt/ros/jazzy/setup.bash`.
 
+For **namespaced** `cmd_vel` (same `robot.namespace` as the plugin in OpenClaw), pass **`robot_namespace:=<id>`** to the Gazebo bringup launches, or see [agenticros_bringup README](ros2_ws/src/agenticros_bringup/README.md#namespaced-cmd_vel-agenticros-robotnamespace).
+
 **Build** the workspace package (from **`ros2_ws`** after a full `colcon build`, or alone):
 
 ```bash
