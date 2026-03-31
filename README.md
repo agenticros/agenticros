@@ -23,7 +23,7 @@ Gemini CLI → @agenticros/gemini (function calling) → Core → ROS2 robots
 - **`packages/agenticros`** — OpenClaw plugin: tools, commands, config page, teleop routes.
 - **`packages/agenticros-claude-code`** — MCP server for Claude Code + Claude desktop / Dispatch (tools only; no config UI).
 - **`packages/agenticros-gemini`** — Gemini CLI (function calling; no MCP).
-- **`ros2_ws/`** — ROS2 workspace: `agenticros_msgs`, `agenticros_discovery`, `agenticros_agent`, `agenticros_follow_me`.
+- **`ros2_ws/`** — ROS2 workspace: `agenticros_msgs`, `agenticros_bringup` (Gazebo + RViz + rosbridge launches), `agenticros_discovery`, `agenticros_agent`, `agenticros_follow_me`.
 - **`docs/`** — Architecture, skills, robot setup, Zenoh, teleop.
 - **`scripts/`** — Workspace setup, gateway plugin config, run demos.
 - **`docker/`** — Docker Compose and Dockerfiles for ROS2 + plugin images.
@@ -47,7 +47,7 @@ Gemini CLI → @agenticros/gemini (function calling) → Core → ROS2 robots
 
    ```bash
    cd ros2_ws
-   colcon build --packages-select agenticros_msgs agenticros_discovery agenticros_agent agenticros_follow_me
+   colcon build --packages-select agenticros_msgs agenticros_bringup agenticros_discovery agenticros_agent agenticros_follow_me
    source install/setup.bash
    ```
 
@@ -64,6 +64,52 @@ Gemini CLI → @agenticros/gemini (function calling) → Core → ROS2 robots
 **With token auth:** Run `node scripts/agenticros-proxy.cjs 18790` and open http://127.0.0.1:18790/plugins/agenticros/. See **docs/teleop.md**.
 
 See **`docs/`** for robot setup, skills, teleop, and Docker.
+
+## RViz2 and Gazebo (TurtleBot3 + rosbridge)
+
+The package **`agenticros_bringup`** provides launch files and an RViz2 config so you can run the same style of stack used in **`examples/turtlebot-chat`** and **`docker/`**: TurtleBot3 in Gazebo, **`/scan`**, **`/cmd_vel`**, and rosbridge on **port 9090** for the AgenticROS plugin.
+
+**Install** (Ubuntu / ROS 2 Jazzy): `sudo apt install ros-jazzy-turtlebot3-gazebo ros-jazzy-rviz2 ros-jazzy-rosbridge-suite` (or rely on the Docker image, which already includes them). **`colcon build` does not install this** — if you see `package 'turtlebot3_gazebo' not found`, run the `apt` line above, then verify with `ros2 pkg prefix turtlebot3_gazebo` after sourcing `/opt/ros/jazzy/setup.bash`.
+
+**Build** the workspace package (from **`ros2_ws`** after a full `colcon build`, or alone):
+
+```bash
+cd ros2_ws
+source /opt/ros/jazzy/setup.bash
+colcon build --packages-select agenticros_bringup
+source install/setup.bash
+```
+
+**Commands** (after `source install/setup.bash`):
+
+| Goal | Command |
+|------|--------|
+| **Rosbridge + Gazebo** (headless-friendly; plugin uses `ws://localhost:9090`) | `ros2 launch agenticros_bringup rosbridge_gazebo.launch.py` |
+| **Gazebo + RViz** on one machine (needs a display) | `ros2 launch agenticros_bringup turtlebot3_gazebo_rviz.launch.py` |
+| **RViz only** (simulation already running) | `ros2 launch agenticros_bringup rviz.launch.py use_sim_time:=true` |
+| **Gazebo only** (you start rosbridge yourself) | `ros2 launch agenticros_bringup gazebo_turtlebot3.launch.py` |
+
+**Parameters**: e.g. `turtlebot3_model:=waffle`, or `rviz_config:=/path/to/custom.rviz` for the RViz launch.
+
+**Mode A (local DDS)** — OpenClaw and Gazebo on the **same machine**, plugin transport **`local`** (no rosbridge). Match **`ROS_DOMAIN_ID`** between the sim and the plugin (default **`0`**):
+
+```bash
+ros2 launch agenticros_bringup mode_a_gazebo.launch.py
+# With RViz: ros2 launch agenticros_bringup mode_a_gazebo_rviz.launch.py
+```
+
+In the AgenticROS config UI, set **Transport mode** to **local** and **Domain ID** to the same value as `ros_domain_id` (default `0`). Then drive the robot with the usual tools (e.g. `ros2_publish` on `/cmd_vel`).
+
+**Docker** (starts Gazebo + TurtleBot3 + rosbridge — typical for **Mode B** plugin on host → `ws://localhost:9090`):
+
+```bash
+cd docker
+docker compose -f docker-compose.yml -f docker-compose.sim.yml up ros2
+```
+
+Then configure the AgenticROS plugin with **`ws://localhost:9090`** as usual. The bundled RViz config is **`turtlebot3_agenticros.rviz`** (fixed frame **`odom`**, LaserScan **`/scan`**, RobotModel from **`/robot_description`**). Adjust displays in RViz if your robot uses different topic names.
+
+Details: [ros2_ws/src/agenticros_bringup/README.md](ros2_ws/src/agenticros_bringup/README.md).
 
 ## Claude + AgenticROS (MCP)
 

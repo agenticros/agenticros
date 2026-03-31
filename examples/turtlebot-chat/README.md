@@ -9,11 +9,12 @@ Control a TurtleBot3 in Gazebo simulation using natural language through WhatsAp
 
 ## Quick Start
 
-1. Start the simulation stack:
+1. Start the simulation stack (Gazebo + TurtleBot3 + rosbridge):
    ```bash
    cd docker
-   docker compose up
+   docker compose -f docker-compose.yml -f docker-compose.sim.yml up ros2
    ```
+   (Rosbridge-only: `docker compose up ros2` — see [docker/README.md](../../docker/README.md). Full launch options: [README.md](../../README.md) **“RViz2 and Gazebo”**.)
 
 2. Install the AgenticROS plugin in your OpenClaw instance:
    ```

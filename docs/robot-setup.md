@@ -148,6 +148,8 @@ This sources the workspace and starts `rosbridge_server`. In another terminal, r
 
 ### If OpenClaw is on the robot (Mode A)
 
+Mode A uses **local DDS** (`LocalTransport`): OpenClaw runs on the **same machine** as ROS 2, and the plugin talks to the ROS graph directly (no rosbridge required). `ROS_DOMAIN_ID` must match your stack (often **`0`**).
+
 1. Build the plugin (from the repo root, on the robot):
    ```bash
    cd /path/to/agenticros
@@ -159,9 +161,19 @@ This sources the workspace and starts `rosbridge_server`. In another terminal, r
    openclaw plugins install -l ./packages/agenticros
    ```
 3. In OpenClaw, set the AgenticROS plugin config:
-   - **Transport mode:** `rosbridge`
-   - **Rosbridge URL:** `ws://localhost:9090`
-4. Start OpenClaw and connect your messaging channel (Telegram, WhatsApp, etc.). The plugin will connect to rosbridge on localhost.
+   - **Transport mode:** **`local`** (Mode A)
+   - **Domain ID:** same as **`ROS_DOMAIN_ID`** for your ROS 2 processes (default **`0`**).
+4. (Optional) **Gazebo + TurtleBot3 simulation** on the same host, aligned with the repo bringup package:
+   ```bash
+   source /opt/ros/jazzy/setup.bash
+   cd /path/to/agenticros/ros2_ws && source install/setup.bash
+   ros2 launch agenticros_bringup mode_a_gazebo.launch.py
+   ```
+   Or with RViz: `ros2 launch agenticros_bringup mode_a_gazebo_rviz.launch.py`.  
+   Use `ros_domain_id:=N` if the plugin uses a non-zero domain. See the repository README section **“RViz2 and Gazebo”**.
+5. Start OpenClaw and connect your messaging channel (Telegram, WhatsApp, etc.). The plugin joins the local ROS 2 domain.
+
+**Note:** If you prefer rosbridge on localhost instead (e.g. for debugging), you can still run **`rosbridge_server`** and set **Transport mode** to **`rosbridge`** with **`ws://localhost:9090`** — that is closer to Mode B wiring, not strict Mode A.
 
 ### If OpenClaw is on another machine (Mode B)
 

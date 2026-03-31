@@ -5,6 +5,7 @@ FROM ros:jazzy-ros-base AS base
 # Install rosbridge_suite and Gazebo
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-jazzy-rosbridge-suite \
+    ros-jazzy-rviz2 \
     ros-jazzy-turtlebot3-gazebo \
     ros-jazzy-turtlebot3-navigation2 \
     ros-jazzy-nav2-bringup \
@@ -15,6 +16,7 @@ ENV TURTLEBOT3_MODEL=burger
 ENV ROS_DOMAIN_ID=0
 
 # Copy the AgenticROS discovery node
+COPY ros2_ws/src/agenticros_bringup /ros2_ws/src/agenticros_bringup
 COPY ros2_ws/src/agenticros_discovery /ros2_ws/src/agenticros_discovery
 COPY ros2_ws/src/agenticros_msgs /ros2_ws/src/agenticros_msgs
 COPY ros2_ws/src/agenticros_agent /ros2_ws/src/agenticros_agent
