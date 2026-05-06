@@ -107,7 +107,16 @@ export function registerService(api: OpenClawPluginApi, config: AgenticROSConfig
     id: "ros2-transport",
 
     async start(_ctx) {
-      await ensureTransportConnected(api, transportCfg);
+      // OpenClaw awaits plugin service start() before marking sidecars ready and accepting
+      // webchat WebSockets. Zenoh connect() can hang indefinitely when the router is down,
+      // which would block the entire gateway. Connection is already initiated from register()
+      // (eager connect + retries); do not await it here.
+      void ensureTransportConnected(api, transportCfg).catch((err) => {
+        api.logger.warn(
+          "AgenticROS transport connect in service.start failed (retries continue): " +
+            (err instanceof Error ? err.message : String(err)),
+        );
+      });
     },
 
     async stop(_ctx) {

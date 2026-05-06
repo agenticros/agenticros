@@ -3,6 +3,22 @@
   "name": "AgenticROS",
   "version": "0.0.1",
   "description": "ROS2 integration for AI agent platforms (OpenClaw adapter)",
+  "activation": {
+    "onStartup": true
+  },
+  "contracts": {
+    "tools": [
+      "ros2_publish",
+      "ros2_subscribe_once",
+      "ros2_service_call",
+      "ros2_action_goal",
+      "ros2_param_get",
+      "ros2_param_set",
+      "ros2_list_topics",
+      "ros2_camera_snapshot",
+      "ros2_depth_distance"
+    ]
+  },
   "configSchema": {
     "type": "object",
     "additionalProperties": false,

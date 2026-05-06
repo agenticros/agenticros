@@ -17,7 +17,7 @@ export default {
   id: "agenticros",
   name: "AgenticROS",
 
-  async register(api: OpenClawPluginApi): Promise<void> {
+  register(api: OpenClawPluginApi): void {
     api.logger.info("AgenticROS plugin loading...");
     const imageSupported = isCdrTypeSupported("sensor_msgs/msg/CompressedImage");
     api.logger.info(`AgenticROS: Zenoh CDR Image/CompressedImage supported=${imageSupported}`);
@@ -46,8 +46,11 @@ export default {
     // Register core ROS2 tools (no Follow Me — that lives in agenticros-skill-followme)
     registerTools(api, config);
 
-    // Load optional skills from skillPackages and skillPaths
-    await loadSkills(api, config);
+    // Load optional skills from skillPackages and skillPaths (async; OpenClaw 2026.5+ requires sync register())
+    void loadSkills(api, config).catch((e) => {
+      const msg = e instanceof Error ? e.message : String(e);
+      api.logger.error("AgenticROS: skill load failed: " + msg);
+    });
 
     // Register safety validation hook (before_tool_call)
     registerSafetyHook(api, config);
