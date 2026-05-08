@@ -4,6 +4,7 @@ import { toNamespacedTopicFull, toTeleopCameraTopicShort, resolveCameraSubscribe
 import { getTransport, getTransportOrNull, getTransportMode, tryReconnectFromFile } from "../service.js";
 import { readAgenticROSConfigFromFile } from "../config-file.js";
 import { getTeleopPageHtml } from "./page.js";
+import { applyCmdVelTwistSignConvention } from "../cmd-vel-twist-sign.js";
 import { ROS_MSG_COMPRESSED_IMAGE, bufferAndMimeFromCompressedImageMessage } from "@agenticros/ros-camera";
 
 const TWIST_TYPE = "geometry_msgs/msg/Twist";
@@ -406,7 +407,13 @@ export function registerTeleopRoutes(api: OpenClawPluginApi, config: AgenticROSC
     const currentConfig = getCurrentConfig();
     const clamped = clampTwist(currentConfig, lx, ly, lz, ax, ay, az);
     const topic = getCmdVelTopic(currentConfig);
-    api.logger.info(`Teleop twist: publishing linear.x=${clamped.linear.x} angular.z=${clamped.angular.z} to topic=${topic}`);
+    const twistMsg = applyCmdVelTwistSignConvention(topic, TWIST_TYPE, {
+      linear: clamped.linear,
+      angular: clamped.angular,
+    });
+    const lin = twistMsg["linear"] as Record<string, unknown> | undefined;
+    const ang = twistMsg["angular"] as Record<string, unknown> | undefined;
+    api.logger.info(`Teleop twist: publishing linear.x=${lin?.["x"]} angular.z=${ang?.["z"]} to topic=${topic}`);
     try {
       const transport = getTransport();
       const status = transport.getStatus?.();
@@ -419,10 +426,7 @@ export function registerTeleopRoutes(api: OpenClawPluginApi, config: AgenticROSC
       const publishResult = transport.publish({
         topic,
         type: TWIST_TYPE,
-        msg: {
-          linear: clamped.linear,
-          angular: clamped.angular,
-        },
+        msg: twistMsg,
       });
       await Promise.resolve(publishResult);
       res.setHeader("Content-Type", "application/json");

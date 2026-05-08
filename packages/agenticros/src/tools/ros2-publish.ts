@@ -3,6 +3,7 @@ import type { OpenClawPluginApi } from "../plugin-api.js";
 import type { AgenticROSConfig } from "@agenticros/core";
 import { toNamespacedTopic } from "@agenticros/core";
 import { getTransport } from "../service.js";
+import { applyCmdVelTwistSignConvention } from "../cmd-vel-twist-sign.js";
 
 /**
  * Register the ros2_publish tool with the AI agent.
@@ -27,7 +28,8 @@ export function registerPublishTool(api: OpenClawPluginApi, config: AgenticROSCo
       const rawTopic = params["topic"] as string;
       const topic = toNamespacedTopic(config, rawTopic);
       const type = params["type"] as string;
-      const message = params["message"] as Record<string, unknown>;
+      let message = params["message"] as Record<string, unknown>;
+      message = applyCmdVelTwistSignConvention(topic, type, message);
 
       const transport = getTransport();
       transport.publish({ topic, type, msg: message });
