@@ -4,9 +4,8 @@
  */
 
 import { CdrReader, CdrWriter } from "@foxglove/cdr";
-import { EncapsulationKind } from "@foxglove/cdr";
-
-const CDR_LE = EncapsulationKind.CDR_LE;
+import { parse } from "@foxglove/rosmsg";
+import { MessageReader } from "@foxglove/rosmsg2-serialization";
 
 /** Normalize type string to "pkg/msg/Type" form. Handles short names (e.g. "Image") and combined forms. */
 function normalizeType(typeStr: string): string {
@@ -29,6 +28,64 @@ function readStdMsgsHeader(reader: CdrReader): Record<string, unknown> {
   return {
     stamp: { sec, nanosec },
     frame_id,
+  };
+}
+
+/**
+ * `CdrReader` already skips the 4-byte encapsulation header (initial offset 4).
+ * CDR2 **appendable** messages (typical for `sensor_msgs` from CycloneDDS / zenoh-bridge-ros2dds)
+ * include a 4-byte **DHEADER** next; without consuming it, `CompressedImage` / `Image` decode misaligns
+ * and the teleop camera sees no valid frames (timeouts → 503).
+ */
+function createBodyReader(data: Uint8Array): CdrReader {
+  const reader = new CdrReader(new DataView(data.buffer, data.byteOffset, data.byteLength));
+  if (reader.usesDelimiterHeader && !reader.usesMemberHeader) {
+    reader.dHeader();
+  }
+  return reader;
+}
+
+/** Embedded defs so Zenoh samples decode like rviz/ros2 bag (CDR1 / CDR2 / delimited / PL_CDR2). */
+const COMPRESSED_IMAGE_MSG_DEF = `
+std_msgs/msg/Header header
+string format
+uint8[] data
+
+================================================================================
+MSG: std_msgs/msg/Header
+builtin_interfaces/msg/Time stamp
+string frame_id
+
+================================================================================
+MSG: builtin_interfaces/msg/Time
+int32 sec
+uint32 nanosec
+`;
+
+let compressedImageReader: MessageReader | null = null;
+
+function decodeCompressedImageWithFoxglove(data: Uint8Array): Record<string, unknown> {
+  if (!compressedImageReader) {
+    compressedImageReader = new MessageReader(parse(COMPRESSED_IMAGE_MSG_DEF, { ros2: true }));
+  }
+  const msg = compressedImageReader.readMessage<Record<string, unknown>>(data);
+  return {
+    header: msg["header"],
+    format: msg["format"],
+    data: msg["data"],
+  };
+}
+
+function decodeCompressedImageManual(data: Uint8Array): Record<string, unknown> {
+  const reader = createBodyReader(data);
+  const header = readStdMsgsHeader(reader);
+  const format = reader.string();
+  const dataLen = reader.sequenceLength();
+  const payload = reader.uint8Array(dataLen);
+  return {
+    header,
+    format,
+    data: Array.from(payload),
   };
 }
 
@@ -67,10 +124,9 @@ export function encodeCdr(typeStr: string, msg: Record<string, unknown>): Uint8A
  */
 export function decodeCdr(typeStr: string, data: Uint8Array): Record<string, unknown> {
   const type = normalizeType(typeStr);
-  const reader = new CdrReader(new DataView(data.buffer, data.byteOffset, data.byteLength));
 
   if (type === "geometry_msgs/msg/Twist") {
-    reader.seekTo(8);
+    const reader = createBodyReader(data);
     const linear = {
       x: reader.float64(),
       y: reader.float64(),
@@ -85,20 +141,15 @@ export function decodeCdr(typeStr: string, data: Uint8Array): Record<string, unk
   }
 
   if (type === "sensor_msgs/msg/CompressedImage") {
-    reader.seekTo(4);
-    const header = readStdMsgsHeader(reader);
-    const format = reader.string();
-    const dataLen = reader.sequenceLength();
-    const payload = reader.uint8Array(dataLen);
-    return {
-      header,
-      format,
-      data: Array.from(payload),
-    };
+    try {
+      return decodeCompressedImageWithFoxglove(data);
+    } catch {
+      return decodeCompressedImageManual(data);
+    }
   }
 
   if (type === "sensor_msgs/msg/Image") {
-    reader.seekTo(4);
+    const reader = createBodyReader(data);
     const header = readStdMsgsHeader(reader);
     const height = reader.uint32();
     const width = reader.uint32();

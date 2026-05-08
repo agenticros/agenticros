@@ -340,6 +340,31 @@ export function cameraSnapshotFromPlainMessage(
   };
 }
 
+/**
+ * Decode a plain `sensor_msgs/CompressedImage` (e.g. from Zenoh CDR) to raw image bytes + MIME type.
+ * Decompresses zstd-wrapped payloads when `format` indicates it. Returns null if data is missing or invalid.
+ */
+export function bufferAndMimeFromCompressedImageMessage(
+  msg: Record<string, unknown>,
+): { buf: Buffer; mime: string } | null {
+  try {
+    if (msg["data"] == null) return null;
+    const rosFormat = String((msg["format"] as string) ?? "jpeg");
+    let buf = coerceRosImageDataToBuffer(msg["data"]);
+    if (!buf || buf.length === 0) return null;
+    if (rosFormat.toLowerCase().includes("zstd")) {
+      buf = Buffer.from(zstdDecompress(buf));
+    }
+    if (!buf.length) return null;
+    const magic = sniffImageMagic(buf);
+    const hinted = mimeHintFromCompressedRosFormat(rosFormat);
+    const mime = magic?.mime ?? hinted?.mime ?? "image/jpeg";
+    return { buf, mime };
+  } catch {
+    return null;
+  }
+}
+
 /** Prefer magic bytes from decoded payload, then format label (png/jpeg/…). */
 export function mimeTypeForSnapshotBase64(base64: string, formatLabel: string): string {
   const magic = sniffImageMagic(Buffer.from(base64, "base64"));

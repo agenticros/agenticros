@@ -15,6 +15,13 @@ let currentMode: TransportConfig["mode"] | null = null;
 /** Concurrency guard — prevents overlapping switchTransport calls. */
 let switching = false;
 
+/**
+ * Serialize every connect attempt (no TOCTOU gap). Two callers that both see `transport` disconnected
+ * must not run `createTransport`+`connect()` in parallel — that duplicates Zenoh WebSockets and triggers
+ * remote-api 1006 / camera 503.
+ */
+let transportConnectChain: Promise<void> = Promise.resolve();
+
 /** Get the active transport. Throws if not connected. */
 export function getTransport(): RosTransport {
   if (!transport) {
@@ -73,23 +80,37 @@ async function ensureTransportConnected(
   api: OpenClawPluginApi,
   transportCfg: TransportConfig,
 ): Promise<void> {
-  if (transport && transport.getStatus() === "connected") {
-    return;
-  }
-  if (transport) {
-    await transport.disconnect();
-    transport = null;
-    currentMode = null;
-  }
-  api.logger.info(`Connecting to ROS2 via ${transportCfg.mode} transport...`);
-  const newTransport = await createTransport(transportCfg);
-  newTransport.onConnection((status: string) => {
-    api.logger.info(`ROS2 transport status: ${status}`);
+  const task = async () => {
+    if (transport && transport.getStatus() === "connected") {
+      return;
+    }
+    if (transport) {
+      try {
+        await transport.disconnect();
+      } catch {
+        /* ignore */
+      }
+      transport = null;
+      currentMode = null;
+    }
+    api.logger.info(`Connecting to ROS2 via ${transportCfg.mode} transport...`);
+    const newTransport = await createTransport(transportCfg);
+    newTransport.onConnection((status: string) => {
+      api.logger.info(`ROS2 transport status: ${status}`);
+    });
+    await newTransport.connect();
+    transport = newTransport;
+    currentMode = transportCfg.mode;
+    api.logger.info(`ROS2 transport connected (mode: ${transportCfg.mode})`);
+  };
+
+  const next = transportConnectChain.then(task, task);
+  transportConnectChain = next.catch((err) => {
+    api.logger.warn(
+      "AgenticROS transport connect failed: " + (err instanceof Error ? err.message : String(err)),
+    );
   });
-  await newTransport.connect();
-  transport = newTransport;
-  currentMode = transportCfg.mode;
-  api.logger.info(`ROS2 transport connected (mode: ${transportCfg.mode})`);
+  await next;
 }
 
 const RETRY_INTERVAL_MS = 10000;

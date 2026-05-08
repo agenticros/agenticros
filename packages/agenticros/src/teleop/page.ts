@@ -61,7 +61,8 @@ export function getTeleopPageHtml(config: AgenticROSConfig): string {
       <input type="range" id="speed" min="0.1" max="1" step="0.1" value="${speedDefault}" />
       <span id="speed-val">${speedDefault}</span>
     </div>
-    <select id="source" class="source-select" style="display:none">
+    <label for="source" class="source-select-label" style="font-size:0.9rem; color:#aaa; margin-right:6px;">Camera topic</label>
+    <select id="source" class="source-select" style="display:none" aria-label="Camera ROS topic">
       <option value="">—</option>
     </select>
     <span class="status" style="font-size:0.8rem; color:#666;">Use a topic ending in <code>/compressed</code> for the feed.</span>
@@ -83,6 +84,25 @@ export function getTeleopPageHtml(config: AgenticROSConfig): string {
 
   <script>
 (function() {
+  /** Base URL for teleop API (status, sources, camera, twist). Resolves correctly when the page is not under .../teleop/ (e.g. hash-routed Control UI). */
+  function teleopApiBase() {
+    var p = window.location.pathname || '';
+    var i = p.indexOf('/teleop');
+    if (i >= 0) return p.slice(0, i) + '/teleop/';
+    var h = (window.location.hash || '').replace(/^#/, '');
+    if (h.indexOf('/teleop') >= 0) {
+      var j = h.indexOf('/teleop');
+      return h.slice(0, j) + '/teleop/';
+    }
+    return '/plugins/agenticros/teleop/';
+  }
+  var API_BASE = teleopApiBase();
+  function apiUrl(s) {
+    var t = String(s);
+    while (t.length > 0 && t.charAt(0) === '/') t = t.slice(1);
+    return API_BASE + t;
+  }
+
   const POLL_MS = ${cameraPollMs};
   const SPEED_DEFAULT = ${speedDefault};
   const cameraEl = document.getElementById('camera');
@@ -106,8 +126,7 @@ export function getTeleopPageHtml(config: AgenticROSConfig): string {
 
   function cameraUrl() {
     if (!selectedTopic) return '';
-    const u = 'camera?topic=' + encodeURIComponent(selectedTopic) + '&type=compressed&t=' + Date.now();
-    return u;
+    return apiUrl('camera?topic=' + encodeURIComponent(selectedTopic) + '&type=compressed&t=' + Date.now());
   }
 
   function startPoll() {
@@ -117,7 +136,7 @@ export function getTeleopPageHtml(config: AgenticROSConfig): string {
     cameraEl.style.display = 'block';
     cameraEl.onerror = function() {
       if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-      fetch(cameraUrl())
+      fetch(apiUrl('camera?topic=' + encodeURIComponent(selectedTopic) + '&type=compressed&t=' + Date.now()))
         .then(function(r) {
           if (r.status >= 400) return r.json().then(function(j) { setStatus('Camera: ' + (j && j.error ? j.error : r.statusText)); });
           setStatus('Camera failed (use a CompressedImage topic, e.g. .../image_raw/compressed)');
@@ -129,13 +148,14 @@ export function getTeleopPageHtml(config: AgenticROSConfig): string {
   }
 
   function loadSources() {
-    fetch('sources')
+    fetch(apiUrl('sources'))
       .then(function(r) { return r.json(); })
       .then(function(arr) {
         if (!Array.isArray(arr) || arr.length === 0) {
           setStatus('No camera sources found. Publish to an Image/CompressedImage topic.');
           return;
         }
+        var prev = selectedTopic;
         sourceEl.innerHTML = '';
         arr.forEach(function(o) {
           const opt = document.createElement('option');
@@ -143,9 +163,12 @@ export function getTeleopPageHtml(config: AgenticROSConfig): string {
           opt.textContent = o.label || o.topic;
           sourceEl.appendChild(opt);
         });
-        sourceEl.style.display = arr.length > 1 ? 'block' : 'none';
-        if (arr.length === 1) selectedTopic = arr[0].topic;
-        else if (arr.length > 1) selectedTopic = arr[0].topic;
+        sourceEl.style.display = arr.length >= 1 ? 'block' : 'none';
+        var labelEl = document.querySelector('.source-select-label');
+        if (labelEl) labelEl.style.display = arr.length >= 1 ? 'inline' : 'none';
+        var stillThere = prev && arr.some(function(o) { return o.topic === prev; });
+        selectedTopic = stillThere ? prev : arr[0].topic;
+        sourceEl.value = selectedTopic;
         startPoll();
       })
       .catch(function(e) { setStatus('Failed to load sources: ' + e.message); });
@@ -167,7 +190,7 @@ export function getTeleopPageHtml(config: AgenticROSConfig): string {
   }
 
   function updateConnectionStatus() {
-    fetch('status')
+    fetch(apiUrl('status'))
       .then(function(r) { return r.json(); })
       .then(function(j) {
         var connected = !!j.connected;
@@ -190,7 +213,7 @@ export function getTeleopPageHtml(config: AgenticROSConfig): string {
   }
 
   function refreshStatus() {
-    fetch('status').then(function(r) { return r.json(); }).then(function(j) {
+    fetch(apiUrl('status')).then(function(r) { return r.json(); }).then(function(j) {
       var c = !!j.connected;
       var m = j.mode || 'none';
       setConnBadge(c, m);
@@ -199,7 +222,7 @@ export function getTeleopPageHtml(config: AgenticROSConfig): string {
 
   reconnectBtn?.addEventListener('click', function() {
     setStatus('Reconnecting...');
-    fetch('reconnect', { method: 'GET' })
+    fetch(apiUrl('reconnect'), { method: 'GET' })
       .then(function(r) {
         const ct = (r.headers.get('Content-Type') || '').toLowerCase();
         if (ct.includes('application/json')) return r.json();
@@ -227,7 +250,7 @@ export function getTeleopPageHtml(config: AgenticROSConfig): string {
     const ay = angularY ?? 0;
     const az = (angularZ ?? 0) * s;
     var q = 'linear_x=' + encodeURIComponent(lx) + '&linear_y=' + encodeURIComponent(ly) + '&linear_z=' + encodeURIComponent(lz) + '&angular_x=' + encodeURIComponent(ax) + '&angular_y=' + encodeURIComponent(ay) + '&angular_z=' + encodeURIComponent(az);
-    fetch('twist?' + q, { method: 'GET' })
+    fetch(apiUrl('twist?' + q), { method: 'GET' })
       .then(function(r) {
         if (r.status === 502) { setStatus('Twist: 502 — use proxy (http://127.0.0.1:18790/plugins/agenticros/) or single gateway worker.'); return; }
         if (!r.ok) return r.json().then(function(j) { setStatus('Twist: ' + (j && j.error ? j.error : r.statusText)); });

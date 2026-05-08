@@ -83,6 +83,10 @@
             "enum": ["ros2dds", "rmw_zenoh"],
             "description": "Use ros2dds when using zenoh-bridge-ros2dds; use rmw_zenoh when robot uses Zenoh RMW directly",
             "default": "ros2dds"
+          },
+          "bridgeNamespace": {
+            "type": "string",
+            "description": "Must match zenoh-bridge-ros2dds plugins.ros2dds.namespace when not default \"/\" (e.g. \"/bot1\"). Omit for default bridge namespace."
           }
         }
       },
@@ -216,6 +220,11 @@
     },
     "zenoh.domainId": {
       "label": "Zenoh Domain ID",
+      "advanced": true
+    },
+    "zenoh.bridgeNamespace": {
+      "label": "Zenoh bridge ROS namespace",
+      "description": "Same as ros2dds.namespace on the robot bridge when not \"/\"",
       "advanced": true
     },
     "rosbridge.url": {

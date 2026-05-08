@@ -1,10 +1,10 @@
 import type { OpenClawPluginApi, HttpRouteRequest, HttpRouteResponse } from "../plugin-api.js";
 import type { AgenticROSConfig } from "@agenticros/core";
-import { toNamespacedTopic, toNamespacedTopicFull } from "@agenticros/core";
+import { toNamespacedTopicFull, toTeleopCameraTopicShort } from "@agenticros/core";
 import { getTransport, getTransportOrNull, getTransportMode, tryReconnectFromFile } from "../service.js";
 import { readAgenticROSConfigFromFile } from "../config-file.js";
 import { getTeleopPageHtml } from "./page.js";
-import { ROS_MSG_COMPRESSED_IMAGE } from "@agenticros/ros-camera";
+import { ROS_MSG_COMPRESSED_IMAGE, bufferAndMimeFromCompressedImageMessage } from "@agenticros/ros-camera";
 
 const TWIST_TYPE = "geometry_msgs/msg/Twist";
 
@@ -12,6 +12,20 @@ const TWIST_TYPE = "geometry_msgs/msg/Twist";
 const IMAGE_TYPE_PATTERN = /Image|CompressedImage/i;
 /** When type is unknown (e.g. Zenoh), treat topic as camera if name looks like one. */
 const CAMERA_TOPIC_NAME_PATTERN = /camera|image|compressed/i;
+
+/**
+ * Preset topics when Zenoh discovery returns nothing (remote-api). Values are full ROS names like `ros2 topic list`.
+ */
+const COMMON_CAMERA_TOPIC_PRESETS: ReadonlyArray<string> = [
+  "/camera/camera/color/image_raw/compressed",
+  "/camera/camera/color/image_raw/compressed/zstd",
+  "/camera/image_raw/compressed",
+  "/image_raw/compressed",
+  "/camera/camera/infra1/image_rect_raw/compressed",
+  "/camera/camera/infra2/image_rect_raw/compressed",
+  "/zed/zed_node/rgb/image_rect_color/compressed",
+  "/usb_cam/image_raw/compressed",
+];
 
 function parseUrl(req: HttpRouteRequest): { pathname: string; searchParams: URLSearchParams } {
   const base = "http://localhost";
@@ -32,9 +46,9 @@ function readRequestBody(stream: NodeJS.ReadableStream): Promise<string> {
 
 function getDefaultCameraTopic(config: AgenticROSConfig): string {
   const t = (config.teleop?.cameraTopic ?? "").trim();
-  if (t) return t;
+  if (t) return toTeleopCameraTopicShort(config, t);
   const r = (config.robot?.cameraTopic ?? "").trim();
-  if (r) return r;
+  if (r) return toTeleopCameraTopicShort(config, r);
   return "/camera/camera/color/image_raw/compressed";
 }
 
@@ -74,19 +88,6 @@ function clampTwist(
       z: Math.max(-maxAng, Math.min(maxAng, angularZ)),
     },
   };
-}
-
-function imageDataToBuffer(data: unknown): Buffer | null {
-  if (data == null) return null;
-  if (data instanceof Uint8Array) return Buffer.from(data);
-  if (Buffer.isBuffer(data)) return data;
-  if (Array.isArray(data)) {
-    const bytes = new Uint8Array(data.length);
-    for (let i = 0; i < data.length; i++) bytes[i] = Number(data[i]) & 0xff;
-    return Buffer.from(bytes);
-  }
-  if (typeof data === "string") return Buffer.from(data, "base64");
-  return null;
 }
 
 /** Shared latest-frame cache: one subscription per topic, serve from cache so polling doesn't timeout. */
@@ -161,23 +162,39 @@ export function registerTeleopRoutes(api: OpenClawPluginApi, config: AgenticROSC
     route({ path: `${base}/teleop/reconnect`, method: "POST", handler: reconnectHandler });
   }
 
+  /** Config default + preset paths + Zenoh discovery (deduped). Dropdown uses short `/camera/...` paths; server namespaces on subscribe. */
+  function buildTeleopCameraSources(
+    cfg: AgenticROSConfig,
+    defaultTopic: string,
+    discovered: Array<{ topic: string; label?: string }>,
+  ): Array<{ topic: string; label?: string }> {
+    const seen = new Set<string>();
+    const out: Array<{ topic: string; label?: string }> = [];
+    const add = (topic: string) => {
+      const short = toTeleopCameraTopicShort(cfg, topic);
+      if (!short || short === "/" || seen.has(short)) return;
+      seen.add(short);
+      out.push({ topic: short, label: short });
+    };
+    add(defaultTopic);
+    for (const preset of COMMON_CAMERA_TOPIC_PRESETS) add(preset);
+    for (const d of discovered) add(d.topic);
+    return out;
+  }
+
   // GET .../teleop/sources — JSON list of camera topics. Always returns at least one option (default camera) when discovery is empty or transport fails.
   const sourcesHandler = async (_req: HttpRouteRequest, res: HttpRouteResponse) => {
-    const fallbackList = (): Array<{ topic: string; label?: string }> => {
-      try {
-        const cfg = getCurrentConfig();
-        const topic = getDefaultCameraTopic(cfg);
-        return [{ topic, label: "Default camera" }];
-      } catch {
-        return [{ topic: "/camera/camera/color/image_raw/compressed", label: "Default camera" }];
-      }
-    };
     try {
       const currentConfig = getCurrentConfig();
+      const defaultTopic = getDefaultCameraTopic(currentConfig);
       let list: Array<{ topic: string; label?: string }>;
       const explicit = currentConfig.teleop?.cameraTopics ?? [];
       if (explicit.length > 0) {
-        list = explicit.map((o) => ({ topic: o.topic, label: o.label }));
+        list = explicit.map((o) => {
+          const topic = toTeleopCameraTopicShort(currentConfig, o.topic.trim());
+          const label = (o.label ?? "").trim() || topic;
+          return { topic, label };
+        });
       } else {
         try {
           const transport = getTransport();
@@ -196,14 +213,14 @@ export function registerTeleopRoutes(api: OpenClawPluginApi, config: AgenticROSC
             const bCompressed = /compressed/i.test(b.name) ? 1 : 0;
             return bCompressed - aCompressed;
           });
-          list = toList.map((t) => ({
-            topic: t.name,
-            label: t.name.replace(/^\//, "").replace(/\//g, " / "),
-          }));
-          if (list.length === 0) list = fallbackList();
+          const discovered = toList.map((t) => {
+            const name = t.name.startsWith("/") ? t.name : `/${t.name}`;
+            return { topic: name, label: name };
+          });
+          list = buildTeleopCameraSources(currentConfig, defaultTopic, discovered);
         } catch (e) {
-          api.logger.warn("Teleop sources (discovery failed, using default): " + (e instanceof Error ? e.message : String(e)));
-          list = fallbackList();
+          api.logger.warn("Teleop sources (discovery failed, using presets): " + (e instanceof Error ? e.message : String(e)));
+          list = buildTeleopCameraSources(currentConfig, defaultTopic, []);
         }
       }
       res.setHeader("Content-Type", "application/json");
@@ -213,7 +230,13 @@ export function registerTeleopRoutes(api: OpenClawPluginApi, config: AgenticROSC
       api.logger.warn("Teleop sources error: " + (e instanceof Error ? e.message : String(e)));
       res.setHeader("Content-Type", "application/json");
       res.statusCode = 200;
-      res.end(JSON.stringify(fallbackList()));
+      try {
+        const cfg = getCurrentConfig();
+        const dt = getDefaultCameraTopic(cfg);
+        res.end(JSON.stringify(buildTeleopCameraSources(cfg, dt, [])));
+      } catch {
+        res.end(JSON.stringify(buildTeleopCameraSources(config, "/camera/camera/color/image_raw/compressed", [])));
+      }
     }
   };
 
@@ -236,9 +259,10 @@ export function registerTeleopRoutes(api: OpenClawPluginApi, config: AgenticROSC
       }
       const typeParam = (searchParams.get("type") ?? "compressed").toLowerCase();
       const useImage = typeParam === "image";
-      // Camera topics from zenoh-bridge-ros2dds are typically NOT namespaced (e.g. camera/camera/color/image_raw/compressed).
-      // Only apply namespace to root-level topics so we subscribe to the key the robot actually publishes.
-      const resolvedTopic = toNamespacedTopic(currentConfig, topic);
+      // zenoh-bridge-ros2dds applies plugins.ros2dds.namespace to *all* interfaces, including absolute `/camera/...`
+      // (see plugin README). Use full namespacing so subscribe keys match the bridge (same as cmd_vel).
+      // Also set zenoh.bridgeNamespace when the bridge uses a non-"/" namespace so rosTopicToZenohKey matches.
+      const resolvedTopic = toNamespacedTopicFull(currentConfig, topic);
       if (cameraCacheState?.topic !== resolvedTopic) {
         api.logger.info(`Teleop camera: topic=${topic} resolvedTopic=${resolvedTopic} namespace=${(currentConfig.robot?.namespace ?? "").trim() || "(none)"}`);
       }
@@ -295,18 +319,16 @@ export function registerTeleopRoutes(api: OpenClawPluginApi, config: AgenticROSC
             }, 8000);
           });
           const handler = (msg: Record<string, unknown>) => {
-            const data = msg["data"];
-            const buf = imageDataToBuffer(data);
-            if (!buf || buf.length === 0) return;
-            const format = String(msg["format"] ?? "jpeg").toLowerCase();
-            state.mime = format === "png" ? "image/png" : "image/jpeg";
-            state.cache = buf;
+            const out = bufferAndMimeFromCompressedImageMessage(msg);
+            if (!out || out.buf.length === 0) return;
+            state.mime = out.mime;
+            state.cache = out.buf;
             if (state.firstFrameTimeout) {
               clearTimeout(state.firstFrameTimeout);
               state.firstFrameTimeout = null;
             }
             if (state.firstFrameResolve) {
-              state.firstFrameResolve({ buf, mime: state.mime });
+              state.firstFrameResolve({ buf: out.buf, mime: state.mime });
               state.firstFrameResolve = null;
               state.firstFrameReject = null;
             }

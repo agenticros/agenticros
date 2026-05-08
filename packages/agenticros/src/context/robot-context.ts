@@ -191,6 +191,7 @@ function buildDynamicContext(
 ): string {
   let context = `## Robot: ${name}\n\n`;
   context += `You are connected to a ROS2 robot named "${name}". You can control it using the ros2_* tools.\n\n`;
+  context += `**Topics below** come from a **short live sample** when the session started. They are not guaranteed complete or up to date. If the user needs certainty—or says a topic is missing—call \`ros2_list_topics\` and answer from that result only.\n\n`;
   if (namespace) {
     context += `**Velocity commands:** Use \`ros2_publish\` with topic \`/cmd_vel\`; the plugin sends them to \`/${namespace}/cmd_vel\`.\n\n`;
   }
@@ -273,7 +274,6 @@ function buildFallbackContext(
   namespace: string,
   cameraTopicHint: string,
 ): string {
-  const prefix = namespace ? `${namespace}/` : "/";
   const skillIds = getLoadedSkillIds();
   const skillsSection =
     skillIds.length > 0
@@ -288,6 +288,10 @@ function buildFallbackContext(
         "\n\n"
       : "";
 
+  const nsLine = namespace
+    ? `Configured **robot.namespace** is \`${namespace}\` (used for cmd_vel-style namespacing in tools — not proof those topics exist).\n\n`
+    : "";
+
   return `
 ## Robot: ${name}
 
@@ -295,15 +299,14 @@ You are connected to a ROS2 robot named "${name}". You can control it using the 
 
 ${buildUserInterfaceBlurb(config)}
 
-### Available Topics
-- \`${prefix}cmd_vel\` (geometry_msgs/msg/Twist) — Velocity commands
-- \`${prefix}odom\` (nav_msgs/msg/Odometry) — Odometry data
-- \`${prefix}scan\` (sensor_msgs/msg/LaserScan) — LIDAR scan
-- \`${cameraTopicHint}\` (sensor_msgs/msg/CompressedImage) — Camera feed for "what do you see?" Use this with \`ros2_camera_snapshot\`.
-- \`${prefix}battery_state\` (sensor_msgs/msg/BatteryState) — Battery status
-- RealSense: \`/camera/camera/color/image_raw\` (Image), \`/camera/camera/color/image_raw/compressed\` (CompressedImage), \`/camera/camera/depth/image_rect_raw\` (depth). Use \`ros2_camera_snapshot\` for RGB; use \`ros2_depth_distance\` for distance in meters.
+### Topic discovery (read carefully)
+**No live topic list was available when this session started** (transport still connecting, Zenoh sampling saw no keys yet, or discovery failed). There is **no** "### Available Topics" section below because nothing was observed on the bus.
 
-${skillsSection}### Safety Limits
+- **You must call \`ros2_list_topics\`** and treat its return value as the **only** authoritative list. **Do not** tell the user that topics such as \`odom\`, \`scan\`, \`battery_state\`, or \`cmd_vel\` exist unless they appear in that tool output (or you successfully subscribe and get data).
+- If the user asks what topics exist, **run the tool first**, then summarize **only** what it returned. If the list is empty, say so plainly and suggest checking the robot stack, Zenoh bridge, and gateway logs.
+- For camera snapshots, after listing topics pick a **CompressedImage** (or Image) topic from the tool result; if none exist, say there is no camera topic. A common **default in plugin config** (not verified live) is \`${cameraTopicHint}\` — still confirm with \`ros2_list_topics\` before relying on it.
+
+${nsLine}${skillsSection}### Safety Limits
 - Maximum linear velocity: 1.0 m/s
 - Maximum angular velocity: 1.5 rad/s
 - All velocity commands are validated before execution
@@ -312,7 +315,7 @@ ${skillsSection}### Safety Limits
 - When the user asks what the robot sees (or for a photo, camera view, or snapshot), **always call \`ros2_camera_snapshot\`** (or \`ros2_subscribe_once\` on a camera topic). Do not assume the transport cannot decode images—${imageTransportHint(config)} If the tool returns an error, report it; otherwise show or describe the image.
 
 ### Distance / "How far am I?"
-- When the user asks how far they are from the robot (or depth / distance in meters), **call \`ros2_depth_distance\`** on a raw depth Image topic (e.g. RealSense \`/camera/camera/depth/image_rect_raw\`). Report the tool result or **quote the exact error text** if it fails (do not claim a generic "decode" failure without the tool message). If the result is valid, give **distance_m** as the measured answer.
+- When the user asks how far they are from the robot (or depth / distance in meters), **call \`ros2_depth_distance\`** only on a depth Image topic that **\`ros2_list_topics\`** (or prior tool output) shows exists. Report the tool result or **quote the exact error text** if it fails (do not claim a generic "decode" failure without the tool message). If the result is valid, give **distance_m** as the measured answer.
 
 ### Tips
 - Use \`ros2_list_topics\` to discover all available topics

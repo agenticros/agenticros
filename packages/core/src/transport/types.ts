@@ -118,6 +118,8 @@ export interface ZenohTransportConfig {
     routerEndpoint: string;
     domainId?: number;
     keyFormat?: "ros2dds" | "rmw_zenoh";
+    /** Matches zenoh-bridge-ros2dds ros2dds.namespace when not default "/". */
+    bridgeNamespace?: string;
   };
 }
 

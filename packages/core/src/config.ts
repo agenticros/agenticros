@@ -21,6 +21,12 @@ export const AgenticROSConfigSchema = z.object({
       domainId: z.number().default(0),
       /** "ros2dds" = zenoh-bridge-ros2dds key format (slashes kept). "rmw_zenoh" = rmw_zenoh key format (domain + %). */
       keyFormat: z.enum(["ros2dds", "rmw_zenoh"]).default("ros2dds"),
+      /**
+       * Must match zenoh-bridge-ros2dds `plugins.ros2dds.namespace` when it is not the default "/".
+       * Example: bridge has `namespace: "/bot1"` → set `bridgeNamespace` to "/bot1" or "bot1".
+       * Omit or use "/" when the bridge uses the default (only the ROS topic path is the zenoh key).
+       */
+      bridgeNamespace: z.string().optional(),
     })
     .default({}),
 

@@ -53,3 +53,21 @@ export function toNamespacedTopicFull(config: AgenticROSConfig, topic: string): 
   if (withoutLeading.startsWith(`${ns}/`) || withoutLeading === ns) return normalized;
   return `/${ns}/${withoutLeading}`;
 }
+
+/**
+ * Canonical topic string for teleop UI and ?topic= query params: leading slash, no robot namespace prefix.
+ * Subscribe/publish still uses {@link toNamespacedTopicFull} on the server so Zenoh keys match the bridge.
+ */
+export function toTeleopCameraTopicShort(config: AgenticROSConfig, topic: string): string {
+  const normalized = normalizeTopic(topic);
+  const ns = (config.robot?.namespace ?? "").trim();
+  if (!ns) return normalized;
+  const withoutLeading = normalized.replace(/^\/+/, "");
+  if (!withoutLeading) return normalized;
+  if (withoutLeading === ns) return "/";
+  if (withoutLeading.startsWith(`${ns}/`)) {
+    const rest = withoutLeading.slice(ns.length + 1);
+    return rest ? `/${rest}` : "/";
+  }
+  return normalized;
+}

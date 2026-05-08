@@ -1,0 +1,63 @@
+diff --git a/dist/link.js b/dist/link.js
+index 4ac3967f589784380501e4cbf3c9dd11a07500d6..2fff09753f579735a52a6115fb89e292b26f03a4 100644
+--- a/dist/link.js
++++ b/dist/link.js
+@@ -23,8 +23,9 @@ export class RemoteLink {
+     static async new(locator) {
+         let websocketEndpoint = this.parseZenohLocator(locator);
+         let retries = 0;
+-        let retryTimeoutMs = RETRY_TIMEOUT_MS;
+         while (retries < MAX_RETRIES) {
++            // Per-attempt timeout (AgenticROS: avoid unbounded growth across outer loop iterations)
++            const retryTimeoutMs = Math.min(RETRY_TIMEOUT_MS + retries * 1500, 15000);
+             let ws = new WebSocket(websocketEndpoint);
+             ws.binaryType = "arraybuffer";
+             ws.onerror = function (event) {
+@@ -37,9 +38,13 @@ export class RemoteLink {
+             while (ws.readyState != 1) {
+                 await sleep(100);
+                 wait += 100;
+-                if (wait > (retryTimeoutMs)) {
+-                    ws.close();
+-                    retryTimeoutMs *= 2;
++                if (wait > retryTimeoutMs) {
++                    try {
++                        ws.close();
++                    }
++                    catch {
++                        /* ignore */
++                    }
+                     break;
+                 }
+             }
+@@ -47,10 +52,11 @@ export class RemoteLink {
+                 console.warn("Connected to", websocketEndpoint);
+                 return new RemoteLink(ws);
+             }
+-            else {
+-                ws = new WebSocket(websocketEndpoint);
+-                console.warn("Restart connection");
+-            }
++            // AgenticROS: upstream never incremented `retries`, causing an infinite connect storm and
++            // zenoh remote-api 1006 / router disconnects. Back off between attempts.
++            retries += 1;
++            console.warn(`Restart connection (${retries}/${MAX_RETRIES})`);
++            await sleep(Math.min(400 + retries * 600, 12000));
+         }
+         throw new Error(`Failed to connect to locator endpoint: ${locator} after ${MAX_RETRIES}`);
+     }
+@@ -60,12 +66,12 @@ export class RemoteLink {
+         };
+     }
+     async send(msg) {
+-        if (!this.isOk) {
++        if (!this.isOk()) {
+             throw new Error("WebSocket is closed");
+         }
+         while (this.ws.bufferedAmount > MAX_WS_BUFFER_SIZE) {
+             await sleep(10);
+-            if (!this.isOk) {
++            if (!this.isOk()) {
+                 throw new Error("WebSocket is closed");
+             }
+         }
