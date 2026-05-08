@@ -1,6 +1,6 @@
 import type { OpenClawPluginApi, HttpRouteRequest, HttpRouteResponse } from "../plugin-api.js";
 import type { AgenticROSConfig } from "@agenticros/core";
-import { toNamespacedTopicFull, toTeleopCameraTopicShort } from "@agenticros/core";
+import { toNamespacedTopicFull, toTeleopCameraTopicShort, resolveCameraSubscribeTopic } from "@agenticros/core";
 import { getTransport, getTransportOrNull, getTransportMode, tryReconnectFromFile } from "../service.js";
 import { readAgenticROSConfigFromFile } from "../config-file.js";
 import { getTeleopPageHtml } from "./page.js";
@@ -259,10 +259,9 @@ export function registerTeleopRoutes(api: OpenClawPluginApi, config: AgenticROSC
       }
       const typeParam = (searchParams.get("type") ?? "compressed").toLowerCase();
       const useImage = typeParam === "image";
-      // zenoh-bridge-ros2dds applies plugins.ros2dds.namespace to *all* interfaces, including absolute `/camera/...`
-      // (see plugin README). Use full namespacing so subscribe keys match the bridge (same as cmd_vel).
-      // Also set zenoh.bridgeNamespace when the bridge uses a non-"/" namespace so rosTopicToZenohKey matches.
-      const resolvedTopic = toNamespacedTopicFull(currentConfig, topic);
+      // Camera topics are often absolute `/camera/...` on the DDS graph while cmd_vel is `/<robot.namespace>/cmd_vel`.
+      // Full namespacing every path breaks those feeds (Zenoh key mismatch → timeout → 503).
+      const resolvedTopic = resolveCameraSubscribeTopic(currentConfig, topic);
       if (cameraCacheState?.topic !== resolvedTopic) {
         api.logger.info(`Teleop camera: topic=${topic} resolvedTopic=${resolvedTopic} namespace=${(currentConfig.robot?.namespace ?? "").trim() || "(none)"}`);
       }

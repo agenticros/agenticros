@@ -71,3 +71,25 @@ export function toTeleopCameraTopicShort(config: AgenticROSConfig, topic: string
   }
   return normalized;
 }
+
+/**
+ * ROS topic to use when subscribing to camera streams (Zenoh / DDS).
+ * Unlike {@link toNamespacedTopicFull}, common sensor topics stay at the graph root (`/camera/...`, `/zed/...`)
+ * even when `robot.namespace` is set for cmd_vel. If the topic already starts with `/<namespace>/`, it is left as-is.
+ * Other multi-segment paths get the namespace prefix (same as Full) for odd layouts.
+ */
+export function resolveCameraSubscribeTopic(config: AgenticROSConfig, topic: string): string {
+  const normalized = normalizeTopic(topic);
+  const ns = (config.robot?.namespace ?? "").trim();
+  if (!ns) return normalized;
+  const withoutLeading = normalized.replace(/^\/+/, "");
+  if (!withoutLeading) return normalized;
+  if (withoutLeading === ns || withoutLeading.startsWith(`${ns}/`)) return normalized;
+
+  const first = withoutLeading.split("/")[0] ?? "";
+  /** First path segment for topics that usually remain unprefixed while cmd_vel is namespaced. */
+  const globalRoots = new Set(["camera", "zed", "usb_cam", "image_raw", "depth"]);
+  if (first && globalRoots.has(first)) return normalized;
+
+  return `/${ns}/${withoutLeading}`;
+}

@@ -29,5 +29,10 @@ export type {
   TransportConfig,
 } from "./transport/types.js";
 
-export { toNamespacedTopic, toNamespacedTopicFull, toTeleopCameraTopicShort } from "./topic-utils.js";
+export {
+  toNamespacedTopic,
+  toNamespacedTopicFull,
+  toTeleopCameraTopicShort,
+  resolveCameraSubscribeTopic,
+} from "./topic-utils.js";
 export { isCdrTypeSupported } from "./transport/zenoh/cdr.js";
