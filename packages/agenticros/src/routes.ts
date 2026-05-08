@@ -10,6 +10,7 @@ import {
 import { getLandingPageHtml } from "./landing-page.js";
 import { getConfigPageHtml, getConfigPageScript } from "./config-page.js";
 import { registerTeleopRoutes } from "./teleop/routes.js";
+import { registerCameraSnapshotRoutes } from "./camera-snapshot-routes.js";
 
 async function readJsonBodyFromReq(req: { readJsonBody?: () => Promise<Record<string, unknown> | null>; body?: unknown; on?: (e: string, cb: (c?: Buffer) => void) => void }): Promise<Record<string, unknown>> {
   if (typeof req.readJsonBody === "function") {
@@ -209,7 +210,10 @@ export function registerRoutes(api: OpenClawPluginApi, config: AgenticROSConfig)
     route({ path: `${base}/config/save`, method: "GET", handler: configSaveHandler });
   }
 
+  registerCameraSnapshotRoutes(api);
   registerTeleopRoutes(api, config);
 
-  api.logger.info("AgenticROS HTTP routes registered (GET /agenticros/, /config, /config.json; GET/POST/PUT /config/save; teleop routes)");
+  api.logger.info(
+    "AgenticROS HTTP routes registered (GET /agenticros/, /config, /config.json; GET/POST/PUT /config/save; camera snapshot + teleop routes)",
+  );
 }

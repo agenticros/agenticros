@@ -257,7 +257,7 @@ function buildDynamicContext(
 - All velocity commands are validated before execution
 
 ### Camera / "What does the robot see?"
-- When the user asks what the robot sees (or for a photo, camera view, or snapshot), **always call \`ros2_camera_snapshot\`** (or \`ros2_subscribe_once\` on a camera topic). Prefer a topic from the list above that contains **color** and **compressed** (e.g. \`/camera/camera/color/image_raw/compressed\`) for RGB. Do not assume the transport cannot decode images—${imageTransportHint(config)} If the tool returns an error, report it; otherwise show or describe the image.
+- When the user asks what the robot sees (or for a photo, camera view, or snapshot), **always call \`ros2_camera_snapshot\`** (or \`ros2_subscribe_once\` on a camera topic). Prefer a topic from the list above that contains **color** and **compressed** (e.g. \`/camera/camera/color/image_raw/compressed\`) for RGB. Do not assume the transport cannot decode images—${imageTransportHint(config)} If the tool returns an error, report it; otherwise show or describe the image. **Do not paste \`data:\` URLs or raw base64** in your reply—the tool returns a proper image block for the UI; describe what you see in prose.
 
 ### Tips
 - Use \`ros2_list_topics\` to discover all available topics
@@ -312,7 +312,7 @@ ${nsLine}${skillsSection}### Safety Limits
 - All velocity commands are validated before execution
 
 ### Camera / "What does the robot see?"
-- When the user asks what the robot sees (or for a photo, camera view, or snapshot), **always call \`ros2_camera_snapshot\`** (or \`ros2_subscribe_once\` on a camera topic). Do not assume the transport cannot decode images—${imageTransportHint(config)} If the tool returns an error, report it; otherwise show or describe the image.
+- When the user asks what the robot sees (or for a photo, camera view, or snapshot), **always call \`ros2_camera_snapshot\`** (or \`ros2_subscribe_once\` on a camera topic). Do not assume the transport cannot decode images—${imageTransportHint(config)} If the tool returns an error, report it; otherwise show or describe the image. **Do not paste \`data:\` URLs or raw base64** in your reply—the tool returns a proper image block for the UI; describe what you see in prose.
 
 ### Distance / "How far am I?"
 - When the user asks how far they are from the robot (or depth / distance in meters), **call \`ros2_depth_distance\`** only on a depth Image topic that **\`ros2_list_topics\`** (or prior tool output) shows exists. Report the tool result or **quote the exact error text** if it fails (do not claim a generic "decode" failure without the tool message). If the result is valid, give **distance_m** as the measured answer.

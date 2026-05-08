@@ -10,6 +10,9 @@ import {
   rosNumericField,
 } from "@agenticros/ros-camera";
 import { getTransport } from "../service.js";
+import { normalizePluginToolImageBase64 } from "../plugin-image-base64.js";
+import { trimJpegToLastEoi } from "../image-binary-trim.js";
+import { storeCameraSnapshot } from "../camera-snapshot-cache.js";
 
 /** Known camera topic patterns for common setups (e.g. RealSense). */
 export const REALSENSE_CAMERA_TOPICS = {
@@ -29,8 +32,10 @@ export function registerCameraTool(api: OpenClawPluginApi, config: AgenticROSCon
     name: "ros2_camera_snapshot",
     label: "ROS2 Camera Snapshot",
     description:
-      "Capture a single image from a ROS2 camera topic. Returns the image as base64-encoded data. " +
-      "Use this when the user asks what the robot sees or requests a photo. " +
+      "Capture a single image from a ROS2 camera topic. Returns a structured image block for the chat UI (plus a short text summary). " +
+      "Use when the user asks what the robot sees or requests a photo. " +
+      "Do not paste raw base64 or data: URLs in your reply—describe the scene from the image you receive. " +
+      "The tool also embeds an HTTP snapshot link in the text (same kind of URL as teleop) for the chat UI. " +
       "Supports sensor_msgs/CompressedImage (e.g. /camera/image_raw/compressed, optional zstd) and sensor_msgs/Image (raw encodings are encoded to PNG).",
     parameters: Type.Object({
       topic: Type.Optional(
@@ -116,28 +121,53 @@ export function registerCameraTool(api: OpenClawPluginApi, config: AgenticROSCon
           }, timeout);
         });
 
-        const base64 = (result.data as string) ?? "";
+        const rawB64 = (result.data as string) ?? "";
+        let base64 = normalizePluginToolImageBase64(rawB64);
         const formatLabel = String((result.format as string) ?? "jpeg").toLowerCase();
-        const mimeType = mimeTypeForSnapshotBase64(base64, formatLabel);
+        let mimeType = base64 ? mimeTypeForSnapshotBase64(base64, formatLabel) : "image/jpeg";
+
+        let buf: Buffer | null = base64 ? Buffer.from(base64, "base64") : null;
+        if (buf && buf.length >= 2 && buf[0] === 0xff && buf[1] === 0xd8) {
+          buf = trimJpegToLastEoi(buf);
+          base64 = buf.toString("base64");
+          mimeType = mimeTypeForSnapshotBase64(base64, formatLabel);
+        }
 
         const wNum =
           result.width != null ? rosNumericField(result.width, "width") : undefined;
         const hNum =
           result.height != null ? rosNumericField(result.height, "height") : undefined;
-        const summary = `Captured one frame from ${topic}${wNum != null && hNum != null ? ` (${wNum}×${hNum})` : ""}.`;
+        let summary = `Captured one frame from ${topic}${wNum != null && hNum != null ? ` (${wNum}×${hNum})` : ""}.`;
+
+        let snapshotId: string | undefined;
+        const minDecodedBytes = 80;
+        const decodedLen = buf ? buf.length : 0;
+        if (buf && decodedLen >= minDecodedBytes) {
+          try {
+            snapshotId = storeCameraSnapshot(buf, mimeType);
+          } catch {
+            /* ignore oversized / cache errors */
+          }
+        }
+        if (snapshotId) {
+          const snapPath = `/plugins/agenticros/camera/snapshot?id=${encodeURIComponent(snapshotId)}`;
+          const origin = (process.env.AGENTICROS_GATEWAY_PUBLIC_URL ?? "").trim().replace(/\/$/, "");
+          const snapUrl = origin ? `${origin}${snapPath}` : snapPath;
+          summary += `\n\n![camera snapshot](${snapUrl})`;
+        }
 
         const content: Array<
           { type: "text"; text: string } | { type: "image"; data: string; mimeType: string }
         > = [{ type: "text", text: summary }];
-        if (base64 && /^[A-Za-z0-9+/=]+$/.test(base64) && base64.length >= 100) {
+        if (base64 && buf && decodedLen >= minDecodedBytes) {
           content.push({ type: "image", data: base64, mimeType });
-        } else if (base64 && (!/^[A-Za-z0-9+/=]+$/.test(base64) || base64.length < 100)) {
+        } else if (rawB64 && (!base64 || decodedLen < minDecodedBytes)) {
           content.push({
             type: "text",
             text:
-              " (Image payload was present but not valid base64 or too small—check topic, message_type, or transport.)",
+              " (Image payload was missing, not valid base64 after normalization, or too small—check topic, message_type, or transport.)",
           });
-        } else if (!base64) {
+        } else if (!rawB64) {
           content.push({
             type: "text",
             text: " (No image data received—topic may be idle or transport returned empty.)",
