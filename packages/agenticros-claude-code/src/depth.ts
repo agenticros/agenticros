@@ -30,6 +30,22 @@ function bytesPerPixelForDepthEncoding(encoding: string): number {
   return normalizeDepthImageEncoding(encoding) === "32FC1" ? 4 : 2;
 }
 
+const DEPTH_SAMPLE_MAX_M = 40;
+const DEPTH_REPORT_PERCENTILE = 12;
+
+function sanitizeDepthSamplesMeters(values: number[]): number[] {
+  return values.filter((v) => Number.isFinite(v) && v > 0 && v <= DEPTH_SAMPLE_MAX_M);
+}
+
+function percentileLowerSorted(sortedAsc: number[], p: number): number {
+  const n = sortedAsc.length;
+  if (n === 0) return NaN;
+  if (n === 1) return sortedAsc[0]!;
+  const pp = Math.max(0, Math.min(100, p));
+  const idx = Math.min(n - 1, Math.floor((pp / 100) * n));
+  return sortedAsc[idx]!;
+}
+
 export function sampleDepthMeters(
   width: number,
   height: number,
@@ -87,6 +103,7 @@ function median(sorted: number[]): number {
 
 export interface DepthSampleResult {
   distance_m: number;
+  median_m: number;
   valid: boolean;
   topic: string;
   encoding: string;
@@ -132,14 +149,18 @@ export async function getDepthDistance(
   const isBigEndian = rosBoolField(result.is_bigendian);
   const data = depthImageDataBytes(result.data);
 
-  const values = sampleDepthMeters(width, height, step, encoding, data, 0.3, isBigEndian);
+  const values = sanitizeDepthSamplesMeters(
+    sampleDepthMeters(width, height, step, encoding, data, 0.3, isBigEndian),
+  );
   const sorted = values.slice().sort((a, b) => a - b);
-  const distance_m = median(sorted);
+  const distance_m = percentileLowerSorted(sorted, DEPTH_REPORT_PERCENTILE);
+  const median_m = median(sorted);
   const min_m = sorted.length ? sorted[0] : NaN;
   const max_m = sorted.length ? sorted[sorted.length - 1] : NaN;
 
   return {
     distance_m: Math.round(distance_m * 1000) / 1000,
+    median_m: Math.round(median_m * 1000) / 1000,
     valid: sorted.length > 0 && Number.isFinite(distance_m),
     topic,
     encoding,

@@ -19,7 +19,7 @@ export function registerDepthDistanceTool(api: OpenClawPluginApi, config: Agenti
     label: "ROS2 depth distance",
     description:
       "Get distance in meters from the robot's depth camera (e.g. RealSense). " +
-      "Samples the center of the depth image and returns the median distance. " +
+      "Samples the center of the depth image and returns distance biased toward nearer pixels (~12th percentile), not median (median often tracks walls when the person only covers part of the patch). " +
       "Use when the user asks how far they are from the robot, or distance to/from the robot.",
 
     parameters: Type.Object({
@@ -40,7 +40,7 @@ export function registerDepthDistanceTool(api: OpenClawPluginApi, config: Agenti
         const transport = getTransport();
         const result = await getDepthDistance(transport, topic, timeout);
         const text = result.valid
-          ? `Distance at center of depth image: **${result.distance_m} m** (range in sample: ${result.min_m}–${result.max_m} m, ${result.sample_count} pixels). Topic: ${result.topic}.`
+          ? `Distance at center (~12th percentile, nearer surfaces): **${result.distance_m} m** (median in same patch: ${result.median_m} m; range ${result.min_m}–${result.max_m} m; ${result.sample_count} pixels). Topic: ${result.topic}.`
           : `No valid depth in center region (topic: ${result.topic}, ${result.width}×${result.height}, encoding ${result.encoding}). The scene may be out of range or obscured.`;
         return {
           content: [{ type: "text" as const, text }],

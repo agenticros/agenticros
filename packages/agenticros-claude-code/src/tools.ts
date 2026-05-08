@@ -375,7 +375,7 @@ export async function handleToolCall(
       try {
         const result = await getDepthDistance(transport, topic, timeout);
         const text = result.valid
-          ? `Distance at center of depth image: **${result.distance_m} m** (range in sample: ${result.min_m}–${result.max_m} m, ${result.sample_count} pixels). Topic: ${result.topic}.`
+          ? `Distance at center (~12th percentile, nearer surfaces): **${result.distance_m} m** (median: ${result.median_m} m; range ${result.min_m}–${result.max_m} m; ${result.sample_count} pixels). Topic: ${result.topic}.`
           : `No valid depth in center region (topic: ${result.topic}, ${result.width}×${result.height}, encoding ${result.encoding}).`;
         return { content: [{ type: "text", text }] };
       } catch (err) {

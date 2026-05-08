@@ -12,6 +12,7 @@ import type { PluginLogger } from "./plugin-api.js";
 /** Result of sampling a depth topic (e.g. RealSense). */
 export interface DepthSampleResult {
   distance_m: number;
+  median_m: number;
   valid: boolean;
   topic: string;
   encoding: string;

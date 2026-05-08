@@ -14,6 +14,30 @@ import {
 } from "@agenticros/ros-camera";
 const DEFAULT_TIMEOUT_MS = 5000;
 
+/** Drop absurd ranges; keeps sky/glitches from skewing percentiles. */
+const DEPTH_SAMPLE_MAX_M = 40;
+
+/**
+ * Reported distance uses a **lower percentile** (not median): the center ROI often mixes the
+ * person (near) with floor/wall/sky (far). Median then tracks background; ~12th percentile
+ * tracks nearer surfaces better for "how far is the person in front".
+ */
+const DEPTH_REPORT_PERCENTILE = 12;
+
+function sanitizeDepthSamplesMeters(values: number[]): number[] {
+  return values.filter((v) => Number.isFinite(v) && v > 0 && v <= DEPTH_SAMPLE_MAX_M);
+}
+
+/** Ascending `sorted`; return value near the low end at percentile `p` (0–100). */
+function percentileLowerSorted(sortedAsc: number[], p: number): number {
+  const n = sortedAsc.length;
+  if (n === 0) return NaN;
+  if (n === 1) return sortedAsc[0]!;
+  const pp = Math.max(0, Math.min(100, p));
+  const idx = Math.min(n - 1, Math.floor((pp / 100) * n));
+  return sortedAsc[idx]!;
+}
+
 function depthImageDataBytes(data: unknown): Uint8Array {
   try {
     return new Uint8Array(coerceRosImageDataToBuffer(data));
@@ -32,7 +56,7 @@ function bytesPerPixelForDepthEncoding(encoding: string): number {
 }
 
 /**
- * Sample center region of a depth image and return median distance in meters.
+ * Sample center region of a depth image and return per-pixel distances in meters.
  * - 16UC1: values in mm (RealSense typical) → divide by 1000
  * - 32FC1: values in m → use as-is
  * Invalid/zero pixels are skipped.
@@ -190,12 +214,17 @@ export async function getDepthSectors(
   const centerV = sampleBand(width, height, step, encoding, data, third, 2 * third, 0.5, isBigEndian);
   const rightV = sampleBand(width, height, step, encoding, data, 2 * third, width, 0.5, isBigEndian);
 
-  const left_m = median(leftV.slice().sort((a, b) => a - b));
-  const center_m = median(centerV.slice().sort((a, b) => a - b));
-  const right_m = median(rightV.slice().sort((a, b) => a - b));
+  const sortN = (v: number[]) => sanitizeDepthSamplesMeters(v).sort((a, b) => a - b);
+  const leftS = sortN(leftV);
+  const centerS = sortN(centerV);
+  const rightS = sortN(rightV);
+  const left_m = percentileLowerSorted(leftS, DEPTH_REPORT_PERCENTILE);
+  const center_m = percentileLowerSorted(centerS, DEPTH_REPORT_PERCENTILE);
+  const right_m = percentileLowerSorted(rightS, DEPTH_REPORT_PERCENTILE);
 
   const round = (x: number) => (Number.isFinite(x) ? Math.round(x * 1000) / 1000 : NaN);
-  const valid = leftV.length > 0 || centerV.length > 0 || rightV.length > 0;
+  const valid =
+    leftS.length > 0 || centerS.length > 0 || rightS.length > 0;
 
   return {
     left_m: round(left_m),
@@ -207,7 +236,10 @@ export async function getDepthSectors(
 }
 
 export interface DepthSampleResult {
+  /** ~12th percentile depth in the center ROI — biased toward nearer surfaces (see module comment). */
   distance_m: number;
+  /** Median depth in the same ROI (often background-dominated when a person only fills part of the patch). */
+  median_m: number;
   valid: boolean;
   topic: string;
   encoding: string;
@@ -219,7 +251,8 @@ export interface DepthSampleResult {
 }
 
 /**
- * Subscribe to a depth topic, get one message, sample center region, return median distance in meters.
+ * Subscribe to a depth topic, get one message, sample center region, return distance in meters
+ * (lower-tail percentile toward nearer pixels; see DEPTH_REPORT_PERCENTILE).
  */
 export async function getDepthDistance(
   transport: RosTransport,
@@ -256,14 +289,18 @@ export async function getDepthDistance(
   const isBigEndian = rosBoolField(result.is_bigendian);
   const data = depthImageDataBytes(result.data);
 
-  const values = sampleDepthMeters(width, height, step, encoding, data, 0.3, isBigEndian);
+  const values = sanitizeDepthSamplesMeters(
+    sampleDepthMeters(width, height, step, encoding, data, 0.3, isBigEndian),
+  );
   const sorted = values.slice().sort((a, b) => a - b);
-  const distance_m = median(sorted);
+  const distance_m = percentileLowerSorted(sorted, DEPTH_REPORT_PERCENTILE);
+  const median_m = median(sorted);
   const min_m = sorted.length ? sorted[0] : NaN;
   const max_m = sorted.length ? sorted[sorted.length - 1] : NaN;
 
   return {
     distance_m: Math.round(distance_m * 1000) / 1000,
+    median_m: Math.round(median_m * 1000) / 1000,
     valid: sorted.length > 0 && Number.isFinite(distance_m),
     topic,
     encoding,
