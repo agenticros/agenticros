@@ -1,9 +1,8 @@
 import { Type } from "@sinclair/typebox";
 import type { OpenClawPluginApi } from "../plugin-api.js";
 import type { AgenticROSConfig } from "@agenticros/core";
-import { toNamespacedTopic } from "@agenticros/core";
+import { toNamespacedTopic, applyCmdVelTwistSignConvention } from "@agenticros/core";
 import { getTransport } from "../service.js";
-import { applyCmdVelTwistSignConvention } from "../cmd-vel-twist-sign.js";
 
 /**
  * Register the ros2_publish tool with the AI agent.

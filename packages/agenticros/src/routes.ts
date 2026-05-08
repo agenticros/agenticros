@@ -6,6 +6,7 @@ import {
   writeAgenticROSConfig,
   getOpenClawConfigPath,
   ConfigFileError,
+  readAgenticROSConfigFromFile,
 } from "./config-file.js";
 import { getLandingPageHtml } from "./landing-page.js";
 import { getConfigPageHtml, getConfigPageScript } from "./config-page.js";
@@ -58,6 +59,35 @@ function configForApi(config: AgenticROSConfig): Record<string, unknown> {
 }
 
 /**
+ * Merge an incoming save payload with the existing on-disk config so partial forms do not erase
+ * nested keys (e.g. skills.followme vs other skill ids).
+ */
+function mergeIncomingAgenticROSConfig(
+  existing: Record<string, unknown> | undefined,
+  incoming: Record<string, unknown>,
+): Record<string, unknown> {
+  const base =
+    existing && typeof existing === "object" ? (JSON.parse(JSON.stringify(existing)) as Record<string, unknown>) : {};
+  for (const key of Object.keys(incoming)) {
+    if (key === "skills") {
+      const exSkills = (base.skills as Record<string, unknown>) ?? {};
+      const inSkills = incoming.skills as Record<string, unknown> | undefined;
+      if (!inSkills || typeof inSkills !== "object" || Array.isArray(inSkills)) continue;
+      base.skills = { ...exSkills, ...inSkills };
+      const exFm = (exSkills.followme as Record<string, unknown>) ?? {};
+      const rawFm = inSkills.followme;
+      if (rawFm !== undefined && typeof rawFm === "object" && rawFm !== null && !Array.isArray(rawFm)) {
+        const inFm = rawFm as Record<string, unknown>;
+        (base.skills as Record<string, unknown>).followme = { ...exFm, ...inFm };
+      }
+    } else {
+      base[key] = incoming[key];
+    }
+  }
+  return base;
+}
+
+/**
  * Register all AgenticROS HTTP routes: landing, config, config API, and teleop.
  * Only call when api.registerHttpRoute is available.
  */
@@ -84,8 +114,19 @@ export function registerRoutes(api: OpenClawPluginApi, config: AgenticROSConfig)
     res.end(getConfigPageScript());
   };
   const configJsonHandler: HttpRouteHandler = (_req, res) => {
-    const payload = configForApi(config);
+    let payload: Record<string, unknown>;
+    try {
+      // Always reflect on-disk openclaw.json so the form matches manual edits / external saves without relying on a stale startup snapshot.
+      payload = configForApi(readAgenticROSConfigFromFile());
+    } catch (err) {
+      api.logger.warn(
+        "AgenticROS config.json: could not read OpenClaw config file, using startup snapshot: " +
+          (err instanceof Error ? err.message : String(err)),
+      );
+      payload = configForApi(config);
+    }
     res.setHeader("Content-Type", "application/json");
+    res.setHeader("Cache-Control", "no-store");
     res.statusCode = 200;
     res.end(JSON.stringify(payload));
   };
@@ -109,59 +150,63 @@ export function registerRoutes(api: OpenClawPluginApi, config: AgenticROSConfig)
   async function performConfigSave(body: Record<string, unknown>): Promise<{ success: boolean; error?: string; message?: string; configPath?: string; statusCode?: number }> {
     try {
       let merged: AgenticROSConfig;
-        try {
-          merged = parseConfig(body);
-        } catch (err) {
-          const msg =
-            err && typeof err === "object" && "message" in err
-              ? String((err as Error).message)
-              : "Validation failed";
-          api.logger.warn("AgenticROS config save validation failed: " + msg);
-          return { success: false, error: msg };
-        }
-        let existingAgenticROS: Record<string, unknown> | undefined;
-        try {
-          const full = readOpenClawConfig();
-          const plugins = full.plugins as Record<string, unknown> | undefined;
-          const entries = plugins?.entries as Record<string, unknown> | undefined;
-          const agenticrosEntry = entries?.agenticros as Record<string, unknown> | undefined;
-          existingAgenticROS = agenticrosEntry?.config as Record<string, unknown> | undefined;
-        } catch (err) {
-          if (err instanceof ConfigFileError && err.code === "ENOENT") {
-            api.logger.warn("AgenticROS config file missing: " + err.message);
-            return { success: false, error: err.message, statusCode: 503 };
-          }
-          if (err instanceof ConfigFileError && err.code === "EACCES") {
-            api.logger.warn("AgenticROS config file access denied: " + err.message);
-            return { success: false, error: err.message, statusCode: 500 };
-          }
-          const readMsg = err instanceof Error ? err.message : "Failed to read config file";
-          api.logger.warn("AgenticROS config read failed: " + readMsg);
-          return { success: false, error: readMsg, statusCode: 500 };
-        }
-        const existingKey =
-          (existingAgenticROS?.webrtc as Record<string, unknown> | undefined)?.robotKey;
-        if (typeof existingKey === "string" && existingKey.length > 0) {
-          merged.webrtc.robotKey = existingKey;
-        }
-        try {
-          writeAgenticROSConfig(merged as unknown as Record<string, unknown>);
-        } catch (err) {
-          const msg = err instanceof ConfigFileError ? err.message : (err instanceof Error ? err.message : "Failed to write config");
-          api.logger.warn("AgenticROS config write failed: " + msg);
-          return { success: false, error: msg };
-        }
-        const configPath = getOpenClawConfigPath();
-        return {
-          success: true,
-          message: "Config saved. Restart the OpenClaw gateway for changes to take effect.",
-          configPath,
-        };
+      let existingAgenticROS: Record<string, unknown> | undefined;
+      try {
+        const full = readOpenClawConfig();
+        const plugins = full.plugins as Record<string, unknown> | undefined;
+        const entries = plugins?.entries as Record<string, unknown> | undefined;
+        const agenticrosEntry = entries?.agenticros as Record<string, unknown> | undefined;
+        existingAgenticROS = agenticrosEntry?.config as Record<string, unknown> | undefined;
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "Save failed";
-        api.logger.warn("AgenticROS config save error: " + msg);
+        if (err instanceof ConfigFileError && err.code === "ENOENT") {
+          api.logger.warn("AgenticROS config file missing: " + err.message);
+          return { success: false, error: err.message, statusCode: 503 };
+        }
+        if (err instanceof ConfigFileError && err.code === "EACCES") {
+          api.logger.warn("AgenticROS config file access denied: " + err.message);
+          return { success: false, error: err.message, statusCode: 500 };
+        }
+        const readMsg = err instanceof Error ? err.message : "Failed to read config file";
+        api.logger.warn("AgenticROS config read failed: " + readMsg);
+        return { success: false, error: readMsg, statusCode: 500 };
+      }
+      try {
+        const combined =
+          existingAgenticROS && typeof existingAgenticROS === "object"
+            ? mergeIncomingAgenticROSConfig(existingAgenticROS, body)
+            : body;
+        merged = parseConfig(combined);
+      } catch (err) {
+        const msg =
+          err && typeof err === "object" && "message" in err
+            ? String((err as Error).message)
+            : "Validation failed";
+        api.logger.warn("AgenticROS config save validation failed: " + msg);
         return { success: false, error: msg };
       }
+      const existingKey =
+        (existingAgenticROS?.webrtc as Record<string, unknown> | undefined)?.robotKey;
+      if (typeof existingKey === "string" && existingKey.length > 0) {
+        merged.webrtc.robotKey = existingKey;
+      }
+      try {
+        writeAgenticROSConfig(merged as unknown as Record<string, unknown>);
+      } catch (err) {
+        const msg = err instanceof ConfigFileError ? err.message : (err instanceof Error ? err.message : "Failed to write config");
+        api.logger.warn("AgenticROS config write failed: " + msg);
+        return { success: false, error: msg };
+      }
+      const configPath = getOpenClawConfigPath();
+      return {
+        success: true,
+        message: "Config saved. Restart the OpenClaw gateway for changes to take effect.",
+        configPath,
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Save failed";
+      api.logger.warn("AgenticROS config save error: " + msg);
+      return { success: false, error: msg };
+    }
   }
 
   const configSaveHandler: HttpRouteHandler = async (req, res) => {

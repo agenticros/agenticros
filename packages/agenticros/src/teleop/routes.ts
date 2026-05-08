@@ -1,10 +1,14 @@
 import type { OpenClawPluginApi, HttpRouteRequest, HttpRouteResponse } from "../plugin-api.js";
 import type { AgenticROSConfig } from "@agenticros/core";
-import { toNamespacedTopicFull, toTeleopCameraTopicShort, resolveCameraSubscribeTopic } from "@agenticros/core";
+import {
+  toNamespacedTopicFull,
+  toTeleopCameraTopicShort,
+  resolveCameraSubscribeTopic,
+  applyCmdVelTwistSignConvention,
+} from "@agenticros/core";
 import { getTransport, getTransportOrNull, getTransportMode, tryReconnectFromFile } from "../service.js";
 import { readAgenticROSConfigFromFile } from "../config-file.js";
 import { getTeleopPageHtml } from "./page.js";
-import { applyCmdVelTwistSignConvention } from "../cmd-vel-twist-sign.js";
 import { ROS_MSG_COMPRESSED_IMAGE, bufferAndMimeFromCompressedImageMessage } from "@agenticros/ros-camera";
 
 const TWIST_TYPE = "geometry_msgs/msg/Twist";

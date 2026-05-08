@@ -251,6 +251,31 @@
     "safety.workspaceLimits": {
       "label": "Workspace Boundary Limits",
       "advanced": true
+    },
+    "skills.followme.depthTopic": {
+      "label": "Follow Me — depth image topic",
+      "description": "sensor_msgs/Image depth topic for distance (e.g. RealSense depth)"
+    },
+    "skills.followme.rateHz": {
+      "label": "Follow Me — loop rate (Hz)",
+      "advanced": true
+    },
+    "skills.followme.invertLinearX": {
+      "label": "Follow Me — invert cmd_vel linear.x",
+      "description": "Flip forward/back if the base drives the wrong way",
+      "advanced": true
+    },
+    "skills.followme.logTickTiming": {
+      "label": "Follow Me — log tick timing",
+      "description": "Emit latency logs for depth / sectors / Ollama per tick",
+      "advanced": true
+    },
+    "skills.followme.criticalStopDistanceM": {
+      "label": "Follow Me — hard stop distance (m)"
+    },
+    "skills.followme.maxVelocityFraction": {
+      "label": "Follow Me — max speed fraction of Safety limits",
+      "description": "Caps linear/angular vs safety.maxLinearVelocity / maxAngularVelocity (e.g. 0.2 = 20%)"
     }
   }
 }
