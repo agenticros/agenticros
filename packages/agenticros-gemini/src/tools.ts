@@ -3,7 +3,7 @@
  */
 
 import type { AgenticROSConfig } from "@agenticros/core";
-import { toNamespacedTopic } from "@agenticros/core";
+import { resolveCameraSubscribeTopic, toNamespacedTopic } from "@agenticros/core";
 import {
   ROS_MSG_COMPRESSED_IMAGE,
   ROS_MSG_IMAGE,
@@ -293,38 +293,46 @@ export async function executeTool(
       const defaultTopic =
         (config.robot?.cameraTopic ?? "").trim() || "/camera/camera/color/image_raw/compressed";
       const rawTopic = (args["topic"] as string | undefined) ?? defaultTopic;
-      const topic = toNamespacedTopic(config, rawTopic);
+      const topic = resolveCameraSubscribeTopic(config, rawTopic);
       const rawMsgType = args["message_type"] as string | undefined;
       const messageType: "CompressedImage" | "Image" = rawMsgType === "Image" ? "Image" : "CompressedImage";
       const timeout = (args["timeout"] as number | undefined) ?? 10000;
       const type = messageType === "Image" ? ROS_MSG_IMAGE : ROS_MSG_COMPRESSED_IMAGE;
 
-      const result = await new Promise<Record<string, unknown>>((resolve, reject) => {
-        const subscription = transport.subscribe(
-          { topic, type },
-          (msg: Record<string, unknown>) => {
-            clearTimeout(timer);
+      let result: Record<string, unknown>;
+      try {
+        result = await new Promise<Record<string, unknown>>((resolve, reject) => {
+          const subscription = transport.subscribe(
+            { topic, type },
+            (msg: Record<string, unknown>) => {
+              clearTimeout(timer);
+              subscription.unsubscribe();
+              try {
+                const payload = cameraSnapshotFromPlainMessage(messageType, msg);
+                resolve({
+                  success: true,
+                  topic,
+                  format: payload.formatLabel,
+                  data: payload.dataBase64,
+                  width: payload.width,
+                  height: payload.height,
+                });
+              } catch (e) {
+                reject(e instanceof Error ? e : new Error(String(e)));
+              }
+            },
+          );
+          const timer = setTimeout(() => {
             subscription.unsubscribe();
-            try {
-              const payload = cameraSnapshotFromPlainMessage(messageType, msg);
-              resolve({
-                success: true,
-                topic,
-                format: payload.formatLabel,
-                data: payload.dataBase64,
-                width: payload.width,
-                height: payload.height,
-              });
-            } catch (e) {
-              reject(e instanceof Error ? e : new Error(String(e)));
-            }
-          },
-        );
-        const timer = setTimeout(() => {
-          subscription.unsubscribe();
-          reject(new Error(`Timeout waiting for camera frame on ${topic}`));
-        }, timeout);
-      });
+            reject(new Error(`Timeout waiting for camera frame on ${topic}`));
+          }, timeout);
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return {
+          output: `Camera snapshot failed: ${message}. Set robot.cameraTopic in config or pass topic= + message_type=Image if only raw Image exists.`,
+        };
+      }
 
       const base64 = (result.data as string) ?? "";
       const format = String((result.format as string) ?? "jpeg").toLowerCase();
@@ -359,7 +367,7 @@ export async function executeTool(
 
     case "ros2_depth_distance": {
       const rawTopic = (args["topic"] as string | undefined)?.trim() || DEFAULT_DEPTH_TOPIC;
-      const topic = toNamespacedTopic(config, rawTopic);
+      const topic = resolveCameraSubscribeTopic(config, rawTopic);
       const timeout = (args["timeout"] as number | undefined) ?? 5000;
       try {
         const result = await getDepthDistance(transport, topic, timeout);

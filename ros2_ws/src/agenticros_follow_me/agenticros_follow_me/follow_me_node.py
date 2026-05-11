@@ -8,9 +8,12 @@ for the AgenticROS plugin.
 
 from __future__ import annotations
 
+import json
+
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist as TwistMsg
+from std_msgs.msg import String as StringMsg
 from agenticros_msgs.srv import (
     FollowMeStart,
     FollowMeStop,
@@ -66,6 +69,11 @@ class FollowMeNode(Node):
         self.create_service(
             FollowMeSetTarget, "follow_me/set_target", self._handle_set_target
         )
+
+        # Topic-based command/status interface for transports without service support (e.g. Zenoh).
+        self.create_subscription(StringMsg, "follow_me/cmd", self._handle_cmd_msg, 10)
+        self._status_pub = self.create_publisher(StringMsg, "follow_me/status", 10)
+        self._status_timer = self.create_timer(0.5, self._publish_status)
 
         self.tracker.start()
         self.get_logger().info(
@@ -177,6 +185,80 @@ class FollowMeNode(Node):
         response.confidence = float(closest.confidence)
         response.message = f"Locked onto person #{closest.id} (closest match)"
         return response
+
+    def _handle_cmd_msg(self, msg: StringMsg) -> None:
+        """Dispatch JSON commands from follow_me/cmd. Mirrors the service handlers."""
+        text = (msg.data or "").strip()
+        if not text:
+            return
+        try:
+            cmd = json.loads(text)
+        except (TypeError, ValueError):
+            self.get_logger().warn(f"follow_me/cmd: invalid JSON: {text!r}")
+            return
+        if not isinstance(cmd, dict):
+            self.get_logger().warn("follow_me/cmd: payload must be a JSON object")
+            return
+        action = str(cmd.get("action") or "").strip().lower()
+        if action == "start":
+            desc = str(cmd.get("target") or cmd.get("target_description") or "").strip()
+            if desc:
+                self.controller.start(target_description=desc)
+            else:
+                self.controller.start()
+            self.get_logger().info(f"follow_me/cmd: start{' (' + desc + ')' if desc else ' (closest)'}")
+        elif action == "stop":
+            self.controller.stop()
+            self.get_logger().info("follow_me/cmd: stop")
+        elif action == "set_distance":
+            try:
+                d = float(cmd.get("distance"))
+            except (TypeError, ValueError):
+                self.get_logger().warn("follow_me/cmd set_distance: invalid distance")
+                return
+            if 0.2 <= d <= 5.0:
+                self.controller.set_target_distance(d)
+                self.get_logger().info(f"follow_me/cmd: set_distance={d}")
+            else:
+                self.get_logger().warn(f"follow_me/cmd set_distance out of range: {d}")
+        elif action == "set_target":
+            desc = str(cmd.get("description") or cmd.get("target") or "").strip()
+            if not desc:
+                self.get_logger().warn("follow_me/cmd set_target: missing description")
+                return
+            persons = self.tracker.persons
+            if not persons:
+                self.get_logger().warn("follow_me/cmd set_target: no persons detected")
+                return
+            closest = min(persons, key=lambda p: p.distance)
+            self.controller.set_target_person(closest.id)
+            self.controller.target_description = desc
+            self.get_logger().info(f"follow_me/cmd: set_target={desc} -> person #{closest.id}")
+        else:
+            self.get_logger().warn(f"follow_me/cmd: unknown action {action!r}")
+
+    def _publish_status(self) -> None:
+        """Publish current follow-me state as JSON on follow_me/status (2 Hz)."""
+        target = self._get_target_person()
+        t = self.controller._last_twist
+        status = {
+            "enabled": bool(self.controller.enabled),
+            "tracking": bool(
+                self.controller.mode.value == "follow" and target is not None
+            ),
+            "target_distance": float(self.controller.config.target_distance),
+            "target_person_id": int(self.controller.target_person_id or 0),
+            "target_description": str(self.controller.target_description or ""),
+            "persons_detected": int(len(self.tracker.persons)),
+            "current_distance": float(target.z) if target else 0.0,
+            "twist": {
+                "linear_x": float(t.linear_x),
+                "angular_z": float(t.angular_z),
+            },
+        }
+        out = StringMsg()
+        out.data = json.dumps(status)
+        self._status_pub.publish(out)
 
 
 def main(args=None):

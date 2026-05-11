@@ -3,7 +3,7 @@
  */
 
 import type { AgenticROSConfig } from "@agenticros/core";
-import { toNamespacedTopic } from "@agenticros/core";
+import { resolveCameraSubscribeTopic, toNamespacedTopic, toNamespacedTopicFull } from "@agenticros/core";
 import {
   ROS_MSG_COMPRESSED_IMAGE,
   ROS_MSG_IMAGE,
@@ -14,6 +14,7 @@ import {
 import { getTransport } from "./transport.js";
 import { checkPublishSafety } from "./safety.js";
 import { getDepthDistance } from "./depth.js";
+import { getFollowMeLocal } from "./follow-me/loop.js";
 
 const DEFAULT_DEPTH_TOPIC = "/camera/camera/depth/image_rect_raw";
 
@@ -122,8 +123,8 @@ export const TOOLS: McpTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        topic: { type: "string", description: "Camera image topic (default from config or /camera/camera/color/image_raw/compressed)" },
-        message_type: { type: "string", description: "'CompressedImage' or 'Image' (default: CompressedImage)" },
+        topic: { type: "string", description: "Camera image topic (default from robot.cameraTopic in ~/.agenticros/config.json). Run ros2 topic list and match your driver." },
+        message_type: { type: "string", description: "'CompressedImage' (JPEG topics, names often contain /compressed) or 'Image' for raw sensor_msgs/Image—required if there is no compressed topic." },
         timeout: { type: "number", description: "Timeout in milliseconds (default: 10000)" },
       },
     },
@@ -140,9 +141,105 @@ export const TOOLS: McpTool[] = [
       },
     },
   },
+  {
+    name: "ros2_follow_me_start",
+    description:
+      "Start the follow-me skill — the robot follows a person. Optional target description to lock onto a specific person; otherwise follows the closest. Modes: 'node' (default) sends a command to the agenticros_follow_me ROS2 node running on the robot; 'local' runs an in-process YOLOv8n loop in the MCP server (no ROS2 node required, ~8 Hz).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        mode: {
+          type: "string",
+          description: "'node' (default) for the ROS2 node, or 'local' for the in-process MCP loop.",
+        },
+        target_description: {
+          type: "string",
+          description: "Optional description of the person to follow (e.g., 'person in red shirt'). Empty = follow closest.",
+        },
+      },
+    },
+  },
+  {
+    name: "ros2_follow_me_stop",
+    description: "Stop the follow-me skill. Robot will stop sending follow velocity commands. Pass mode='local' to stop the in-process loop.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        mode: { type: "string", description: "'node' (default) or 'local'." },
+      },
+    },
+  },
+  {
+    name: "ros2_follow_me_status",
+    description:
+      "Read the current follow-me status (enabled, tracking, target distance, persons detected). For mode='node' returns the latest message from follow_me/status; for mode='local' returns the in-process loop status.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        mode: { type: "string", description: "'node' (default) or 'local'." },
+        timeout: { type: "number", description: "Timeout in milliseconds (default: 3000). Only used for mode='node'." },
+      },
+    },
+  },
+  {
+    name: "ros2_follow_me_set_distance",
+    description: "Set the follow-me target distance in meters. Clamped server-side to [0.2, 5.0].",
+    inputSchema: {
+      type: "object",
+      properties: {
+        mode: { type: "string", description: "'node' (default) or 'local'." },
+        distance: { type: "number", description: "Target distance in meters (0.2 to 5.0)" },
+      },
+      required: ["distance"],
+    },
+  },
+  {
+    name: "ros2_follow_me_set_target",
+    description:
+      "Lock the follow-me tracker onto a person described by text. Locks onto the closest visible person and stores the description for future re-identification.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        mode: { type: "string", description: "'node' (default) or 'local'." },
+        description: { type: "string", description: "Description of the person to follow" },
+      },
+      required: ["description"],
+    },
+  },
 ];
 
 export type ToolContent = { type: "text"; text: string } | { type: "image"; data: string; mimeType: string };
+
+function followMeMode(args: Record<string, unknown>): "node" | "local" {
+  const raw = String(args["mode"] ?? "node").toLowerCase().trim();
+  return raw === "local" ? "local" : "node";
+}
+
+async function publishFollowMeCmd(
+  config: AgenticROSConfig,
+  payload: Record<string, unknown>,
+): Promise<{ topic: string; payload: Record<string, unknown> }> {
+  const transport = getTransport();
+  if (transport.getStatus() !== "connected") {
+    throw new Error(
+      "Transport not connected. Check zenohd (ws://localhost:10000) and config in ~/.agenticros/config.json.",
+    );
+  }
+  const topic = toNamespacedTopicFull(config, "/follow_me/cmd");
+  const data = JSON.stringify(payload);
+  const PUBLISH_TIMEOUT_MS = 5_000;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(
+      () => reject(new Error(`Publish to ${topic} timed out after ${PUBLISH_TIMEOUT_MS / 1000}s`)),
+      PUBLISH_TIMEOUT_MS,
+    );
+  });
+  await Promise.race([
+    transport.publish({ topic, type: "std_msgs/msg/String", msg: { data } }),
+    timeoutPromise,
+  ]);
+  return { topic, payload };
+}
 
 export async function handleToolCall(
   name: string,
@@ -312,65 +409,79 @@ export async function handleToolCall(
       const defaultTopic =
         (config.robot?.cameraTopic ?? "").trim() || "/camera/camera/color/image_raw/compressed";
       const rawTopic = (args["topic"] as string | undefined) ?? defaultTopic;
-      const topic = toNamespacedTopic(config, rawTopic);
+      const topic = resolveCameraSubscribeTopic(config, rawTopic);
       const rawMsgType = args["message_type"] as string | undefined;
       const messageType: "CompressedImage" | "Image" = rawMsgType === "Image" ? "Image" : "CompressedImage";
       const timeout = (args["timeout"] as number | undefined) ?? 10000;
       const type = messageType === "Image" ? ROS_MSG_IMAGE : ROS_MSG_COMPRESSED_IMAGE;
 
-      const result = await new Promise<Record<string, unknown>>((resolve, reject) => {
-        const subscription = transport.subscribe(
-          { topic, type },
-          (msg: Record<string, unknown>) => {
-            clearTimeout(timer);
+      try {
+        const result = await new Promise<Record<string, unknown>>((resolve, reject) => {
+          const subscription = transport.subscribe(
+            { topic, type },
+            (msg: Record<string, unknown>) => {
+              clearTimeout(timer);
+              subscription.unsubscribe();
+              try {
+                const payload = cameraSnapshotFromPlainMessage(messageType, msg);
+                resolve({
+                  success: true,
+                  topic,
+                  format: payload.formatLabel,
+                  data: payload.dataBase64,
+                  width: payload.width,
+                  height: payload.height,
+                });
+              } catch (e) {
+                reject(e instanceof Error ? e : new Error(String(e)));
+              }
+            },
+          );
+          const timer = setTimeout(() => {
             subscription.unsubscribe();
-            try {
-              const payload = cameraSnapshotFromPlainMessage(messageType, msg);
-              resolve({
-                success: true,
-                topic,
-                format: payload.formatLabel,
-                data: payload.dataBase64,
-                width: payload.width,
-                height: payload.height,
-              });
-            } catch (e) {
-              reject(e instanceof Error ? e : new Error(String(e)));
-            }
-          },
-        );
-        const timer = setTimeout(() => {
-          subscription.unsubscribe();
-          reject(new Error(`Timeout waiting for camera frame on ${topic}`));
-        }, timeout);
-      });
+            reject(new Error(`Timeout waiting for camera frame on ${topic}`));
+          }, timeout);
+        });
 
-      const base64 = (result.data as string) ?? "";
-      const format = String((result.format as string) ?? "jpeg").toLowerCase();
-      const mimeType = mimeTypeForSnapshotBase64(base64, format);
-      const wNum = result.width != null ? rosNumericField(result.width, "width") : undefined;
-      const hNum = result.height != null ? rosNumericField(result.height, "height") : undefined;
-      const summary = `Captured one frame from ${topic}${wNum != null && hNum != null ? ` (${wNum}×${hNum})` : ""}.`;
-      const content: ToolContent[] = [{ type: "text", text: summary }];
-      if (base64 && /^[A-Za-z0-9+/=]+$/.test(base64) && base64.length >= 100) {
-        content.push({ type: "image", data: base64, mimeType });
-      } else if (base64 && (!/^[A-Za-z0-9+/=]+$/.test(base64) || base64.length < 100)) {
-        content.push({
-          type: "text",
-          text: " (Image payload was present but not valid base64 or too small—check topic, message_type, or transport.)",
-        });
-      } else if (!base64) {
-        content.push({
-          type: "text",
-          text: " (No image data received—topic may be idle or transport returned empty.)",
-        });
+        const base64 = (result.data as string) ?? "";
+        const format = String((result.format as string) ?? "jpeg").toLowerCase();
+        const mimeType = mimeTypeForSnapshotBase64(base64, format);
+        const wNum = result.width != null ? rosNumericField(result.width, "width") : undefined;
+        const hNum = result.height != null ? rosNumericField(result.height, "height") : undefined;
+        const summary = `Captured one frame from ${topic}${wNum != null && hNum != null ? ` (${wNum}×${hNum})` : ""}.`;
+        const content: ToolContent[] = [{ type: "text", text: summary }];
+        if (base64 && /^[A-Za-z0-9+/=]+$/.test(base64) && base64.length >= 100) {
+          content.push({ type: "image", data: base64, mimeType });
+        } else if (base64 && (!/^[A-Za-z0-9+/=]+$/.test(base64) || base64.length < 100)) {
+          content.push({
+            type: "text",
+            text: " (Image payload was present but not valid base64 or too small—check topic, message_type, or transport.)",
+          });
+        } else if (!base64) {
+          content.push({
+            type: "text",
+            text: " (No image data received—topic may be idle or transport returned empty.)",
+          });
+        }
+        return { content };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return {
+          content: [
+            {
+              type: "text",
+              text:
+                `Camera snapshot failed: ${message}. Check robot.cameraTopic and transport in ~/.agenticros/config.json; try ros2_camera_snapshot with topic=<exact topic from ros2 topic list> and message_type=Image if you only have raw Image (not /compressed).`,
+            },
+          ],
+          isError: true,
+        };
       }
-      return { content };
     }
 
     case "ros2_depth_distance": {
       const rawTopic = (args["topic"] as string | undefined)?.trim() || DEFAULT_DEPTH_TOPIC;
-      const topic = toNamespacedTopic(config, rawTopic);
+      const topic = resolveCameraSubscribeTopic(config, rawTopic);
       const timeout = (args["timeout"] as number | undefined) ?? 5000;
       try {
         const result = await getDepthDistance(transport, topic, timeout);
@@ -384,6 +495,132 @@ export async function handleToolCall(
           content: [{ type: "text", text: `Depth distance failed: ${message}` }],
           isError: true,
         };
+      }
+    }
+
+    case "ros2_follow_me_start": {
+      const mode = followMeMode(args);
+      const desc = String(args["target_description"] ?? "").trim();
+      if (mode === "local") {
+        if (transport.getStatus() !== "connected") {
+          return {
+            content: [{ type: "text", text: "Transport not connected. Check zenohd and config." }],
+            isError: true,
+          };
+        }
+        try {
+          const loop = getFollowMeLocal(config, transport);
+          await loop.start({ targetDescription: desc || undefined });
+          const text = `Follow-me (local) started${desc ? ` (target: ${desc})` : " (closest person)"}. Use ros2_follow_me_status with mode='local' to check tracking state.`;
+          return { content: [{ type: "text", text }] };
+        } catch (err) {
+          return { content: [{ type: "text", text: `Follow-me local start failed: ${err instanceof Error ? err.message : String(err)}` }], isError: true };
+        }
+      }
+      try {
+        const { topic } = await publishFollowMeCmd(config, {
+          action: "start",
+          ...(desc ? { target: desc } : {}),
+        });
+        const text = `Follow-me start sent to ${topic}${desc ? ` (target: ${desc})` : " (closest person)"}. Use ros2_follow_me_status to verify the node received it.`;
+        return { content: [{ type: "text", text }] };
+      } catch (err) {
+        return { content: [{ type: "text", text: `Follow-me start failed: ${err instanceof Error ? err.message : String(err)}` }], isError: true };
+      }
+    }
+
+    case "ros2_follow_me_stop": {
+      const mode = followMeMode(args);
+      if (mode === "local") {
+        try {
+          const loop = getFollowMeLocal(config, transport);
+          await loop.stop();
+          return { content: [{ type: "text", text: "Follow-me (local) stopped. cmd_vel zeroed." }] };
+        } catch (err) {
+          return { content: [{ type: "text", text: `Follow-me local stop failed: ${err instanceof Error ? err.message : String(err)}` }], isError: true };
+        }
+      }
+      try {
+        const { topic } = await publishFollowMeCmd(config, { action: "stop" });
+        return { content: [{ type: "text", text: `Follow-me stop sent to ${topic}.` }] };
+      } catch (err) {
+        return { content: [{ type: "text", text: `Follow-me stop failed: ${err instanceof Error ? err.message : String(err)}` }], isError: true };
+      }
+    }
+
+    case "ros2_follow_me_set_distance": {
+      const distance = Number(args["distance"]);
+      if (!Number.isFinite(distance)) {
+        return { content: [{ type: "text", text: "distance must be a finite number" }], isError: true };
+      }
+      if (distance < 0.2 || distance > 5.0) {
+        return { content: [{ type: "text", text: `distance ${distance} out of range [0.2, 5.0]` }], isError: true };
+      }
+      const mode = followMeMode(args);
+      if (mode === "local") {
+        getFollowMeLocal(config, transport).setTargetDistance(distance);
+        return { content: [{ type: "text", text: `Follow-me (local) target distance set to ${distance} m.` }] };
+      }
+      try {
+        const { topic } = await publishFollowMeCmd(config, { action: "set_distance", distance });
+        return { content: [{ type: "text", text: `Follow-me set_distance=${distance} sent to ${topic}.` }] };
+      } catch (err) {
+        return { content: [{ type: "text", text: `Follow-me set_distance failed: ${err instanceof Error ? err.message : String(err)}` }], isError: true };
+      }
+    }
+
+    case "ros2_follow_me_set_target": {
+      const description = String(args["description"] ?? "").trim();
+      if (!description) {
+        return { content: [{ type: "text", text: "description is required" }], isError: true };
+      }
+      const mode = followMeMode(args);
+      if (mode === "local") {
+        getFollowMeLocal(config, transport).setTargetDescription(description);
+        return { content: [{ type: "text", text: `Follow-me (local) target description set: ${description}. (Note: local mode currently follows the largest person; description is recorded but not yet used for re-id.)` }] };
+      }
+      try {
+        const { topic } = await publishFollowMeCmd(config, { action: "set_target", description });
+        return { content: [{ type: "text", text: `Follow-me set_target sent to ${topic} (description: ${description}).` }] };
+      } catch (err) {
+        return { content: [{ type: "text", text: `Follow-me set_target failed: ${err instanceof Error ? err.message : String(err)}` }], isError: true };
+      }
+    }
+
+    case "ros2_follow_me_status": {
+      const mode = followMeMode(args);
+      if (mode === "local") {
+        const status = getFollowMeLocal(config, transport).status();
+        return { content: [{ type: "text", text: JSON.stringify({ success: true, mode: "local", status }) }] };
+      }
+      const topic = toNamespacedTopicFull(config, "/follow_me/status");
+      const timeout = (args["timeout"] as number | undefined) ?? 3000;
+      try {
+        const message = await new Promise<Record<string, unknown>>((resolve, reject) => {
+          const sub = transport.subscribe(
+            { topic, type: "std_msgs/msg/String" },
+            (msg: Record<string, unknown>) => {
+              clearTimeout(timer);
+              sub.unsubscribe();
+              resolve(msg);
+            },
+          );
+          const timer = setTimeout(() => {
+            sub.unsubscribe();
+            reject(new Error(`Timeout waiting for status on ${topic} — is the agenticros_follow_me node running?`));
+          }, timeout);
+        });
+        let parsed: unknown = null;
+        const data = (message["data"] as string | undefined) ?? "";
+        try {
+          parsed = data ? JSON.parse(data) : null;
+        } catch {
+          parsed = null;
+        }
+        const text = JSON.stringify({ success: true, topic, status: parsed ?? data });
+        return { content: [{ type: "text", text }] };
+      } catch (err) {
+        return { content: [{ type: "text", text: `Follow-me status failed: ${err instanceof Error ? err.message : String(err)}` }], isError: true };
       }
     }
 
