@@ -15,6 +15,7 @@ import { getTransport } from "./transport.js";
 import { checkPublishSafety } from "./safety.js";
 import { getDepthDistance } from "./depth.js";
 import { getFollowMeLocal } from "./follow-me/loop.js";
+import { findObject } from "./find-object/find-object.js";
 
 const DEFAULT_DEPTH_TOPIC = "/camera/camera/depth/image_rect_raw";
 
@@ -204,6 +205,38 @@ export const TOOLS: McpTool[] = [
         description: { type: "string", description: "Description of the person to follow" },
       },
       required: ["description"],
+    },
+  },
+  {
+    name: "ros2_find_object",
+    description:
+      "Rotate the robot in place (clockwise by default) until a target object is detected by YOLOv8n in the camera feed, then stop. Target must be a COCO class name (e.g., 'cell phone', 'chair', 'bottle', 'cup', 'laptop'). Returns whether the object was found, its confidence, bounding box, and horizontal offset from image center (-1=left edge, 0=center, +1=right edge).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        target: {
+          type: "string",
+          description:
+            "COCO class name to search for (e.g., 'cell phone', 'chair', 'bottle').",
+        },
+        angular_speed: {
+          type: "number",
+          description: "Rotation speed in rad/s (default 0.3). Clamped to safety.maxAngularVelocity.",
+        },
+        clockwise: {
+          type: "boolean",
+          description: "Rotate clockwise (default true). Set false for counterclockwise.",
+        },
+        timeout_seconds: {
+          type: "number",
+          description: "Give up after this many seconds (default 30).",
+        },
+        min_confidence: {
+          type: "number",
+          description: "Minimum detection confidence to accept (default 0.5).",
+        },
+      },
+      required: ["target"],
     },
   },
 ];
@@ -622,6 +655,38 @@ export async function handleToolCall(
       } catch (err) {
         return { content: [{ type: "text", text: `Follow-me status failed: ${err instanceof Error ? err.message : String(err)}` }], isError: true };
       }
+    }
+
+    case "ros2_find_object": {
+      if (transport.getStatus() !== "connected") {
+        return {
+          content: [{ type: "text", text: "Transport not connected to Zenoh/ROS2." }],
+          isError: true,
+        };
+      }
+      const target = String(args["target"] ?? "").trim();
+      if (!target) {
+        return { content: [{ type: "text", text: "Missing required argument: target" }], isError: true };
+      }
+      const result = await findObject(config, transport, {
+        target,
+        angularSpeed: args["angular_speed"] as number | undefined,
+        clockwise: args["clockwise"] as boolean | undefined,
+        timeoutSeconds: args["timeout_seconds"] as number | undefined,
+        minConfidence: args["min_confidence"] as number | undefined,
+      });
+      const summary = result.error
+        ? result.error
+        : result.found
+        ? `Found ${target} after ${result.elapsedSeconds.toFixed(1)}s rotating ${result.rotationDirection}. ` +
+          `Confidence ${(result.detection!.confidence * 100).toFixed(0)}%, ` +
+          `horizontal offset ${result.detection!.horizontalOffset.toFixed(2)} ` +
+          `(${result.detection!.horizontalOffset < 0 ? "left" : "right"} of center). Robot stopped.`
+        : `${target} not found within ${result.elapsedSeconds.toFixed(1)}s. Robot stopped.`;
+      return {
+        content: [{ type: "text", text: summary + "\n" + JSON.stringify(result) }],
+        isError: !!result.error,
+      };
     }
 
     default:

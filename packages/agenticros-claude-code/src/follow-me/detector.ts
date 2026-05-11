@@ -161,6 +161,18 @@ export class PersonDetector {
    * Returns bounding boxes in the original image's pixel space.
    */
   async detect(image: Buffer | Uint8Array): Promise<{ width: number; height: number; persons: PersonDetection[] }> {
+    const r = await this.detectClass(image, PERSON_CLASS_ID);
+    return { width: r.width, height: r.height, persons: r.detections };
+  }
+
+  /**
+   * Detect a single COCO class (0..79) in a JPEG/PNG image buffer.
+   * 0=person, 67=cell phone, 56=chair, ... see find-object/coco-classes.ts.
+   */
+  async detectClass(
+    image: Buffer | Uint8Array,
+    classId: number,
+  ): Promise<{ width: number; height: number; detections: PersonDetection[] }> {
     if (!this.session) await this.load();
     const session = this.session!;
 
@@ -220,7 +232,7 @@ export class PersonDetector {
 
     const raw: PersonDetection[] = [];
     for (let i = 0; i < nAnchors; i++) {
-      const score = arr[(4 + PERSON_CLASS_ID) * nAnchors + i]!;
+      const score = arr[(4 + classId) * nAnchors + i]!;
       if (score < this.scoreThreshold) continue;
       const cx = arr[0 * nAnchors + i]!;
       const cy = arr[1 * nAnchors + i]!;
@@ -242,8 +254,8 @@ export class PersonDetector {
       });
     }
 
-    const persons = nms(raw, this.iouThreshold);
-    return { width: origW, height: origH, persons };
+    const detections = nms(raw, this.iouThreshold);
+    return { width: origW, height: origH, detections };
   }
 
   async dispose(): Promise<void> {
