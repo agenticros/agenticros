@@ -17,6 +17,9 @@
     "typecheck": "tsc --noEmit"
   },
   "openclaw": {
+    "extensions": [
+      "./dist/index.js"
+    ],    
     "compat": {
       "pluginApi": ">=2026.3.24-beta.2"
     },
