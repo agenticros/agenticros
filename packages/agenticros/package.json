@@ -1,5 +1,5 @@
 {
-  "name": "agenticros/agenticros",
+  "name": "agenticros",
   "version": "0.0.1",
   "type": "module",
   "description": "AgenticROS OpenClaw plugin — ROS2 tools, commands, and routes for the OpenClaw gateway",
