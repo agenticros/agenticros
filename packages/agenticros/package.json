@@ -16,6 +16,14 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit"
   },
+  "openclaw": {
+    "compat": {
+      "pluginApi": ">=2026.3.24-beta.2"
+    },
+    "build": {
+      "openclawVersion": "2026.3.24-beta.2"
+    }
+  },
   "dependencies": {
     "@agenticros/core": "workspace:*",
     "@agenticros/ros-camera": "workspace:*",
