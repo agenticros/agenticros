@@ -117,34 +117,99 @@ export function getTeleopPageHtml(config: AgenticROSConfig): string {
   let selectedTopic = '';
   let pollTimer = null;
   let statusInterval = null;
-  let lastConnected = null;
-  let disconnectedCount = 0;
-
   function setStatus(msg) { statusEl.textContent = msg; }
   function getSpeed() { return parseFloat(speedEl?.value || SPEED_DEFAULT); }
   speedEl?.addEventListener('input', function() { speedVal.textContent = this.value; });
 
-  function cameraUrl() {
+  function cameraFetchUrl() {
     if (!selectedTopic) return '';
     return apiUrl('camera?topic=' + encodeURIComponent(selectedTopic) + '&type=compressed&t=' + Date.now());
   }
 
+  /** Monotonic token so a stale async loop stops after topic change / stopPoll. */
+  let pollGeneration = 0;
+
+  function revokeCameraObjectUrl() {
+    var prev = cameraEl && cameraEl.dataset ? cameraEl.dataset.objectUrl : '';
+    if (prev) {
+      try { URL.revokeObjectURL(prev); } catch (e) { /* ignore */ }
+      cameraEl.dataset.objectUrl = '';
+    }
+  }
+
+  function stopPoll() {
+    pollGeneration += 1;
+    if (pollTimer) {
+      clearTimeout(pollTimer);
+      pollTimer = null;
+    }
+    revokeCameraObjectUrl();
+  }
+
   function startPoll() {
-    if (pollTimer) clearInterval(pollTimer);
+    stopPoll();
     if (!selectedTopic) { noFeedEl.style.display = 'flex'; cameraEl.style.display = 'none'; return; }
     noFeedEl.style.display = 'none';
     cameraEl.style.display = 'block';
-    cameraEl.onerror = function() {
-      if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-      fetch(apiUrl('camera?topic=' + encodeURIComponent(selectedTopic) + '&type=compressed&t=' + Date.now()))
+    var gen = pollGeneration;
+
+    function scheduleNext(delayMs) {
+      if (gen !== pollGeneration) return;
+      pollTimer = setTimeout(tick, delayMs);
+    }
+
+    function tick() {
+      if (gen !== pollGeneration || !selectedTopic) return;
+      var url = cameraFetchUrl();
+      if (!url) return;
+      var t0 = Date.now();
+      fetch(url, { cache: 'no-store', credentials: 'same-origin' })
         .then(function(r) {
-          if (r.status >= 400) return r.json().then(function(j) { setStatus('Camera: ' + (j && j.error ? j.error : r.statusText)); });
-          setStatus('Camera failed (use a CompressedImage topic, e.g. .../image_raw/compressed)');
+          if (gen !== pollGeneration) return null;
+          var ct = (r.headers.get('Content-Type') || '').toLowerCase();
+          if (!r.ok) {
+            if (ct.indexOf('application/json') >= 0) {
+              return r.json().then(function(j) {
+                if (gen !== pollGeneration) return;
+                var err = j && j.error ? String(j.error) : r.statusText;
+                var code = j && j.code ? String(j.code) : '';
+                setStatus(code ? ('Camera [' + code + ']: ' + err) : ('Camera: ' + err));
+                scheduleNext(POLL_MS);
+              });
+            }
+            setStatus('Camera: ' + r.status + ' ' + r.statusText);
+            scheduleNext(POLL_MS);
+            return null;
+          }
+          if (ct.indexOf('image/') !== 0) {
+            return r.json().then(function(j) {
+              if (gen !== pollGeneration) return;
+              var err = j && j.error ? String(j.error) : 'unexpected response';
+              var code = j && j.code ? String(j.code) : '';
+              setStatus(code ? ('Camera [' + code + ']: ' + err) : ('Camera: ' + err));
+              scheduleNext(POLL_MS);
+            });
+          }
+          return r.blob().then(function(blob) {
+            if (gen !== pollGeneration) return;
+            setStatus('');
+            var objectUrl = URL.createObjectURL(blob);
+            revokeCameraObjectUrl();
+            cameraEl.dataset.objectUrl = objectUrl;
+            cameraEl.src = objectUrl;
+            var elapsed = Date.now() - t0;
+            var wait = Math.max(0, POLL_MS - elapsed);
+            scheduleNext(wait);
+          });
         })
-        .catch(function() { setStatus('Camera request failed. Check transport (Reconnect) and gateway logs.'); });
-    };
-    cameraEl.src = cameraUrl();
-    pollTimer = setInterval(function() { cameraEl.src = cameraUrl(); }, POLL_MS);
+        .catch(function() {
+          if (gen !== pollGeneration) return;
+          setStatus('Camera request failed. Check transport (Reconnect) and gateway logs.');
+          scheduleNext(POLL_MS);
+        });
+    }
+
+    tick();
   }
 
   function loadSources() {
@@ -176,17 +241,9 @@ export function getTeleopPageHtml(config: AgenticROSConfig): string {
 
   function setConnBadge(connected, mode) {
     if (!connBadge) return;
-    if (connected) {
-      disconnectedCount = 0;
-      lastConnected = true;
-    } else {
-      disconnectedCount = (lastConnected === false ? disconnectedCount + 1 : 1);
-      lastConnected = false;
-    }
-    var showConnected = connected || disconnectedCount < 2;
-    connBadge.className = 'conn-badge ' + (showConnected ? 'connected' : 'disconnected');
-    connBadge.textContent = showConnected ? '● Connected (' + (mode || 'ros2') + ')' : '○ Disconnected (mode: ' + (mode || 'none') + ')';
-    connBadge.title = showConnected ? 'Transport connected' : 'Start Zenoh router (ws://localhost:10000) or rosbridge, then click Reconnect';
+    connBadge.className = 'conn-badge ' + (connected ? 'connected' : 'disconnected');
+    connBadge.textContent = connected ? '● Connected (' + (mode || 'ros2') + ')' : '○ Disconnected (mode: ' + (mode || 'none') + ')';
+    connBadge.title = connected ? 'Transport connected (camera still needs a publishing CompressedImage topic)' : 'Start Zenoh router (ws://localhost:10000) or rosbridge, then click Reconnect';
   }
 
   function updateConnectionStatus() {

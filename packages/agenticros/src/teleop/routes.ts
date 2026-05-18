@@ -1,5 +1,5 @@
 import type { OpenClawPluginApi, HttpRouteRequest, HttpRouteResponse } from "../plugin-api.js";
-import type { AgenticROSConfig } from "@agenticros/core";
+import type { AgenticROSConfig, ConnectionStatus } from "@agenticros/core";
 import {
   toNamespacedTopicFull,
   toTeleopCameraTopicShort,
@@ -36,6 +36,19 @@ function parseUrl(req: HttpRouteRequest): { pathname: string; searchParams: URLS
   const base = "http://localhost";
   const url = new URL(req.url ?? "", base);
   return { pathname: url.pathname, searchParams: url.searchParams };
+}
+
+/** Machine-readable reason for teleop/camera JSON errors (client UI / automation). */
+export type TeleopCameraErrorCode =
+  | "unsupported_image_type"
+  | "transport_unready"
+  | "transport_not_connected"
+  | "worker"
+  | "timeout"
+  | "unknown";
+
+function teleopCameraErrorBody(code: TeleopCameraErrorCode, error: string): string {
+  return JSON.stringify({ code, error });
 }
 
 function readRequestBody(stream: NodeJS.ReadableStream): Promise<string> {
@@ -273,11 +286,14 @@ export function registerTeleopRoutes(api: OpenClawPluginApi, config: AgenticROSC
 
       if (useImage) {
         res.setHeader("Content-Type", "application/json");
+        res.setHeader("Cache-Control", "no-store");
+        res.setHeader("Pragma", "no-cache");
         res.statusCode = 501;
         res.end(
-          JSON.stringify({
-            error: "Raw Image topics not supported; use a CompressedImage topic (e.g. .../image_raw/compressed)",
-          }),
+          teleopCameraErrorBody(
+            "unsupported_image_type",
+            "Raw Image topics not supported; use a CompressedImage topic (e.g. .../image_raw/compressed)",
+          ),
         );
         return;
       }
@@ -302,14 +318,42 @@ export function registerTeleopRoutes(api: OpenClawPluginApi, config: AgenticROSC
 
         if (state.cache && state.cache.length > 0) {
           res.setHeader("Content-Type", state.mime);
-          res.setHeader("Cache-Control", "no-store");
+          res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+          res.setHeader("Pragma", "no-cache");
           res.statusCode = 200;
           res.end(state.cache);
           return;
         }
 
         if (!state.sub) {
-          const transport = getTransport();
+          const transport = getTransportOrNull();
+          if (!transport) {
+            res.setHeader("Content-Type", "application/json");
+            res.setHeader("Cache-Control", "no-store");
+            res.setHeader("Pragma", "no-cache");
+            res.statusCode = 503;
+            res.end(
+              teleopCameraErrorBody(
+                "transport_unready",
+                "ROS2 transport not ready (no session on this process). Start Zenoh/rosbridge, then Reconnect — or use a single gateway worker so status and camera hit the same process.",
+              ),
+            );
+            return;
+          }
+          const camConn: ConnectionStatus = transport.getStatus();
+          if (camConn !== "connected") {
+            res.setHeader("Content-Type", "application/json");
+            res.setHeader("Cache-Control", "no-store");
+            res.setHeader("Pragma", "no-cache");
+            res.statusCode = 503;
+            res.end(
+              teleopCameraErrorBody(
+                "transport_not_connected",
+                `ROS2 transport not connected (status: ${camConn}). Wait for the session or fix Zenoh/rosbridge; see gateway logs.`,
+              ),
+            );
+            return;
+          }
           const firstFramePromise = new Promise<{ buf: Buffer; mime: string }>((resolve, reject) => {
             state.firstFrameResolve = resolve;
             state.firstFrameReject = reject;
@@ -350,7 +394,8 @@ export function registerTeleopRoutes(api: OpenClawPluginApi, config: AgenticROSC
           }
           const { buf, mime } = await firstFramePromise;
           res.setHeader("Content-Type", mime);
-          res.setHeader("Cache-Control", "no-store");
+          res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+          res.setHeader("Pragma", "no-cache");
           res.statusCode = 200;
           res.end(buf);
           return;
@@ -373,7 +418,8 @@ export function registerTeleopRoutes(api: OpenClawPluginApi, config: AgenticROSC
         });
         const { buf, mime } = await waitForFirst;
         res.setHeader("Content-Type", mime);
-        res.setHeader("Cache-Control", "no-store");
+        res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+        res.setHeader("Pragma", "no-cache");
         res.statusCode = 200;
         res.end(buf);
       } catch (e) {
@@ -385,12 +431,26 @@ export function registerTeleopRoutes(api: OpenClawPluginApi, config: AgenticROSC
           if (isTimeout) lastCameraTimeoutLog = { topic: resolvedTopic, at: now };
         }
         res.setHeader("Content-Type", "application/json");
+        res.setHeader("Cache-Control", "no-store");
+        res.setHeader("Pragma", "no-cache");
         res.statusCode = 503;
-        const userMsg =
-          /session|transport|not initialized|undefined/i.test(raw)
-            ? "Camera unavailable. Transport may be on another gateway worker — try opening teleop on the gateway directly or run the gateway with a single worker."
-            : raw;
-        res.end(JSON.stringify({ error: userMsg }));
+        const { code, userMsg }: { code: TeleopCameraErrorCode; userMsg: string } = (() => {
+          if (/session|transport|not initialized|undefined/i.test(raw)) {
+            return {
+              code: "worker" as const,
+              userMsg:
+                "Camera unavailable. Transport may be on another gateway worker — try opening teleop on the gateway directly or run the gateway with a single worker.",
+            };
+          }
+          if (isTimeout) {
+            return {
+              code: "timeout" as const,
+              userMsg: `No CompressedImage frames on "${resolvedTopic}" before timeout. Confirm the topic exists and publishes sensor_msgs/msg/CompressedImage (e.g. ros2 topic echo); match robot namespace; check Zenoh/rosbridge and gateway logs.`,
+            };
+          }
+          return { code: "unknown" as const, userMsg: raw };
+        })();
+        res.end(teleopCameraErrorBody(code, userMsg));
       }
   };
 
