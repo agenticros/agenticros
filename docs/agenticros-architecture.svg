@@ -1,0 +1,193 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1040" viewBox="0 0 1600 1040" role="img" aria-labelledby="title desc">
+  <title id="title">AgenticROS codebase architecture</title>
+  <desc id="desc">Architecture diagram showing AgenticROS platform adapters, shared TypeScript packages, transport modes, ROS2 workspace nodes, and robot data flow.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f6f8fb; }
+      .title { font: 700 34px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #17202a; }
+      .subtitle { font: 500 15px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #526071; }
+      .band-title { font: 700 17px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #1e2a36; letter-spacing: 0; }
+      .box-title { font: 700 15px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #15202b; }
+      .box-text { font: 500 12.5px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #3f4c5c; }
+      .small { font: 500 11.5px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #526071; }
+      .label { font: 700 11px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #39485a; }
+      .surface { fill: #ffffff; stroke: #c7d0dc; stroke-width: 1.5; }
+      .adapter { fill: #e7f2ff; stroke: #5f9bd3; stroke-width: 1.5; }
+      .shared { fill: #fff7dd; stroke: #c89c32; stroke-width: 1.5; }
+      .transport { fill: #e8f7ee; stroke: #58a971; stroke-width: 1.5; }
+      .ros { fill: #f2ebff; stroke: #8c6fc7; stroke-width: 1.5; }
+      .robot { fill: #ffece8; stroke: #ce725f; stroke-width: 1.5; }
+      .config { fill: #edf1f5; stroke: #9aa8b8; stroke-width: 1.5; }
+      .band { fill: #ffffff; stroke: #d8e0ea; stroke-width: 1.3; }
+      .dash { stroke-dasharray: 7 7; }
+      .line { fill: none; stroke: #657386; stroke-width: 2; }
+      .line-strong { fill: none; stroke: #2c6f9f; stroke-width: 2.8; }
+      .line-soft { fill: none; stroke: #9aa8b8; stroke-width: 1.6; }
+      .note { fill: #ffffff; stroke: #d8e0ea; stroke-width: 1.2; }
+    </style>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M 0 0 L 12 6 L 0 12 z" fill="#657386"/>
+    </marker>
+    <marker id="arrowBlue" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M 0 0 L 12 6 L 0 12 z" fill="#2c6f9f"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1600" height="1040"/>
+  <text class="title" x="64" y="62">AgenticROS Architecture</text>
+  <text class="subtitle" x="64" y="88">AI agent adapters share one ROS transport core, load optional skill packages, then reach ROS2 through Zenoh, rosbridge, local DDS, or WebRTC.</text>
+
+  <rect class="band" x="50" y="124" width="1500" height="152" rx="12"/>
+  <text class="band-title" x="74" y="154">Agent Platforms</text>
+
+  <rect class="surface" x="84" y="178" width="254" height="70" rx="8"/>
+  <text class="box-title" x="106" y="205">OpenClaw Gateway</text>
+  <text class="box-text" x="106" y="226">Sessions, AI agent, web chat,</text>
+  <text class="box-text" x="106" y="244">HTTP routes, teleop UI</text>
+
+  <rect class="surface" x="398" y="178" width="254" height="70" rx="8"/>
+  <text class="box-title" x="420" y="205">Codex / Claude Code</text>
+  <text class="box-text" x="420" y="226">MCP client calls tools over</text>
+  <text class="box-text" x="420" y="244">stdio JSON-RPC</text>
+
+  <rect class="surface" x="712" y="178" width="254" height="70" rx="8"/>
+  <text class="box-title" x="734" y="205">Gemini CLI</text>
+  <text class="box-text" x="734" y="226">Standalone chat loop with</text>
+  <text class="box-text" x="734" y="244">Gemini function calling</text>
+
+  <rect class="surface" x="1026" y="178" width="446" height="70" rx="8"/>
+  <text class="box-title" x="1048" y="205">Users and Operators</text>
+  <text class="box-text" x="1048" y="226">Natural-language requests, direct teleop, status checks,</text>
+  <text class="box-text" x="1048" y="244">camera snapshots, skill commands</text>
+
+  <rect class="band" x="50" y="310" width="1500" height="212" rx="12"/>
+  <text class="band-title" x="74" y="340">Adapter Packages</text>
+
+  <rect class="adapter" x="84" y="366" width="294" height="112" rx="8"/>
+  <text class="box-title" x="108" y="393">packages/agenticros</text>
+  <text class="box-text" x="108" y="415">OpenClaw plugin registration</text>
+  <text class="box-text" x="108" y="435">Core ROS2 tools, safety hook</text>
+  <text class="box-text" x="108" y="455">Config UI, teleop, skill loader</text>
+
+  <rect class="adapter" x="418" y="366" width="294" height="112" rx="8"/>
+  <text class="box-title" x="442" y="393">packages/agenticros-claude-code</text>
+  <text class="box-text" x="442" y="415">MCP server over stdio</text>
+  <text class="box-text" x="442" y="435">Tool definitions and handlers</text>
+  <text class="box-text" x="442" y="455">Camera, depth, follow-me, find-object</text>
+
+  <rect class="adapter" x="752" y="366" width="294" height="112" rx="8"/>
+  <text class="box-title" x="776" y="393">packages/agenticros-gemini</text>
+  <text class="box-text" x="776" y="415">Gemini function declarations</text>
+  <text class="box-text" x="776" y="435">Tool execution against transport</text>
+  <text class="box-text" x="776" y="455">Image responses where enabled</text>
+
+  <rect class="config" x="1086" y="366" width="386" height="112" rx="8"/>
+  <text class="box-title" x="1110" y="393">Config and Skill Loading</text>
+  <text class="box-text" x="1110" y="415">Config sources: ~/.agenticros or OpenClaw config</text>
+  <text class="box-text" x="1110" y="435">skillPackages: npm package names</text>
+  <text class="box-text" x="1110" y="455">skillPaths + config.skills.&lt;skillId&gt;</text>
+
+  <rect class="band" x="50" y="556" width="1500" height="188" rx="12"/>
+  <text class="band-title" x="74" y="586">Shared TypeScript Runtime</text>
+
+  <rect class="shared" x="110" y="618" width="424" height="86" rx="8"/>
+  <text class="box-title" x="134" y="645">@agenticros/core</text>
+  <text class="box-text" x="134" y="667">Zod config, namespace helpers, transport factory</text>
+  <text class="box-text" x="134" y="687">RosTransport interface: topics, services, actions, introspection</text>
+
+  <rect class="shared" x="588" y="618" width="346" height="86" rx="8"/>
+  <text class="box-title" x="612" y="645">@agenticros/ros-camera</text>
+  <text class="box-text" x="612" y="667">Shared Image / CompressedImage snapshot encoding</text>
+  <text class="box-text" x="612" y="687">Depth/image numeric coercion helpers</text>
+
+  <rect class="config" x="988" y="618" width="438" height="86" rx="8"/>
+  <text class="box-title" x="1012" y="645">Public Skill API</text>
+  <text class="box-text" x="1012" y="667">registerSkill(api, config, context) + api.registerTool</text>
+  <text class="box-text" x="1012" y="687">context: getTransport, depth samples/sectors, logger</text>
+
+  <rect class="band" x="50" y="778" width="700" height="206" rx="12"/>
+  <text class="band-title" x="74" y="808">Transport Implementations</text>
+  <text class="small" x="310" y="808">Config selects one mode; every adapter and skill speaks the same RosTransport contract.</text>
+
+  <rect class="transport" x="90" y="842" width="140" height="72" rx="8"/>
+  <text class="box-title" x="117" y="870">Zenoh</text>
+  <text class="small" x="112" y="891">ws:// router</text>
+
+  <rect class="transport" x="260" y="842" width="140" height="72" rx="8"/>
+  <text class="box-title" x="294" y="870">rosbridge</text>
+  <text class="small" x="288" y="891">WebSocket JSON</text>
+
+  <rect class="transport" x="430" y="842" width="140" height="72" rx="8"/>
+  <text class="box-title" x="466" y="870">local DDS</text>
+  <text class="small" x="464" y="891">rclnodejs</text>
+
+  <rect class="transport" x="600" y="842" width="110" height="72" rx="8"/>
+  <text class="box-title" x="626" y="870">WebRTC</text>
+  <text class="small" x="622" y="891">Data channel</text>
+
+  <rect class="band" x="802" y="778" width="748" height="206" rx="12"/>
+  <text class="band-title" x="826" y="808">ROS2 Workspace and Robot</text>
+
+  <rect class="ros" x="842" y="842" width="174" height="74" rx="8"/>
+  <text class="box-title" x="868" y="870">ROS2 DDS Bus</text>
+  <text class="small" x="864" y="891">topics, services, actions</text>
+
+  <rect class="ros" x="1050" y="824" width="190" height="58" rx="8"/>
+  <text class="box-title" x="1074" y="850">discovery_node</text>
+  <text class="small" x="1074" y="869">capability manifest</text>
+
+  <rect class="ros" x="1050" y="900" width="190" height="58" rx="8"/>
+  <text class="box-title" x="1074" y="926">follow_me_node</text>
+  <text class="small" x="1074" y="945">tracking + cmd_vel</text>
+
+  <rect class="ros" x="1050" y="962" width="190" height="0" rx="0"/>
+
+  <rect class="ros" x="1274" y="824" width="212" height="58" rx="8"/>
+  <text class="box-title" x="1298" y="850">agenticros_agent</text>
+  <text class="small" x="1298" y="869">robot-side WebRTC bridge</text>
+
+  <rect class="robot" x="1274" y="900" width="212" height="58" rx="8"/>
+  <text class="box-title" x="1298" y="926">Robot Hardware</text>
+  <text class="small" x="1298" y="945">motors, camera, depth, IMU</text>
+
+  <line class="line-strong" x1="211" y1="248" x2="231" y2="366" marker-end="url(#arrowBlue)"/>
+  <line class="line-strong" x1="525" y1="248" x2="565" y2="366" marker-end="url(#arrowBlue)"/>
+  <line class="line-strong" x1="839" y1="248" x2="899" y2="366" marker-end="url(#arrowBlue)"/>
+  <line class="line-soft" x1="1249" y1="248" x2="1280" y2="366" marker-end="url(#arrow)"/>
+
+  <line class="line-strong" x1="231" y1="478" x2="322" y2="618" marker-end="url(#arrowBlue)"/>
+  <line class="line-strong" x1="565" y1="478" x2="420" y2="618" marker-end="url(#arrowBlue)"/>
+  <line class="line-strong" x1="899" y1="478" x2="534" y2="646" marker-end="url(#arrowBlue)"/>
+  <line class="line-soft" x1="1280" y1="478" x2="1207" y2="618" marker-end="url(#arrow)"/>
+  <line class="line-strong" x1="1280" y1="478" x2="1207" y2="618" marker-end="url(#arrowBlue)"/>
+
+  <line class="line" x1="534" y1="661" x2="588" y2="661" marker-end="url(#arrow)"/>
+  <line class="line" x1="1207" y1="704" x2="555" y2="930" marker-end="url(#arrow)"/>
+  <line class="line" x1="761" y1="704" x2="400" y2="842" marker-end="url(#arrow)"/>
+  <line class="line" x1="322" y1="704" x2="160" y2="842" marker-end="url(#arrow)"/>
+  <line class="line" x1="400" y1="704" x2="330" y2="842" marker-end="url(#arrow)"/>
+  <line class="line" x1="470" y1="704" x2="500" y2="842" marker-end="url(#arrow)"/>
+  <line class="line" x1="534" y1="704" x2="655" y2="842" marker-end="url(#arrow)"/>
+
+  <path class="line dash" d="M 160 914 C 230 990, 745 1000, 842 879" marker-end="url(#arrow)"/>
+  <path class="line dash" d="M 330 914 C 455 1018, 758 1002, 842 879" marker-end="url(#arrow)"/>
+  <path class="line dash" d="M 500 914 C 600 982, 760 958, 842 879" marker-end="url(#arrow)"/>
+  <path class="line dash" d="M 655 914 C 766 954, 1160 780, 1380 824" marker-end="url(#arrow)"/>
+  <path class="line dash" d="M 555 930 C 610 880, 742 862, 842 879" marker-end="url(#arrow)"/>
+
+  <rect class="shared" x="90" y="926" width="276" height="46" rx="8"/>
+  <text class="box-title" x="110" y="948">agenticros-skills</text>
+  <text class="small" x="110" y="965">curated skill catalog and submission list</text>
+
+  <rect class="shared" x="400" y="926" width="310" height="46" rx="8"/>
+  <text class="box-title" x="420" y="948">agenticros-skill-followme</text>
+  <text class="small" x="420" y="965">follow_robot, follow_me_see, ollama_status</text>
+
+  <line class="line" x1="1016" y1="879" x2="1050" y2="853" marker-end="url(#arrow)"/>
+  <line class="line" x1="1016" y1="879" x2="1050" y2="929" marker-end="url(#arrow)"/>
+  <line class="line" x1="1240" y1="929" x2="1274" y2="929" marker-end="url(#arrow)"/>
+  <line class="line" x1="1380" y1="882" x2="1380" y2="900" marker-end="url(#arrow)"/>
+
+  <rect class="note" x="64" y="1000" width="1472" height="24" rx="6"/>
+  <text class="small" x="82" y="1016">Reviewed from AgenticROS core/adapters, ros2_ws nodes, ../agenticros-skills, and ../agenticros-skill-followme.</text>
+</svg>
