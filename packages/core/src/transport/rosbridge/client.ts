@@ -1,4 +1,6 @@
 import WebSocket from "ws";
+import http from "node:http";
+import type { Agent as HttpAgent } from "node:http";
 import type {
   RosbridgeClientOptions,
   ConnectionStatus,
@@ -12,6 +14,106 @@ export interface PendingRequest {
   resolve: (value: unknown) => void;
   reject: (reason: Error) => void;
   timer: ReturnType<typeof setTimeout>;
+}
+
+/**
+ * Build an http.Agent that tunnels every connect() through an HTTP CONNECT
+ * proxy when the environment defines one.
+ *
+ * Why this exists:
+ *
+ *   * Node 22+ honors HTTP(S)_PROXY for ``https.request`` (via the experimental
+ *     ``EnvHttpProxyAgent``) but ``ws://`` connections from the ``ws`` library
+ *     bypass that and try a direct TCP connect to the resolved IP. In a
+ *     NemoClaw / OpenShell sandbox the gateway runs in a restricted netns
+ *     where the only routable peer is the OPA policy proxy at
+ *     ``10.200.0.1:3128``. Direct connects to anything else fail with
+ *     ``ECONNREFUSED`` — that's exactly what happens when ``rosbridge.url``
+ *     points at ``ws://host.docker.internal:9090`` from inside the sandbox.
+ *
+ *   * Adding an http-proxy-agent dep would balloon the offline-deploy bundle
+ *     and is unnecessary — Node's built-in ``http.request`` with method
+ *     ``CONNECT`` does exactly the same handshake.
+ *
+ * Returns ``null`` (let ``ws`` use its default Agent) when:
+ *
+ *   * No proxy env var is set, or
+ *   * The target host appears in ``NO_PROXY`` (case-insensitive match,
+ *     ``*`` and leading ``.`` wildcards honored RFC-style).
+ *
+ * The plugin owns its own reconnect/cleanup, so we keep the Agent
+ * stateless and use ``keepAlive: false`` — every connect attempt opens a
+ * fresh CONNECT tunnel.
+ */
+function buildProxyAgentForUrl(wsUrl: string): HttpAgent | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(wsUrl);
+  } catch {
+    return null;
+  }
+  const targetHost = parsed.hostname;
+  const targetPort = parsed.port || (parsed.protocol === "wss:" ? "443" : "80");
+
+  const proxyUrl =
+    process.env.HTTPS_PROXY ||
+    process.env.https_proxy ||
+    process.env.HTTP_PROXY ||
+    process.env.http_proxy ||
+    "";
+  if (!proxyUrl) return null;
+
+  let proxy: URL;
+  try {
+    proxy = new URL(proxyUrl);
+  } catch {
+    return null;
+  }
+
+  const noProxy = (process.env.NO_PROXY || process.env.no_proxy || "").toLowerCase();
+  if (noProxy) {
+    const target = targetHost.toLowerCase();
+    const entries = noProxy.split(",").map((s) => s.trim()).filter(Boolean);
+    for (const entry of entries) {
+      if (entry === "*") return null;
+      const e = entry.startsWith(".") ? entry.slice(1) : entry;
+      if (target === e || target.endsWith("." + e)) return null;
+    }
+  }
+
+  class TunnelAgent extends http.Agent {
+    createConnection(
+      opts: { hostname?: string; host?: string; port?: number | string },
+      cb: (err: Error | null, socket?: NodeJS.Socket) => void,
+    ): undefined {
+      const host = opts.hostname || opts.host || targetHost;
+      const port = String(opts.port ?? targetPort);
+      const req = http.request({
+        host: proxy.hostname,
+        port: proxy.port ? Number(proxy.port) : proxy.protocol === "https:" ? 443 : 80,
+        method: "CONNECT",
+        path: `${host}:${port}`,
+        headers: { Host: `${host}:${port}` },
+      });
+      req.once("connect", (res, socket) => {
+        if (res.statusCode === 200) {
+          cb(null, socket);
+        } else {
+          socket.destroy();
+          cb(
+            new Error(
+              `HTTP CONNECT to proxy ${proxy.host} failed: ${res.statusCode} ${res.statusMessage ?? ""}`.trim(),
+            ),
+          );
+        }
+      });
+      req.once("error", (err) => cb(err));
+      req.end();
+      return undefined;
+    }
+  }
+
+  return new TunnelAgent({ keepAlive: false });
 }
 
 /**
@@ -56,7 +158,10 @@ export class RosbridgeClient {
       }, 10_000);
 
       try {
-        this.ws = new WebSocket(this.options.url);
+        const proxyAgent = buildProxyAgentForUrl(this.options.url);
+        this.ws = proxyAgent
+          ? new WebSocket(this.options.url, { agent: proxyAgent })
+          : new WebSocket(this.options.url);
       } catch (err) {
         clearTimeout(connectTimeout);
         this.setStatus("disconnected");
@@ -78,22 +183,38 @@ export class RosbridgeClient {
         this.handleMessage(data);
       };
 
-      this.ws.onerror = (_event) => {
+      this.ws.onerror = (event: { message?: string; error?: Error }) => {
         clearTimeout(connectTimeout);
         if (this.status === "connecting") {
           this.ws = null;
           this.setStatus("disconnected");
-          reject(new Error(`WebSocket error connecting to ${this.options.url}`));
+          const underlying =
+            (event?.error && (event.error.message || String(event.error))) ||
+            event?.message ||
+            "no underlying error message";
+          reject(new Error(`WebSocket error connecting to ${this.options.url}: ${underlying}`));
         }
       };
 
-      this.ws.onclose = () => {
+      this.ws.onclose = (event: { code?: number; reason?: Buffer | string }) => {
         clearTimeout(connectTimeout);
         this.ws = null;
 
         if (this.status === "connecting") {
           this.setStatus("disconnected");
-          reject(new Error(`WebSocket closed during connection to ${this.options.url}`));
+          const code = event?.code ?? "n/a";
+          const reasonRaw = event?.reason;
+          const reasonStr =
+            typeof reasonRaw === "string"
+              ? reasonRaw
+              : reasonRaw && typeof (reasonRaw as Buffer).toString === "function"
+                ? (reasonRaw as Buffer).toString()
+                : "";
+          reject(
+            new Error(
+              `WebSocket closed during connection to ${this.options.url} (code=${code}${reasonStr ? `, reason="${reasonStr}"` : ""})`,
+            ),
+          );
           return;
         }
 

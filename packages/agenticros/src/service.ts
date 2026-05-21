@@ -74,6 +74,26 @@ export async function switchTransport(config: TransportConfig, logger: PluginLog
 }
 
 /**
+ * The plugin owns all reconnection logic (tryConnect + pollWhenDisconnected). Tell the
+ * underlying transport client to NOT reconnect on its own — otherwise we get two
+ * concurrent reconnect timers per client. When the plugin then drops the transport
+ * reference (e.g. on poll-driven replace) the underlying client keeps reconnecting on
+ * its own, leaking one live WebSocket per replace cycle and hammering rosbridge.
+ */
+function buildTransportConfig(transportCfg: TransportConfig): TransportConfig {
+  if (transportCfg.mode === "rosbridge") {
+    return {
+      ...transportCfg,
+      rosbridge: {
+        ...(transportCfg.rosbridge ?? { url: "ws://localhost:9090" }),
+        reconnect: false,
+      },
+    };
+  }
+  return transportCfg;
+}
+
+/**
  * Connect the transport (create + connect). Idempotent: if already connected, no-op.
  */
 async function ensureTransportConnected(
@@ -94,7 +114,7 @@ async function ensureTransportConnected(
       currentMode = null;
     }
     api.logger.info(`Connecting to ROS2 via ${transportCfg.mode} transport...`);
-    const newTransport = await createTransport(transportCfg);
+    const newTransport = await createTransport(buildTransportConfig(transportCfg));
     newTransport.onConnection((status: string) => {
       api.logger.info(`ROS2 transport status: ${status}`);
     });
@@ -124,6 +144,9 @@ const DISCONNECTED_POLL_MS = 15000;
 export function registerService(api: OpenClawPluginApi, config: AgenticROSConfig): void {
   const transportCfg = getTransportConfig(config);
 
+  let pollInterval: ReturnType<typeof setInterval> | null = null;
+  let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
   api.registerService({
     id: "ros2-transport",
 
@@ -141,6 +164,14 @@ export function registerService(api: OpenClawPluginApi, config: AgenticROSConfig
     },
 
     async stop(_ctx) {
+      if (pollInterval) {
+        clearInterval(pollInterval);
+        pollInterval = null;
+      }
+      if (retryTimer) {
+        clearTimeout(retryTimer);
+        retryTimer = null;
+      }
       if (transport) {
         await transport.disconnect();
         transport = null;
@@ -158,29 +189,37 @@ export function registerService(api: OpenClawPluginApi, config: AgenticROSConfig
         api.logger.warn(
           "AgenticROS transport connect failed (retry in " + RETRY_INTERVAL_MS / 1000 + "s): " + (err instanceof Error ? err.message : String(err)),
         );
-        setTimeout(tryConnect, RETRY_INTERVAL_MS);
+        if (retryTimer) clearTimeout(retryTimer);
+        retryTimer = setTimeout(tryConnect, RETRY_INTERVAL_MS);
       });
   }
 
-  // When we have a transport but it's disconnected (e.g. Zenoh session dropped), reconnect
+  // When we have a transport but it's disconnected (e.g. Zenoh session dropped), reconnect.
+  //
+  // IMPORTANT: do NOT drop the transport reference without calling disconnect() first.
+  // ensureTransportConnected() already does the right thing — it disconnects the old
+  // transport (which clears its timers and closes its WebSocket) before creating a new
+  // one. The previous version of this function nulled `transport` directly, which
+  // orphaned the WebSocket client and leaked one live connection per poll cycle.
   function pollWhenDisconnected(): void {
-    if (transport && transport.getStatus() !== "connected") {
-      transport = null;
-      currentMode = null;
-      tryConnect();
-    } else if (!transport) {
-      tryConnect();
-    }
+    if (transport && transport.getStatus() === "connected") return;
+    ensureTransportConnected(api, transportCfg).catch((err) => {
+      api.logger.warn(
+        "AgenticROS transport poll-reconnect failed: " +
+          (err instanceof Error ? err.message : String(err)),
+      );
+    });
   }
 
   // Connect eagerly; on failure retry every 10s
   ensureTransportConnected(api, transportCfg).catch((err) => {
     api.logger.warn("AgenticROS eager transport connect failed: " + (err instanceof Error ? err.message : String(err)));
-    setTimeout(tryConnect, RETRY_INTERVAL_MS);
+    if (retryTimer) clearTimeout(retryTimer);
+    retryTimer = setTimeout(tryConnect, RETRY_INTERVAL_MS);
   });
 
   // Every 15s, if disconnected (or session dropped), try to connect so we recover without restart
-  setInterval(pollWhenDisconnected, DISCONNECTED_POLL_MS);
+  pollInterval = setInterval(pollWhenDisconnected, DISCONNECTED_POLL_MS);
 }
 
 /**
