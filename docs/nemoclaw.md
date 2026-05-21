@@ -588,6 +588,180 @@ docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" \
     /sandbox/.openclaw/openclaw.json
 ```
 
+## Switching the inference model
+
+NemoClaw routes every chat through whatever model `nemoclaw inference get` reports. The current value is set during `nemoclaw onboard` but can be changed at any time without re-onboarding. There are two situations covered below: swapping one local Ollama model for another, and switching the whole provider over to OpenAI (or any other hosted API).
+
+> **Important — vision vs. text-only:** the `ros2_camera_snapshot` tool returns a structured image content block (`{ type: "image", data: base64, mimeType }`), which means the model *only* describes what's in the frame if it actually has a vision encoder. `qwen2.5:7b` is **text-only** (no vision encoder), and so is the default `nemotron-3-super-120b-a12b` text route. With a text model the agent will run the tool successfully, embed the snapshot URL in the chat UI, and say something like *"Here is a snapshot."* without describing the scene — that is the model literally not being able to see the image, not a tool bug. For "what does the robot see?" you need a **VLM / multimodal model**.
+
+### Switching between Ollama models (e.g. `qwen2.5:7b` → `qwen2.5vl:7b`)
+
+Use this when you want to stay on local Ollama (no API costs, no egress policy changes) but pick a different model — most commonly to gain vision capability.
+
+```bash
+# 1. Inventory what's installed and what's loaded right now
+ollama list                       # everything on disk
+ollama ps                         # what's actually loaded into GPU/RAM
+
+# 2. Pull the model you want. qwen2.5vl:7b is the natural drop-in upgrade
+#    from qwen2.5:7b — same family, same prompt style, plus a vision encoder.
+#    (~5.5 GB download; needs about 8 GB GPU RAM loaded at the default
+#    32k context window.)
+ollama pull qwen2.5vl:7b
+
+# 3. Point NemoClaw at the new model. --provider stays the same; only
+#    --model changes. This updates both the OpenShell inference route
+#    AND the OpenClaw sandbox's openclaw.json in one shot.
+nemoclaw inference set --provider ollama-local --model qwen2.5vl:7b --sandbox nemo
+
+# 4. Verify
+nemoclaw inference get
+# → {"provider":"ollama-local","model":"qwen2.5vl:7b"}
+
+# 5. Bounce the gateway so OpenClaw re-queries the model's capabilities
+nemoclaw nemo recover
+
+# 6. Confirm the sandbox flags it as a vision model (column should read
+#    'vision' or 'multimodal', NOT 'text')
+docker exec $(docker ps --format '{{.Names}}' | grep '^openshell-nemo-') \
+    openclaw models list 2>&1 | grep -i qwen2.5vl
+
+# 7. (Optional) free the old text model from disk
+ollama rm qwen2.5:7b
+```
+
+Other Ollama vision tags that work in NemoClaw `2026.4.24+` (the capability-detection bug from OpenClaw 2026.2.x is fixed in this version):
+
+| Tag | Size on disk | Notes |
+|---|---|---|
+| `qwen2.5vl:3b` | ~3.2 GB | Smallest qwen-VL. OK on Jetson Orin Nano 8 GB. |
+| `qwen2.5vl:7b` | ~5.5 GB | Recommended baseline on Orin AGX 32 GB. |
+| `qwen2.5vl:32b` | ~21 GB | Only if you have the RAM. |
+| `llama3.2-vision:11b` | ~7.9 GB | Meta vision model. Different prompt style than qwen. |
+| `llava-llama3:8b` | ~5.5 GB | LLaVA on Llama 3. Older but well-tested. |
+| `moondream` | ~1.7 GB | Tiny + fast. Good for quick "is there a person in front of me?" type prompts; weak at long answers. |
+
+Verification prompt once you've switched and bounced the gateway:
+
+> *"Use ros2_camera_snapshot, then describe in detail what you see in the image — objects, colors, lighting, anything you can identify."*
+
+A vision model produces a real scene description. A text-only model says "Here is a snapshot." with no detail.
+
+### Switching from local Ollama to OpenAI
+
+Use this when local inference is too slow on your hardware, the model isn't strong enough for your prompts, or you want GPT-4o's vision quality (which is currently the gold standard for "describe what you see"). Requires an OpenAI API key and outbound network access from the sandbox.
+
+```bash
+# 1. Provide the key in your shell. The --credential flag below accepts
+#    either KEY=VALUE inline or a bare KEY that's read from the
+#    environment. The env-lookup form keeps the secret out of shell
+#    history.
+export OPENAI_API_KEY=sk-...
+
+# 2. Register OpenAI as a provider in the OpenShell gateway. This
+#    stores the credential in OpenShell's encrypted secrets store; you
+#    won't need OPENAI_API_KEY exported afterwards.
+openshell provider create --name openai --type openai --credential OPENAI_API_KEY
+
+# Sanity-check the provider was registered
+openshell provider list
+
+# 3. Switch the active inference route. gpt-4o is the recommended
+#    default — it's multimodal so the camera tool works, and it's the
+#    fastest of the high-quality OpenAI models. gpt-4o-mini is the
+#    cheap/fast fallback.
+nemoclaw inference set --provider openai --model gpt-4o --sandbox nemo
+
+# 4. Verify
+nemoclaw inference get
+# → {"provider":"openai","model":"gpt-4o"}
+```
+
+#### Open `api.openai.com:443` in the sandbox egress policy
+
+The default sandbox policy does not include OpenAI's host, so without this step the agent will fail with `DENIED ... -> api.openai.com:443` in `/var/log/openshell.*.log` inside the sandbox container. NemoClaw ships a built-in `openai` preset for exactly this:
+
+```bash
+# Check whether the preset exists in your CLI version
+nemoclaw nemo policy-list
+
+# Apply it
+nemoclaw nemo policy-add --preset openai --yes
+```
+
+If `--preset openai` isn't recognized (preset names vary slightly between NemoClaw versions — e.g. `openai-api`), drop in a custom preset:
+
+```yaml
+# scripts/openai.policy.yaml
+version: 1
+network_policies:
+  openai:
+    name: openai
+    endpoints:
+      - host: api.openai.com
+        port: 443
+        access: full
+    binaries:
+      - { path: /usr/local/bin/openclaw }
+      - { path: /usr/local/bin/node }
+      - { path: /usr/bin/node }
+```
+
+```bash
+nemoclaw nemo policy-add --from-file scripts/openai.policy.yaml --yes
+```
+
+#### Bounce and verify
+
+```bash
+nemoclaw nemo recover
+
+# Watch for the agent to come up against OpenAI
+docker logs $(docker ps --format '{{.Names}}' | grep '^openshell-nemo-') -f \
+    2>&1 | grep -iE 'inference|openai|provider'
+
+# Smoke-test the robot bridge is still healthy
+./scripts/smoke_test_nemoclaw.sh
+```
+
+Then ask the same vision verification prompt as above. With `gpt-4o`, expect a detailed scene description in 1–3 seconds (Jetson-bound latency is now network round-trip, not local GPU).
+
+### Switching back
+
+To go back to local Ollama:
+
+```bash
+nemoclaw inference set --provider ollama-local --model qwen2.5vl:7b --sandbox nemo
+nemoclaw nemo recover
+```
+
+The `openai` provider stays registered in OpenShell with its credential; you don't need to recreate it next time you want to switch back to GPT-4o. To wipe the credential entirely:
+
+```bash
+openshell provider delete openai
+```
+
+### Inspecting / debugging the inference route
+
+```bash
+# What NemoClaw thinks the active route is
+nemoclaw inference get --json
+
+# What the OpenShell gateway has registered
+openshell inference get
+openshell provider list
+
+# What OpenClaw inside the sandbox sees, with per-model capability flags
+docker exec $(docker ps --format '{{.Names}}' | grep '^openshell-nemo-') \
+    openclaw models list
+
+# Live network decisions (handy when the model fails silently — e.g. an
+# OpenAI request that's getting blocked by the egress policy)
+docker exec $(docker ps --format '{{.Names}}' | grep '^openshell-nemo-') \
+    tail -50 /var/log/openshell.$(date +%Y-%m-%d).log \
+    | grep -E 'api.openai.com|ollama|inference|DENIED'
+```
+
 ## Troubleshooting
 
 - **`docker cp` complains `invalid symlink … -> "../../../../../../home/nvidia/Projects/agenticros/..."`** — pnpm leaves a self-reference symlink in `node_modules/.pnpm/node_modules/@agenticros/agenticros` that points back into the source tree. Delete it before `docker cp`:
@@ -621,6 +795,8 @@ docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" \
   The shipped `scripts/agenticros-rosbridge.policy.yaml` already includes both `access: full, tls: skip` (so the proxy makes a raw L4 CONNECT tunnel for `ws://`) and `allowed_ips`. If you regenerate the file by hand, both blocks are required.
 
 - **`openclaw plugins list` hangs** — listing instantiates plugins, and AgenticROS's reconnect loop keeps it alive. Inspect the registered config directly instead (see "Inspecting the sandbox config" above).
+
+- **Agent runs `ros2_camera_snapshot` successfully but just says "Here is a snapshot" without describing the scene** — the configured model is text-only and has no vision encoder. `qwen2.5:7b` and most "instruct" models without a `-vl` / `-vision` suffix are text-only. Switch to a vision-capable model — see [Switching the inference model](#switching-the-inference-model) above. Recommended drop-in: `ollama pull qwen2.5vl:7b` then `nemoclaw inference set --provider ollama-local --model qwen2.5vl:7b --sandbox nemo && nemoclaw nemo recover`. Verify with `docker exec $CONTAINER openclaw models list | grep qwen2.5vl` — the capability column should read `vision` (or `multimodal`), not `text`.
 
 - **Camera frames don't show up but `ros2_list_topics` does** — check the topic exists and is `sensor_msgs/CompressedImage`:
   ```bash
