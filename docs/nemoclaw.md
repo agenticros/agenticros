@@ -802,6 +802,25 @@ You should see `qwen2.5:7b` issue the tool call, the `agenticros` plugin return 
 
 ### Switching from local Ollama to OpenAI
 
+> **Known Jetson limitation — read this first.** On Jetson L4T running NemoClaw `v0.0.48` + OpenClaw `2026.4.24`, **OpenAI as the inference provider does not work end-to-end for streaming chat** even when every individual layer reports healthy. The non-streaming `api.openai.com/v1/models` probe succeeds (`nemoclaw nemo doctor` confirms `Provider health: ... reachable`), `nemoclaw inference set --provider openai-api` validates `api.openai.com/v1/chat/completions` with HTTP 200, the OpenAI policy is loaded, and the credential is stored — but actual chat from the dashboard fails with `503 "inference service unavailable"` returned by the openshell-router itself, before the request leaves the sandbox. The `/var/log/openshell.*.log` fingerprint is:
+>
+> ```
+> ALLOWED inference.local:443
+> INFO openshell_router: routing proxy inference request (streaming)
+> OCSF NET:FAIL [LOW] inference.local:443
+> ```
+>
+> and in `/tmp/openclaw/openclaw-*.log`:
+>
+> ```
+> embedded run agent end: ... model=gpt-4o provider=openai
+>     error=LLM request timed out. rawError=503 "inference service unavailable"
+> ```
+>
+> The 503 originates inside the openshell-router (`/opt/openshell/bin/openshell-sandbox`) on the streaming path — not from OpenAI, not from a policy denial, not from missing credentials. We've reproduced this with both `gpt-4o` and `gpt-4o-mini` after applying every plausible policy shape (`access: full`, `protocol: rest` + `rules: allow GET/POST /**`, with and without `binaries:` restrictions). It looks like an unfixed bug in the streaming-routing path of NemoClaw's bundled openshell-router on Jetson; the non-streaming validation path works, which is why `nemoclaw inference set` reports success.
+>
+> **What to do until upstream fixes it:** stay on local Ollama. The [two-model setup](#two-model-setup-texttools-primary-with-a-vision-auto-describer-local-ollama) (`qwen2.5:7b` for tools + `qwen2.5vl:7b` as `agents.defaults.imageModel` auto-describer) gives you tool calling AND scene description with zero API cost. The instructions below are kept for the case where you're on x86 NemoClaw or a future Jetson NemoClaw release fixes the streaming path — they're known to work on x86 NemoClaw.
+
 Use this when local inference is too slow on your hardware, the model isn't strong enough for your prompts, or you want GPT-4o's vision quality (which is currently the gold standard for "describe what you see"). Requires an OpenAI API key and outbound network access from the sandbox.
 
 ```bash
@@ -901,19 +920,134 @@ docker logs $(docker ps --format '{{.Names}}' | grep '^openshell-nemo-') -f \
 
 Then ask the same vision verification prompt as above. With `gpt-4o`, expect a detailed scene description in 1–3 seconds (Jetson-bound latency is now network round-trip, not local GPU).
 
-### Switching back
+### Switching to NVIDIA-hosted inference (`nemotron-3-super-120b-a12b` via build.nvidia.com)
 
-To go back to local Ollama:
+NemoClaw ships a built-in `nvidia` provider profile that talks to NVIDIA's hosted inference endpoints (`integrate.api.nvidia.com` and `inference-api.nvidia.com`). This is the natural alternative when:
+
+- OpenAI doesn't work (see the [Jetson streaming-router warning](#switching-from-local-ollama-to-openai) — `openai-api` returns `503 "inference service unavailable"` on Jetson L4T at the time of writing),
+- Local Ollama is too slow for your prompts,
+- You want a recent NVIDIA-trained model (the `nemoclaw inference set --help` output recommends `nvidia/nemotron-3-super-120b-a12b` as the default route — 120B parameters, 12B active MoE, native tool calling).
+
+> **Same Jetson caveat as OpenAI may apply.** The `nvidia-prod` upstream is also a public-TLS endpoint (`integrate.api.nvidia.com:443`), so it routes through the same streaming proxy path that surfaces `503 "inference service unavailable"` for `openai-api` on Jetson NemoClaw `v0.0.48`. As of this writing we have NOT confirmed whether `nvidia-prod` is affected by the same bug — it might use a different code path inside the openshell-router, or it might 503 the same way. **Test the live dashboard chat after switching**, and if you see the same fingerprint in `/var/log/openshell.*.log` (`NET:FAIL [LOW] inference.local:443` after `routing proxy inference request (streaming)`), the bug is router-wide and you should fall back to the [two-model Ollama setup](#two-model-setup-texttools-primary-with-a-vision-auto-describer-local-ollama).
+
+#### 1. Get an NVIDIA API key
+
+1. Open <https://build.nvidia.com> and sign in (free NVIDIA developer account).
+2. Browse to any inference model card — `nvidia/nemotron-3-super-120b-a12b`, `meta/llama-3.1-70b-instruct`, etc.
+3. On the model card, click **Get API Key** in the right rail. You'll get a key starting with `nvapi-`. Keys are account-wide, not model-scoped — any model card hands you the same key.
+
+Free-tier quotas at the time of writing are ~1000 credits/month for personal accounts (more for corporate emails). `nemotron-3-super-120b-a12b` is in NVIDIA's free eval program; if it ever gets gated behind paid credits, `meta/llama-3.1-70b-instruct` is firmly in the free tier and also supports tool calling.
+
+#### 2. Register the provider and switch the route
 
 ```bash
-nemoclaw inference set --provider ollama-local --model qwen2.5vl:7b --sandbox nemo --no-verify
-nemoclaw nemo recover
+# 1. Drop the key into your shell. The --credential lookup below is
+#    in-memory; the value is stored encrypted in OpenShell's credential
+#    store after registration. You do NOT need this env var afterwards.
+export NVIDIA_API_KEY=nvapi-...
+
+# 2. Register the provider. --type nvidia uses the built-in NVIDIA
+#    profile (which already has the right base URL and the egress
+#    policy is preloaded — see "Egress" below). --name nvidia-prod is
+#    the alias used by `nemoclaw inference set --provider` afterwards;
+#    you can pick any name, but `nvidia-prod` matches the example in
+#    `nemoclaw inference set --help`.
+openshell provider create --name nvidia-prod --type nvidia --credential NVIDIA_API_KEY
+
+# Sanity check
+openshell provider list   # should show nvidia-prod alongside ollama-local
+
+# 3. Switch the active inference route. The hosted model identifier is
+#    namespaced (publisher/model-id), as you can see on each model card.
+nemoclaw inference set \
+  --provider nvidia-prod \
+  --model nvidia/nemotron-3-super-120b-a12b \
+  --sandbox nemo
+
+# 4. Verify the route was synced into the sandbox (the inference set
+#    command does this automatically, but it's a good sanity check).
+CONTAINER=$(docker ps --format '{{.Names}}' | grep '^openshell-nemo-')
+docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" jq \
+  '{primary: .agents.defaults.model.primary, providers: (.models.providers | keys)}' \
+  /sandbox/.openclaw/openclaw.json
+# Expected:
+#   primary:   "nvidia-prod/nvidia/nemotron-3-super-120b-a12b"
+#   providers: ["inference", "nvidia-prod", ...]
 ```
 
-The `openai-api` provider stays registered in OpenShell with its credential; you don't need to recreate it next time you want to switch back to GPT-4o. To wipe the credential entirely:
+#### 3. Egress — no policy work required
+
+Unlike OpenAI (which needs you to apply `scripts/openai.policy.yaml` by hand), the `nvidia` preset is **already loaded** as a built-in:
+
+```bash
+openshell policy get --full nemo | grep -A 20 '^  nvidia:'
+```
+
+The built-in policy uses the REST-aware shape (`protocol: rest`, narrowly scoped `rules: allow POST /v1/chat/completions`, etc.) and covers both `integrate.api.nvidia.com:443` and `inference-api.nvidia.com:443`. If for some reason `policy get` shows the `nvidia` block missing, force-apply it with `nemoclaw nemo policy-add --preset nvidia --yes`.
+
+#### 4. Live test (DO NOT `nemoclaw nemo recover`)
+
+Skip `nemoclaw nemo recover` — it gives false-negative probe failures on Jetson (see the [recover false-negative bullet](#troubleshooting) in Troubleshooting). The gateway hot-reloads the inference route automatically. Refresh the dashboard tab and ask:
+
+> *"Reply with exactly the word PONG, nothing else."*
+
+If you get `PONG` back in a couple of seconds, the route works end-to-end. Then try the camera prompt:
+
+> *"Use ros2_camera_snapshot, then describe what you see."*
+
+#### 5. Vision via the imageModel auto-describer
+
+`nvidia/nemotron-3-super-120b-a12b` is a text + tools model — at this writing it has no native vision encoder. If you want it to *describe* the snapshot the camera tool returns, layer the same media-understanding flow on top of it that the [Two-model setup](#two-model-setup-texttools-primary-with-a-vision-auto-describer-local-ollama) uses for `qwen2.5:7b`:
+
+```bash
+docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" sh -c '
+  cd /sandbox/.openclaw && \
+  jq ".agents.defaults.imageModel = \"inference/qwen2.5vl:7b\"
+      | (.models.providers.\"nvidia-prod\".models[]
+         | select(.id == \"nvidia/nemotron-3-super-120b-a12b\")
+         | .input) = [\"text\"]
+     " openclaw.json > openclaw.json.tmp && mv openclaw.json.tmp openclaw.json
+'
+```
+
+This keeps `nemotron-3-super` as the cloud-hosted tools primary and uses your already-installed local `qwen2.5vl:7b` to caption images before they reach `nemotron`. End result: hosted speed/quality for tool reasoning, local GPU for image understanding, no extra cloud cost for snapshots.
+
+If you instead want to use an NVIDIA-hosted vision model as the auto-describer, pick a VLM from build.nvidia.com — `meta/llama-3.2-90b-vision-instruct` is the most established free-tier option — and set `imageModel: "nvidia-prod/meta/llama-3.2-90b-vision-instruct"`. The same `nvidia-prod` provider entry handles both, no second provider registration needed.
+
+#### 6. Available NVIDIA-hosted models worth knowing
+
+| Model | What it's good for | Free-tier | Vision |
+|---|---|---|---|
+| `nvidia/nemotron-3-super-120b-a12b` | Tool calling, reasoning, long context — the recommended default per the `nemoclaw inference set` example | yes (eval program) | no |
+| `meta/llama-3.1-70b-instruct` | Generic tool-capable instruct model, well-tested | yes | no |
+| `meta/llama-3.2-90b-vision-instruct` | VLM for `imageModel` auto-describe | yes | yes |
+| `nvidia/nv-embedqa-e5-v5` | Embeddings (if you wire memory) | yes | n/a |
+
+Browse the full catalog at <https://build.nvidia.com/explore/discover> — anything that exposes `/v1/chat/completions` will work as a route here.
+
+### Switching back
+
+To go back to local Ollama from any hosted provider (OpenAI, NVIDIA, Anthropic, etc.):
+
+```bash
+# Recommended on Jetson: the dual-Ollama two-model setup (tools + vision auto-describer)
+nemoclaw inference set --provider ollama-local --model qwen2.5:7b --sandbox nemo --no-verify
+CONTAINER=$(docker ps --format '{{.Names}}' | grep '^openshell-nemo-')
+docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" sh -c '
+  cd /sandbox/.openclaw && \
+  jq ".agents.defaults.model.primary = \"inference/qwen2.5:7b\"
+      | .agents.defaults.imageModel  = \"inference/qwen2.5vl:7b\"" \
+    openclaw.json > openclaw.json.tmp && mv openclaw.json.tmp openclaw.json
+'
+# NO `nemoclaw nemo recover` — hot-reload picks it up and the probe gives
+# false negatives anyway. See the troubleshooting bullet.
+```
+
+Hosted provider entries (`openai-api`, `nvidia-prod`, …) stay registered in OpenShell with their credentials, so you don't need to recreate them next time you switch. To wipe a credential entirely:
 
 ```bash
 openshell provider delete openai-api
+openshell provider delete nvidia-prod
 ```
 
 ### Inspecting / debugging the inference route
@@ -998,6 +1132,30 @@ docker exec $(docker ps --format '{{.Names}}' | grep '^openshell-nemo-') \
      After the recover, the Input column should read `text+image`.
 
 - **`nemoclaw inference set` exits with `failed to verify inference endpoint for provider 'ollama-local' ... at 'http://host.openshell.internal:11435/v1': failed to connect`** — the verification probe runs from a place that can't resolve `host.openshell.internal` (the openshell-gateway container has no entry for it in `/etc/hosts` on Jetson). The runtime traffic still works because it goes through the OPA proxy from the sandbox netns, which does resolve the name. Re-run with `--no-verify` to skip the probe — but be aware that this also skips the capability probe (see previous bullet).
+
+- **Dashboard chat hangs / times out with `LLM request timed out. rawError=503 "inference service unavailable"` when the inference provider is `openai-api`** — on Jetson NemoClaw `v0.0.48` + OpenClaw `2026.4.24`, OpenAI is broken at the openshell-router's streaming layer. See [the warning at the top of the OpenAI section](#switching-from-local-ollama-to-openai) for the full diagnostic fingerprint and confirmation steps. **There is no policy or credential fix from the user side.** Fall back to the [two-model Ollama setup](#two-model-setup-texttools-primary-with-a-vision-auto-describer-local-ollama):
+  ```bash
+  nemoclaw inference set --provider ollama-local --model qwen2.5:7b --sandbox nemo --no-verify
+  CONTAINER=$(docker ps --format '{{.Names}}' | grep '^openshell-nemo-')
+  docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" sh -c '
+    cd /sandbox/.openclaw && \
+    jq ".agents.defaults.model.primary = \"inference/qwen2.5:7b\"
+        | .agents.defaults.imageModel  = \"inference/qwen2.5vl:7b\"" \
+      openclaw.json > openclaw.json.tmp && mv openclaw.json.tmp openclaw.json
+  '
+  ```
+  Confirm with `docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" openclaw models list | grep qwen` — qwen2.5vl:7b should carry the `image` tag.
+
+- **`nemoclaw nemo recover` reports `Probe failed: OpenClaw gateway is not running in 'nemo' and automatic recovery failed`** — almost always a **false negative** on Jetson. The probe runs inside the sandbox's network namespace, where loopback access to the gateway's port is blocked by the sandbox sealing. Check the *real* state from the host instead:
+  ```bash
+  CONTAINER=$(docker ps --format '{{.Names}}' | grep '^openshell-nemo-')
+  curl -sI http://127.0.0.1:18790/                              # the dashboard port on the host
+  docker exec "$CONTAINER" ps -ef | grep openclaw-gateway        # pid should be present
+  docker exec "$CONTAINER" tail -5 /tmp/gateway.log              # recent reload events
+  ```
+  If `curl` returns `HTTP/1.1 200 OK` and the gateway log shows `[gateway] ready` (and any subsequent `[reload] config hot reload applied` events), the gateway is fine — your config change has already been picked up by hot-reload and you don't need to recover. The dashboard URL is unchanged. You can safely ignore the probe failure.
+
+  Note: `nemoclaw nemo recover` will also re-sync the active inference route from `/sandbox/.nemoclaw/config.json` if it decides the gateway is down. If you `nemoclaw inference set --provider X` and then `recover`, and `recover` thinks the gateway is dead, you may see the route revert to whatever `/sandbox/.nemoclaw/config.json` last had. **Just skip `recover` after a successful `inference set`** — the OpenShell router and OpenClaw both hot-reload the route automatically.
 
 - **Camera frames don't show up but `ros2_list_topics` does** — check the topic exists and is `sensor_msgs/CompressedImage`:
   ```bash
