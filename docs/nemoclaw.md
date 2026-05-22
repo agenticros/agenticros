@@ -18,7 +18,7 @@ These are the exact steps that succeeded on this Jetson (`nemoclaw v0.0.48`, Nem
 
 - Linux host with Docker installed (`docker --version`).
 - The NemoClaw CLI (`nemoclaw`) on `PATH`. (NVIDIA's installer drops it at `~/.local/bin/nemoclaw`.)
-- An inference provider you can reach from the host. The setup below uses **local Ollama** with `qwen2.5:7b` — install with `ollama pull qwen2.5:7b` first, and make sure `ollama serve` is up on `127.0.0.1:11434`.
+- An inference provider you can reach from the host. The setup below uses **local Ollama** with `qwen3-vl:8b-instruct` — install with `ollama pull qwen3-vl:8b-instruct` first, and make sure `ollama serve` is up on `127.0.0.1:11434`. This single model handles both tool calling and vision natively, so no second describer model is needed. (Requires Ollama 0.12.7+.)
 
 ### 1.2 Disable iptables in the Docker daemon (required on Jetson)
 
@@ -69,7 +69,7 @@ At the end:
 ```
 NemoClaw is ready
   Sandbox:  nemo
-  Model:    qwen2.5:7b (Local Ollama)
+  Model:    qwen3-vl:8b-instruct (Local Ollama)
   Browser:  http://127.0.0.1:18790/
   Terminal: nemoclaw nemo connect  →  openclaw tui
 ```
@@ -85,7 +85,7 @@ sandbox@…:/sandbox$ openclaw tui      # local TUI chat (alt to the browser UI)
 
 `Ctrl-C`, `/exit`, then `exit` returns you to the host shell.
 
-At this point the agent has no robot capabilities — it's just `qwen2.5:7b` talking to itself. The next part adds AgenticROS, RealSense, and ROS 2.
+At this point the agent has no robot capabilities — it's just `qwen3-vl:8b-instruct` talking to itself. The next part adds AgenticROS, RealSense, and ROS 2.
 
 ## Part 2 — Two ways to add ROS 2 + RealSense + AgenticROS
 
@@ -312,7 +312,7 @@ Then ask the agent things like:
 - "How far is the nearest obstacle in front?" → `ros2_depth_distance`
 - "Drive forward at 0.2 m/s for 1 second, then stop." → `ros2_publish` to `/<namespace>/cmd_vel`
 
-If the model doesn't reach for the tools, prompt it explicitly: *"Use the AgenticROS tools — call `ros2_list_topics` and then `ros2_camera_snapshot`."* Small local models (qwen2.5:7b) usually need that nudge; larger or function-tuned models pick it up on their own.
+If the model doesn't reach for the tools, prompt it explicitly: *"Use the AgenticROS tools — call `ros2_list_topics` and then `ros2_camera_snapshot`."* Small local models (the 8 B `qwen3-vl:8b-instruct`) sometimes need that nudge on the first turn while the prompt cache is cold; larger or function-tuned models pick it up on their own.
 
 #### A.11 Updating the plugin after a code change
 
@@ -590,281 +590,155 @@ docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" \
 
 ## Switching the inference model
 
-NemoClaw routes every chat through whatever model `nemoclaw inference get` reports. The current value is set during `nemoclaw onboard` but can be changed at any time without re-onboarding. There are two situations covered below: swapping one local Ollama model for another, and switching the whole provider over to OpenAI (or any other hosted API).
+NemoClaw routes every chat through whatever model `nemoclaw inference get` reports. The current value is set during `nemoclaw onboard` but can be changed at any time without re-onboarding. The two situations covered below are configuring the recommended local-Ollama setup (a single multimodal model that handles both tool calling and vision), and switching the whole provider over to OpenAI or NVIDIA-hosted inference.
 
-> **Important — vision vs. text-only:** the `ros2_camera_snapshot` tool returns a structured image content block (`{ type: "image", data: base64, mimeType }`), which means the model *only* describes what's in the frame if it actually has a vision encoder. `qwen2.5:7b` is **text-only** (no vision encoder), and so is the default `nemotron-3-super-120b-a12b` text route. With a text model the agent will run the tool successfully, embed the snapshot URL in the chat UI, and say something like *"Here is a snapshot."* without describing the scene — that is the model literally not being able to see the image, not a tool bug. For "what does the robot see?" you need a **VLM / multimodal model**.
+> **Important — vision vs. text-only:** the `ros2_camera_snapshot` tool returns a structured image content block (`{ type: "image", data: base64, mimeType }`), which means the model *only* describes what's in the frame if it actually has a vision encoder. The recommended `qwen3-vl:8b-instruct` route handles this end-to-end, but if you ever switch to a text-only model (e.g. `nemotron-3-super-120b-a12b`, `llama3.1:8b`, `qwen2.5:7b`) the agent will run the tool successfully, embed the snapshot URL in the chat UI, and say something like *"Here is a snapshot."* without describing the scene — that is the model literally not being able to see the image, not a tool bug. For "what does the robot see?" you need a **VLM / multimodal model**.
 
-### Switching between Ollama models (e.g. `qwen2.5:7b` → `qwen2.5vl:7b`)
+> **TL;DR for Jetson Orin AGX:** the [Local Ollama setup](#local-ollama-unified-qwen3-vl8b-instruct-recommended) below is what we recommend and what NemoClaw is onboarded with by default. One 6 GB model (`qwen3-vl:8b-instruct`), handles tool calling and vision natively, no second describer model needed. The hosted-provider sub-sections (`OpenAI`, `NVIDIA-hosted`) are kept for x86 NemoClaw — on Jetson L4T they hit an unfixed streaming-router bug; see those sections for details.
 
-Use this when you want to stay on local Ollama (no API costs, no egress policy changes) but pick a different model — most commonly to gain vision capability.
+### Local Ollama: unified `qwen3-vl:8b-instruct` (recommended)
+
+This is the **simplest** working setup on Jetson L4T with NemoClaw `v0.0.48` + OpenClaw `2026.4.24`: **one model that handles both tool calling and vision natively, no auto-describer needed, no in-plugin describer needed**. `qwen3-vl` is the first Qwen-family VLM that Ollama also tags as `tools`-capable, so the same weights answer the chat, emit OpenAI-style `tool_calls`, and see the image attached to a tool result — without OpenClaw having to filter image blocks out or route to a second model.
+
+**Use the `-instruct` variant, NOT the bare tag.** `qwen3-vl:8b` is the reasoning/"thinking" build; on Ollama it ignores `think: false` and burns the entire `num_predict` budget on hidden `<think>` tokens before emitting any visible content, so every tool call returns `finish_reason: length` with `tool_calls: []`. Upstream maintainers explicitly say "if you don't want thinking, use the instruct version" ([ollama/ollama#14798](https://github.com/ollama/ollama/issues/14798), [#13353](https://github.com/ollama/ollama/issues/13353)). The `-instruct` tag is a separate model file, ~6.1 GB Q4_K_M, same 8.8 B params.
+
+**Memory budget on Orin AGX (30 GiB iGPU pool).** `qwen3-vl:8b-instruct` resident with the 32 K context KV cache is ~12 GiB; the OpenClaw system prompt + 35-tool catalog adds another ~5 GiB of compute-side memory. Headroom is fine for one model. Do **not** try to keep `llama3.1:8b` or `qwen2.5vl:7b` resident at the same time — they'll co-evict (we observed the auto-describer take a 32 s cold-load hit between every snapshot in the two-model setup). Just unload them:
 
 ```bash
-# 1. Inventory what's installed and what's loaded right now
-ollama list                       # everything on disk
-ollama ps                         # what's actually loaded into GPU/RAM
+curl -s http://localhost:11434/api/generate -d '{"model":"llama3.1:8b","keep_alive":0}'   >/dev/null
+curl -s http://localhost:11434/api/generate -d '{"model":"qwen2.5vl:7b","keep_alive":0}'  >/dev/null
+ollama rm llama3.1:8b qwen2.5vl:7b   # optional — saves ~11 GB disk if you don't need them
+```
 
-# 2. Pull the model you want. qwen2.5vl:7b is the natural drop-in upgrade
-#    from qwen2.5:7b — same family, same prompt style, plus a vision encoder.
-#    (~5.5 GB download; needs about 8 GB GPU RAM loaded at the default
-#    32k context window.)
-ollama pull qwen2.5vl:7b
+#### Setup (5 steps)
 
-# 3. Point NemoClaw at the new model. --provider stays the same; only
-#    --model changes. This updates both the OpenShell inference route
-#    AND the OpenClaw sandbox's openclaw.json in one shot.
-#
-#    NOTE: NemoClaw's pre-flight verify probe hits
-#    http://host.openshell.internal:11435 (the ollama-auth-proxy NemoClaw
-#    runs in front of your host's `ollama serve`). On Jetson, that
-#    hostname doesn't resolve from the openshell-gateway container, so
-#    the probe always returns "failed to connect". The traffic itself
-#    works fine end-to-end — pass --no-verify to skip the broken probe.
-nemoclaw inference set --provider ollama-local --model qwen2.5vl:7b --sandbox nemo --no-verify
+```bash
+CONTAINER=$(docker ps --format '{{.Names}}' | grep '^openshell-nemo-')
 
-# 4. Verify
+# 1. Pull the instruct variant (6.1 GB). Requires Ollama 0.12.7+.
+ollama pull qwen3-vl:8b-instruct
+
+# 2. Pre-warm with a 60-min keep-alive (cold-load is ~32 s on Orin AGX).
+curl -s -m 90 http://localhost:11434/api/generate \
+    -d '{"model":"qwen3-vl:8b-instruct","prompt":"hi","stream":false,"keep_alive":"60m"}' >/dev/null
+
+# 3. Point NemoClaw's inference route at it (this also syncs the per-agent model identity).
+nemoclaw inference set --provider ollama-local --model qwen3-vl:8b-instruct --sandbox nemo --no-verify
 nemoclaw inference get
-# → {"provider":"ollama-local","model":"qwen2.5vl:7b"}
+# → Provider: ollama-local
+#   Model:    qwen3-vl:8b-instruct
 
-# 5. Bounce the gateway so OpenClaw re-queries the model's capabilities
-nemoclaw nemo recover
+# 4. CRITICAL: `nemoclaw inference set` writes `input: ["text"]` for the
+#    new model regardless of its actual capabilities, which causes OpenClaw
+#    to OMIT image content blocks from tool results (the `image-ChxVuvXM.js`
+#    image filter resolves it as text-only and tags every snapshot tool
+#    result with "(tool image omitted: model does not support images)").
+#    Patch the catalog to declare it multimodal in BOTH the root config
+#    AND the per-agent override:
+docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" sh -c '
+  for f in /sandbox/.openclaw/openclaw.json /sandbox/.openclaw/agents/main/agent/models.json; do
+    jq "
+      ((.models.providers.inference.models // .providers.inference.models)[]
+        | select(.id == \"qwen3-vl:8b-instruct\")
+        | .input) = [\"text\", \"image\"]
+    " \"$f\" > \"$f.tmp\" && mv \"$f.tmp\" \"$f\"
+  done
+'
 
-# 6. Confirm the sandbox flags it as a vision model. The Input column
-#    should read 'text+image', NOT 'text'.
+# 5. Bump the LLM idle timeout from 120 s → 480 s. The 35-tool OpenClaw
+#    catalog + 29 KB system prompt expands to ~20 K input tokens; prompt
+#    processing on the Orin AGX iGPU takes 3–4 min for the FIRST cold
+#    pass through the prompt (subsequent passes hit the KV cache and
+#    finish in 10–60 s). At 120 s the gateway gives up before Ollama
+#    even returns the first token, retries, and ping-pongs forever.
+docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" sh -c '
+  jq ".agents.defaults.llm.idleTimeoutSeconds = 480" \
+     /sandbox/.openclaw/openclaw.json > /sandbox/.openclaw/openclaw.json.tmp && \
+  mv /sandbox/.openclaw/openclaw.json.tmp /sandbox/.openclaw/openclaw.json
+'
+
+# 6. (Optional but recommended) Disable the in-plugin describer — the
+#    primary now sees images directly, so the side-call to a VL model is
+#    pure overhead. Skip this step if you also want a guaranteed text
+#    description embedded in the tool result text (belt and suspenders).
+docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" sh -c '
+  jq ".plugins.entries.agenticros.config.describer.enabled = false" \
+     /sandbox/.openclaw/openclaw.json > /sandbox/.openclaw/openclaw.json.tmp && \
+  mv /sandbox/.openclaw/openclaw.json.tmp /sandbox/.openclaw/openclaw.json
+'
+```
+
+OpenClaw watches `openclaw.json` and hot-reloads `models.providers.inference.models` and `agents.defaults.llm` without a gateway restart. The describer change requires a restart (`nemoclaw nemo recover`).
+
+#### Verify the wiring
+
+```bash
 docker exec $(docker ps --format '{{.Names}}' | grep '^openshell-nemo-') \
-    openclaw models list 2>&1 | grep -i qwen2.5vl
+    openclaw models list 2>&1 | grep qwen3-vl
 # Expected:
-#   inference/qwen2.5vl:7b   text+image   128k   yes   yes   default
-
-# 7. If step 6 shows Input=text instead of text+image, NemoClaw's sync
-#    code wrote a hardcoded `input: ["text"]` into openclaw.json (this
-#    happens whenever --no-verify is used, because the capability probe
-#    is skipped along with the connection probe). Patch it in place:
-CONTAINER=$(docker ps --format '{{.Names}}' | grep '^openshell-nemo-')
-docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" sh -c '
-  cd /sandbox/.openclaw && \
-  jq "(.models.providers.inference.models[] | select(.id == \"qwen2.5vl:7b\") | .input) = [\"text\", \"image\"]" openclaw.json > openclaw.json.tmp && \
-  mv openclaw.json.tmp openclaw.json
-'
-nemoclaw nemo recover
-
-# 8. (Optional) free the old text model from disk
-ollama rm qwen2.5:7b
+#   inference/qwen3-vl:8b-instruct   text+image   128k   yes   yes   default
 ```
 
-Other Ollama vision tags that work in NemoClaw `2026.4.24+` (the capability-detection bug from OpenClaw 2026.2.x is fixed in this version):
+The Input column **must** read `text+image`. If it reads `text` alone, step 4 didn't apply and the model will hallucinate scene descriptions from the snapshot URL filename instead of the bytes (we observed exactly this: "wall with a light switch and a door", "tiled floor" — none of which were in the actual frame).
 
-| Tag | Size on disk | Notes |
+#### Sanity prompt + expected end-to-end timing
+
+> *"Use ros2_camera_snapshot and tell me in detail what you see."*
+
+Flow (one user prompt → ~6 minutes wall-clock on the first turn, ~1 minute on subsequent turns once Ollama's prompt-prefix cache is warm):
+
+```
+user prompt
+   │ ~3–4 min prompt processing on cold cache
+   ▼
+qwen3-vl:8b-instruct ── tool_calls: [ros2_camera_snapshot] ──▶ agenticros plugin
+                                                                    │
+                                                          captured JPEG bytes
+                                                                    │
+   ┌── tool result (text-only "Captured one frame..." + markdown link)
+   │   PLUS a follow-up user message OpenClaw adds:
+   │   { type: "image_url", image_url: { url: "data:image/jpeg;base64,..." } }
+   ▼
+qwen3-vl:8b-instruct ── final assistant message with grounded scene description
+                       (matches the actual frame: people, objects, colors, layout)
+```
+
+Two characteristics to watch for on the wire (`/tmp/ollama-proxy-requests.log` if you have the auth-proxy logging build running):
+
+- **Request 1** is ~80 KB, `msgs_count=2`, `tools_count=35`, `model: qwen3-vl:8b-instruct`. Response is ~700 bytes with `finish_reason: tool_calls` and a structured `tool_calls[]` array. If `finish_reason` is `stop` and `aggregated_content` contains a JSON snippet with ```{"name":"ros2_camera_snapshot","parameters":{...}}``` wrapped in backticks, the model emitted a text-based fake tool call. That means OpenClaw's meta-tool catalog is enabled — see the next subsection on patching `selection-*.js`.
+- **Request 2** is ~200 KB. The 120 KB jump is the `data:image/jpeg;base64,...` block OpenClaw appends as a follow-up user message after the tool result. If request 2 is only ~85 KB and `msg[4]` is missing entirely (or `msg[3]` says "(tool image omitted: model does not support images)" in its text), the catalog `input` array doesn't include `image` — step 4 above didn't take, or `nemoclaw inference set` was re-run and wiped it.
+
+#### Disable OpenClaw's meta-tool catalog (one-time patch)
+
+NemoClaw by default wraps every OpenClaw tool behind three meta-tools — `tool_call`, `tool_describe`, `tool_search` — so the model only sees those three in its `tools` array and has to nest the real tool name + arguments inside `tool_call.arguments`. The wrapper schema declares `tool_call.arguments` as an *object*, but the OpenAI spec says `function.arguments` is a JSON-encoded *string*. Capable models (`llama3.1:8b`, `qwen3-vl:8b-instruct`) follow the spec, serialize their arguments as a string, and OpenClaw's validator then rejects them — so the tool never runs and the model emits text-based fallback JSON. To bypass:
+
+```bash
+CONTAINER=$(docker ps --format '{{.Names}}' | grep '^openshell-nemo-')
+docker exec -u root "$CONTAINER" sh -c '
+  SEL=$(ls /usr/local/lib/node_modules/openclaw/dist/selection-*.js | head -1)
+  # Invert the env-var default: opt-IN to the meta-tool catalog instead of opt-out
+  sed -i "s/process.env.NEMOCLAW_TOOL_CATALOG !== \"0\"/process.env.NEMOCLAW_TOOL_CATALOG === \"1\"/" "$SEL"
+  grep nemoClawToolCatalogEnabled "$SEL"
+'
+nemoclaw nemo recover
+```
+
+After this, OpenClaw exposes the 35 ROS + system tools directly to the model as normal OpenAI functions. The model picks them by name and OpenClaw routes them to the underlying handlers without the meta-wrapper roundtrip. The patch is forward-compatible — set `NEMOCLAW_TOOL_CATALOG=1` in the container env to opt back into the meta-catalog if a future model can't handle the direct tool list. *Note: a NemoClaw upgrade overwrites `selection-*.js`; re-apply after upgrading.*
+
+#### Why a single multimodal model is the right shape on Jetson
+
+Earlier iterations of this guide ran two Ollama models in parallel — a text+tools primary (`qwen2.5:7b`) and a vision-only auto-describer (`qwen2.5vl:7b`) wired via `agents.defaults.imageModel`. That setup is no longer recommended on Jetson Orin AGX, for three reasons that all surface as the same user-visible failure (generic hallucinated scene descriptions):
+
+| | Two-model auto-describer (legacy) | Unified `qwen3-vl:8b-instruct` |
 |---|---|---|
-| `qwen2.5vl:3b` | ~3.2 GB | Smallest qwen-VL. OK on Jetson Orin Nano 8 GB. |
-| `qwen2.5vl:7b` | ~5.5 GB | Recommended baseline on Orin AGX 32 GB. |
-| `qwen2.5vl:32b` | ~21 GB | Only if you have the RAM. |
-| `llama3.2-vision:11b` | ~7.9 GB | Meta vision model. Different prompt style than qwen. |
-| `llava-llama3:8b` | ~5.5 GB | LLaVA on Llama 3. Older but well-tested. |
-| `moondream` | ~1.7 GB | Tiny + fast. Good for quick "is there a person in front of me?" type prompts; weak at long answers. |
+| Models resident in VRAM | 2 (≈ 12 GB + 11 GB = 23 GB) | 1 (≈ 12 GB) |
+| Eviction risk on 30 GB iGPU | High — co-eviction adds ~32 s cold-load per snapshot | None |
+| LLM round-trips per snapshot | 3 (primary → tool → describer → primary) | 2 (primary → tool → primary) |
+| Image handling | VL captions to text; primary never sees pixels | Primary sees the JPEG directly — grounded descriptions, follow-up questions about the image work |
+| Tool catalog clobbered by `inference set` | Both models' `input` arrays get wiped | One model's `input` array gets wiped (easier to re-patch) |
+| Ollama tool-call compatibility | `qwen2.5vl:7b` rejects tool calls outright (`does not support tools`) | `qwen3-vl` is tagged `tools`-capable by Ollama |
 
-Verification prompt once you've switched and bounced the gateway:
-
-> *"Use ros2_camera_snapshot, then describe in detail what you see in the image — objects, colors, lighting, anything you can identify."*
-
-A vision model produces a real scene description. A text-only model says "Here is a snapshot." with no detail.
-
-### Two-model setup: text+tools primary with a vision auto-describer (local Ollama)
-
-Use this when you want **both tool-calling AND scene description** but each single Ollama model on your shelf only supports one or the other:
-
-- `qwen2.5:7b` supports tool/function calling, but is text-only (no vision encoder).
-- `qwen2.5vl:7b` has a vision encoder, but Ollama explicitly rejects tool calls against the VL variants (`registry.ollama.ai` returns `qwen2.5vl:7b does not support tools (status code: 400)` if OpenClaw tries to send a tool list with the request).
-
-Picking one means giving up the other — unless you configure OpenClaw's **media-understanding** flow. OpenClaw can be told to use a *primary* model for the chat and a *separate* model that gets invoked automatically to caption any image content (chat upload, or a tool result like `ros2_camera_snapshot`). The caption is injected as plain text into the conversation the primary model sees, so the primary never needs to be multimodal.
-
-The wiring is `agents.defaults.imageModel` in the sandbox's `openclaw.json` (the key is read by `coerceToolModelConfig(cfg.agents.defaults.imageModel)` inside OpenClaw and routed to `describeImagesWithModel` whenever a tool returns image content).
-
-```bash
-CONTAINER=$(docker ps --format '{{.Names}}' | grep '^openshell-nemo-')
-
-# 1. Pull both models on the host. Ollama keeps them on disk; only the
-#    one being invoked is resident in GPU memory at a time (default
-#    OLLAMA_KEEP_ALIVE = 5 min), so you don't pay for two slots at once
-#    unless requests interleave faster than the eviction timer.
-ollama pull qwen2.5:7b           # text + tools (primary)
-ollama pull qwen2.5vl:7b         # text + image (auto-describer)
-
-# 2. Set the active inference route to the tool-capable text model.
-#    Every chat message hits this by default.
-nemoclaw inference set --provider ollama-local --model qwen2.5:7b --sandbox nemo --no-verify
-nemoclaw inference get   # → {"provider":"ollama-local","model":"qwen2.5:7b"}
-
-# 3. Teach OpenClaw about BOTH models and point imageModel at the VL one.
-#    The patch does four things in one shot:
-#      - adds qwen2.5vl:7b to models.providers.inference.models
-#      - fixes the input-capability flags on both
-#        (qwen2.5:7b → ["text"], qwen2.5vl:7b → ["text","image"])
-#      - sets agents.defaults.model.primary = inference/qwen2.5:7b
-#      - sets agents.defaults.imageModel    = inference/qwen2.5vl:7b
-docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" sh -c '
-  cd /sandbox/.openclaw && \
-  jq "
-    if (.models.providers.inference.models | map(.id) | index(\"qwen2.5vl:7b\")) == null then
-      .models.providers.inference.models += [{
-        id: \"qwen2.5vl:7b\",
-        name: \"inference/qwen2.5vl:7b\",
-        reasoning: false,
-        input: [\"text\", \"image\"],
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-        contextWindow: 131072,
-        maxTokens: 4096,
-        api: \"openai-completions\"
-      }]
-    else . end
-    | (.models.providers.inference.models[] | select(.id == \"qwen2.5:7b\")   | .input) = [\"text\"]
-    | (.models.providers.inference.models[] | select(.id == \"qwen2.5vl:7b\") | .input) = [\"text\", \"image\"]
-    | .agents.defaults.model.primary = \"inference/qwen2.5:7b\"
-    | .agents.defaults.imageModel    = \"inference/qwen2.5vl:7b\"
-  " openclaw.json > openclaw.json.tmp && mv openclaw.json.tmp openclaw.json
-'
-
-# 4. `nemoclaw inference set` only patches the system-level openclaw.json.
-#    The per-agent file at agents/main/agent/models.json overrides the
-#    system catalog for the actual chat agent — so it also needs both
-#    models, otherwise `openclaw models list` and the chat runtime will
-#    only see one of them. (Also drop any orphan "openai" provider entry
-#    left over from a previous switch attempt.)
-docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" sh -c '
-  cd /sandbox/.openclaw/agents/main/agent && \
-  jq "
-    del(.providers.openai)
-    | if (.providers.inference.models | map(.id) | index(\"qwen2.5:7b\")) == null then
-        .providers.inference.models = ([{
-          id: \"qwen2.5:7b\",
-          name: \"inference/qwen2.5:7b\",
-          reasoning: false,
-          input: [\"text\"],
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-          contextWindow: 131072,
-          maxTokens: 4096,
-          api: \"openai-completions\"
-        }] + .providers.inference.models)
-      else . end
-    | (.providers.inference.models[] | select(.id == \"qwen2.5vl:7b\") | .input) = [\"text\", \"image\"]
-  " models.json > models.json.tmp && mv models.json.tmp models.json
-'
-
-# 5. Bounce the gateway and confirm both models are visible with the
-#    right flags. The KEY check: qwen2.5vl:7b should carry the `image`
-#    TAG (rightmost column) — this is OpenClaw saying "I have wired this
-#    model as the agents.defaults.imageModel auto-describer." Without
-#    that tag the imageModel reference didn't resolve to anything.
-nemoclaw nemo recover
-docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" openclaw models list | grep qwen
-# Expected:
-#   inference/qwen2.5:7b      text         128k   yes   yes   default
-#   inference/qwen2.5vl:7b    text+image   128k   yes   yes   image     ← note 'image' tag
-```
-
-How a chat turn actually flows once this is wired:
-
-```
-user: "use ros2_camera_snapshot then describe what you see"
-   │
-   ▼
-qwen2.5:7b (primary)    ── tool call ──▶ ros2_camera_snapshot
-   │                                              │
-   │                                       returns { type: "image",
-   │                                                 data: <base64 jpg>,
-   │                                                 mimeType: "image/jpeg" }
-   │                                              │
-   │       qwen2.5vl:7b  ◀── auto-route ──────────┘
-   │       (agents.defaults
-   │        .imageModel)
-   │              │
-   │       returns text caption ("A living room with a couch on the left…")
-   │              │
-   ◀──────────────┘
-   │
-   ▼
-qwen2.5:7b sees the caption as a normal text message and can call more
-tools or synthesise its reply. It NEVER receives the image bytes.
-```
-
-Trade-offs and gotchas:
-
-- **Latency.** Every image content block now triggers a second LLM call. On Orin AGX, the VL inference adds ~3–8 s per snapshot. Three `ros2_camera_snapshot` calls in one chat turn = three sequential VL calls.
-- **GPU memory.** Two distinct Ollama models means two distinct GPU slots if both happen to be hot. Watch `ollama ps`. If you're on 16 GB shared memory and want to keep them both warm, drop `OLLAMA_KEEP_ALIVE` (e.g. `OLLAMA_KEEP_ALIVE=2m`) so the unused one evicts quickly; otherwise expect a 1–2 s reload penalty when switching.
-- **The caption is not the primary model's "vision".** The primary only sees what the VL model wrote. If the user asks a follow-up like *"what's that red object in the top-left?"* and the VL caption didn't mention it, the primary will either hallucinate or have to re-issue `ros2_camera_snapshot` and let the VL model take another look.
-- **The `image` tag in `openclaw models list` is how you confirm the wiring took.** If the tag is missing, OpenClaw didn't pick up `agents.defaults.imageModel` — usually because (a) the value doesn't match a registered model name *exactly*, (b) the per-agent `models.json` override (step 4) is stale, or (c) `openclaw models list` was run as `root` instead of as `sandbox`, so it loaded `/root/.openclaw/openclaw.json` instead of `/sandbox/.openclaw/openclaw.json` — always pass `-u sandbox -e HOME=/sandbox`.
-- **The `nemoclaw inference set` cookie-cutter doesn't know about imageModel.** It writes only `agents.defaults.model.primary`, so the step-3 patch is required each time you change either model.
-- **`nemoclaw inference set` _clobbers_ `models.providers.inference.models`.** Every time you run it, it rewrites the inference provider's catalog to contain **only** the active model. If you previously added `qwen2.5vl:7b` to that catalog (for use as `imageModel`), it disappears and `agents.defaults.imageModel = "inference/qwen2.5vl:7b"` silently fails to resolve — the auto-describer skips the VL call and the text-only primary either hallucinates a generic scene description or returns no description at all. **Symptom**: the assistant says it called `ros2_camera_snapshot` and shows the markdown image link, but the description sounds suspiciously generic ("well-lit indoor scene with tables and chairs"). **Confirm**: `docker exec -u sandbox -e HOME=/sandbox $(docker ps --format '{{.Names}}' | grep '^openshell-nemo-') openclaw models list | grep qwen` should show **both** `qwen2.5:7b` (tagged `default`) **and** `qwen2.5vl:7b` (tagged `image`). If the VL row is missing, re-add it with the `jq` patch from step 3 above (or the recipe in *Switching back* below) — and patch the per-agent override at `/sandbox/.openclaw/agents/main/agent/models.json` too, since that file persists across provider switches and can still hold stale entries from previous experiments.
-
-Sanity prompt once everything is wired and the gateway has recovered:
-
-> *"Use ros2_camera_snapshot, then describe in detail what you see in the image — objects, colors, lighting, anything you can identify."*
-
-You should see `qwen2.5:7b` issue the tool call, the `agenticros` plugin return a snapshot, a 3–10 s pause (the VL model running in the background), and then a real scene description in the chat — without the primary model ever having been multimodal.
-
-### Alternative: in-plugin describer (bypasses OpenClaw's image filter)
-
-`agents.defaults.imageModel` is OpenClaw's *built-in* auto-describer for tool results that return image content. It works on x86 NemoClaw but on Jetson L4T (NemoClaw `v0.0.48` + OpenClaw `2026.4.24`) we observed two failure modes that the section above can't fully prevent:
-
-1. **OpenClaw drops image content blocks before passing them to text-only primaries.** `packages/openclaw/dist/.../provider-stream-EGXtbhbQ.js:309` filters `b.type !== "image"` when the primary model declares `input: "text"` — even *if* the tool returned an `{type:"image", data:base64,...}` block. The model literally never sees the bytes; it sees only the markdown image URL and tends to hallucinate a description from the filename / surrounding context. (The auto-describer only kicks in when the primary's input includes `image`, which `qwen2.5:7b` does not.)
-2. **`nemoclaw inference set` clobbers the catalog**, which silently un-wires `imageModel` (covered in detail above).
-
-To sidestep both issues the AgenticROS plugin ships an **in-plugin describer**: the `ros2_camera_snapshot` tool optionally calls a vision-capable OpenAI-compatible endpoint *itself*, then embeds the description text into the tool result. The primary model receives a tool result with a real "**Vision description**: ..." paragraph in its plain-text content — so even a strictly text-only Ollama model can repeat back what's actually in front of the robot.
-
-Set up:
-
-```bash
-CONTAINER=$(docker ps --format '{{.Names}}' | grep '^openshell-nemo-')
-TOKEN=$(cat ~/.nemoclaw/ollama-proxy-token)
-
-# 1. Wire the describer in the plugin config. The URL targets the
-#    nemoclaw ollama-auth-proxy on the docker bridge (host port 11435)
-#    — Ollama itself is on 127.0.0.1:11434 which the sandbox cannot
-#    reach, the auth-proxy is the only path in. The `local-inference`
-#    NemoClaw preset is active by default and already permits POST to
-#    that endpoint, so no extra policy work is required.
-#
-#    The auth-proxy demands a bearer token (24-byte hex written to
-#    ~/.nemoclaw/ollama-proxy-token by nemoclaw during onboard).
-docker exec "$CONTAINER" sh -c "OUT=\$(jq '.plugins.entries.agenticros.config.describer = {
-    enabled: true,
-    url: \"http://host.openshell.internal:11435/v1/chat/completions\",
-    apiKey: \"$TOKEN\",
-    model: \"qwen2.5vl:7b\",
-    maxTokens: 400,
-    timeoutMs: 60000,
-    maxImageDimension: 896
-  }' /sandbox/.openclaw/openclaw.json) && echo \"\$OUT\" > /sandbox/.openclaw/openclaw.json"
-
-# 2. Pre-warm both Ollama models on the host (cold-load is 30–60 s).
-curl -s http://localhost:11434/api/generate -d '{"model":"qwen2.5:7b","prompt":"hi","stream":false}' >/dev/null
-curl -s http://localhost:11434/api/generate -d '{"model":"qwen2.5vl:7b","prompt":"hi","stream":false}' >/dev/null
-
-# 3. Restart the gateway so the plugin reloads the new config.
-docker exec -u root "$CONTAINER" sh -c 'kill $(pgrep -f "openclaw.*gateway")'
-sleep 3
-nemoclaw nemo recover
-```
-
-After this, ask the dashboard:
-
-> *"Use ros2_camera_snapshot, then tell me in detail what you see."*
-
-`qwen2.5:7b` calls the tool. The plugin grabs the frame, base64-encodes it, POSTs it to `qwen2.5vl:7b` through the auth-proxy, and appends the result to the tool's text output as `**Vision description** (auto-generated by qwen2.5vl:7b in Nms — quote or paraphrase this when reporting what the robot sees): ...`. The primary model paraphrases that paragraph into the user-facing response.
-
-Compared to `agents.defaults.imageModel` this approach:
-
-- **Works with strictly text-only primaries** — no `input: "image"` declaration needed; the primary never receives image bytes, just text.
-- **Survives `nemoclaw inference set` runs** — the describer config lives on the plugin, not in the inference catalog, so the cookie-cutter can't wipe it out.
-- **Adds a "Vision description" block that the primary is explicitly told to quote** — much less likely to be ignored than the implicit content-block hand-off OpenClaw does for `imageModel`.
-
-Trade-offs to know:
-
-- The describer makes one extra HTTP call per `ros2_camera_snapshot`, adding 3–10 s on Jetson (≤1 s if both models are already resident — set `OLLAMA_MAX_LOADED_MODELS=2` in the Ollama service env to keep them warm).
-- If the describer call fails (proxy denied, model not loaded, timeout), the tool still returns the image link with a warning paragraph appended explaining the describer didn't respond — the operator can recover by checking `/tmp/gateway.log` for `ros2_camera_snapshot: describer failed: ...`.
-- The describer config is stored in plaintext in `openclaw.json` along with the Ollama-proxy bearer token. That token has filesystem `0600` on the host but is now also inside the sandbox config — anyone with read access to the sandbox can call the host's Ollama. If that's not acceptable, run `chmod 600` on `/sandbox/.openclaw/openclaw.json` from inside the container after editing.
-- You can also point `describer.url` at a remote OpenAI-compatible vision model (OpenAI, NVIDIA hosted, a separate vLLM box) — set `describer.apiKey` to that provider's key. **On Jetson the same streaming-path 503 issue described in the next section affects public-TLS upstreams**; the local Ollama path is the only reliably-working option today.
-
-You can run *both* the `agents.defaults.imageModel` auto-describer **and** the in-plugin describer — they're independent. The in-plugin describer is enforced inside the `ros2_camera_snapshot` tool; the `imageModel` describer fires for *any* tool result with an image content block (and ALSO for `ros2_camera_snapshot` if the primary's input includes image, in which case the tool returns both a description AND the raw image block). Most operators on Jetson will want **only** the in-plugin describer with `qwen2.5:7b` as the text-only primary — fewer moving parts, no `inference set` foot-gun.
+The unified setup is strictly simpler and gives strictly more accurate descriptions, *if* you accept the 3–4 min cold-prompt-processing penalty on the first turn after a long idle. Subsequent turns reuse Ollama's prompt-prefix cache and finish in 10–60 s. Keep the model resident across idle gaps with `keep_alive: "60m"` (see [Setup step 2](#setup-5-steps)) and you only pay that penalty once per Ollama restart.
 
 ### Switching from local Ollama to OpenAI
 
@@ -887,7 +761,7 @@ You can run *both* the `agents.defaults.imageModel` auto-describer **and** the i
 >
 > The working upstream pattern on Jetson today is the **private host bridge** (`host.openshell.internal:11434/11435`, used by `ollama-local`); everything routed through a public-TLS endpoint hits the streaming-path 503.
 >
-> **What to do until upstream fixes it:** stay on local Ollama. The [two-model setup](#two-model-setup-texttools-primary-with-a-vision-auto-describer-local-ollama) (`qwen2.5:7b` for tools + `qwen2.5vl:7b` as `agents.defaults.imageModel` auto-describer) gives you tool calling AND scene description with zero API cost. The instructions below are kept for the case where you're on x86 NemoClaw or a future Jetson NemoClaw release fixes the streaming path — they're known to work on x86 NemoClaw.
+> **What to do until upstream fixes it:** stay on local Ollama. The [unified `qwen3-vl:8b-instruct` setup](#local-ollama-unified-qwen3-vl8b-instruct-recommended) gives you tool calling AND scene description from a single 6 GB model with zero API cost. The instructions below are kept for the case where you're on x86 NemoClaw or a future Jetson NemoClaw release fixes the streaming path — they're known to work on x86 NemoClaw.
 
 Use this when local inference is too slow on your hardware, the model isn't strong enough for your prompts, or you want GPT-4o's vision quality (which is currently the gold standard for "describe what you see"). Requires an OpenAI API key and outbound network access from the sandbox.
 
@@ -996,7 +870,7 @@ NemoClaw ships a built-in `nvidia` provider profile that talks to NVIDIA's hoste
 - Local Ollama is too slow for your prompts,
 - You want a recent NVIDIA-trained model (the `nemoclaw inference set --help` output recommends `nvidia/nemotron-3-super-120b-a12b` as the default route — 120B parameters, 12B active MoE, native tool calling).
 
-> **Confirmed broken on Jetson L4T (NemoClaw v0.0.48 + OpenClaw 2026.4.24).** `nvidia-prod` hits exactly the same router-internal `503 "inference service unavailable"` as `openai-api` — verified with `nvidia/nemotron-3-super-120b-a12b` on May 22, 2026. The dashboard hangs after the opening message, and `/var/log/openshell.*.log` shows the identical `NET:FAIL [LOW] inference.local:443` fingerprint after `routing proxy inference request (streaming)`. Same bug, same `/opt/openshell/bin/openshell-sandbox` streaming-proxy code path. The setup steps below are still correct — they're known to work on x86 NemoClaw — but on Jetson all hosted inference (public-TLS upstreams) currently fails. Fall back to the [two-model Ollama setup](#two-model-setup-texttools-primary-with-a-vision-auto-describer-local-ollama) until upstream fixes the router.
+> **Confirmed broken on Jetson L4T (NemoClaw v0.0.48 + OpenClaw 2026.4.24).** `nvidia-prod` hits exactly the same router-internal `503 "inference service unavailable"` as `openai-api` — verified with `nvidia/nemotron-3-super-120b-a12b` on May 22, 2026. The dashboard hangs after the opening message, and `/var/log/openshell.*.log` shows the identical `NET:FAIL [LOW] inference.local:443` fingerprint after `routing proxy inference request (streaming)`. Same bug, same `/opt/openshell/bin/openshell-sandbox` streaming-proxy code path. The setup steps below are still correct — they're known to work on x86 NemoClaw — but on Jetson all hosted inference (public-TLS upstreams) currently fails. Fall back to the [unified `qwen3-vl:8b-instruct` setup](#local-ollama-unified-qwen3-vl8b-instruct-recommended) until upstream fixes the router.
 
 #### 1. Get an NVIDIA API key
 
@@ -1063,24 +937,15 @@ If you get `PONG` back in a couple of seconds, the route works end-to-end. Then 
 
 > *"Use ros2_camera_snapshot, then describe what you see."*
 
-#### 5. Vision via the imageModel auto-describer
+#### 5. Vision for a text-only hosted primary
 
-`nvidia/nemotron-3-super-120b-a12b` is a text + tools model — at this writing it has no native vision encoder. If you want it to *describe* the snapshot the camera tool returns, layer the same media-understanding flow on top of it that the [Two-model setup](#two-model-setup-texttools-primary-with-a-vision-auto-describer-local-ollama) uses for `qwen2.5:7b`:
+`nvidia/nemotron-3-super-120b-a12b` is a text + tools model — at this writing it has no native vision encoder. If you need scene description while keeping a hosted text primary, switch the primary to an NVIDIA-hosted multimodal model instead — `meta/llama-3.2-90b-vision-instruct` is the most established free-tier option, the same `nvidia-prod` provider entry handles both (no second provider registration needed):
 
 ```bash
-docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" sh -c '
-  cd /sandbox/.openclaw && \
-  jq ".agents.defaults.imageModel = \"inference/qwen2.5vl:7b\"
-      | (.models.providers.\"nvidia-prod\".models[]
-         | select(.id == \"nvidia/nemotron-3-super-120b-a12b\")
-         | .input) = [\"text\"]
-     " openclaw.json > openclaw.json.tmp && mv openclaw.json.tmp openclaw.json
-'
+nemoclaw inference set --provider nvidia-prod --model meta/llama-3.2-90b-vision-instruct --sandbox nemo
 ```
 
-This keeps `nemotron-3-super` as the cloud-hosted tools primary and uses your already-installed local `qwen2.5vl:7b` to caption images before they reach `nemotron`. End result: hosted speed/quality for tool reasoning, local GPU for image understanding, no extra cloud cost for snapshots.
-
-If you instead want to use an NVIDIA-hosted vision model as the auto-describer, pick a VLM from build.nvidia.com — `meta/llama-3.2-90b-vision-instruct` is the most established free-tier option — and set `imageModel: "nvidia-prod/meta/llama-3.2-90b-vision-instruct"`. The same `nvidia-prod` provider entry handles both, no second provider registration needed.
+If you specifically need `nemotron-3-super-120b-a12b` for its reasoning/tool quality AND scene description on the same chat, the cleanest path today is to **leave the hosted route alone for tool reasoning** and **fall back to local `qwen3-vl:8b-instruct` whenever you want to describe what the robot sees** — switch routes with one `nemoclaw inference set` call, no media-understanding/auto-describer wiring required. (The legacy `agents.defaults.imageModel` flow that previously layered a local VL on top of the hosted text primary depended on the same two-model auto-describer Jetson can no longer keep both resident — see [Why a single multimodal model is the right shape on Jetson](#why-a-single-multimodal-model-is-the-right-shape-on-jetson).)
 
 #### 6. Available NVIDIA-hosted models worth knowing
 
@@ -1088,7 +953,7 @@ If you instead want to use an NVIDIA-hosted vision model as the auto-describer, 
 |---|---|---|---|
 | `nvidia/nemotron-3-super-120b-a12b` | Tool calling, reasoning, long context — the recommended default per the `nemoclaw inference set` example | yes (eval program) | no |
 | `meta/llama-3.1-70b-instruct` | Generic tool-capable instruct model, well-tested | yes | no |
-| `meta/llama-3.2-90b-vision-instruct` | VLM for `imageModel` auto-describe | yes | yes |
+| `meta/llama-3.2-90b-vision-instruct` | Multimodal primary — use as the active model when you need scene description with hosted inference | yes | yes |
 | `nvidia/nv-embedqa-e5-v5` | Embeddings (if you wire memory) | yes | n/a |
 
 Browse the full catalog at <https://build.nvidia.com/explore/discover> — anything that exposes `/v1/chat/completions` will work as a route here.
@@ -1098,14 +963,17 @@ Browse the full catalog at <https://build.nvidia.com/explore/discover> — anyth
 To go back to local Ollama from any hosted provider (OpenAI, NVIDIA, Anthropic, etc.):
 
 ```bash
-# Recommended on Jetson: the dual-Ollama two-model setup (tools + vision auto-describer)
-nemoclaw inference set --provider ollama-local --model qwen2.5:7b --sandbox nemo --no-verify
+# Recommended on Jetson: unified qwen3-vl:8b-instruct (tools + vision in one model)
+nemoclaw inference set --provider ollama-local --model qwen3-vl:8b-instruct --sandbox nemo --no-verify
 CONTAINER=$(docker ps --format '{{.Names}}' | grep '^openshell-nemo-')
+# Re-apply the multimodal input-array patch — `nemoclaw inference set` always writes
+# input: ["text"] regardless of the model's actual capabilities.
 docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" sh -c '
-  cd /sandbox/.openclaw && \
-  jq ".agents.defaults.model.primary = \"inference/qwen2.5:7b\"
-      | .agents.defaults.imageModel  = \"inference/qwen2.5vl:7b\"" \
-    openclaw.json > openclaw.json.tmp && mv openclaw.json.tmp openclaw.json
+  for f in /sandbox/.openclaw/openclaw.json /sandbox/.openclaw/agents/main/agent/models.json; do
+    jq "((.models.providers.inference.models // .providers.inference.models)[]
+          | select(.id == \"qwen3-vl:8b-instruct\") | .input) = [\"text\",\"image\"]" \
+       \"$f\" > \"$f.tmp\" && mv \"$f.tmp\" \"$f\"
+  done
 '
 # NO `nemoclaw nemo recover` — hot-reload picks it up and the probe gives
 # false negatives anyway. See the troubleshooting bullet.
@@ -1183,128 +1051,73 @@ docker exec $(docker ps --format '{{.Names}}' | grep '^openshell-nemo-') \
 
 - **`openclaw plugins list` hangs** — listing instantiates plugins, and AgenticROS's reconnect loop keeps it alive. Inspect the registered config directly instead (see "Inspecting the sandbox config" above).
 
-- **Agent describes a generic indoor scene that doesn't match what the camera is actually showing** — classic "model never saw the image" hallucination from the text-only primary. There are *three* distinct root causes depending on what's going wrong:
-
-  0. **The model emitted a malformed `tool_call` and the snapshot was never taken** — `qwen2.5:7b` specifically is notorious for this. OpenClaw exposes ROS tools through a meta-tool with the shape `tool_call(name: "ros2_camera_snapshot", arguments: { topic: ... })`, but `qwen2.5:7b` consistently flattens the arguments (`{name: "ros2_camera_snapshot", topic: "..."}`) or drops `name` entirely. Each malformed attempt returns `Validation failed for tool "tool_call": arguments: must have required properties arguments` as the toolResult, and the model usually gives up after 2-4 retries and *hallucinates* a description from the user's question alone. The chat shows the model "calling" the tool, but `/tmp/gateway.log` has **no** `ros2_camera_snapshot:` line, and the session jsonl shows `toolResult` entries containing the validation-error string instead of an image. **Fix**: switch to a model that's actually trained for OpenClaw's meta-tool format. `qwen2.5-coder:7b` is the lowest-friction option (same family, drop-in `ollama pull`, ~4 GB, same quantization) and follows the schema reliably. `llama3.1:8b` works too. After pulling, switch with `nemoclaw inference set --provider ollama-local --model qwen2.5-coder:7b --no-verify` — the gateway hot-reloads and your describer config is preserved (unlike on the inference catalog, see the next bullet). **Confirm**: open a new chat, ask the snapshot question, and grep `/sandbox/.openclaw/agents/main/sessions/<session>.jsonl` for `"role":"toolResult"` — you should see an entry whose text starts with `Captured one frame from /camera/...` and includes a `**Vision description**:` paragraph, not a `Validation failed` string.
-
-  Then in order of "no fix worked, dig deeper":
-
-  1. **`agents.defaults.imageModel` (OpenClaw auto-describer) silently un-wired** — most common trigger is running `nemoclaw inference set` (for any reason — switching providers, retrying after a failure, etc.) which **wipes `qwen2.5vl:7b` out of `/sandbox/.openclaw/openclaw.json`'s `models.providers.inference.models` list**. After that, `agents.defaults.imageModel = "inference/qwen2.5vl:7b"` references a model the resolver can't find, the VL describer is skipped, and the text-only primary fabricates a scene description from the markdown image URL alone. There's also a *deeper* failure mode here: when the primary declares `input: "text"` only (which `qwen2.5:7b` does), OpenClaw filters `b.type === "image"` blocks out of the tool result *before* the model ever sees them — so even when `imageModel` resolves correctly, the primary still hallucinates from the markdown URL alone unless it has multimodal input declared. Switch to the [in-plugin describer](#alternative-in-plugin-describer-bypasses-openclaws-image-filter) — it doesn't rely on either declaration and writes the description into the tool result's *text*, which OpenClaw never filters.
-  2. **In-plugin describer failed** — check `/tmp/gateway.log` for `ros2_camera_snapshot: describer failed: <reason>`. Common causes:
-     - `HTTP 401 Unauthorized` — `describer.apiKey` doesn't match `~/.nemoclaw/ollama-proxy-token`. Re-copy it: `docker exec $(docker ps --format '{{.Names}}' | grep '^openshell-nemo-') sh -c "jq '.plugins.entries.agenticros.config.describer.apiKey = \"$(cat ~/.nemoclaw/ollama-proxy-token)\"' /sandbox/.openclaw/openclaw.json | sponge /sandbox/.openclaw/openclaw.json"` (or rewrite via `OUT=$(jq ...) && echo "$OUT" > ...`).
-     - `policy_denied` / `FORWARD denied` — the gateway can't reach `host.openshell.internal:11435`. The built-in `local-inference` preset must be active (`nemoclaw nemo policy-list | grep local-inference` should show `●`). If you've replaced it with a custom preset, make sure that preset lists `/usr/local/bin/node` under `binaries:` (it's the gateway's actual interpreter — `readlink /proc/$(pgrep openclaw)/exe` confirms).
-     - `fetch failed` / `ECONNREFUSED` — the host's `ollama-auth-proxy` isn't running. `ps -p $(cat ~/.nemoclaw/ollama-auth-proxy.pid) -o cmd=` should print `node .../ollama-auth-proxy.js`. If missing, re-run `nemoclaw nemo doctor` which restarts it.
-     - `HTTP 500` from the upstream — Ollama hasn't loaded `qwen2.5vl:7b` yet. Pre-warm with `curl http://localhost:11434/api/generate -d '{"model":"qwen2.5vl:7b","prompt":"hi","stream":false}'`. Cold-load on Jetson AGX Orin is ~30–60 s.
-
-  Confirm and fix:
+- **Multimodal primary describes a generic scene instead of the actual frame, and the gateway log contains `tool image omitted: model does not support images`** — OpenClaw's `resolveGatewayModelSupportsImages` checks the active model's `input` array in `/sandbox/.openclaw/openclaw.json → models.providers.inference.models[]`. `nemoclaw inference set` writes `input: ["text"]` for every new model regardless of its actual capabilities, so even after switching to `qwen3-vl:8b-instruct` the gateway thinks it's text-only and filters the image bytes out before the second LLM call. **Fix**: patch the `input` field for the model in *both* the root `openclaw.json` and the per-agent `agents/main/agent/models.json`:
   ```bash
   CONTAINER=$(docker ps --format '{{.Names}}' | grep '^openshell-nemo-')
-
-  # 1. Confirm the VL row is missing from `openclaw models list` (or has no `image` tag).
-  docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" openclaw models list | grep qwen
-  # Expected (both rows present, qwen2.5vl tagged `image`):
-  #   inference/qwen2.5:7b       text       ...  default
-  #   inference/qwen2.5vl:7b     text+image ...  image
-
-  # 2. Re-add qwen2.5vl:7b to the SYSTEM catalog AND clean the per-agent override.
   docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" sh -c '
-    cd /sandbox/.openclaw && \
-    jq "
-      if (.models.providers.inference.models | map(.id) | index(\"qwen2.5vl:7b\")) == null then
-        .models.providers.inference.models += [{
-          id: \"qwen2.5vl:7b\",
-          name: \"inference/qwen2.5vl:7b\",
-          reasoning: false,
-          input: [\"text\", \"image\"],
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-          contextWindow: 131072,
-          maxTokens: 4096,
-          api: \"openai-completions\"
-        }]
-      else . end
-      | (.models.providers.inference.models[] | select(.id == \"qwen2.5vl:7b\") | .input) = [\"text\", \"image\"]
-      | (.models.providers.inference.models[] | select(.id == \"qwen2.5:7b\")   | .input) = [\"text\"]
-    " openclaw.json > openclaw.json.tmp && mv openclaw.json.tmp openclaw.json
+    for f in /sandbox/.openclaw/openclaw.json /sandbox/.openclaw/agents/main/agent/models.json; do
+      jq "((.models.providers.inference.models // .providers.inference.models)[]
+            | select(.id == \"qwen3-vl:8b-instruct\") | .input) = [\"text\",\"image\"]" \
+         \"$f\" > \"$f.tmp\" && mv \"$f.tmp\" \"$f\"
+    done
   '
+  ```
+  Confirm `inference/qwen3-vl:8b-instruct` shows `text+image` in the Input column:
+  ```bash
+  docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" openclaw models list | grep qwen3-vl
+  ```
+  OpenClaw hot-reloads `openclaw.json` — no gateway restart needed. (See [Setup step 4](#setup-5-steps) in the unified-model section for the full recipe.)
+
+- **First chat turn after a long idle times out with `LLM request timed out`, even though Ollama eventually produces a valid response** — on Jetson Orin AGX the iGPU takes 3–4 minutes to prompt-process the ~20 K input tokens from OpenClaw's 35-tool catalog + 29 KB system prompt on a cold cache. The gateway's default `agents.defaults.llm.idleTimeoutSeconds` is 120 s, so it gives up before Ollama emits a single token, retries, and ping-pongs forever. Subsequent turns hit Ollama's prompt-prefix cache and finish in 10–60 s, but the first turn after the LLM cools off (`keep_alive` default 5 min) is always slow. **Fix**: bump the idle timeout to ~480 s in the root openclaw.json — the path is `agents.defaults.llm.idleTimeoutSeconds`, **not** `agents.defaults.llmIdleTimeout` or similar:
+  ```bash
+  CONTAINER=$(docker ps --format '{{.Names}}' | grep '^openshell-nemo-')
   docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" sh -c '
-    cd /sandbox/.openclaw/agents/main/agent && \
-    jq "
-      .providers.inference.models |= map(select(.id | startswith(\"nvidia/\") | not))
-      | if (.providers.inference.models | map(.id) | index(\"qwen2.5:7b\")) == null then
-          .providers.inference.models = ([{
-            id: \"qwen2.5:7b\", name: \"inference/qwen2.5:7b\", reasoning: false,
-            input: [\"text\"], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-            contextWindow: 131072, maxTokens: 4096, api: \"openai-completions\"
-          }] + .providers.inference.models)
-        else . end
-      | (.providers.inference.models[] | select(.id == \"qwen2.5vl:7b\") | .input) = [\"text\", \"image\"]
-      | (.providers.inference.models[] | select(.id == \"qwen2.5:7b\")   | .input) = [\"text\"]
-    " models.json > models.json.tmp && mv models.json.tmp models.json
+    jq ".agents.defaults.llm.idleTimeoutSeconds = 480" \
+       /sandbox/.openclaw/openclaw.json > /sandbox/.openclaw/openclaw.json.tmp && \
+    mv /sandbox/.openclaw/openclaw.json.tmp /sandbox/.openclaw/openclaw.json
   '
-
-  # 3. Hot reload picks it up automatically; re-verify after ~3 seconds.
-  sleep 3
-  docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" openclaw models list | grep qwen
   ```
-
-  Then refresh the dashboard and re-ask the prompt. The first turn after the fix takes ~30–90 s while Ollama cold-loads `qwen2.5vl:7b` for the describer call — that's normal. Subsequent turns are much faster while both models stay resident (see `OLLAMA_MAX_LOADED_MODELS` tuning below).
-
-- **Both Ollama models keep evicting each other on every chat turn (each turn takes 60–120 s)** — Ollama's default `OLLAMA_MAX_LOADED_MODELS=1` and a stale `OLLAMA_KEEP_ALIVE` value force the runner to swap models on every primary↔VL handoff. Bump both via a systemd drop-in (requires sudo):
-
+  Also set Ollama's keep-alive to keep the model resident across idle gaps, eliminating the cold-load entirely after the first warmup:
   ```bash
-  sudo tee /etc/systemd/system/ollama.service.d/override.conf >/dev/null <<'EOF'
-  [Service]
-  Environment="OLLAMA_HOST=0.0.0.0:11434"
-  Environment="OLLAMA_MAX_LOADED_MODELS=2"
-  Environment="OLLAMA_KEEP_ALIVE=30m"
-  Environment="OLLAMA_NUM_PARALLEL=1"
-  EOF
-  sudo systemctl daemon-reload && sudo systemctl restart ollama
-  curl -s http://127.0.0.1:11434/api/version
+  curl -s -m 90 http://localhost:11434/api/generate \
+      -d '{"model":"qwen3-vl:8b-instruct","prompt":"hi","stream":false,"keep_alive":"60m"}' >/dev/null
   ```
 
-  Pre-warm both models so the dashboard's first turn is instant:
+- **`qwen3-vl:8b` returns `finish_reason: length` with empty content and an empty `tool_calls[]` array even at `max_tokens: 2000`** — the bare `qwen3-vl:8b` tag is the *thinking* variant. It opens every response with a long internal `<think>...</think>` block, burns the entire `num_predict` budget on hidden reasoning tokens, and never reaches the visible answer. Ollama strips the `<think>` block from the streamed content but doesn't return it as a separate field, so to the gateway it just looks like a model that exhausted its token budget producing nothing. **Fix**: use the explicit non-thinking variant `qwen3-vl:8b-instruct` (separate model file, ~6.1 GB):
   ```bash
-  curl -s --max-time 180 -X POST http://127.0.0.1:11434/v1/chat/completions \
-    -H 'Content-Type: application/json' \
-    -d '{"model":"qwen2.5:7b","stream":false,"max_tokens":5,"messages":[{"role":"user","content":"ok"}]}' >/dev/null
-  curl -s --max-time 180 -X POST http://127.0.0.1:11434/v1/chat/completions \
-    -H 'Content-Type: application/json' \
-    -d '{"model":"qwen2.5vl:7b","stream":false,"max_tokens":5,"messages":[{"role":"user","content":"ok"}]}' >/dev/null
-  curl -s http://127.0.0.1:11434/api/ps | python3 -c 'import sys,json; [print(m["name"], int(m["size_vram"]/1024/1024), "MiB") for m in json.load(sys.stdin)["models"]]'
+  ollama pull qwen3-vl:8b-instruct
+  nemoclaw inference set --provider ollama-local --model qwen3-vl:8b-instruct --sandbox nemo --no-verify
+  # Then re-apply the multimodal input-array patch (see image-omitted entry above).
   ```
-  On Orin AGX with 30 GB unified memory, both models fit (~8 GB + ~19 GB with default `num_ctx=32768`). If you only have 16 GB, lower the VL context window by creating a custom modelfile (`FROM qwen2.5vl:7b\nPARAMETER num_ctx 8192`) or live with the eviction tax.
+  Upstream maintainers confirm `think: false` is silently ignored on the base variant ([ollama/ollama#14798](https://github.com/ollama/ollama/issues/14798), [#13353](https://github.com/ollama/ollama/issues/13353)) — the `-instruct` tag is the only way to disable thinking. Same model family, same weights, same context window, just without the reasoning tokens.
 
-- **Agent runs `ros2_camera_snapshot` successfully but just says "Here is a snapshot" without describing the scene** — the configured model can't see images. Two common causes:
-  1. **The model itself is text-only.** `qwen2.5:7b` and most "instruct" models without a `-vl` / `-vision` suffix have no vision encoder. You have two options:
-     - Swap the active model for a multimodal one — drop-in: `ollama pull qwen2.5vl:7b` then `nemoclaw inference set --provider ollama-local --model qwen2.5vl:7b --sandbox nemo --no-verify && nemoclaw nemo recover`. Downside: most Ollama VL models (including `qwen2.5vl:7b`) reject tool calls, so the agent can still run tools, just won't auto-call them.
-     - Keep `qwen2.5:7b` as the tool-capable primary and add `qwen2.5vl:7b` as the auto-describer via `agents.defaults.imageModel`. See [Two-model setup: text+tools primary with a vision auto-describer](#two-model-setup-texttools-primary-with-a-vision-auto-describer-local-ollama). This is the right path if you need tool calling AND scene description on local hardware.
-  2. **The model is multimodal but OpenClaw thinks it's text-only.** `nemoclaw inference set --no-verify` writes a hardcoded `input: ["text"]` into `/sandbox/.openclaw/openclaw.json` because it skips the capability probe along with the connection probe. Diagnose with `docker exec $CONTAINER openclaw models list | grep <model>` — if the Input column reads `text` for a model you *know* is multimodal, patch the JSON in place:
+- **Agent describes a generic indoor scene that doesn't match what the camera is actually showing** — classic "model never saw the image" hallucination. With the recommended `qwen3-vl:8b-instruct` setup, this means one of two things has gone wrong:
+
+  1. **OpenClaw thinks the model is text-only and is filtering the image out of the tool result.** Symptom: `/tmp/gateway.log` (or the proxy capture) contains `tool image omitted: model does not support images`. This is the `nemoclaw inference set` catalog-clobber bug — `inference set` writes `input: ["text"]` regardless of the model's actual capabilities. Re-apply the multimodal input-array patch from the [image-omitted entry above](#multimodal-primary-describes-a-generic-scene-instead-of-the-actual-frame-and-the-gateway-log-contains-tool-image-omitted-model-does-not-support-images) (and confirm `openclaw models list | grep qwen3-vl` shows the Input column reading `text+image`, not `text`).
+  2. **The model is using a different (text-only) tag.** Run `nemoclaw inference get` and confirm it reports `qwen3-vl:8b-instruct`, not `qwen3-vl:8b` (the thinking variant — see the `finish_reason: length` entry above), not `llama3.1:8b`, and not `qwen2.5:7b`. If it doesn't, re-set:
      ```bash
-     CONTAINER=$(docker ps --format '{{.Names}}' | grep '^openshell-nemo-')
-     docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" sh -c '
-       cd /sandbox/.openclaw && \
-       jq "(.models.providers.inference.models[] | select(.id == \"qwen2.5vl:7b\") | .input) = [\"text\", \"image\"]" openclaw.json > openclaw.json.tmp && \
-       mv openclaw.json.tmp openclaw.json
-     '
-     nemoclaw nemo recover
+     nemoclaw inference set --provider ollama-local --model qwen3-vl:8b-instruct --sandbox nemo --no-verify
+     # Then re-apply the multimodal input-array patch.
      ```
-     After the recover, the Input column should read `text+image`.
+
+  Historical note for context (no action needed if you're on `qwen3-vl:8b-instruct`): earlier iterations of this guide used `qwen2.5:7b` as the text+tools primary or `llama3.1:8b` after that. The Qwen2.5 family is **incompatible with OpenClaw's structured tool-call path on Ollama** — `qwen2.5:7b` emits arguments at the top level or drops `name` (`Validation failed for tool "tool_call": arguments: must have required properties arguments`), and `qwen2.5-coder:7b` emits the correct `{name, arguments}` JSON as a *string* in `content` instead of the OpenAI-structured `tool_calls` array, which Ollama's templates don't lift out. In either case the chat shows the model "calling" the tool, but `/tmp/gateway.log` has no `ros2_camera_snapshot:` line and the snapshot is never taken. The unified `qwen3-vl:8b-instruct` setup avoids this entirely — `qwen3-vl` is tagged `tools`-capable by Ollama and emits proper structured `tool_calls`.
 
 - **`nemoclaw inference set` exits with `failed to verify inference endpoint for provider 'ollama-local' ... at 'http://host.openshell.internal:11435/v1': failed to connect`** — the verification probe runs from a place that can't resolve `host.openshell.internal` (the openshell-gateway container has no entry for it in `/etc/hosts` on Jetson). The runtime traffic still works because it goes through the OPA proxy from the sandbox netns, which does resolve the name. Re-run with `--no-verify` to skip the probe — but be aware that this also skips the capability probe (see previous bullet).
 
-- **Dashboard chat hangs / times out with `LLM request timed out. rawError=503 "inference service unavailable"` when the inference provider is `openai-api` or `nvidia-prod` (or any other public-TLS upstream)** — on Jetson NemoClaw `v0.0.48` + OpenClaw `2026.4.24`, **all hosted inference providers are broken** at the openshell-router's streaming layer. Confirmed for both `openai-api` (gpt-4o, gpt-4o-mini) and `nvidia-prod` (nemotron-3-super-120b-a12b). The non-streaming validation paths (`nemoclaw inference set`, `nemoclaw nemo doctor`) report success because they don't exercise the broken code path. See [the warning at the top of the OpenAI section](#switching-from-local-ollama-to-openai) for the full diagnostic fingerprint. **There is no policy or credential fix from the user side.** Fall back to the [two-model Ollama setup](#two-model-setup-texttools-primary-with-a-vision-auto-describer-local-ollama):
+- **Dashboard chat hangs / times out with `LLM request timed out. rawError=503 "inference service unavailable"` when the inference provider is `openai-api` or `nvidia-prod` (or any other public-TLS upstream)** — on Jetson NemoClaw `v0.0.48` + OpenClaw `2026.4.24`, **all hosted inference providers are broken** at the openshell-router's streaming layer. Confirmed for both `openai-api` (gpt-4o, gpt-4o-mini) and `nvidia-prod` (nemotron-3-super-120b-a12b). The non-streaming validation paths (`nemoclaw inference set`, `nemoclaw nemo doctor`) report success because they don't exercise the broken code path. See [the warning at the top of the OpenAI section](#switching-from-local-ollama-to-openai) for the full diagnostic fingerprint. **There is no policy or credential fix from the user side.** Fall back to the [unified `qwen3-vl:8b-instruct` setup](#local-ollama-unified-qwen3-vl8b-instruct-recommended):
   ```bash
-  nemoclaw inference set --provider ollama-local --model qwen2.5:7b --sandbox nemo --no-verify
+  nemoclaw inference set --provider ollama-local --model qwen3-vl:8b-instruct --sandbox nemo --no-verify
   CONTAINER=$(docker ps --format '{{.Names}}' | grep '^openshell-nemo-')
+  # Re-apply the multimodal input-array patch (inference set always writes input: ["text"]).
   docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" sh -c '
-    cd /sandbox/.openclaw && \
-    jq ".agents.defaults.model.primary = \"inference/qwen2.5:7b\"
-        | .agents.defaults.imageModel  = \"inference/qwen2.5vl:7b\"" \
-      openclaw.json > openclaw.json.tmp && mv openclaw.json.tmp openclaw.json
+    for f in /sandbox/.openclaw/openclaw.json /sandbox/.openclaw/agents/main/agent/models.json; do
+      jq "((.models.providers.inference.models // .providers.inference.models)[]
+            | select(.id == \"qwen3-vl:8b-instruct\") | .input) = [\"text\",\"image\"]" \
+         \"$f\" > \"$f.tmp\" && mv \"$f.tmp\" \"$f\"
+    done
   '
   ```
-  Confirm with `docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" openclaw models list | grep qwen` — qwen2.5vl:7b should carry the `image` tag.
+  Confirm with `docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" openclaw models list | grep qwen3-vl` — the Input column should read `text+image`.
 
 - **`nemoclaw nemo recover` reports `Probe failed: OpenClaw gateway is not running in 'nemo' and automatic recovery failed`** — almost always a **false negative** on Jetson. The probe runs inside the sandbox's network namespace, where loopback access to the gateway's port is blocked by the sandbox sealing. Check the *real* state from the host instead:
   ```bash
