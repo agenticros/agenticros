@@ -98,6 +98,65 @@ export const AgenticROSConfigSchema = z.object({
     })
     .default({}),
 
+  /**
+   * Optional in-plugin image describer.
+   *
+   * When the primary chat model is text-only (e.g. Ollama qwen2.5:7b),
+   * OpenClaw filters image content blocks out of tool results before the
+   * LLM ever sees them, so `ros2_camera_snapshot` cannot be described.
+   * Configuring an OpenAI-compatible chat completions endpoint here lets
+   * the plugin call a vision model itself and embed the description text
+   * directly in the snapshot tool result.
+   *
+   * Recommended Jetson setup: point at local Ollama with a VL model:
+   *   url: "http://host.docker.internal:11434/v1/chat/completions"
+   *   model: "qwen2.5vl:7b"
+   *
+   * If `enabled: false`, the snapshot result includes only the camera URL
+   * and the agent is on its own (suitable when the primary model is
+   * multimodal and OpenClaw does not need to filter images).
+   */
+  describer: z
+    .object({
+      enabled: z.boolean().default(false),
+      /** OpenAI-compat chat completions endpoint URL. */
+          url: z
+            .string()
+            // host.openshell.internal:11435 is the nemoclaw ollama-auth-proxy
+            // bound to the docker bridge — it's the ONLY way to reach the
+            // host's Ollama from a NemoClaw sandbox. Two reasons:
+            //   1. The default Ollama daemon binds 127.0.0.1:11434 on the
+            //      host, which is not reachable from the bridge.
+            //   2. The built-in `local-inference` policy permits POST to
+            //      host.openshell.internal:11435 (and 11434/8000) but the
+            //      OPA proxy will refuse a forward to any other port.
+            // The auth-proxy requires `Authorization: Bearer <token>` from
+            // ~/.nemoclaw/ollama-proxy-token — set ``describer.apiKey``.
+            .default("http://host.openshell.internal:11435/v1/chat/completions"),
+      /** Optional Bearer token / API key for the endpoint. */
+      apiKey: z.string().optional(),
+      /** Vision model id (must accept OpenAI `image_url` content blocks). */
+      model: z.string().default("qwen2.5vl:7b"),
+      /** Prompt sent alongside the image. */
+      prompt: z
+        .string()
+        .default(
+          "Describe what is visible in this camera frame from a mobile robot. " +
+            "Focus on the physical scene: objects, materials, layout, colors, lighting, distances. " +
+            "Be concrete and specific. Do not speculate or add detail you cannot see.",
+        ),
+      /** Max tokens for the description. */
+      maxTokens: z.number().int().min(50).max(2048).default(400),
+      /** Request timeout in ms. */
+      timeoutMs: z.number().int().min(1000).max(180000).default(60000),
+      /**
+       * Resize images larger than this max dimension before sending to the
+       * VL model. Reduces token usage and latency. Set to 0 to disable.
+       */
+      maxImageDimension: z.number().int().min(0).max(4096).default(896),
+    })
+    .default({}),
+
   /** Per-skill config. Keys are skill ids (e.g. followme). Each skill validates its own slice. */
   skills: z.record(z.string(), z.unknown()).default({}),
 

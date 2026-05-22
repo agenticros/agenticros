@@ -190,6 +190,20 @@
           }
         }
       },
+      "describer": {
+        "type": "object",
+        "description": "Optional in-plugin image describer. When enabled, ros2_camera_snapshot calls an OpenAI-compatible vision endpoint (typically local Ollama with a qwen2.5-VL model) and embeds the description text directly in the tool result. Required when the primary chat model is text-only (e.g. qwen2.5:7b for tool calling on Jetson) because OpenClaw filters image content blocks out of tool results for text-only models, leaving the agent unable to describe what the robot sees.",
+        "properties": {
+          "enabled": { "type": "boolean", "default": false, "description": "Master switch for the describer." },
+          "url": { "type": "string", "default": "http://host.openshell.internal:11435/v1/chat/completions", "description": "OpenAI-compat chat completions endpoint URL (e.g. Ollama)." },
+          "apiKey": { "type": "string", "description": "Optional Bearer token for the endpoint." },
+          "model": { "type": "string", "default": "qwen2.5vl:7b", "description": "Vision model id (must accept OpenAI image_url content blocks)." },
+          "prompt": { "type": "string", "description": "Prompt sent alongside each image. A reasonable default is used when omitted." },
+          "maxTokens": { "type": "number", "default": 400, "minimum": 50, "maximum": 2048, "description": "Max tokens to generate for each description." },
+          "timeoutMs": { "type": "number", "default": 60000, "minimum": 1000, "maximum": 180000, "description": "HTTP request timeout in milliseconds." },
+          "maxImageDimension": { "type": "number", "default": 896, "minimum": 0, "maximum": 4096, "description": "Resize images larger than this max dimension before sending to the VL model. 0 disables resizing." }
+        }
+      },
       "skills": {
         "type": "object",
         "description": "Per-skill config. Keys are skill ids (e.g. followme). Each skill validates its own slice.",
