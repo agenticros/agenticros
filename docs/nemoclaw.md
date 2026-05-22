@@ -793,6 +793,7 @@ Trade-offs and gotchas:
 - **The caption is not the primary model's "vision".** The primary only sees what the VL model wrote. If the user asks a follow-up like *"what's that red object in the top-left?"* and the VL caption didn't mention it, the primary will either hallucinate or have to re-issue `ros2_camera_snapshot` and let the VL model take another look.
 - **The `image` tag in `openclaw models list` is how you confirm the wiring took.** If the tag is missing, OpenClaw didn't pick up `agents.defaults.imageModel` — usually because (a) the value doesn't match a registered model name *exactly*, (b) the per-agent `models.json` override (step 4) is stale, or (c) `openclaw models list` was run as `root` instead of as `sandbox`, so it loaded `/root/.openclaw/openclaw.json` instead of `/sandbox/.openclaw/openclaw.json` — always pass `-u sandbox -e HOME=/sandbox`.
 - **The `nemoclaw inference set` cookie-cutter doesn't know about imageModel.** It writes only `agents.defaults.model.primary`, so the step-3 patch is required each time you change either model.
+- **`nemoclaw inference set` _clobbers_ `models.providers.inference.models`.** Every time you run it, it rewrites the inference provider's catalog to contain **only** the active model. If you previously added `qwen2.5vl:7b` to that catalog (for use as `imageModel`), it disappears and `agents.defaults.imageModel = "inference/qwen2.5vl:7b"` silently fails to resolve — the auto-describer skips the VL call and the text-only primary either hallucinates a generic scene description or returns no description at all. **Symptom**: the assistant says it called `ros2_camera_snapshot` and shows the markdown image link, but the description sounds suspiciously generic ("well-lit indoor scene with tables and chairs"). **Confirm**: `docker exec -u sandbox -e HOME=/sandbox $(docker ps --format '{{.Names}}' | grep '^openshell-nemo-') openclaw models list | grep qwen` should show **both** `qwen2.5:7b` (tagged `default`) **and** `qwen2.5vl:7b` (tagged `image`). If the VL row is missing, re-add it with the `jq` patch from step 3 above (or the recipe in *Switching back* below) — and patch the per-agent override at `/sandbox/.openclaw/agents/main/agent/models.json` too, since that file persists across provider switches and can still hold stale entries from previous experiments.
 
 Sanity prompt once everything is wired and the gateway has recovered:
 
@@ -802,7 +803,7 @@ You should see `qwen2.5:7b` issue the tool call, the `agenticros` plugin return 
 
 ### Switching from local Ollama to OpenAI
 
-> **Known Jetson limitation — read this first.** On Jetson L4T running NemoClaw `v0.0.48` + OpenClaw `2026.4.24`, **OpenAI as the inference provider does not work end-to-end for streaming chat** even when every individual layer reports healthy. The non-streaming `api.openai.com/v1/models` probe succeeds (`nemoclaw nemo doctor` confirms `Provider health: ... reachable`), `nemoclaw inference set --provider openai-api` validates `api.openai.com/v1/chat/completions` with HTTP 200, the OpenAI policy is loaded, and the credential is stored — but actual chat from the dashboard fails with `503 "inference service unavailable"` returned by the openshell-router itself, before the request leaves the sandbox. The `/var/log/openshell.*.log` fingerprint is:
+> **Known Jetson limitation — read this first.** On Jetson L4T running NemoClaw `v0.0.48` + OpenClaw `2026.4.24`, **no public-TLS inference provider works end-to-end for streaming chat** — confirmed broken for both `openai-api` (gpt-4o, gpt-4o-mini) and `nvidia-prod` (nemotron-3-super-120b-a12b). Every individual layer reports healthy: the non-streaming `/v1/models` probes succeed (`nemoclaw nemo doctor` confirms `Provider health: ... reachable`), `nemoclaw inference set` validates `/v1/chat/completions` with HTTP 200, the egress policy is loaded, and the credential is stored — but actual chat from the dashboard fails with `503 "inference service unavailable"` returned by the openshell-router itself, before the request leaves the sandbox. The `/var/log/openshell.*.log` fingerprint is identical for both providers:
 >
 > ```
 > ALLOWED inference.local:443
@@ -810,14 +811,16 @@ You should see `qwen2.5:7b` issue the tool call, the `agenticros` plugin return 
 > OCSF NET:FAIL [LOW] inference.local:443
 > ```
 >
-> and in `/tmp/openclaw/openclaw-*.log`:
+> and in `/tmp/openclaw/openclaw-*.log` (substituting whichever provider/model you're testing):
 >
 > ```
-> embedded run agent end: ... model=gpt-4o provider=openai
+> embedded run agent end: ... model=<model> provider=<provider>
 >     error=LLM request timed out. rawError=503 "inference service unavailable"
 > ```
 >
-> The 503 originates inside the openshell-router (`/opt/openshell/bin/openshell-sandbox`) on the streaming path — not from OpenAI, not from a policy denial, not from missing credentials. We've reproduced this with both `gpt-4o` and `gpt-4o-mini` after applying every plausible policy shape (`access: full`, `protocol: rest` + `rules: allow GET/POST /**`, with and without `binaries:` restrictions). It looks like an unfixed bug in the streaming-routing path of NemoClaw's bundled openshell-router on Jetson; the non-streaming validation path works, which is why `nemoclaw inference set` reports success.
+> The 503 originates inside the openshell-router (`/opt/openshell/bin/openshell-sandbox`) on the **streaming** path specifically — not from the upstream, not from a policy denial, not from missing credentials. We've reproduced this with `gpt-4o`, `gpt-4o-mini`, and `nvidia/nemotron-3-super-120b-a12b` after applying every plausible policy shape (`access: full`, `protocol: rest` + `rules: allow GET/POST /**`, with and without `binaries:` restrictions). The non-streaming validation paths work for all of them — which is why `nemoclaw inference set` happily reports `Validated Endpoints` with HTTP 200 and `nemoclaw nemo doctor` reports `reachable`. This is an unfixed bug in the streaming-routing path of NemoClaw's bundled openshell-router on Jetson.
+>
+> The working upstream pattern on Jetson today is the **private host bridge** (`host.openshell.internal:11434/11435`, used by `ollama-local`); everything routed through a public-TLS endpoint hits the streaming-path 503.
 >
 > **What to do until upstream fixes it:** stay on local Ollama. The [two-model setup](#two-model-setup-texttools-primary-with-a-vision-auto-describer-local-ollama) (`qwen2.5:7b` for tools + `qwen2.5vl:7b` as `agents.defaults.imageModel` auto-describer) gives you tool calling AND scene description with zero API cost. The instructions below are kept for the case where you're on x86 NemoClaw or a future Jetson NemoClaw release fixes the streaming path — they're known to work on x86 NemoClaw.
 
@@ -928,7 +931,7 @@ NemoClaw ships a built-in `nvidia` provider profile that talks to NVIDIA's hoste
 - Local Ollama is too slow for your prompts,
 - You want a recent NVIDIA-trained model (the `nemoclaw inference set --help` output recommends `nvidia/nemotron-3-super-120b-a12b` as the default route — 120B parameters, 12B active MoE, native tool calling).
 
-> **Same Jetson caveat as OpenAI may apply.** The `nvidia-prod` upstream is also a public-TLS endpoint (`integrate.api.nvidia.com:443`), so it routes through the same streaming proxy path that surfaces `503 "inference service unavailable"` for `openai-api` on Jetson NemoClaw `v0.0.48`. As of this writing we have NOT confirmed whether `nvidia-prod` is affected by the same bug — it might use a different code path inside the openshell-router, or it might 503 the same way. **Test the live dashboard chat after switching**, and if you see the same fingerprint in `/var/log/openshell.*.log` (`NET:FAIL [LOW] inference.local:443` after `routing proxy inference request (streaming)`), the bug is router-wide and you should fall back to the [two-model Ollama setup](#two-model-setup-texttools-primary-with-a-vision-auto-describer-local-ollama).
+> **Confirmed broken on Jetson L4T (NemoClaw v0.0.48 + OpenClaw 2026.4.24).** `nvidia-prod` hits exactly the same router-internal `503 "inference service unavailable"` as `openai-api` — verified with `nvidia/nemotron-3-super-120b-a12b` on May 22, 2026. The dashboard hangs after the opening message, and `/var/log/openshell.*.log` shows the identical `NET:FAIL [LOW] inference.local:443` fingerprint after `routing proxy inference request (streaming)`. Same bug, same `/opt/openshell/bin/openshell-sandbox` streaming-proxy code path. The setup steps below are still correct — they're known to work on x86 NemoClaw — but on Jetson all hosted inference (public-TLS upstreams) currently fails. Fall back to the [two-model Ollama setup](#two-model-setup-texttools-primary-with-a-vision-auto-describer-local-ollama) until upstream fixes the router.
 
 #### 1. Get an NVIDIA API key
 
@@ -1115,6 +1118,87 @@ docker exec $(docker ps --format '{{.Names}}' | grep '^openshell-nemo-') \
 
 - **`openclaw plugins list` hangs** — listing instantiates plugins, and AgenticROS's reconnect loop keeps it alive. Inspect the registered config directly instead (see "Inspecting the sandbox config" above).
 
+- **Agent describes a generic indoor scene that doesn't match what the camera is actually showing** — classic "model never saw the image" hallucination from the text-only primary. The dual-Ollama auto-describer pipeline silently broke. The most common trigger is running `nemoclaw inference set` (for any reason — switching providers, retrying after a failure, etc.) which **wipes `qwen2.5vl:7b` out of `/sandbox/.openclaw/openclaw.json`'s `models.providers.inference.models` list**. After that, `agents.defaults.imageModel = "inference/qwen2.5vl:7b"` references a model the resolver can't find, the VL describer is skipped, and the text-only primary fabricates a scene description from the markdown image URL alone.
+
+  Confirm and fix:
+  ```bash
+  CONTAINER=$(docker ps --format '{{.Names}}' | grep '^openshell-nemo-')
+
+  # 1. Confirm the VL row is missing from `openclaw models list` (or has no `image` tag).
+  docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" openclaw models list | grep qwen
+  # Expected (both rows present, qwen2.5vl tagged `image`):
+  #   inference/qwen2.5:7b       text       ...  default
+  #   inference/qwen2.5vl:7b     text+image ...  image
+
+  # 2. Re-add qwen2.5vl:7b to the SYSTEM catalog AND clean the per-agent override.
+  docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" sh -c '
+    cd /sandbox/.openclaw && \
+    jq "
+      if (.models.providers.inference.models | map(.id) | index(\"qwen2.5vl:7b\")) == null then
+        .models.providers.inference.models += [{
+          id: \"qwen2.5vl:7b\",
+          name: \"inference/qwen2.5vl:7b\",
+          reasoning: false,
+          input: [\"text\", \"image\"],
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+          contextWindow: 131072,
+          maxTokens: 4096,
+          api: \"openai-completions\"
+        }]
+      else . end
+      | (.models.providers.inference.models[] | select(.id == \"qwen2.5vl:7b\") | .input) = [\"text\", \"image\"]
+      | (.models.providers.inference.models[] | select(.id == \"qwen2.5:7b\")   | .input) = [\"text\"]
+    " openclaw.json > openclaw.json.tmp && mv openclaw.json.tmp openclaw.json
+  '
+  docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" sh -c '
+    cd /sandbox/.openclaw/agents/main/agent && \
+    jq "
+      .providers.inference.models |= map(select(.id | startswith(\"nvidia/\") | not))
+      | if (.providers.inference.models | map(.id) | index(\"qwen2.5:7b\")) == null then
+          .providers.inference.models = ([{
+            id: \"qwen2.5:7b\", name: \"inference/qwen2.5:7b\", reasoning: false,
+            input: [\"text\"], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+            contextWindow: 131072, maxTokens: 4096, api: \"openai-completions\"
+          }] + .providers.inference.models)
+        else . end
+      | (.providers.inference.models[] | select(.id == \"qwen2.5vl:7b\") | .input) = [\"text\", \"image\"]
+      | (.providers.inference.models[] | select(.id == \"qwen2.5:7b\")   | .input) = [\"text\"]
+    " models.json > models.json.tmp && mv models.json.tmp models.json
+  '
+
+  # 3. Hot reload picks it up automatically; re-verify after ~3 seconds.
+  sleep 3
+  docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" openclaw models list | grep qwen
+  ```
+
+  Then refresh the dashboard and re-ask the prompt. The first turn after the fix takes ~30–90 s while Ollama cold-loads `qwen2.5vl:7b` for the describer call — that's normal. Subsequent turns are much faster while both models stay resident (see `OLLAMA_MAX_LOADED_MODELS` tuning below).
+
+- **Both Ollama models keep evicting each other on every chat turn (each turn takes 60–120 s)** — Ollama's default `OLLAMA_MAX_LOADED_MODELS=1` and a stale `OLLAMA_KEEP_ALIVE` value force the runner to swap models on every primary↔VL handoff. Bump both via a systemd drop-in (requires sudo):
+
+  ```bash
+  sudo tee /etc/systemd/system/ollama.service.d/override.conf >/dev/null <<'EOF'
+  [Service]
+  Environment="OLLAMA_HOST=0.0.0.0:11434"
+  Environment="OLLAMA_MAX_LOADED_MODELS=2"
+  Environment="OLLAMA_KEEP_ALIVE=30m"
+  Environment="OLLAMA_NUM_PARALLEL=1"
+  EOF
+  sudo systemctl daemon-reload && sudo systemctl restart ollama
+  curl -s http://127.0.0.1:11434/api/version
+  ```
+
+  Pre-warm both models so the dashboard's first turn is instant:
+  ```bash
+  curl -s --max-time 180 -X POST http://127.0.0.1:11434/v1/chat/completions \
+    -H 'Content-Type: application/json' \
+    -d '{"model":"qwen2.5:7b","stream":false,"max_tokens":5,"messages":[{"role":"user","content":"ok"}]}' >/dev/null
+  curl -s --max-time 180 -X POST http://127.0.0.1:11434/v1/chat/completions \
+    -H 'Content-Type: application/json' \
+    -d '{"model":"qwen2.5vl:7b","stream":false,"max_tokens":5,"messages":[{"role":"user","content":"ok"}]}' >/dev/null
+  curl -s http://127.0.0.1:11434/api/ps | python3 -c 'import sys,json; [print(m["name"], int(m["size_vram"]/1024/1024), "MiB") for m in json.load(sys.stdin)["models"]]'
+  ```
+  On Orin AGX with 30 GB unified memory, both models fit (~8 GB + ~19 GB with default `num_ctx=32768`). If you only have 16 GB, lower the VL context window by creating a custom modelfile (`FROM qwen2.5vl:7b\nPARAMETER num_ctx 8192`) or live with the eviction tax.
+
 - **Agent runs `ros2_camera_snapshot` successfully but just says "Here is a snapshot" without describing the scene** — the configured model can't see images. Two common causes:
   1. **The model itself is text-only.** `qwen2.5:7b` and most "instruct" models without a `-vl` / `-vision` suffix have no vision encoder. You have two options:
      - Swap the active model for a multimodal one — drop-in: `ollama pull qwen2.5vl:7b` then `nemoclaw inference set --provider ollama-local --model qwen2.5vl:7b --sandbox nemo --no-verify && nemoclaw nemo recover`. Downside: most Ollama VL models (including `qwen2.5vl:7b`) reject tool calls, so the agent can still run tools, just won't auto-call them.
@@ -1133,7 +1217,7 @@ docker exec $(docker ps --format '{{.Names}}' | grep '^openshell-nemo-') \
 
 - **`nemoclaw inference set` exits with `failed to verify inference endpoint for provider 'ollama-local' ... at 'http://host.openshell.internal:11435/v1': failed to connect`** — the verification probe runs from a place that can't resolve `host.openshell.internal` (the openshell-gateway container has no entry for it in `/etc/hosts` on Jetson). The runtime traffic still works because it goes through the OPA proxy from the sandbox netns, which does resolve the name. Re-run with `--no-verify` to skip the probe — but be aware that this also skips the capability probe (see previous bullet).
 
-- **Dashboard chat hangs / times out with `LLM request timed out. rawError=503 "inference service unavailable"` when the inference provider is `openai-api`** — on Jetson NemoClaw `v0.0.48` + OpenClaw `2026.4.24`, OpenAI is broken at the openshell-router's streaming layer. See [the warning at the top of the OpenAI section](#switching-from-local-ollama-to-openai) for the full diagnostic fingerprint and confirmation steps. **There is no policy or credential fix from the user side.** Fall back to the [two-model Ollama setup](#two-model-setup-texttools-primary-with-a-vision-auto-describer-local-ollama):
+- **Dashboard chat hangs / times out with `LLM request timed out. rawError=503 "inference service unavailable"` when the inference provider is `openai-api` or `nvidia-prod` (or any other public-TLS upstream)** — on Jetson NemoClaw `v0.0.48` + OpenClaw `2026.4.24`, **all hosted inference providers are broken** at the openshell-router's streaming layer. Confirmed for both `openai-api` (gpt-4o, gpt-4o-mini) and `nvidia-prod` (nemotron-3-super-120b-a12b). The non-streaming validation paths (`nemoclaw inference set`, `nemoclaw nemo doctor`) report success because they don't exercise the broken code path. See [the warning at the top of the OpenAI section](#switching-from-local-ollama-to-openai) for the full diagnostic fingerprint. **There is no policy or credential fix from the user side.** Fall back to the [two-model Ollama setup](#two-model-setup-texttools-primary-with-a-vision-auto-describer-local-ollama):
   ```bash
   nemoclaw inference set --provider ollama-local --model qwen2.5:7b --sandbox nemo --no-verify
   CONTAINER=$(docker ps --format '{{.Names}}' | grep '^openshell-nemo-')
