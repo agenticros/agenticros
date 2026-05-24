@@ -1,8 +1,17 @@
 # AgenticROS System Architecture
 
+![AgenticROS architecture: agent platforms → adapter packages → shared TypeScript runtime → transports → ROS 2 workspace and robot](images/agenticros-architecture.png)
+
 AgenticROS supports four deployment modes depending on where OpenClaw runs
 relative to the robot. The AI Gateway layer and ROS2 layer remain the same
 across all modes — only the transport between them changes.
+
+The diagram above shows how every agent platform (OpenClaw Gateway, Codex /
+Claude Code, Gemini CLI, and direct users/operators) funnels through adapter
+packages into the shared `@agenticros/core` runtime, then out across the
+configured transport (Zenoh, rosbridge, local DDS, or WebRTC) to the ROS 2
+workspace and robot hardware. The text diagrams below break out each
+deployment mode in more detail.
 
 ---
 
