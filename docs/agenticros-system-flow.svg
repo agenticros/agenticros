@@ -56,25 +56,34 @@
 
   <rect class="tile messaging" x="88" y="250" width="126" height="82" rx="14"/>
   <circle cx="119" cy="291" r="20" fill="#3a76f0"/>
-  <text class="label" x="113" y="297" fill="#ffffff">S</text>
+  <circle cx="119" cy="291" r="13" fill="none" stroke="#ffffff" stroke-width="3" stroke-dasharray="3 3"/>
+  <path d="M 109 286 Q 109 279 116 279 L 123 279 Q 130 279 130 286 L 130 292 Q 130 299 123 299 L 118 299 L 111 304 L 113 298 Q 109 296 109 292 Z" fill="#ffffff"/>
   <text class="label" x="148" y="284">Signal</text>
   <text class="small" x="148" y="306">secure chat</text>
 
   <rect class="tile messaging" x="252" y="250" width="126" height="82" rx="14"/>
-  <rect x="282" y="271" width="41" height="41" rx="10" fill="#4a154b"/>
-  <text class="label" x="296" y="297" fill="#ffffff">#</text>
+  <rect x="282" y="271" width="41" height="41" rx="10" fill="#ffffff"/>
+  <rect x="288" y="286" width="28" height="9" rx="4.5" fill="#36c5f0" transform="rotate(-90 302 290.5)"/>
+  <rect x="293" y="279" width="28" height="9" rx="4.5" fill="#2eb67d"/>
+  <rect x="289" y="299" width="28" height="9" rx="4.5" fill="#e01e5a"/>
+  <rect x="307" y="286" width="28" height="9" rx="4.5" fill="#ecb22e" transform="rotate(90 321 290.5)"/>
   <text class="label" x="334" y="284">Slack</text>
   <text class="small" x="334" y="306">team ops</text>
 
   <rect class="tile messaging" x="88" y="370" width="126" height="82" rx="14"/>
   <circle cx="119" cy="411" r="20" fill="#25d366"/>
-  <text class="label" x="111" y="417" fill="#ffffff">W</text>
+  <path d="M 107 410 Q 107 399 118 397 Q 130 396 133 408 Q 136 420 124 425 Q 119 427 113 425 L 106 428 L 109 421 Q 107 416 107 410 Z" fill="#ffffff"/>
+  <path d="M 114 404 Q 118 415 127 418" fill="none" stroke="#25d366" stroke-width="3.2" stroke-linecap="round"/>
+  <path d="M 113 404 L 116 402 L 119 407 L 117 409 M 124 416 L 127 414 L 131 417 L 129 421" fill="none" stroke="#25d366" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
   <text class="label" x="148" y="404">WhatsApp</text>
   <text class="small" x="148" y="426">mobile</text>
 
   <rect class="tile messaging" x="252" y="370" width="126" height="82" rx="14"/>
   <rect x="282" y="391" width="41" height="41" rx="12" fill="#1f8fff"/>
-  <text class="label" x="295" y="417" fill="#ffffff">W</text>
+  <path d="M 292 407 Q 292 399 300 399 L 308 399 Q 316 399 316 407 L 316 411 Q 316 419 308 419 L 301 419 L 293 425 L 296 418 Q 292 416 292 411 Z" fill="#ffffff"/>
+  <circle cx="300" cy="409" r="2" fill="#1f8fff"/>
+  <circle cx="304" cy="409" r="2" fill="#1f8fff"/>
+  <circle cx="308" cy="409" r="2" fill="#1f8fff"/>
   <text class="label" x="334" y="404">WebChat</text>
   <text class="small" x="334" y="426">browser UI</text>
 
@@ -89,31 +98,45 @@
 
   <rect class="tile agent" x="508" y="248" width="152" height="84" rx="14"/>
   <circle cx="542" cy="290" r="21" fill="#1d2636"/>
-  <text class="label" x="533" y="296" fill="#ffffff">OC</text>
+  <path d="M 531 299 C 526 293 526 286 531 281 C 536 276 544 276 549 281" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
+  <path d="M 546 279 L 555 270 M 551 284 L 562 279 M 553 291 L 565 292" stroke="#f3d274" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="542" cy="290" r="6" fill="none" stroke="#ffffff" stroke-width="2"/>
   <text class="label" x="574" y="284">OpenClaw</text>
   <text class="small" x="574" y="306">gateway</text>
 
   <rect class="tile agent" x="692" y="248" width="152" height="84" rx="14"/>
   <rect x="724" y="269" width="42" height="42" rx="10" fill="#76b900"/>
-  <text class="label" x="735" y="296" fill="#ffffff">N</text>
+  <path d="M 731 291 C 739 280 751 279 759 291 C 752 301 739 302 731 291 Z" fill="#ffffff"/>
+  <circle cx="746" cy="291" r="5" fill="#76b900"/>
+  <path d="M 732 291 C 740 287 750 287 759 291" fill="none" stroke="#76b900" stroke-width="2"/>
   <text class="label" x="778" y="284">NemoClaw</text>
   <text class="small" x="778" y="306">sandbox</text>
 
   <rect class="tile agent" x="508" y="370" width="152" height="84" rx="14"/>
   <circle cx="542" cy="412" r="21" fill="#111827"/>
-  <text class="label" x="535" y="418" fill="#ffffff">AI</text>
+  <g fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round">
+    <path d="M 542 395 C 552 397 557 408 552 417 C 548 426 535 429 528 421"/>
+    <path d="M 557 408 C 561 418 554 428 543 429 C 533 431 524 422 525 412"/>
+    <path d="M 554 425 C 546 433 533 431 528 421 C 523 412 528 400 538 397"/>
+    <path d="M 529 427 C 519 423 517 410 525 402 C 532 394 545 395 551 404"/>
+    <path d="M 522 407 C 520 397 531 390 541 394 C 551 397 556 410 551 419"/>
+    <path d="M 530 398 C 538 390 551 393 555 403 C 560 413 553 425 542 426"/>
+  </g>
   <text class="label" x="574" y="404">OpenAI</text>
   <text class="small" x="574" y="426">models</text>
 
   <rect class="tile agent" x="692" y="370" width="152" height="84" rx="14"/>
   <circle cx="726" cy="412" r="21" fill="#b86f52"/>
-  <text class="label" x="718" y="418" fill="#ffffff">C</text>
+  <path d="M 712 424 L 726 394 L 740 424 Z" fill="#ffffff"/>
+  <path d="M 720 418 L 726 405 L 732 418 Z" fill="#b86f52"/>
   <text class="label" x="758" y="404">Claude</text>
   <text class="small" x="758" y="426">reasoning</text>
 
   <rect class="tile agent" x="600" y="492" width="152" height="84" rx="14"/>
   <circle cx="634" cy="534" r="21" fill="#4285f4"/>
-  <text class="label" x="625" y="540" fill="#ffffff">G</text>
+  <path d="M 634 511 L 640 528 L 657 534 L 640 540 L 634 557 L 628 540 L 611 534 L 628 528 Z" fill="#ffffff"/>
+  <path d="M 652 515 L 655 523 L 663 526 L 655 529 L 652 537 L 649 529 L 641 526 L 649 523 Z" fill="#fbbc04"/>
+  <path d="M 615 516 L 618 523 L 625 526 L 618 529 L 615 536 L 612 529 L 605 526 L 612 523 Z" fill="#34a853"/>
   <text class="label" x="666" y="526">Gemini</text>
   <text class="small" x="666" y="548">multimodal</text>
 
@@ -133,14 +156,31 @@
   <text class="text" x="1003" y="486">Robotics runtime for agentic AI</text>
 
   <rect class="tile core" x="982" y="534" width="306" height="84" rx="14"/>
+  <g transform="translate(1240 576)">
+    <circle cx="-18" cy="-10" r="5" fill="#22314a"/>
+    <circle cx="0" cy="-10" r="5" fill="#22314a"/>
+    <circle cx="18" cy="-10" r="5" fill="#22314a"/>
+    <circle cx="-18" cy="8" r="5" fill="#22314a"/>
+    <circle cx="0" cy="8" r="5" fill="#22314a"/>
+    <circle cx="18" cy="8" r="5" fill="#22314a"/>
+    <path d="M -18 -10 L 0 -10 L 18 -10 M -18 8 L 0 8 L 18 8 M -18 -10 L -18 8 M 0 -10 L 0 8 M 18 -10 L 18 8" stroke="#22314a" stroke-width="2"/>
+  </g>
   <text class="label" x="1010" y="566">ROS Tool Layer</text>
   <text class="text" x="1010" y="590">topics, services, actions, params</text>
 
   <rect class="tile core" x="982" y="646" width="306" height="84" rx="14"/>
+  <g transform="translate(1244 690)" fill="none" stroke="#d6a333" stroke-width="4" stroke-linecap="round">
+    <path d="M -26 8 C -12 -14 12 -14 26 8"/>
+    <path d="M -16 8 C -7 -4 7 -4 16 8"/>
+    <path d="M -5 8 C -2 5 2 5 5 8"/>
+  </g>
   <text class="label" x="1010" y="678">Transport + Safety</text>
   <text class="text" x="1010" y="702">Zenoh, rosbridge, DDS, WebRTC</text>
 
   <rect class="tile skill" x="982" y="758" width="306" height="104" rx="14"/>
+  <path d="M 1236 788 C 1236 780 1243 773 1251 773 C 1256 773 1260 776 1262 780 C 1264 776 1268 773 1273 773 C 1281 773 1288 780 1288 788 C 1288 806 1262 821 1262 821 C 1262 821 1236 806 1236 788 Z" fill="#8d70ca"/>
+  <circle cx="1262" cy="794" r="9" fill="#f2ecff"/>
+  <path d="M 1256 794 L 1268 794 M 1262 788 L 1262 800" stroke="#8d70ca" stroke-width="3" stroke-linecap="round"/>
   <text class="label" x="1010" y="790">AgenticROS Skills</text>
   <text class="text" x="1010" y="814">mission packages: follow, inspect,</text>
   <text class="text" x="1010" y="836">navigate, perceive, recover</text>
@@ -151,19 +191,32 @@
 
   <rect class="tile robot" x="1420" y="248" width="280" height="76" rx="14"/>
   <circle cx="1454" cy="286" r="20" fill="#22314a"/>
-  <text class="label" x="1443" y="292" fill="#ffffff">ROS</text>
+  <circle cx="1446" cy="278" r="4" fill="#ffffff"/>
+  <circle cx="1454" cy="278" r="4" fill="#ffffff"/>
+  <circle cx="1462" cy="278" r="4" fill="#ffffff"/>
+  <circle cx="1446" cy="286" r="4" fill="#ffffff"/>
+  <circle cx="1454" cy="286" r="4" fill="#ffffff"/>
+  <circle cx="1462" cy="286" r="4" fill="#ffffff"/>
+  <circle cx="1446" cy="294" r="4" fill="#ffffff"/>
+  <circle cx="1454" cy="294" r="4" fill="#ffffff"/>
+  <circle cx="1462" cy="294" r="4" fill="#ffffff"/>
   <text class="label" x="1488" y="280">Robot ROS Graph</text>
   <text class="small" x="1488" y="302">topics, services, actions</text>
 
   <rect class="tile device" x="1420" y="356" width="132" height="82" rx="14"/>
   <rect x="1449" y="377" width="42" height="42" rx="11" fill="#2379b5"/>
-  <circle cx="1470" cy="398" r="10" fill="#b9ecff"/>
+  <rect x="1458" y="389" width="24" height="18" rx="4" fill="#b9ecff"/>
+  <circle cx="1470" cy="398" r="7" fill="#2379b5"/>
+  <circle cx="1470" cy="398" r="3" fill="#b9ecff"/>
+  <path d="M 1460 412 L 1480 412" stroke="#b9ecff" stroke-width="3" stroke-linecap="round"/>
   <text class="label" x="1502" y="390">RealSense</text>
   <text class="small" x="1502" y="412">RGB-D</text>
 
   <rect class="tile nvidia" x="1574" y="356" width="126" height="82" rx="14"/>
   <rect x="1603" y="377" width="42" height="42" rx="10" fill="#76b900"/>
-  <text class="label" x="1615" y="404" fill="#ffffff">N</text>
+  <path d="M 1609 398 C 1617 387 1629 386 1637 398 C 1630 408 1617 409 1609 398 Z" fill="#ffffff"/>
+  <circle cx="1624" cy="398" r="5" fill="#76b900"/>
+  <path d="M 1610 398 C 1618 394 1628 394 1637 398" fill="none" stroke="#76b900" stroke-width="2"/>
   <text class="label" x="1648" y="390">VSLAM</text>
   <text class="small" x="1648" y="412">pose</text>
 
@@ -180,11 +233,16 @@
   <text class="small" x="1660" y="526">state</text>
 
   <rect class="tile robot" x="1420" y="610" width="280" height="112" rx="14"/>
+  <path d="M 1640 660 L 1655 646 L 1670 660 L 1670 692 L 1640 692 Z" fill="#4f9568"/>
+  <path d="M 1648 674 L 1656 682 L 1668 668" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
   <text class="label" x="1448" y="644">Mission Execution</text>
   <text class="text" x="1448" y="670">Follow, inspect, navigate, monitor,</text>
   <text class="text" x="1448" y="694">report, recover, return</text>
 
   <rect class="tile skill" x="1420" y="774" width="280" height="104" rx="14"/>
+  <path d="M 1642 823 C 1642 813 1650 805 1660 805 C 1670 805 1678 813 1678 823 C 1678 833 1670 841 1660 841 C 1650 841 1642 833 1642 823 Z" fill="#8d70ca"/>
+  <path d="M 1660 806 L 1660 799 M 1660 847 L 1660 840 M 1643 823 L 1636 823 M 1684 823 L 1677 823 M 1648 811 L 1643 806 M 1677 840 L 1672 835 M 1672 811 L 1677 806 M 1643 840 L 1648 835" stroke="#8d70ca" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="1660" cy="823" r="7" fill="#f2ecff"/>
   <text class="label" x="1448" y="808">Feedback Loop</text>
   <text class="text" x="1448" y="834">camera, depth, pose, odometry,</text>
   <text class="text" x="1448" y="856">battery, diagnostics</text>
