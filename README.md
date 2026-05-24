@@ -125,6 +125,42 @@ Then configure the AgenticROS plugin with `**ws://localhost:9090**` as usual. Th
 
 Details: [ros2_ws/src/agenticros_bringup/README.md](ros2_ws/src/agenticros_bringup/README.md).
 
+## Running AgenticROS on NemoClaw
+
+[NVIDIA NemoClaw](https://github.com/NVIDIA/NemoClaw) packages OpenClaw inside an OpenShell sandbox container with policy-enforced egress and managed inference. AgenticROS plugs into that OpenClaw the same way it plugs into a "vanilla" gateway — with one twist: ROS 2, RealSense, and rosbridge run on the **host**, and only the AgenticROS plugin runs **inside** the sandbox. The plugin reaches the host over the Docker bridge at `host.docker.internal:9090`.
+
+Quick steps (sandbox named `nemo`, robot has namespace `<NS>`):
+
+```bash
+# 1. Build + pack the plugin so it works in the sandbox's offline-npm env
+pnpm install && pnpm build
+pnpm --filter @agenticros/agenticros deploy --prod /tmp/agenticros-deploy
+rm -f /tmp/agenticros-deploy/node_modules/.pnpm/node_modules/@agenticros/agenticros
+
+# 2. Copy it into the sandbox and chown to the sandbox user
+CONTAINER=$(docker ps --format '{{.Names}}' | grep '^openshell-nemo-')
+docker exec "$CONTAINER" rm -rf /sandbox/agenticros && docker exec "$CONTAINER" mkdir -p /sandbox/agenticros
+docker cp /tmp/agenticros-deploy/. "$CONTAINER:/sandbox/agenticros/"
+docker exec "$CONTAINER" chown -R sandbox:sandbox /sandbox/agenticros
+
+# 3. Register + configure the plugin inside the sandbox (HOME=/sandbox is required)
+docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" \
+    openclaw plugins install -l /sandbox/agenticros           # Ctrl-C once it starts logging "ROS2 transport status:"
+
+# 4. Open the host's rosbridge port in NemoClaw policy
+nemoclaw nemo policy-add --from-file scripts/agenticros-rosbridge.policy.yaml --yes
+
+# 5. Start RealSense + rosbridge on the host
+./scripts/run_nemoclaw_host_stack.sh humble robot_namespace:=<NS> align_depth:=true
+
+# 6. Restart the sandbox gateway, verify, and chat
+nemoclaw nemo recover
+./scripts/smoke_test_nemoclaw.sh        # 6 checks; exits 0 when all green
+nemoclaw nemo dashboard-url
+```
+
+Full walkthrough, troubleshooting, and a "full-embed" alternative (ROS / RealSense baked into a custom sandbox image): **[docs/nemoclaw.md](docs/nemoclaw.md)**.
+
 ## Claude + AgenticROS (MCP)
 
 The same **AgenticROS MCP server** (`@agenticros/claude-code`) can drive the robot from **Claude Code** (terminal) or from the **Claude desktop app** on macOS (including **Claude Dispatch** on iPhone when paired to Claude on your Mac). Both use MCP; they use **different config files**.
@@ -201,42 +237,6 @@ AgenticROS **skills** are optional packages that add tools and behaviors to the 
 - **Config**: Each skill reads its options from `**config.skills.<skillId>`** (e.g. `config.skills.followme`).
 - **Contract and creating a skill**: See **[docs/skills.md](docs/skills.md)** for the full contract, install steps, and how to build a third-party skill.
 - **Reference skill**: **[agenticros-skill-followme](https://github.com/your-org/agenticros-skill-followme)** — Follow Me (depth + optional Ollama), with tools `follow_robot`, `follow_me_see`, and `ollama_status`. Use its README as a template for new skills.
-
-## Running AgenticROS on NemoClaw
-
-[NVIDIA NemoClaw](https://github.com/NVIDIA/NemoClaw) packages OpenClaw inside an OpenShell sandbox container with policy-enforced egress and managed inference. AgenticROS plugs into that OpenClaw the same way it plugs into a "vanilla" gateway — with one twist: ROS 2, RealSense, and rosbridge run on the **host**, and only the AgenticROS plugin runs **inside** the sandbox. The plugin reaches the host over the Docker bridge at `host.docker.internal:9090`.
-
-Quick steps (sandbox named `nemo`, robot has namespace `<NS>`):
-
-```bash
-# 1. Build + pack the plugin so it works in the sandbox's offline-npm env
-pnpm install && pnpm build
-pnpm --filter @agenticros/agenticros deploy --prod /tmp/agenticros-deploy
-rm -f /tmp/agenticros-deploy/node_modules/.pnpm/node_modules/@agenticros/agenticros
-
-# 2. Copy it into the sandbox and chown to the sandbox user
-CONTAINER=$(docker ps --format '{{.Names}}' | grep '^openshell-nemo-')
-docker exec "$CONTAINER" rm -rf /sandbox/agenticros && docker exec "$CONTAINER" mkdir -p /sandbox/agenticros
-docker cp /tmp/agenticros-deploy/. "$CONTAINER:/sandbox/agenticros/"
-docker exec "$CONTAINER" chown -R sandbox:sandbox /sandbox/agenticros
-
-# 3. Register + configure the plugin inside the sandbox (HOME=/sandbox is required)
-docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" \
-    openclaw plugins install -l /sandbox/agenticros           # Ctrl-C once it starts logging "ROS2 transport status:"
-
-# 4. Open the host's rosbridge port in NemoClaw policy
-nemoclaw nemo policy-add --from-file scripts/agenticros-rosbridge.policy.yaml --yes
-
-# 5. Start RealSense + rosbridge on the host
-./scripts/run_nemoclaw_host_stack.sh humble robot_namespace:=<NS> align_depth:=true
-
-# 6. Restart the sandbox gateway, verify, and chat
-nemoclaw nemo recover
-./scripts/smoke_test_nemoclaw.sh        # 6 checks; exits 0 when all green
-nemoclaw nemo dashboard-url
-```
-
-Full walkthrough, troubleshooting, and a "full-embed" alternative (ROS / RealSense baked into a custom sandbox image): **[docs/nemoclaw.md](docs/nemoclaw.md)**.
 
 ## License
 
