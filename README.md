@@ -2,7 +2,9 @@
 
 **Physical AI Agents for ROS Robots**
 
-![AgenticROS architecture: agent platforms → adapter packages → shared TypeScript runtime → transports → ROS 2 workspace and robot](docs/images/agenticros-architecture.png)
+[![Watch the AgenticROS intro on YouTube](https://img.youtube.com/vi/_fbWhYcPj0M/maxresdefault.jpg)](https://www.youtube.com/watch?v=_fbWhYcPj0M)
+
+> ▶ [Watch the AgenticROS intro on YouTube](https://www.youtube.com/watch?v=_fbWhYcPj0M)
 
 AgenticROS turns ROS 2 robots into agent-native machines. Speak, type, or message — and your robot perceives, reasons, and acts. It is an open, AI-agent-agnostic interface layer that bridges the world of frontier reasoning models with the world of cameras, depth sensors, motors, and `cmd_vel`, so robots stop being remote-controlled tools and start collaborating like teammates.
 
@@ -18,6 +20,8 @@ With AgenticROS, your robot can describe what it sees, follow intent ("go check 
 AgenticROS is built so that new adapters (LangGraph, OpenAI, local models, voice stacks, etc.) can be added without touching the ROS 2 layer. The core transport and tool contract are platform-agnostic; adapters are thin shims that surface those tools to each agent runtime.
 
 ## Architecture
+
+![AgenticROS architecture: agent platforms → adapter packages → shared TypeScript runtime → transports → ROS 2 workspace and robot](docs/images/agenticros-architecture.png)
 
 - **Core** (`packages/core`): Platform-agnostic ROS2 transport (rosbridge, Zenoh, local, WebRTC), config schema, and shared types. No dependency on any specific AI platform.
 - **Adapters** (`packages/agenticros`, and later others): Implement the contract for each AI platform. The OpenClaw adapter registers tools, commands, and HTTP routes with the OpenClaw gateway and uses the core for all ROS2 communication.
