@@ -1,0 +1,211 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1100" viewBox="0 0 1800 1100" role="img" aria-labelledby="title desc">
+  <title id="title">AgenticROS system flow</title>
+  <desc id="desc">System flow showing chat channels and AI agent platforms connecting through AgenticROS to ROS, RealSense, NVIDIA VSLAM, robot skills, motors, batteries, and robot missions.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f5f7fb; }
+      .title { font: 800 42px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #16212f; }
+      .subtitle { font: 500 18px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #526071; }
+      .section { font: 800 18px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #243244; }
+      .label { font: 700 15px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #172231; }
+      .text { font: 500 13px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #435166; }
+      .small { font: 600 12px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #5b6a7f; }
+      .tiny { font: 700 11px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #5b6a7f; }
+      .panel { fill: #ffffff; stroke: #d6e0eb; stroke-width: 1.4; }
+      .tile { fill: #ffffff; stroke: #c7d2df; stroke-width: 1.5; }
+      .messaging { fill: #eaf6ff; stroke: #68a5d9; }
+      .agent { fill: #edf4ff; stroke: #7198d8; }
+      .core { fill: #fff6d8; stroke: #d6a333; }
+      .robot { fill: #eaf8ef; stroke: #5ca976; }
+      .device { fill: #fff0ec; stroke: #cd7a67; }
+      .skill { fill: #f2ecff; stroke: #8d70ca; }
+      .nvidia { fill: #eef9df; stroke: #76b900; }
+      .line { fill: none; stroke: #657386; stroke-width: 2.3; }
+      .line-blue { fill: none; stroke: #266d9f; stroke-width: 3; }
+      .line-green { fill: none; stroke: #4f9568; stroke-width: 2.8; }
+      .line-purple { fill: none; stroke: #7a63b8; stroke-width: 2.8; }
+      .dash { stroke-dasharray: 8 8; }
+      .shadow { filter: drop-shadow(0 10px 20px rgba(22,33,47,0.08)); }
+    </style>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M 0 0 L 12 6 L 0 12 z" fill="#657386"/>
+    </marker>
+    <marker id="arrowBlue" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M 0 0 L 12 6 L 0 12 z" fill="#266d9f"/>
+    </marker>
+    <marker id="arrowGreen" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M 0 0 L 12 6 L 0 12 z" fill="#4f9568"/>
+    </marker>
+    <marker id="arrowPurple" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M 0 0 L 12 6 L 0 12 z" fill="#7a63b8"/>
+    </marker>
+    <linearGradient id="agenticrosGrad" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#fff7dc"/>
+      <stop offset="0.52" stop-color="#fdf0c3"/>
+      <stop offset="1" stop-color="#f7e2a2"/>
+    </linearGradient>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1800" height="1100"/>
+  <text class="title" x="70" y="72">AgenticROS System Flow</text>
+  <text class="subtitle" x="70" y="104">Messages become agent plans; AgenticROS turns those plans into perception, skills, and safe ROS-powered robot action.</text>
+
+  <rect class="panel shadow" x="52" y="144" width="366" height="826" rx="18"/>
+  <text class="section" x="84" y="184">Conversation Channels</text>
+  <text class="text" x="84" y="208">Operators assign missions, goals, and questions.</text>
+
+  <rect class="tile messaging" x="88" y="250" width="126" height="82" rx="14"/>
+  <circle cx="119" cy="291" r="20" fill="#3a76f0"/>
+  <text class="label" x="113" y="297" fill="#ffffff">S</text>
+  <text class="label" x="148" y="284">Signal</text>
+  <text class="small" x="148" y="306">secure chat</text>
+
+  <rect class="tile messaging" x="252" y="250" width="126" height="82" rx="14"/>
+  <rect x="282" y="271" width="41" height="41" rx="10" fill="#4a154b"/>
+  <text class="label" x="296" y="297" fill="#ffffff">#</text>
+  <text class="label" x="334" y="284">Slack</text>
+  <text class="small" x="334" y="306">team ops</text>
+
+  <rect class="tile messaging" x="88" y="370" width="126" height="82" rx="14"/>
+  <circle cx="119" cy="411" r="20" fill="#25d366"/>
+  <text class="label" x="111" y="417" fill="#ffffff">W</text>
+  <text class="label" x="148" y="404">WhatsApp</text>
+  <text class="small" x="148" y="426">mobile</text>
+
+  <rect class="tile messaging" x="252" y="370" width="126" height="82" rx="14"/>
+  <rect x="282" y="391" width="41" height="41" rx="12" fill="#1f8fff"/>
+  <text class="label" x="295" y="417" fill="#ffffff">W</text>
+  <text class="label" x="334" y="404">WebChat</text>
+  <text class="small" x="334" y="426">browser UI</text>
+
+  <rect class="tile messaging" x="88" y="492" width="290" height="98" rx="14"/>
+  <text class="label" x="116" y="526">Mission Inputs</text>
+  <text class="text" x="116" y="550">"Follow me", "inspect aisle three",</text>
+  <text class="text" x="116" y="572">"what do you see?", "return home"</text>
+
+  <rect class="panel shadow" x="468" y="144" width="414" height="826" rx="18"/>
+  <text class="section" x="500" y="184">AI Agent Platforms</text>
+  <text class="text" x="500" y="208">Planning, tool calls, multimodal reasoning.</text>
+
+  <rect class="tile agent" x="508" y="248" width="152" height="84" rx="14"/>
+  <circle cx="542" cy="290" r="21" fill="#1d2636"/>
+  <text class="label" x="533" y="296" fill="#ffffff">OC</text>
+  <text class="label" x="574" y="284">OpenClaw</text>
+  <text class="small" x="574" y="306">gateway</text>
+
+  <rect class="tile agent" x="692" y="248" width="152" height="84" rx="14"/>
+  <rect x="724" y="269" width="42" height="42" rx="10" fill="#76b900"/>
+  <text class="label" x="735" y="296" fill="#ffffff">N</text>
+  <text class="label" x="778" y="284">NemoClaw</text>
+  <text class="small" x="778" y="306">sandbox</text>
+
+  <rect class="tile agent" x="508" y="370" width="152" height="84" rx="14"/>
+  <circle cx="542" cy="412" r="21" fill="#111827"/>
+  <text class="label" x="535" y="418" fill="#ffffff">AI</text>
+  <text class="label" x="574" y="404">OpenAI</text>
+  <text class="small" x="574" y="426">models</text>
+
+  <rect class="tile agent" x="692" y="370" width="152" height="84" rx="14"/>
+  <circle cx="726" cy="412" r="21" fill="#b86f52"/>
+  <text class="label" x="718" y="418" fill="#ffffff">C</text>
+  <text class="label" x="758" y="404">Claude</text>
+  <text class="small" x="758" y="426">reasoning</text>
+
+  <rect class="tile agent" x="600" y="492" width="152" height="84" rx="14"/>
+  <circle cx="634" cy="534" r="21" fill="#4285f4"/>
+  <text class="label" x="625" y="540" fill="#ffffff">G</text>
+  <text class="label" x="666" y="526">Gemini</text>
+  <text class="small" x="666" y="548">multimodal</text>
+
+  <rect class="tile agent" x="508" y="636" width="336" height="128" rx="16"/>
+  <text class="label" x="536" y="670">Agent Work Loop</text>
+  <text class="text" x="536" y="696">Interpret goal -> choose tools -> observe</text>
+  <text class="text" x="536" y="720">state -> revise plan -> issue safe actions</text>
+  <text class="small" x="536" y="748">Tool calls are routed through AgenticROS.</text>
+
+  <rect class="panel shadow" x="930" y="120" width="410" height="872" rx="22"/>
+  <rect x="980" y="185" width="310" height="236" rx="24" fill="url(#agenticrosGrad)" stroke="#d1a43b" stroke-width="2.2"/>
+  <circle cx="1080" cy="303" r="62" fill="#16212f"/>
+  <circle cx="1080" cy="303" r="42" fill="#f3d274"/>
+  <circle cx="1080" cy="303" r="19" fill="#16212f"/>
+  <path d="M 1080 241 L 1080 210 M 1080 396 L 1080 365 M 1018 303 L 987 303 M 1173 303 L 1142 303 M 1036 259 L 1013 236 M 1124 347 L 1147 370 M 1124 259 L 1147 236 M 1036 347 L 1013 370" stroke="#16212f" stroke-width="8" stroke-linecap="round"/>
+  <text class="label" x="1014" y="458" font-size="30">AgenticROS</text>
+  <text class="text" x="1003" y="486">Robotics runtime for agentic AI</text>
+
+  <rect class="tile core" x="982" y="534" width="306" height="84" rx="14"/>
+  <text class="label" x="1010" y="566">ROS Tool Layer</text>
+  <text class="text" x="1010" y="590">topics, services, actions, params</text>
+
+  <rect class="tile core" x="982" y="646" width="306" height="84" rx="14"/>
+  <text class="label" x="1010" y="678">Transport + Safety</text>
+  <text class="text" x="1010" y="702">Zenoh, rosbridge, DDS, WebRTC</text>
+
+  <rect class="tile skill" x="982" y="758" width="306" height="104" rx="14"/>
+  <text class="label" x="1010" y="790">AgenticROS Skills</text>
+  <text class="text" x="1010" y="814">mission packages: follow, inspect,</text>
+  <text class="text" x="1010" y="836">navigate, perceive, recover</text>
+
+  <rect class="panel shadow" x="1388" y="144" width="360" height="826" rx="18"/>
+  <text class="section" x="1420" y="184">Robot Sensing + Actuation</text>
+  <text class="text" x="1420" y="208">ROS-powered hardware and autonomy stack.</text>
+
+  <rect class="tile robot" x="1420" y="248" width="280" height="76" rx="14"/>
+  <circle cx="1454" cy="286" r="20" fill="#22314a"/>
+  <text class="label" x="1443" y="292" fill="#ffffff">ROS</text>
+  <text class="label" x="1488" y="280">Robot ROS Graph</text>
+  <text class="small" x="1488" y="302">topics, services, actions</text>
+
+  <rect class="tile device" x="1420" y="356" width="132" height="82" rx="14"/>
+  <rect x="1449" y="377" width="42" height="42" rx="11" fill="#2379b5"/>
+  <circle cx="1470" cy="398" r="10" fill="#b9ecff"/>
+  <text class="label" x="1502" y="390">RealSense</text>
+  <text class="small" x="1502" y="412">RGB-D</text>
+
+  <rect class="tile nvidia" x="1574" y="356" width="126" height="82" rx="14"/>
+  <rect x="1603" y="377" width="42" height="42" rx="10" fill="#76b900"/>
+  <text class="label" x="1615" y="404" fill="#ffffff">N</text>
+  <text class="label" x="1648" y="390">VSLAM</text>
+  <text class="small" x="1648" y="412">pose</text>
+
+  <rect class="tile device" x="1420" y="470" width="132" height="82" rx="14"/>
+  <circle cx="1454" cy="511" r="20" fill="#db6b57"/>
+  <path d="M 1440 511 L 1468 511 M 1454 497 L 1454 525" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
+  <text class="label" x="1488" y="504">Motors</text>
+  <text class="small" x="1488" y="526">cmd_vel</text>
+
+  <rect class="tile device" x="1574" y="470" width="126" height="82" rx="14"/>
+  <rect x="1604" y="491" width="40" height="28" rx="6" fill="#4f9568"/>
+  <rect x="1644" y="500" width="7" height="10" rx="2" fill="#4f9568"/>
+  <text class="label" x="1660" y="504">Battery</text>
+  <text class="small" x="1660" y="526">state</text>
+
+  <rect class="tile robot" x="1420" y="610" width="280" height="112" rx="14"/>
+  <text class="label" x="1448" y="644">Mission Execution</text>
+  <text class="text" x="1448" y="670">Follow, inspect, navigate, monitor,</text>
+  <text class="text" x="1448" y="694">report, recover, return</text>
+
+  <rect class="tile skill" x="1420" y="774" width="280" height="104" rx="14"/>
+  <text class="label" x="1448" y="808">Feedback Loop</text>
+  <text class="text" x="1448" y="834">camera, depth, pose, odometry,</text>
+  <text class="text" x="1448" y="856">battery, diagnostics</text>
+
+  <path class="line-blue" d="M 378 291 C 430 291, 450 291, 508 291" marker-end="url(#arrowBlue)"/>
+  <path class="line-blue" d="M 378 411 C 430 435, 448 464, 600 534" marker-end="url(#arrowBlue)"/>
+  <path class="line-blue" d="M 378 541 C 445 600, 480 656, 508 700" marker-end="url(#arrowBlue)"/>
+
+  <path class="line-blue" d="M 844 290 C 906 290, 926 292, 980 303" marker-end="url(#arrowBlue)"/>
+  <path class="line-blue" d="M 844 412 C 904 440, 930 486, 982 574" marker-end="url(#arrowBlue)"/>
+  <path class="line-blue" d="M 752 534 C 840 584, 900 658, 982 688" marker-end="url(#arrowBlue)"/>
+  <path class="line-blue" d="M 844 700 C 900 738, 928 784, 982 810" marker-end="url(#arrowBlue)"/>
+
+  <path class="line-green" d="M 1288 574 C 1346 560, 1370 306, 1420 286" marker-end="url(#arrowGreen)"/>
+  <path class="line-green" d="M 1288 688 C 1348 642, 1374 514, 1420 511" marker-end="url(#arrowGreen)"/>
+  <path class="line-purple" d="M 1288 810 C 1350 780, 1376 678, 1420 666" marker-end="url(#arrowPurple)"/>
+
+  <path class="line dash" d="M 1420 397 C 1350 400, 1315 516, 1288 574" marker-end="url(#arrow)"/>
+  <path class="line dash" d="M 1574 397 C 1395 410, 1360 600, 1288 688" marker-end="url(#arrow)"/>
+  <path class="line dash" d="M 1700 826 C 1580 934, 1250 930, 1135 862" marker-end="url(#arrow)"/>
+
+  <rect class="tile" x="70" y="1004" width="1660" height="46" rx="12"/>
+  <text class="small" x="96" y="1032">Brand names are shown as system tiles for architecture communication. Replace tiles with official logo artwork where required by partner brand guidelines.</text>
+</svg>
