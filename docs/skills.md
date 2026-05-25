@@ -27,9 +27,29 @@ Types for **SkillContext**, **RegisterSkill**, and **DepthSampleResult** are exp
    - **`skillPaths`**: `["/path/to/skills"]`
    The plugin scans each path for a `package.json` with **`"agenticrosSkill": true`** and loads the **main** entry. Run `pnpm install` and `pnpm build` in that directory so the entry exists.
 
-3. **Restart the gateway** after changing `skillPackages` or `skillPaths` so the plugin loads the skills.
+3. **Sync the manifest allowlist** by running, from the AgenticROS repo root:
 
-4. **Configure the skill** under **`config.skills.<skillId>`** (e.g. `config.skills.followme`). See the skill’s README for its options.
+   ```bash
+   pnpm sync-skill-tools
+   # or: node scripts/sync-skill-tools.mjs
+   ```
+
+   OpenClaw 2026+ enforces `contracts.tools` in `openclaw.plugin.json` as a **strict allowlist** — any tool a plugin tries to register at runtime that is not declared in the manifest is rejected with `plugin must declare contracts.tools for: <name>` and silently dropped. The script imports each skill configured in `skillPaths` / `skillPackages` with a `registerTool` spy, collects the tool names that the skill registers, and merges them into the agenticros plugin's manifest. Run it whenever you add, remove, or rebuild a skill.
+
+   Useful flags:
+
+   ```bash
+   pnpm sync-skill-tools:dry      # show what would change, do not write
+   ```
+
+4. **Refresh the plugin registry and restart the gateway** so OpenClaw re-reads the updated `contracts.tools`:
+
+   ```bash
+   openclaw plugins registry --refresh
+   # then restart the gateway (or send it SIGTERM and let your supervisor restart it)
+   ```
+
+5. **Configure the skill** under **`config.skills.<skillId>`** (e.g. `config.skills.followme`). See the skill’s README for its options.
 
 ## Testing skills (e.g. Follow Me)
 
@@ -40,8 +60,10 @@ The core repo does not install or bundle any skills. To test a skill like **agen
 
 2. **Smoke test (no robot)**  
    - Build the skill (`pnpm install && pnpm build` in the skill repo).  
-   - Point **skillPaths** at the skill directory, set transport to a dummy mode if needed, restart the gateway.  
-   - Check gateway logs for `AgenticROS: loaded skills: followme`.  
+   - Point **skillPaths** at the skill directory, set transport to a dummy mode if needed.  
+   - From the AgenticROS repo root, run **`pnpm sync-skill-tools`** so the skill's tools are added to the plugin manifest's `contracts.tools` allowlist.  
+   - **`openclaw plugins registry --refresh`** then restart the gateway.  
+   - Check gateway logs for `AgenticROS: loaded skills: followme` and confirm there are **no** `plugin must declare contracts.tools for: …` errors.  
    - In the web chat, confirm the agent knows about the skill (e.g. "what follow me tools do you have?") and that **follow_robot** (e.g. status) and **ollama_status** are callable.
 
 3. **With ROS2 + Zenoh**  

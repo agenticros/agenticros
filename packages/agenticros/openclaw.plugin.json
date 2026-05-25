@@ -16,7 +16,10 @@
       "ros2_param_set",
       "ros2_list_topics",
       "ros2_camera_snapshot",
-      "ros2_depth_distance"
+      "ros2_depth_distance",
+      "follow_robot",
+      "follow_me_see",
+      "ollama_status"
     ]
   },
   "configSchema": {
@@ -28,7 +31,12 @@
         "properties": {
           "mode": {
             "type": "string",
-            "enum": ["rosbridge", "local", "webrtc", "zenoh"],
+            "enum": [
+              "rosbridge",
+              "local",
+              "webrtc",
+              "zenoh"
+            ],
             "description": "Transport mode: rosbridge (Mode B), local (Mode A), webrtc (Mode C), or zenoh (Mode D)",
             "default": "rosbridge"
           }
@@ -53,7 +61,9 @@
             "default": 3000
           }
         },
-        "required": ["url"]
+        "required": [
+          "url"
+        ]
       },
       "local": {
         "type": "object",
@@ -80,7 +90,10 @@
           },
           "keyFormat": {
             "type": "string",
-            "enum": ["ros2dds", "rmw_zenoh"],
+            "enum": [
+              "ros2dds",
+              "rmw_zenoh"
+            ],
             "description": "Use ros2dds when using zenoh-bridge-ros2dds; use rmw_zenoh when robot uses Zenoh RMW directly",
             "default": "ros2dds"
           },
@@ -126,7 +139,11 @@
                 }
               }
             },
-            "default": [{ "urls": "stun:stun.l.google.com:19302" }]
+            "default": [
+              {
+                "urls": "stun:stun.l.google.com:19302"
+              }
+            ]
           }
         }
       },
@@ -154,15 +171,42 @@
         "type": "object",
         "description": "Teleop web app: camera and twist controls",
         "properties": {
-          "cameraTopic": { "type": "string", "default": "" },
+          "cameraTopic": {
+            "type": "string",
+            "default": ""
+          },
           "cameraTopics": {
             "type": "array",
-            "items": { "type": "object", "properties": { "topic": { "type": "string" }, "label": { "type": "string" } } },
+            "items": {
+              "type": "object",
+              "properties": {
+                "topic": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                }
+              }
+            },
             "default": []
           },
-          "cmdVelTopic": { "type": "string", "default": "" },
-          "speedDefault": { "type": "number", "description": "Default linear speed (m/s) for teleop", "default": 0.3, "minimum": 0, "maximum": 2 },
-          "cameraPollMs": { "type": "number", "default": 150, "minimum": 50, "maximum": 2000 }
+          "cmdVelTopic": {
+            "type": "string",
+            "default": ""
+          },
+          "speedDefault": {
+            "type": "number",
+            "description": "Default linear speed (m/s) for teleop",
+            "default": 0.3,
+            "minimum": 0,
+            "maximum": 2
+          },
+          "cameraPollMs": {
+            "type": "number",
+            "default": 150,
+            "minimum": 50,
+            "maximum": 2000
+          }
         }
       },
       "safety": {
@@ -171,7 +215,7 @@
           "maxLinearVelocity": {
             "type": "number",
             "description": "Maximum linear velocity (m/s)",
-            "default": 1.0
+            "default": 1
           },
           "maxAngularVelocity": {
             "type": "number",
@@ -182,10 +226,22 @@
             "type": "object",
             "description": "Workspace boundary limits (meters)",
             "properties": {
-              "xMin": { "type": "number", "default": -10 },
-              "xMax": { "type": "number", "default": 10 },
-              "yMin": { "type": "number", "default": -10 },
-              "yMax": { "type": "number", "default": 10 }
+              "xMin": {
+                "type": "number",
+                "default": -10
+              },
+              "xMax": {
+                "type": "number",
+                "default": 10
+              },
+              "yMin": {
+                "type": "number",
+                "default": -10
+              },
+              "yMax": {
+                "type": "number",
+                "default": 10
+              }
             }
           }
         }
@@ -194,14 +250,50 @@
         "type": "object",
         "description": "Optional in-plugin image describer. When enabled, ros2_camera_snapshot calls an OpenAI-compatible vision endpoint (typically local Ollama with a qwen2.5-VL model) and embeds the description text directly in the tool result. Required when the primary chat model is text-only (e.g. qwen2.5:7b for tool calling on Jetson) because OpenClaw filters image content blocks out of tool results for text-only models, leaving the agent unable to describe what the robot sees.",
         "properties": {
-          "enabled": { "type": "boolean", "default": false, "description": "Master switch for the describer." },
-          "url": { "type": "string", "default": "http://host.openshell.internal:11435/v1/chat/completions", "description": "OpenAI-compat chat completions endpoint URL (e.g. Ollama)." },
-          "apiKey": { "type": "string", "description": "Optional Bearer token for the endpoint." },
-          "model": { "type": "string", "default": "qwen2.5vl:7b", "description": "Vision model id (must accept OpenAI image_url content blocks)." },
-          "prompt": { "type": "string", "description": "Prompt sent alongside each image. A reasonable default is used when omitted." },
-          "maxTokens": { "type": "number", "default": 400, "minimum": 50, "maximum": 2048, "description": "Max tokens to generate for each description." },
-          "timeoutMs": { "type": "number", "default": 60000, "minimum": 1000, "maximum": 180000, "description": "HTTP request timeout in milliseconds." },
-          "maxImageDimension": { "type": "number", "default": 896, "minimum": 0, "maximum": 4096, "description": "Resize images larger than this max dimension before sending to the VL model. 0 disables resizing." }
+          "enabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "Master switch for the describer."
+          },
+          "url": {
+            "type": "string",
+            "default": "http://host.openshell.internal:11435/v1/chat/completions",
+            "description": "OpenAI-compat chat completions endpoint URL (e.g. Ollama)."
+          },
+          "apiKey": {
+            "type": "string",
+            "description": "Optional Bearer token for the endpoint."
+          },
+          "model": {
+            "type": "string",
+            "default": "qwen2.5vl:7b",
+            "description": "Vision model id (must accept OpenAI image_url content blocks)."
+          },
+          "prompt": {
+            "type": "string",
+            "description": "Prompt sent alongside each image. A reasonable default is used when omitted."
+          },
+          "maxTokens": {
+            "type": "number",
+            "default": 400,
+            "minimum": 50,
+            "maximum": 2048,
+            "description": "Max tokens to generate for each description."
+          },
+          "timeoutMs": {
+            "type": "number",
+            "default": 60000,
+            "minimum": 1000,
+            "maximum": 180000,
+            "description": "HTTP request timeout in milliseconds."
+          },
+          "maxImageDimension": {
+            "type": "number",
+            "default": 896,
+            "minimum": 0,
+            "maximum": 4096,
+            "description": "Resize images larger than this max dimension before sending to the VL model. 0 disables resizing."
+          }
         }
       },
       "skills": {
@@ -212,13 +304,17 @@
       "skillPaths": {
         "type": "array",
         "description": "Directories to scan for skill packages (package.json with agenticrosSkill: true).",
-        "items": { "type": "string" },
+        "items": {
+          "type": "string"
+        },
         "default": []
       },
       "skillPackages": {
         "type": "array",
         "description": "Npm (or local) package names to load as skills (e.g. agenticros-skill-followme).",
-        "items": { "type": "string" },
+        "items": {
+          "type": "string"
+        },
         "default": []
       }
     }
