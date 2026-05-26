@@ -1,7 +1,12 @@
 /**
  * Returns the AgenticROS landing page HTML (links to Config and Teleop).
+ *
+ * `basePath` is the mount prefix where this plugin is served (e.g. `/plugins/agenticros`,
+ * `/agenticros`, or `/api/agenticros`). Hrefs are built absolutely from it so the
+ * buttons work whether the user opens the landing URL with or without a trailing slash.
  */
-export function getLandingPageHtml(): string {
+export function getLandingPageHtml(basePath = "/agenticros"): string {
+  const base = basePath.replace(/\/+$/, "");
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -16,14 +21,17 @@ export function getLandingPageHtml(): string {
     nav { display: flex; flex-wrap: wrap; gap: 12px; }
     a { display: inline-block; padding: 12px 20px; border-radius: 8px; background: #333; color: #e0e0e0; text-decoration: none; border: 1px solid #555; }
     a:hover { background: #444; color: #fff; }
+    a.back { background: transparent; border-color: #444; color: #aaa; font-size: 0.9rem; padding: 6px 12px; margin-bottom: 12px; }
+    a.back:hover { background: #2a2a2a; color: #e0e0e0; }
   </style>
 </head>
 <body>
+  <a class="back" href="/">← Back to chat</a>
   <h1>AgenticROS</h1>
   <p>ROS2 + OpenClaw — natural language control of robots.</p>
   <nav>
-    <a href="config">Config</a>
-    <a href="teleop/">Teleop</a>
+    <a href="${base}/config">Config</a>
+    <a href="${base}/teleop/">Teleop</a>
   </nav>
 </body>
 </html>`;

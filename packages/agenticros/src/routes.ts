@@ -98,10 +98,10 @@ export function registerRoutes(api: OpenClawPluginApi, config: AgenticROSConfig)
     return;
   }
 
-  const landingHandler: HttpRouteHandler = (_req, res) => {
+  const makeLandingHandler = (basePath: string): HttpRouteHandler => (_req, res) => {
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.statusCode = 200;
-    res.end(getLandingPageHtml());
+    res.end(getLandingPageHtml(basePath));
   };
   const configPageHandler: HttpRouteHandler = (_req, res) => {
     res.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -135,7 +135,7 @@ export function registerRoutes(api: OpenClawPluginApi, config: AgenticROSConfig)
   const route = (opts: { path: string; method?: string; handler: HttpRouteHandler }) =>
     register({ ...opts, requireAuth: false, auth: "plugin" });
   for (const base of ["/agenticros", "/api/agenticros", "/plugins/agenticros"]) {
-    route({ path: `${base}/`, method: "GET", handler: landingHandler });
+    route({ path: `${base}/`, method: "GET", handler: makeLandingHandler(base) });
     route({ path: `${base}/config`, method: "GET", handler: configPageHandler });
     route({ path: `${base}/config.js`, method: "GET", handler: configScriptHandler });
     route({ path: `${base}/config.json`, method: "GET", handler: configJsonHandler });
