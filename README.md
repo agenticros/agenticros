@@ -1,5 +1,15 @@
 # AgenticROS
 
+```text
+    _                     _   _       ____   ___  ____
+   / \   __ _  ___ _ __ | |_(_) ___ |  _ \ / _ \/ ___|
+  / _ \ / _` |/ _ \ '_ \| __| |/ __|| |_) | | | \___ \
+ / ___ \ (_| |  __/ | | | |_| | (__ |  _ <| |_| |___) |
+/_/   \_\__, |\___|_| |_|\__|_|\___||_| \_\___/|____/
+        |___/
+  AgenticROS - agentic AI for ROS-powered robots
+```
+
 **Physical AI Agents for ROS Robots**
 
 [![Watch the AgenticROS intro on YouTube](https://img.youtube.com/vi/_fbWhYcPj0M/maxresdefault.jpg)](https://www.youtube.com/watch?v=_fbWhYcPj0M)
