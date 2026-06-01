@@ -27,6 +27,7 @@
 set -e
 
 REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+source "$REPO_ROOT/scripts/lib/agenticros-banner.sh"
 OPENCLAW_JSON="${OPENCLAW_CONFIG:-$HOME/.openclaw/openclaw.json}"
 MODE=""
 NAMESPACE=""
@@ -75,9 +76,8 @@ resolve_mode() {
 }
 
 if [[ "$INTERACTIVE" == true ]]; then
-  echo "=============================================="
-  echo "  AgenticROS configuration"
-  echo "=============================================="
+  agenticros_banner
+  echo "AgenticROS configuration"
   echo ""
   echo "Mode A — Everything on robot (OpenClaw on robot, transport = local)"
   echo "Mode B — Connected robot (OpenClaw here, robot on network; transport = rosbridge)"

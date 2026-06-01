@@ -1,5 +1,5 @@
 import type { OpenClawPluginApi } from "./plugin-api.js";
-import { parseConfig, isCdrTypeSupported } from "@agenticros/core";
+import { parseConfig, isCdrTypeSupported, agenticROSBannerLines } from "@agenticros/core";
 import { readAgenticROSConfigFromFile } from "./config-file.js";
 import { registerService } from "./service.js";
 import { registerTools } from "./tools/index.js";
@@ -18,6 +18,9 @@ export default {
   name: "AgenticROS",
 
   register(api: OpenClawPluginApi): void {
+    for (const line of agenticROSBannerLines({ tagline: true })) {
+      api.logger.info(line);
+    }
     api.logger.info("AgenticROS plugin loading...");
     const imageSupported = isCdrTypeSupported("sensor_msgs/msg/CompressedImage");
     api.logger.info(`AgenticROS: Zenoh CDR Image/CompressedImage supported=${imageSupported}`);

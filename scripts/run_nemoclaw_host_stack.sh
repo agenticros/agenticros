@@ -35,6 +35,10 @@ ROS_DISTRO="${1:-humble}"
 shift || true
 
 REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+source "$REPO_ROOT/scripts/lib/agenticros-banner.sh"
+agenticros_banner
+echo "Starting AgenticROS host stack for NemoClaw"
+echo ""
 SETUP="/opt/ros/${ROS_DISTRO}/setup.bash"
 
 if [[ ! -f "$SETUP" ]]; then

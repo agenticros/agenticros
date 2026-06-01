@@ -19,6 +19,7 @@ OPENCLAW_JSON="${OPENCLAW_CONFIG:-$HOME/.openclaw/openclaw.json}"
 ROSBRIDGE_URL=""
 ROBOT_NAMESPACE=""
 NO_SYSTEMD=false
+source "$REPO_ROOT/scripts/lib/agenticros-banner.sh"
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -30,9 +31,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-echo "=============================================="
-echo "  AgenticROS gateway plugin setup"
-echo "=============================================="
+agenticros_banner
+echo "AgenticROS gateway plugin setup"
 echo "  Plugin: $PLUGIN_DIR"
 echo "  Config: $OPENCLAW_JSON"
 echo ""
@@ -108,9 +108,7 @@ else
 fi
 echo ""
 
-echo "=============================================="
-echo "  Gateway plugin setup complete"
-echo "=============================================="
+echo "Gateway plugin setup complete"
 echo ""
 echo "Next steps:"
 echo "  1. Restart the OpenClaw gateway (e.g. systemctl --user restart openclaw-gateway.service)"

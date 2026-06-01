@@ -37,3 +37,8 @@ export {
 } from "./topic-utils.js";
 export { applyCmdVelTwistSignConvention } from "./cmd-vel-twist.js";
 export { isCdrTypeSupported } from "./transport/zenoh/cdr.js";
+export {
+  renderAgenticROSBanner,
+  agenticROSBannerLines,
+  type AgenticROSBannerOptions,
+} from "./banner.js";

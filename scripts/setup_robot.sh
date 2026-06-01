@@ -14,6 +14,7 @@ REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 ROS2_WS="$REPO_ROOT/ros2_ws"
 SKIP_APT=false
 ROS_DISTRO=""
+source "$REPO_ROOT/scripts/lib/agenticros-banner.sh"
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -23,9 +24,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-echo "=============================================="
-echo "  AgenticROS robot setup"
-echo "=============================================="
+agenticros_banner
+echo "AgenticROS robot setup"
 echo ""
 
 # Detect ROS distro if not set

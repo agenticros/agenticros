@@ -421,9 +421,10 @@ validate_setup() {
 
 # Main execution
 main() {
-    echo "======================================"
+    # shellcheck source=scripts/lib/agenticros-banner.sh
+    source "$REPO_ROOT/scripts/lib/agenticros-banner.sh"
+    agenticros_banner
     echo "AgenticROS Development Setup"
-    echo "======================================"
     echo ""
 
     parse_args "$@"

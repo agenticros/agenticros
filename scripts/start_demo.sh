@@ -18,6 +18,11 @@ ROS_DISTRO="${1:-jazzy}"
 REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 CAMERA_LOG=/tmp/agenticros-camera.log
 CAMERA_PID_FILE=/tmp/agenticros-camera.pid
+source "$REPO_ROOT/scripts/lib/agenticros-banner.sh"
+
+agenticros_banner
+echo "Starting AgenticROS Claude Code demo"
+echo ""
 
 echo "==> Sourcing ROS2 ($ROS_DISTRO) and agenticros workspace"
 source "/opt/ros/$ROS_DISTRO/setup.bash"

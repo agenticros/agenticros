@@ -13,8 +13,11 @@
 import { loadConfig } from "./config.js";
 import { connect, disconnect } from "./transport.js";
 import { chatWithRobot } from "./chat.js";
+import { renderAgenticROSBanner } from "@agenticros/core";
 
 async function main(): Promise<void> {
+  process.stderr.write(renderAgenticROSBanner({ color: process.stderr.isTTY }) + "\n\n");
+
   const args = process.argv.slice(2);
   const normalizedArgs = args.length > 0 && args[0] === "--" ? args.slice(1) : args;
   let userMessage: string;

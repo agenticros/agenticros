@@ -11,6 +11,10 @@ set -e
 
 ROS_DISTRO="${1:-jazzy}"
 REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+source "$REPO_ROOT/scripts/lib/agenticros-banner.sh"
+agenticros_banner
+echo "Starting AgenticROS native ROS bridge stack"
+echo ""
 
 source "/opt/ros/$ROS_DISTRO/setup.bash"
 [[ -f "$REPO_ROOT/ros2_ws/install/setup.bash" ]] && source "$REPO_ROOT/ros2_ws/install/setup.bash"

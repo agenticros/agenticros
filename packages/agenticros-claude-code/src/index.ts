@@ -12,6 +12,7 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { ListToolsRequestSchema, CallToolRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import type { AgenticROSConfig } from "@agenticros/core";
+import { renderAgenticROSBanner } from "@agenticros/core";
 import { loadConfig } from "./config.js";
 import { connect, disconnect } from "./transport.js";
 import { TOOLS, handleToolCall } from "./tools.js";
@@ -42,6 +43,8 @@ function main(): void {
   };
   console.log = (...args: unknown[]) => stderrWrite(args);
   console.info = (...args: unknown[]) => stderrWrite(args);
+
+  process.stderr.write(renderAgenticROSBanner({ color: process.stderr.isTTY }) + "\n\n");
 
   const server = new Server(
     {

@@ -10,11 +10,12 @@ set -e
 
 REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$REPO_ROOT"
+source "$REPO_ROOT/scripts/lib/agenticros-banner.sh"
 
 echo ""
-echo "  ╭─────────────────────────────────────────╮"
-echo "  │   AgenticROS — Onboard a new robot          │"
-echo "  ╰─────────────────────────────────────────╯"
+agenticros_banner
+echo ""
+echo "  AgenticROS - Onboard a new robot"
 echo ""
 
 # Where are we?
@@ -56,9 +57,7 @@ case "$choice" in
 esac
 
 echo ""
-echo "  ╭─────────────────────────────────────────╮"
-echo "  │   Onboarding checklist                   │"
-echo "  ╰─────────────────────────────────────────╯"
+echo "  Onboarding checklist"
 echo ""
 if [[ "$choice" == "1" || "$choice" == "3" ]]; then
   echo "  On the robot:"
