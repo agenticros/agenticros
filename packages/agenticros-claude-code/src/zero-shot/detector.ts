@@ -7,16 +7,52 @@
  *
  * Model: Xenova/owlv2-base-patch16-finetuned (downloaded on first use,
  * cached under ~/.cache/huggingface). Override with AGENTICROS_OWLV2_MODEL.
+ *
+ * Both `@huggingface/transformers` and `sharp` are loaded lazily on first
+ * use so a missing optional dep cannot crash MCP server startup — it only
+ * surfaces when the user actually calls the zero-shot detector.
  */
 
-import sharp from "sharp";
-import {
-  pipeline,
-  RawImage,
-  type ZeroShotObjectDetectionPipeline,
+// Type-only imports keep the types available at compile time without forcing
+// the runtime modules to load when this file is imported.
+type TransformersModule = typeof import("@huggingface/transformers");
+type SharpFn = (input: Buffer | Uint8Array) => import("sharp").Sharp;
+import type {
+  ZeroShotObjectDetectionPipeline,
+  RawImage as RawImageType,
 } from "@huggingface/transformers";
 
 const DEFAULT_MODEL = "Xenova/owlv2-base-patch16-finetuned";
+
+let transformersModule: TransformersModule | null = null;
+let sharpFn: SharpFn | null = null;
+
+async function loadDeps(): Promise<{
+  transformers: TransformersModule;
+  sharp: SharpFn;
+}> {
+  if (transformersModule && sharpFn) {
+    return { transformers: transformersModule, sharp: sharpFn };
+  }
+  try {
+    const [tMod, sharpMod] = await Promise.all([
+      import("@huggingface/transformers"),
+      import("sharp"),
+    ]);
+    const tAny = tMod as unknown as { default?: TransformersModule };
+    transformersModule = tAny.default ?? (tMod as unknown as TransformersModule);
+    const sharpAny = sharpMod as unknown as { default?: SharpFn };
+    sharpFn = sharpAny.default ?? (sharpMod as unknown as SharpFn);
+  } catch (err) {
+    const hint = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `Zero-shot detection requires the optional packages '@huggingface/transformers' and 'sharp'. ` +
+        `Install them in this workspace (pnpm install) to enable open-vocabulary detection. ` +
+        `Underlying error: ${hint}`,
+    );
+  }
+  return { transformers: transformersModule!, sharp: sharpFn! };
+}
 
 export interface ZeroShotDetection {
   label: string;
@@ -49,10 +85,11 @@ export class ZeroShotDetector {
     if (this.detector) return;
     if (this.loading) return this.loading;
     this.loading = (async () => {
+      const { transformers } = await loadDeps();
       process.stderr.write(
         `[AgenticROS] zero-shot: loading ${this.modelId} (first run downloads ~150 MB)…\n`,
       );
-      this.detector = (await pipeline(
+      this.detector = (await transformers.pipeline(
         "zero-shot-object-detection",
         this.modelId,
         { dtype: "q8" },
@@ -74,13 +111,20 @@ export class ZeroShotDetector {
     if (!this.detector) await this.load();
     if (prompts.length === 0) return { width: 0, height: 0, detections: [] };
 
-    const decoded = await sharp(image)
+    const { transformers, sharp: sharpFnLocal } = await loadDeps();
+
+    const decoded = await sharpFnLocal(image)
       .removeAlpha()
       .raw()
       .toBuffer({ resolveWithObject: true });
     const w = decoded.info.width;
     const h = decoded.info.height;
-    const rawImg = new RawImage(new Uint8Array(decoded.data), w, h, 3);
+    const rawImg: RawImageType = new transformers.RawImage(
+      new Uint8Array(decoded.data),
+      w,
+      h,
+      3,
+    );
 
     const pipelineOpts: { threshold: number; top_k?: number } = {
       threshold: opts.threshold ?? 0.1,

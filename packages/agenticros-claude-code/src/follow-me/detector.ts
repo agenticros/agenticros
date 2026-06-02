@@ -16,8 +16,42 @@ import path from "node:path";
 import os from "node:os";
 import https from "node:https";
 import http from "node:http";
-import * as ort from "onnxruntime-node";
-import sharp from "sharp";
+
+// Type-only imports keep `ort` / `sharp` types available at compile time
+// without forcing the native packages to load when this module is imported.
+// The actual runtime modules are loaded lazily in `loadDeps()` so a missing
+// native dep cannot crash MCP server startup — it only fails when the user
+// actually invokes a detection tool.
+type OrtModule = typeof import("onnxruntime-node");
+type SharpFn = (input: Buffer | Uint8Array) => import("sharp").Sharp;
+import type { InferenceSession as OrtInferenceSession } from "onnxruntime-node";
+
+let ortModule: OrtModule | null = null;
+let sharpFn: SharpFn | null = null;
+
+async function loadDeps(): Promise<{ ort: OrtModule; sharp: SharpFn }> {
+  if (ortModule && sharpFn) return { ort: ortModule, sharp: sharpFn };
+  try {
+    const [ortMod, sharpMod] = await Promise.all([
+      import("onnxruntime-node"),
+      import("sharp"),
+    ]);
+    // Both packages are CJS; under Node ESM their default export is the real
+    // module value. Fall back to the namespace if `.default` is absent.
+    const ortAny = ortMod as unknown as { default?: OrtModule };
+    ortModule = ortAny.default ?? (ortMod as unknown as OrtModule);
+    const sharpAny = sharpMod as unknown as { default?: SharpFn };
+    sharpFn = sharpAny.default ?? (sharpMod as unknown as SharpFn);
+  } catch (err) {
+    const hint = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `Local YOLO detection requires the optional packages 'onnxruntime-node' and 'sharp'. ` +
+        `Install them in this workspace (pnpm install) to enable follow-me local mode and ros2_find_object. ` +
+        `Underlying error: ${hint}`,
+    );
+  }
+  return { ort: ortModule!, sharp: sharpFn! };
+}
 
 const DEFAULT_MODEL_URL =
   "https://huggingface.co/Ultralytics/YOLOv8/resolve/main/yolov8n.onnx";
@@ -137,7 +171,7 @@ function nms(detections: PersonDetection[], iouThreshold: number): PersonDetecti
 }
 
 export class PersonDetector {
-  private session: ort.InferenceSession | null = null;
+  private session: OrtInferenceSession | null = null;
   private readonly scoreThreshold: number;
   private readonly iouThreshold: number;
 
@@ -148,8 +182,9 @@ export class PersonDetector {
 
   async load(): Promise<void> {
     if (this.session) return;
+    const { ort: ortMod } = await loadDeps();
     const modelPath = await ensureModel();
-    this.session = await ort.InferenceSession.create(modelPath, {
+    this.session = await ortMod.InferenceSession.create(modelPath, {
       executionProviders: ["cpu"],
       graphOptimizationLevel: "all",
     });
@@ -175,8 +210,9 @@ export class PersonDetector {
   ): Promise<{ width: number; height: number; detections: PersonDetection[] }> {
     if (!this.session) await this.load();
     const session = this.session!;
+    const { ort: ortMod, sharp: sharpFn } = await loadDeps();
 
-    const src = sharp(image);
+    const src = sharpFn(image);
     const meta = await src.metadata();
     const origW = meta.width ?? 0;
     const origH = meta.height ?? 0;
@@ -191,7 +227,7 @@ export class PersonDetector {
     const padX = Math.floor((INPUT_SIZE - newW) / 2);
     const padY = Math.floor((INPUT_SIZE - newH) / 2);
 
-    const { data, info } = await sharp(image)
+    const { data, info } = await sharpFn(image)
       .resize(newW, newH, { fit: "fill" })
       .extend({
         top: padY,
@@ -212,14 +248,14 @@ export class PersonDetector {
     const pixels = INPUT_SIZE * INPUT_SIZE;
     const input = new Float32Array(3 * pixels);
     for (let i = 0; i < pixels; i++) {
-      input[i] = data[i * 3] / 255;
-      input[pixels + i] = data[i * 3 + 1] / 255;
-      input[2 * pixels + i] = data[i * 3 + 2] / 255;
+      input[i] = data[i * 3]! / 255;
+      input[pixels + i] = data[i * 3 + 1]! / 255;
+      input[2 * pixels + i] = data[i * 3 + 2]! / 255;
     }
 
     const inputName = session.inputNames[0]!;
     const outputName = session.outputNames[0]!;
-    const tensor = new ort.Tensor("float32", input, [1, 3, INPUT_SIZE, INPUT_SIZE]);
+    const tensor = new ortMod.Tensor("float32", input, [1, 3, INPUT_SIZE, INPUT_SIZE]);
     const out = await session.run({ [inputName]: tensor });
     const result = out[outputName]!;
     // YOLOv8 ONNX output: [1, 84, 8400] — 4 box + 80 class scores per anchor.
