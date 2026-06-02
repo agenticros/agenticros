@@ -11,7 +11,7 @@ import {
 } from "@google/genai";
 import { GoogleGenAI } from "@google/genai";
 import type { AgenticROSConfig } from "@agenticros/core";
-import { GEMINI_TOOLS } from "./tools.js";
+import { buildGeminiTools } from "./tools.js";
 import { executeTool } from "./tools.js";
 
 /** Override with env GEMINI_MODEL (e.g. gemini-2.5-flash, gemini-2.0-flash). */
@@ -46,8 +46,9 @@ export async function chatWithRobot(
   const ai = new GoogleGenAI({ apiKey });
   const model = resolveModel(options.model);
 
+  const tools = await buildGeminiTools(config);
   const generateConfig = {
-    tools: GEMINI_TOOLS,
+    tools,
     systemInstruction: options.systemInstruction ?? "You are a helpful assistant controlling a ROS2 robot. Use the provided tools to list topics, publish commands, read sensor data, call services, send action goals, get/set parameters, capture camera images, and read depth distance. Be concise and safe with velocity commands.",
   };
 

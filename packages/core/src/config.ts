@@ -157,6 +157,72 @@ export const AgenticROSConfigSchema = z.object({
     })
     .default({}),
 
+  /**
+   * Optional cross-adapter semantic memory subsystem.
+   *
+   * When `enabled: true`, OpenClaw, Claude Code, and Gemini adapters all
+   * register four memory tools (memory_remember / memory_recall /
+   * memory_forget / memory_status) backed by a shared store. Default is
+   * off — zero new deps when disabled.
+   *
+   * See docs/memory.md for ready-to-paste recipes.
+   */
+  memory: z
+    .object({
+      /** Master switch. When false, adapters skip registering memory tools. */
+      enabled: z.boolean().default(false),
+      /** Which backend to use. "local" has no extra deps; "mem0" needs `pnpm add mem0ai`. */
+      backend: z.enum(["local", "mem0"]).default("local"),
+      /** Override the per-record namespace. Defaults to robot.namespace at call time. */
+      namespace: z.string().optional(),
+      local: z
+        .object({
+          /** JSON-on-disk store path. Supports leading "~/". */
+          storePath: z.string().default("~/.agenticros/memory.json"),
+        })
+        .default({}),
+      mem0: z
+        .object({
+          /**
+           * When true, mem0 runs its LLM-driven fact extraction on `add`.
+           * When false (default), content is stored as-is — predictable,
+           * no LLM call on write, agent stays in explicit control.
+           */
+          inferOnWrite: z.boolean().default(false),
+          /** SQLite history db path (mem0 historyDbPath). Supports leading "~/". */
+          historyDbPath: z
+            .string()
+            .default("~/.agenticros/memory-history.db"),
+          /**
+           * Embedder passed verbatim to `new Memory({ embedder })`.
+           * When omitted, the factory auto-detects: Ollama (if reachable)
+           * → OpenAI (if OPENAI_API_KEY set) → error.
+           */
+          embedder: z
+            .object({
+              provider: z.string(),
+              config: z.record(z.string(), z.unknown()),
+            })
+            .optional(),
+          /** Vector store passed verbatim to `new Memory({ vectorStore })`. */
+          vectorStore: z
+            .object({
+              provider: z.string(),
+              config: z.record(z.string(), z.unknown()),
+            })
+            .optional(),
+          /** LLM passed verbatim to `new Memory({ llm })`. Only used when inferOnWrite is true. */
+          llm: z
+            .object({
+              provider: z.string(),
+              config: z.record(z.string(), z.unknown()),
+            })
+            .optional(),
+        })
+        .default({}),
+    })
+    .default({}),
+
   /** Per-skill config. Keys are skill ids (e.g. followme). Each skill validates its own slice. */
   skills: z.record(z.string(), z.unknown()).default({}),
 

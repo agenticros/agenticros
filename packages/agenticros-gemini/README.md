@@ -117,8 +117,16 @@ The same ROS2 tools as the OpenClaw and Claude Code adapters:
 | `ros2_param_get` / `ros2_param_set` | Get/set node parameters |
 | `ros2_camera_snapshot` | One frame from camera topic (image returned to model) |
 | `ros2_depth_distance` | Distance in meters from depth camera |
+| `memory_remember` *(when enabled)* | Store a durable fact for the robot — shared with OpenClaw, Claude Desktop, Claude Code |
+| `memory_recall` *(when enabled)* | Semantic search across long-term memory |
+| `memory_forget` *(when enabled)* | Delete by id, query, or whole namespace |
+| `memory_status` *(when enabled)* | Health check + record count + embedder info |
 
 Safety limits from config (max linear/angular velocity) are applied before `ros2_publish`.
+
+### Optional: shared memory across agents
+
+The four `memory_*` tools are only exposed to Gemini when memory is **enabled** in `~/.agenticros/config.json`. Once enabled, the underlying store (`~/.mem0/vector_store.db` for the mem0 backend) is shared across every adapter for the same robot — so a fact remembered from Claude Desktop is immediately recall-able from Gemini, and vice versa. Memory tools work even when zenohd is not running. See [`docs/memory.md`](../../docs/memory.md) for setup recipes and troubleshooting.
 
 ## Zenoh / transport
 

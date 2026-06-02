@@ -11,13 +11,26 @@ import {
   mimeTypeForSnapshotBase64,
   rosNumericField,
 } from "@agenticros/ros-camera";
+import { resolveMemoryNamespace } from "@agenticros/core";
 import { getTransport } from "./transport.js";
 import { checkPublishSafety } from "./safety.js";
 import { getDepthDistance } from "./depth.js";
 import { getFollowMeLocal } from "./follow-me/loop.js";
 import { findObject } from "./find-object/find-object.js";
+import { ensureMemory } from "./memory.js";
 
 const DEFAULT_DEPTH_TOPIC = "/camera/camera/depth/image_rect_raw";
+
+/**
+ * Names of memory tools — dispatched separately from ROS tools so they can
+ * work without the Zenoh/ROS transport.
+ */
+export const MEMORY_TOOL_NAMES = new Set<string>([
+  "memory_remember",
+  "memory_recall",
+  "memory_forget",
+  "memory_status",
+]);
 
 export interface McpTool {
   name: string;
@@ -208,6 +221,59 @@ export const TOOLS: McpTool[] = [
     },
   },
   {
+    name: "memory_remember",
+    description:
+      "Store a durable fact in long-term memory. Call this when the user says \"remember that ...\", \"note that ...\", \"from now on ...\", or shares a stable personal fact (preferences, names, places, routines, robot hardware like the camera/eyes the robot has). The store is shared across all AgenticROS adapters talking to this robot (OpenClaw, Claude Desktop, Claude Code, Gemini). Do NOT auto-store chat transcripts or transient state. Namespace defaults to the robot namespace. Only available when memory is enabled in config.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        content: { type: "string", description: "The fact to remember, written as a self-contained sentence." },
+        tags: { type: "array", description: "Optional list of tag strings for filtering later (e.g. ['preference', 'speed'])." },
+        path: { type: "string", description: "Optional hierarchical hint (e.g. 'preferences.movement.speed')." },
+        namespace: { type: "string", description: "Optional namespace override; defaults to the robot namespace." },
+      },
+      required: ["content"],
+    },
+  },
+  {
+    name: "memory_recall",
+    description:
+      "Semantic search of long-term memory. ALWAYS call this BEFORE answering a personal-context question, including: \"what do I have for X?\", \"what's my Y?\", \"where is the Z?\", \"what did I tell you about ...?\", \"do you remember ...?\". The store is shared across every adapter for this robot — a fact saved from Claude Desktop or Claude Code lives in the same store. Returns the top matches ranked by relevance. Only available when memory is enabled in config.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Free-text query describing what you want to recall." },
+        limit: { type: "number", description: "Max number of matches to return (default 5)." },
+        namespace: { type: "string", description: "Optional namespace override; defaults to the robot namespace." },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "memory_forget",
+    description:
+      "Delete memories. Provide either an `id` (delete one), a `query` (delete all matches in the namespace), or just `namespace` (delete every memory in that namespace). Use sparingly — irreversible.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Record id (returned by memory_remember)." },
+        query: { type: "string", description: "Free-text query; deletes every matching memory in the namespace." },
+        namespace: { type: "string", description: "Namespace to delete from (defaults to the robot namespace)." },
+      },
+    },
+  },
+  {
+    name: "memory_status",
+    description:
+      "One-call health check for the memory subsystem. Returns whether memory is enabled, which backend is active, how many memories exist for the current namespace, the last write timestamp, and the embedder configuration when applicable.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        namespace: { type: "string", description: "Optional namespace override; defaults to the robot namespace." },
+      },
+    },
+  },
+  {
     name: "ros2_find_object",
     description:
       "Rotate the robot in place (clockwise by default) until a target object is detected by YOLOv8n in the camera feed, then stop. Target must be a COCO class name (e.g., 'cell phone', 'chair', 'bottle', 'cup', 'laptop'). Returns whether the object was found, its confidence, bounding box, and horizontal offset from image center (-1=left edge, 0=center, +1=right edge).",
@@ -279,6 +345,11 @@ export async function handleToolCall(
   args: Record<string, unknown>,
   config: AgenticROSConfig,
 ): Promise<{ content: ToolContent[]; isError?: boolean }> {
+  // Memory tools are self-contained — they never touch the ROS transport, so
+  // dispatch them before getTransport() (which throws when zenohd is down).
+  if (MEMORY_TOOL_NAMES.has(name)) {
+    return handleMemoryToolCall(name, args, config);
+  }
   const transport = getTransport();
 
   switch (name) {
@@ -694,5 +765,87 @@ export async function handleToolCall(
         content: [{ type: "text", text: `Unknown tool: ${name}` }],
         isError: true,
       };
+  }
+}
+
+/**
+ * Dispatcher for the four memory_* tools. Kept separate from the ROS tool
+ * switch because memory tools must work without the ROS transport (zenohd
+ * may not be running on the agent host).
+ */
+async function handleMemoryToolCall(
+  name: string,
+  args: Record<string, unknown>,
+  config: AgenticROSConfig,
+): Promise<{ content: ToolContent[]; isError?: boolean }> {
+  const memory = await ensureMemory(config);
+  if (!memory) {
+    return {
+      content: [
+        {
+          type: "text",
+          text:
+            "Memory is not enabled. Set memory.enabled=true in ~/.agenticros/config.json (backend: 'local' for zero deps, 'mem0' for semantic search). See docs/memory.md.",
+        },
+      ],
+      isError: true,
+    };
+  }
+  const namespace = resolveMemoryNamespace(config, args["namespace"] as string | undefined);
+  try {
+    if (name === "memory_remember") {
+      const content = String(args["content"] ?? "").trim();
+      if (!content) {
+        return { content: [{ type: "text", text: "memory_remember requires 'content'." }], isError: true };
+      }
+      const tags = Array.isArray(args["tags"]) ? (args["tags"] as unknown[]).map(String) : undefined;
+      const pathHint = typeof args["path"] === "string" ? (args["path"] as string) : undefined;
+      const record = await memory.remember({ content, namespace, tags, path: pathHint });
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({ success: true, id: record.id, namespace: record.namespace, backend: memory.backend }),
+          },
+        ],
+      };
+    }
+    if (name === "memory_recall") {
+      const query = String(args["query"] ?? "").trim();
+      if (!query) {
+        return { content: [{ type: "text", text: "memory_recall requires 'query'." }], isError: true };
+      }
+      const limit = typeof args["limit"] === "number" ? (args["limit"] as number) : 5;
+      const hits = await memory.recall({ query, namespace, limit });
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              success: true,
+              namespace,
+              backend: memory.backend,
+              count: hits.length,
+              results: hits,
+            }),
+          },
+        ],
+      };
+    }
+    if (name === "memory_forget") {
+      const id = typeof args["id"] === "string" ? (args["id"] as string) : undefined;
+      const query = typeof args["query"] === "string" ? (args["query"] as string) : undefined;
+      const result = await memory.forget({ id, query, namespace });
+      return {
+        content: [
+          { type: "text", text: JSON.stringify({ success: true, ...result, namespace, backend: memory.backend }) },
+        ],
+      };
+    }
+    const status = await memory.status(namespace);
+    return { content: [{ type: "text", text: JSON.stringify({ success: true, ...status }) }] };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { content: [{ type: "text", text: `${name} failed: ${message}` }], isError: true };
   }
 }

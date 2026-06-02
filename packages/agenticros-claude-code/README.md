@@ -142,8 +142,16 @@ The server exposes the same ROS2 tools as the OpenClaw plugin:
 | `ros2_param_get` / `ros2_param_set` | Get/set node parameters |
 | `ros2_camera_snapshot` | "What do you see" — one frame from camera topic |
 | `ros2_depth_distance` | Distance in meters from depth camera |
+| `memory_remember` *(when enabled)* | Store a durable fact for the robot — shared with OpenClaw, Claude Desktop, Gemini |
+| `memory_recall` *(when enabled)* | Semantic search across long-term memory |
+| `memory_forget` *(when enabled)* | Delete by id, query, or whole namespace |
+| `memory_status` *(when enabled)* | Health check + record count + embedder info |
 
 Safety limits (max linear/angular velocity) from config are applied before `ros2_publish`.
+
+### Optional: shared memory across agents
+
+The four `memory_*` tools only show up in `tools/list` when memory is **enabled** in `~/.agenticros/config.json`. Once enabled, anything you remember from Claude Code (or Claude Desktop) is immediately recall-able from OpenClaw chat and the Gemini CLI for the same robot — the underlying store lives at `~/.mem0/vector_store.db` and is shared across processes. Memory tools work even when zenohd is not running (they never touch the ROS transport). See [`docs/memory.md`](../../docs/memory.md) at the repo root for setup recipes and troubleshooting.
 
 ### “You’re denying the tool call” / robot doesn’t move
 

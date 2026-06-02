@@ -12,6 +12,7 @@ import { registerDepthDistanceTool } from "./ros2-depth-distance.js";
 /**
  * Register core ROS2 tools with the OpenClaw AI agent.
  * Optional skills (e.g. Follow Me) register their own tools via the skill loader.
+ * Memory tools register asynchronously from index.ts after initMemory resolves.
  */
 export function registerTools(api: OpenClawPluginApi, config: AgenticROSConfig): void {
   registerPublishTool(api, config);

@@ -237,6 +237,26 @@ Use **Google Gemini** to chat with your robot from the terminal (same ROS2 tools
 
 See **[packages/agenticros-gemini/README.md](packages/agenticros-gemini/README.md)** for details and tested command examples (camera snapshot/description, depth distance, forward Twist, and stop).
 
+## Memory (optional)
+
+AgenticROS can give every adapter a **shared, persistent, cross-process** long-term memory so facts you teach the robot from one agent are immediately available in the others — Claude Desktop, Claude Code, Gemini CLI, OpenClaw chat. Off by default. Two backends:
+
+- **`local`** — zero deps, JSON-on-disk at `~/.agenticros/memory.json`, keyword + recency search. Enable with one config flag.
+- **`mem0`** — semantic search via the pure-Node [`mem0ai`](https://www.npmjs.com/package/mem0ai) package (`pnpm add mem0ai`); file-backed vector store at `~/.mem0/vector_store.db` (shared across all processes on the host, no server to run); embedder auto-detects Ollama (`http://localhost:11434`) → `OPENAI_API_KEY` → clear error.
+
+When enabled, every adapter exposes four tools — `memory_remember`, `memory_recall`, `memory_forget`, `memory_status`. OpenClaw chats additionally get a system-context section that lists recently-remembered facts and instructs the LLM to call `memory_recall` before answering personal-context questions like *"what do I have for X?"* or *"what's my Y?"*.
+
+Memory is namespaced by `robot.namespace` so adapters talking to the same robot share the same store. See **[docs/memory.md](docs/memory.md)** for ready-to-paste recipes, cross-process verification steps, and troubleshooting. OpenClaw users can also enable it from the web config UI at `/agenticros/config` (Memory section).
+
+Quickest path to try it (fully local, no API keys):
+
+```bash
+pnpm add mem0ai
+ollama pull nomic-embed-text   # ~270 MB embedder model
+```
+
+Add `{ "memory": { "enabled": true, "backend": "mem0" } }` to `~/.agenticros/config.json` (or the OpenClaw config UI). Restart the gateway / MCP client. Then ask Claude Desktop *"remember that I have a RealSense D435i for eyes"* and ask OpenClaw *"what do I have for eyes?"* — same fact, both agents.
+
 ## Skills
 
 AgenticROS **skills** are optional packages that add tools and behaviors to the plugin. They are loaded at gateway start.

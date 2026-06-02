@@ -21,6 +21,7 @@ Available MCP tools:
 - `ros2_param_get` / `ros2_param_set` — get/set node parameters
 - `ros2_camera_snapshot` — capture a camera image
 - `ros2_depth_distance` — sample depth at the center of the depth image
+- `memory_remember` / `memory_recall` / `memory_forget` / `memory_status` — cross-adapter long-term memory (only when `config.memory.enabled` is true). Shared with OpenClaw, Codex, and Gemini for the same robot via `~/.mem0/vector_store.db` (mem0 backend) or `~/.agenticros/memory.json` (local backend). See `docs/memory.md`.
 
 **Robot namespace**: `3946b404-c33e-4aa3-9a8d-16deb1c5c593`
 **cmd_vel topic**: `/3946b404-c33e-4aa3-9a8d-16deb1c5c593/cmd_vel`

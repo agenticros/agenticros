@@ -12,6 +12,8 @@ import { getLandingPageHtml } from "./landing-page.js";
 import { getConfigPageHtml, getConfigPageScript } from "./config-page.js";
 import { registerTeleopRoutes } from "./teleop/routes.js";
 import { registerCameraSnapshotRoutes } from "./camera-snapshot-routes.js";
+import { getMemory, getMemoryInitError } from "./memory.js";
+import { resolveMemoryNamespace } from "@agenticros/core";
 
 async function readJsonBodyFromReq(req: { readJsonBody?: () => Promise<Record<string, unknown> | null>; body?: unknown; on?: (e: string, cb: (c?: Buffer) => void) => void }): Promise<Record<string, unknown>> {
   if (typeof req.readJsonBody === "function") {
@@ -255,10 +257,72 @@ export function registerRoutes(api: OpenClawPluginApi, config: AgenticROSConfig)
     route({ path: `${base}/config/save`, method: "GET", handler: configSaveHandler });
   }
 
+  const memoryStatusHandler: HttpRouteHandler = async (_req, res) => {
+    res.setHeader("Content-Type", "application/json");
+    res.setHeader("Cache-Control", "no-store");
+    const memory = getMemory();
+    if (!memory) {
+      res.statusCode = 200;
+      res.end(
+        JSON.stringify({
+          success: true,
+          enabled: false,
+          reason:
+            getMemoryInitError() ??
+            "Memory disabled. Set memory.enabled=true to use the four memory_* tools.",
+        }),
+      );
+      return;
+    }
+    try {
+      const namespace = resolveMemoryNamespace(config);
+      const status = await memory.status(namespace);
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, ...status }));
+    } catch (err) {
+      res.statusCode = 500;
+      res.end(
+        JSON.stringify({
+          success: false,
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
+    }
+  };
+
+  const memoryClearHandler: HttpRouteHandler = async (_req, res) => {
+    res.setHeader("Content-Type", "application/json");
+    const memory = getMemory();
+    if (!memory) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ success: false, error: "Memory not enabled" }));
+      return;
+    }
+    try {
+      const namespace = resolveMemoryNamespace(config);
+      const result = await memory.forget({ namespace });
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, ...result, namespace }));
+    } catch (err) {
+      res.statusCode = 500;
+      res.end(
+        JSON.stringify({
+          success: false,
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
+    }
+  };
+
+  for (const base of ["/agenticros", "/api/agenticros", "/plugins/agenticros"]) {
+    route({ path: `${base}/memory/status`, method: "GET", handler: memoryStatusHandler });
+    route({ path: `${base}/memory/clear`, method: "POST", handler: memoryClearHandler });
+  }
+
   registerCameraSnapshotRoutes(api);
   registerTeleopRoutes(api, config);
 
   api.logger.info(
-    "AgenticROS HTTP routes registered (GET /agenticros/, /config, /config.json; GET/POST/PUT /config/save; camera snapshot + teleop routes)",
+    "AgenticROS HTTP routes registered (GET /agenticros/, /config, /config.json; GET/POST/PUT /config/save; memory status + clear; camera snapshot + teleop routes)",
   );
 }

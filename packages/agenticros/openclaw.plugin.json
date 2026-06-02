@@ -17,6 +17,10 @@
       "ros2_list_topics",
       "ros2_camera_snapshot",
       "ros2_depth_distance",
+      "memory_remember",
+      "memory_recall",
+      "memory_forget",
+      "memory_status",
       "follow_robot",
       "follow_me_see",
       "ollama_status"
@@ -293,6 +297,62 @@
             "minimum": 0,
             "maximum": 4096,
             "description": "Resize images larger than this max dimension before sending to the VL model. 0 disables resizing."
+          }
+        }
+      },
+      "memory": {
+        "type": "object",
+        "description": "Optional cross-adapter semantic memory. Off by default; see docs/memory.md.",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "Master switch. When false, no memory tools are registered."
+          },
+          "backend": {
+            "type": "string",
+            "enum": ["local", "mem0"],
+            "default": "local",
+            "description": "local = JSON-on-disk, no deps; mem0 = semantic search via mem0ai (requires `pnpm add mem0ai`)."
+          },
+          "namespace": {
+            "type": "string",
+            "description": "Override per-record namespace. Defaults to robot.namespace at call time."
+          },
+          "local": {
+            "type": "object",
+            "properties": {
+              "storePath": {
+                "type": "string",
+                "default": "~/.agenticros/memory.json"
+              }
+            }
+          },
+          "mem0": {
+            "type": "object",
+            "properties": {
+              "inferOnWrite": {
+                "type": "boolean",
+                "default": false,
+                "description": "When true, mem0 LLM-extracts facts on add. Default false (raw store)."
+              },
+              "historyDbPath": {
+                "type": "string",
+                "default": "~/.agenticros/memory-history.db"
+              },
+              "embedder": {
+                "type": "object",
+                "description": "Optional. When omitted, factory auto-detects Ollama → OpenAI → error."
+              },
+              "vectorStore": {
+                "type": "object",
+                "description": "Optional. Passed to mem0 verbatim."
+              },
+              "llm": {
+                "type": "object",
+                "description": "Optional. Required only when inferOnWrite is true."
+              }
+            }
           }
         }
       },

@@ -318,6 +318,30 @@ dependencies are never loaded.
 
 ---
 
+## Optional cross-adapter memory
+
+When `config.memory.enabled` is true, all four adapters (OpenClaw, Claude Code
+MCP, Claude Desktop MCP, Gemini CLI) register four extra tools —
+`memory_remember`, `memory_recall`, `memory_forget`, `memory_status` — backed
+by a **shared, file-backed store** namespaced by `robot.namespace`. With the
+`mem0` backend, the vector store lives at `~/.mem0/vector_store.db`, so every
+process on the host reads and writes the same data — that is what enables
+true cross-adapter recall (a fact remembered from Claude Desktop is immediately
+recall-able from OpenClaw).
+
+The OpenClaw plugin additionally injects a `### Memory` section into each
+chat's system context at `before_agent_start`, containing usage directives
+for the four tools plus a snapshot of up to 10 recently-remembered facts
+(via the `MemoryProvider.recent(namespace, limit)` core method). This lets
+the OpenClaw LLM answer common personal-context questions ("what do I have
+for X?") **without** a tool call, while still using `memory_recall` for
+deeper semantic search.
+
+Off by default; see [memory.md](memory.md) for setup, recipes, and
+cross-process verification steps.
+
+---
+
 ## Data Flow Example
 
 ```

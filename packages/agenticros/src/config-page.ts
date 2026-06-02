@@ -92,6 +92,30 @@ export function getConfigPageHtml(): string {
       <div class="field"><label for="safety.maxAngularVelocity">Max angular velocity</label><input type="number" id="safety.maxAngularVelocity" name="safety.maxAngularVelocity" min="0" step="0.1" /></div>
     </section>
     <section>
+      <h2>Memory</h2>
+      <p class="field-hint">Optional cross-adapter semantic memory. Shared across OpenClaw, Claude Code, and Gemini when they target the same robot namespace. Off by default. <a href="https://github.com/" target="_blank">See docs/memory.md.</a></p>
+      <div class="field">
+        <label>Backend</label>
+        <label style="display:inline-block;margin-right:14px;font-size:0.9rem;color:#e0e0e0"><input type="radio" name="memory.backendChoice" value="off" /> Off</label>
+        <label style="display:inline-block;margin-right:14px;font-size:0.9rem;color:#e0e0e0"><input type="radio" name="memory.backendChoice" value="local" /> Local (no deps, dumb keyword)</label>
+        <label style="display:inline-block;font-size:0.9rem;color:#e0e0e0"><input type="radio" name="memory.backendChoice" value="mem0" /> Mem0 (semantic, requires <code>pnpm add mem0ai</code>)</label>
+      </div>
+      <div id="section-memory-mem0" style="display:none">
+        <div class="field"><label><input type="checkbox" id="memory.mem0.inferOnWrite" name="memory.mem0.inferOnWrite" /> Use LLM-driven fact extraction on write (slower, costs tokens)</label></div>
+        <div class="field"><label for="memory.mem0.historyDbPath">History DB path</label><input type="text" id="memory.mem0.historyDbPath" name="memory.mem0.historyDbPath" placeholder="~/.agenticros/memory-history.db" /></div>
+        <p class="field-hint">Embedder, vector store, and llm overrides require editing <code>~/.openclaw/openclaw.json</code> directly. When unset, the factory auto-detects Ollama (if reachable) then OpenAI (if OPENAI_API_KEY set).</p>
+      </div>
+      <div id="section-memory-local" style="display:none">
+        <div class="field"><label for="memory.local.storePath">Store path</label><input type="text" id="memory.local.storePath" name="memory.local.storePath" placeholder="~/.agenticros/memory.json" /></div>
+      </div>
+      <div class="field" id="memory-actions" style="display:none">
+        <button type="button" id="memory-test-btn">Test</button>
+        <button type="button" id="memory-clear-btn" style="background:#a33;color:#fff;margin-left:8px">Clear all in namespace</button>
+        <span id="memory-test-status" style="margin-left:10px;color:#aaa;font-size:0.85rem"></span>
+      </div>
+      <pre id="memory-test-output" style="display:none;background:#252525;padding:8px;border:1px solid #444;border-radius:4px;font-size:0.8rem;color:#9c9;max-width:520px;white-space:pre-wrap;word-break:break-all"></pre>
+    </section>
+    <section>
       <h2>Skills</h2>
       <div class="field">
         <label for="skillPackages">Skill packages (comma-separated)</label>
@@ -162,7 +186,7 @@ const CONFIG_PAGE_SCRIPT = `(function() {
     if (saveBtn && msg) saveBtn.textContent = msg.indexOf('Saving') !== -1 ? 'Saving…' : 'Save config';
   }
   var NUM_FIELDS = ['rosbridge.reconnectInterval','zenoh.domainId','local.domainId','teleop.speedDefault','teleop.cameraPollMs','safety.maxLinearVelocity','safety.maxAngularVelocity','skills.followme.targetDistance','skills.followme.rateHz','skills.followme.minLinearVelocity','skills.followme.criticalStopDistanceM','skills.followme.maxVelocityFraction','skills.followme.searchAngularVelocity','skills.followme.searchTicksBeforeSwitch'];
-  var BOOL_FIELDS = ['rosbridge.reconnect','skills.followme.useOllama','skills.followme.invertLinearX','skills.followme.logTickTiming','skills.followme.useDepthSectors'];
+  var BOOL_FIELDS = ['rosbridge.reconnect','memory.mem0.inferOnWrite','skills.followme.useOllama','skills.followme.invertLinearX','skills.followme.logTickTiming','skills.followme.useDepthSectors'];
   function setByPath(obj, path, value) {
     var parts = path.split('.');
     var cur = obj;
@@ -223,23 +247,52 @@ const CONFIG_PAGE_SCRIPT = `(function() {
     if (typeof val === 'string') return val.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
     return [];
   }
+  function getMemoryBackendChoice() {
+    var radios = document.getElementsByName('memory.backendChoice');
+    for (var i = 0; i < radios.length; i++) {
+      if (radios[i].checked) return radios[i].value;
+    }
+    return 'off';
+  }
+  function setMemoryBackendChoice(choice) {
+    var radios = document.getElementsByName('memory.backendChoice');
+    for (var i = 0; i < radios.length; i++) {
+      radios[i].checked = (radios[i].value === choice);
+    }
+  }
+  function updateMemoryVisibility() {
+    var choice = getMemoryBackendChoice();
+    var localSec = document.getElementById('section-memory-local');
+    var mem0Sec = document.getElementById('section-memory-mem0');
+    var actions = document.getElementById('memory-actions');
+    if (localSec) localSec.style.display = choice === 'local' ? 'block' : 'none';
+    if (mem0Sec) mem0Sec.style.display = choice === 'mem0' ? 'block' : 'none';
+    if (actions) actions.style.display = choice === 'off' ? 'none' : 'block';
+  }
   function payloadFromForm() {
-    var payload = { transport: {}, robot: {}, rosbridge: {}, zenoh: {}, local: {}, webrtc: {}, teleop: {}, safety: {}, skillPackages: [], skillPaths: [], skills: {} };
-    var names = ['transport.mode','robot.name','robot.namespace','robot.cameraTopic','rosbridge.url','rosbridge.reconnect','rosbridge.reconnectInterval','zenoh.routerEndpoint','zenoh.domainId','zenoh.keyFormat','local.domainId','webrtc.signalingUrl','webrtc.apiUrl','webrtc.robotId','teleop.cameraTopic','teleop.cmdVelTopic','teleop.speedDefault','teleop.cameraPollMs','safety.maxLinearVelocity','safety.maxAngularVelocity','skills.followme.useOllama','skills.followme.ollamaUrl','skills.followme.vlmModel','skills.followme.cameraTopic','skills.followme.cameraMessageType','skills.followme.depthTopic','skills.followme.cmdVelTopic','skills.followme.targetDistance','skills.followme.rateHz','skills.followme.minLinearVelocity','skills.followme.invertLinearX','skills.followme.logTickTiming','skills.followme.criticalStopDistanceM','skills.followme.maxVelocityFraction','skills.followme.visionCallbackUrl','skills.followme.useDepthSectors','skills.followme.searchAngularVelocity','skills.followme.searchTicksBeforeSwitch'];
+    var payload = { transport: {}, robot: {}, rosbridge: {}, zenoh: {}, local: {}, webrtc: {}, teleop: {}, safety: {}, memory: { local: {}, mem0: {} }, skillPackages: [], skillPaths: [], skills: {} };
+    var names = ['transport.mode','robot.name','robot.namespace','robot.cameraTopic','rosbridge.url','rosbridge.reconnect','rosbridge.reconnectInterval','zenoh.routerEndpoint','zenoh.domainId','zenoh.keyFormat','local.domainId','webrtc.signalingUrl','webrtc.apiUrl','webrtc.robotId','teleop.cameraTopic','teleop.cmdVelTopic','teleop.speedDefault','teleop.cameraPollMs','safety.maxLinearVelocity','safety.maxAngularVelocity','memory.local.storePath','memory.mem0.inferOnWrite','memory.mem0.historyDbPath','skills.followme.useOllama','skills.followme.ollamaUrl','skills.followme.vlmModel','skills.followme.cameraTopic','skills.followme.cameraMessageType','skills.followme.depthTopic','skills.followme.cmdVelTopic','skills.followme.targetDistance','skills.followme.rateHz','skills.followme.minLinearVelocity','skills.followme.invertLinearX','skills.followme.logTickTiming','skills.followme.criticalStopDistanceM','skills.followme.maxVelocityFraction','skills.followme.visionCallbackUrl','skills.followme.useDepthSectors','skills.followme.searchAngularVelocity','skills.followme.searchTicksBeforeSwitch'];
     for (var i = 0; i < names.length; i++) {
       var v = getFieldValue(names[i]);
       if (v !== undefined) setByPath(payload, names[i], v);
     }
+    var memChoice = getMemoryBackendChoice();
+    payload.memory.enabled = (memChoice !== 'off');
+    if (memChoice !== 'off') payload.memory.backend = memChoice;
     payload.skillPackages = toArray(getFieldValue('skillPackages'));
     payload.skillPaths = toArray(getFieldValue('skillPaths'));
     return payload;
   }
   function populateForm(c) {
-    var names = ['transport.mode','robot.name','robot.namespace','robot.cameraTopic','rosbridge.url','rosbridge.reconnect','rosbridge.reconnectInterval','zenoh.routerEndpoint','zenoh.domainId','zenoh.keyFormat','local.domainId','webrtc.signalingUrl','webrtc.apiUrl','webrtc.robotId','teleop.cameraTopic','teleop.cmdVelTopic','teleop.speedDefault','teleop.cameraPollMs','safety.maxLinearVelocity','safety.maxAngularVelocity','skills.followme.useOllama','skills.followme.ollamaUrl','skills.followme.vlmModel','skills.followme.cameraTopic','skills.followme.cameraMessageType','skills.followme.depthTopic','skills.followme.cmdVelTopic','skills.followme.targetDistance','skills.followme.rateHz','skills.followme.minLinearVelocity','skills.followme.invertLinearX','skills.followme.logTickTiming','skills.followme.criticalStopDistanceM','skills.followme.maxVelocityFraction','skills.followme.visionCallbackUrl','skills.followme.useDepthSectors','skills.followme.searchAngularVelocity','skills.followme.searchTicksBeforeSwitch'];
+    var names = ['transport.mode','robot.name','robot.namespace','robot.cameraTopic','rosbridge.url','rosbridge.reconnect','rosbridge.reconnectInterval','zenoh.routerEndpoint','zenoh.domainId','zenoh.keyFormat','local.domainId','webrtc.signalingUrl','webrtc.apiUrl','webrtc.robotId','teleop.cameraTopic','teleop.cmdVelTopic','teleop.speedDefault','teleop.cameraPollMs','safety.maxLinearVelocity','safety.maxAngularVelocity','memory.local.storePath','memory.mem0.inferOnWrite','memory.mem0.historyDbPath','skills.followme.useOllama','skills.followme.ollamaUrl','skills.followme.vlmModel','skills.followme.cameraTopic','skills.followme.cameraMessageType','skills.followme.depthTopic','skills.followme.cmdVelTopic','skills.followme.targetDistance','skills.followme.rateHz','skills.followme.minLinearVelocity','skills.followme.invertLinearX','skills.followme.logTickTiming','skills.followme.criticalStopDistanceM','skills.followme.maxVelocityFraction','skills.followme.visionCallbackUrl','skills.followme.useDepthSectors','skills.followme.searchAngularVelocity','skills.followme.searchTicksBeforeSwitch'];
     for (var i = 0; i < names.length; i++) {
       var v = getByPath(c, names[i]);
       setFieldValue(names[i], v);
     }
+    var memEnabled = !!getByPath(c, 'memory.enabled');
+    var memBackend = getByPath(c, 'memory.backend') || 'local';
+    setMemoryBackendChoice(memEnabled ? memBackend : 'off');
+    updateMemoryVisibility();
     setFieldValue('skillPackages', Array.isArray(c.skillPackages) ? c.skillPackages.join(', ') : (c.skillPackages || ''));
     setFieldValue('skillPaths', Array.isArray(c.skillPaths) ? c.skillPaths.join(', ') : (c.skillPaths || ''));
     if (getByPath(c, 'skills.followme.useDepthSectors') === undefined) {
@@ -357,6 +410,85 @@ const CONFIG_PAGE_SCRIPT = `(function() {
   window.agenticrosSave = runSave;
   saveBtn.addEventListener('click', runSave);
   form.addEventListener('submit', function(e) { e.preventDefault(); if (window.agenticrosSave) window.agenticrosSave(); });
+  var memoryRadios = document.getElementsByName('memory.backendChoice');
+  for (var ri = 0; ri < memoryRadios.length; ri++) {
+    memoryRadios[ri].addEventListener('change', updateMemoryVisibility);
+  }
+  var memoryTestBtn = document.getElementById('memory-test-btn');
+  var memoryClearBtn = document.getElementById('memory-clear-btn');
+  var memoryTestStatus = document.getElementById('memory-test-status');
+  var memoryTestOutput = document.getElementById('memory-test-output');
+  function setMemoryTestStatus(text, isErr) {
+    if (memoryTestStatus) {
+      memoryTestStatus.textContent = text;
+      memoryTestStatus.style.color = isErr ? '#f99' : '#aaa';
+    }
+  }
+  function showMemoryTestOutput(text) {
+    if (memoryTestOutput) {
+      memoryTestOutput.textContent = text;
+      memoryTestOutput.style.display = 'block';
+    }
+  }
+  if (memoryTestBtn) {
+    memoryTestBtn.addEventListener('click', function() {
+      setMemoryTestStatus('Testing...', false);
+      if (memoryTestOutput) memoryTestOutput.style.display = 'none';
+      fetch('memory/status')
+        .then(function(r) { return r.text().then(function(t) { return { status: r.status, text: t }; }); })
+        .then(function(p) {
+          try {
+            var data = JSON.parse(p.text);
+            if (data && data.success === false) {
+              setMemoryTestStatus('Error', true);
+              showMemoryTestOutput(JSON.stringify(data, null, 2));
+              return;
+            }
+            setMemoryTestStatus(
+              data.enabled
+                ? 'OK — ' + data.backend + ', ' + (data.recordCount || 0) + ' records'
+                : 'Disabled',
+              false,
+            );
+            showMemoryTestOutput(JSON.stringify(data, null, 2));
+          } catch (_) {
+            setMemoryTestStatus('Bad response (status ' + p.status + ')', true);
+            showMemoryTestOutput(p.text);
+          }
+        })
+        .catch(function(err) {
+          setMemoryTestStatus('Request failed', true);
+          showMemoryTestOutput(String(err && err.message ? err.message : err));
+        });
+    });
+  }
+  if (memoryClearBtn) {
+    memoryClearBtn.addEventListener('click', function() {
+      if (!window.confirm('Delete every memory in the current namespace? This cannot be undone.')) return;
+      setMemoryTestStatus('Clearing...', false);
+      fetch('memory/clear', { method: 'POST' })
+        .then(function(r) { return r.text().then(function(t) { return { status: r.status, text: t }; }); })
+        .then(function(p) {
+          try {
+            var data = JSON.parse(p.text);
+            if (data && data.success) {
+              setMemoryTestStatus('Cleared ' + (data.removed || 0) + ' records', false);
+              showMemoryTestOutput(JSON.stringify(data, null, 2));
+            } else {
+              setMemoryTestStatus('Error', true);
+              showMemoryTestOutput(p.text);
+            }
+          } catch (_) {
+            setMemoryTestStatus('Bad response (status ' + p.status + ')', true);
+            showMemoryTestOutput(p.text);
+          }
+        })
+        .catch(function(err) {
+          setMemoryTestStatus('Request failed', true);
+          showMemoryTestOutput(String(err && err.message ? err.message : err));
+        });
+    });
+  }
   fetch('config.json')
     .then(function(r) { return r.json(); })
     .then(function(c) { populateForm(c); })

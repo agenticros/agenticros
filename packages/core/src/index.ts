@@ -42,3 +42,13 @@ export {
   agenticROSBannerLines,
   type AgenticROSBannerOptions,
 } from "./banner.js";
+
+export { createMemory, resolveMemoryNamespace } from "./memory/index.js";
+export type {
+  MemoryProvider,
+  MemoryRecord,
+  MemoryStatus,
+  RememberInput,
+  RecallInput,
+  ForgetInput,
+} from "./memory/index.js";

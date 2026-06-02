@@ -3,6 +3,8 @@ import { parseConfig, isCdrTypeSupported, agenticROSBannerLines } from "@agentic
 import { readAgenticROSConfigFromFile } from "./config-file.js";
 import { registerService } from "./service.js";
 import { registerTools } from "./tools/index.js";
+import { registerMemoryTools } from "./tools/ros2-memory.js";
+import { initMemory } from "./memory.js";
 import { loadSkills } from "./skill-loader.js";
 import { registerSafetyHook } from "./safety/validator.js";
 import { registerRobotContext } from "./context/robot-context.js";
@@ -48,6 +50,16 @@ export default {
 
     // Register core ROS2 tools (no Follow Me — that lives in agenticros-skill-followme)
     registerTools(api, config);
+
+    // Initialize optional memory subsystem (async; off-by-default; same pattern as skills below).
+    void initMemory(config, api.logger)
+      .then((memory) => {
+        if (memory) registerMemoryTools(api, config);
+      })
+      .catch((e) => {
+        const msg = e instanceof Error ? e.message : String(e);
+        api.logger.error("AgenticROS: memory init failed: " + msg);
+      });
 
     // Load optional skills from skillPackages and skillPaths (async; OpenClaw 2026.5+ requires sync register())
     void loadSkills(api, config).catch((e) => {

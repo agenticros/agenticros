@@ -14,7 +14,8 @@
   },
   "scripts": {
     "build": "tsc",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --test \"dist/memory/__tests__/*.test.js\""
   },
   "dependencies": {
     "@eclipse-zenoh/zenoh-ts": "^1.9.0",
@@ -27,6 +28,14 @@
   },
   "optionalDependencies": {
     "rclnodejs": "^1.8.1"
+  },
+  "peerDependencies": {
+    "mem0ai": "^2.0.0"
+  },
+  "peerDependenciesMeta": {
+    "mem0ai": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/node": "^20.17.0",

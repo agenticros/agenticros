@@ -58,6 +58,12 @@ const CORE_TOOLS = [
   "ros2_list_topics",
   "ros2_camera_snapshot",
   "ros2_depth_distance",
+  // Memory tools (registered conditionally at runtime when memory.enabled=true).
+  // Listed here so they remain in the allowlist after sync-skill-tools rewrites it.
+  "memory_remember",
+  "memory_recall",
+  "memory_forget",
+  "memory_status",
 ];
 
 function log(...m) {

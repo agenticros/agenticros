@@ -1,8 +1,10 @@
 import type { OpenClawPluginApi } from "../plugin-api.js";
-import type { AgenticROSConfig } from "@agenticros/core";
+import type { AgenticROSConfig, MemoryRecord } from "@agenticros/core";
 import type { TopicInfo, ServiceInfo, ActionInfo } from "@agenticros/core";
+import { resolveMemoryNamespace } from "@agenticros/core";
 import { getTransport } from "../service.js";
 import { getLoadedSkillIds } from "../skill-loader.js";
+import { getMemory } from "../memory.js";
 
 /** Cached discovery results with TTL. */
 interface DiscoveryCache {
@@ -46,9 +48,54 @@ export function registerRobotContext(api: OpenClawPluginApi, config: AgenticROSC
     const capabilities = await discoverCapabilities(api, robotNamespace);
     const cameraTopicHint =
       (config.robot?.cameraTopic ?? "").trim() || "/camera/camera/color/image_raw/compressed";
-    const context = buildRobotContext(config, robotName, robotNamespace, capabilities, cameraTopicHint);
+    const memorySection = await buildMemorySection(config);
+    const context =
+      buildRobotContext(config, robotName, robotNamespace, capabilities, cameraTopicHint) +
+      memorySection;
     return { prependContext: context };
   });
+}
+
+/**
+ * Build a "Memory" section that tells the LLM how to use memory tools and
+ * what's already stored. Returns "" when memory is disabled or unavailable,
+ * so non-memory users see no change in their context.
+ */
+async function buildMemorySection(config: AgenticROSConfig): Promise<string> {
+  if (!config.memory?.enabled) return "";
+  const memory = getMemory();
+  if (!memory) {
+    // Provider isn't ready yet (async init still pending). Skip silently;
+    // the section will appear on the next session.
+    return "";
+  }
+  const namespace = resolveMemoryNamespace(config);
+  let recent: MemoryRecord[] = [];
+  try {
+    recent = await memory.recent(namespace, 10);
+  } catch {
+    recent = [];
+  }
+  const recentBlock =
+    recent.length === 0
+      ? "_No memories saved yet for this robot._"
+      : recent
+          .map((r, i) => `${i + 1}. ${r.content.replace(/\s+/g, " ").trim()}`)
+          .join("\n");
+  return `\n\n### Memory (cross-session, ${memory.backend} backend)
+You have a shared long-term memory store. It is shared across **all** AgenticROS adapters talking to this robot — facts written from Claude Desktop, Claude Code, Gemini CLI, and this OpenClaw chat all live in the same store and surface here.
+
+**Always call \`memory_recall\` BEFORE answering** when the user asks a personal-context question, including:
+- "What do I have for X?", "What's my Y?", "Where is the Z?"
+- "What did I tell you about ...?", "Do you remember ...?", "What's my preference for ...?"
+- Anything that depends on facts the user previously shared about themselves, their robot setup, their home, or their preferences.
+
+**Call \`memory_remember\`** when the user explicitly says "remember that ...", "note that ...", "from now on ...", or shares a durable personal fact (preferences, names, places, routines, robot hardware). Do **not** auto-store conversation transcripts.
+
+**Recently remembered (newest first):**
+${recentBlock}
+
+If a question seems answerable from this list, answer directly. If you need more (e.g. semantic match, full search), call \`memory_recall\` with a focused query.`;
 }
 
 /**

@@ -3,7 +3,11 @@
  */
 
 import type { AgenticROSConfig } from "@agenticros/core";
-import { resolveCameraSubscribeTopic, toNamespacedTopic } from "@agenticros/core";
+import {
+  resolveCameraSubscribeTopic,
+  resolveMemoryNamespace,
+  toNamespacedTopic,
+} from "@agenticros/core";
 import {
   ROS_MSG_COMPRESSED_IMAGE,
   ROS_MSG_IMAGE,
@@ -16,6 +20,14 @@ import { createFunctionResponsePartFromBase64 } from "@google/genai";
 import { getTransport } from "./transport.js";
 import { checkPublishSafety } from "./safety.js";
 import { getDepthDistance } from "./depth.js";
+import { ensureMemory } from "./memory.js";
+
+const MEMORY_TOOL_NAMES = new Set([
+  "memory_remember",
+  "memory_recall",
+  "memory_forget",
+  "memory_status",
+]);
 
 const DEFAULT_DEPTH_TOPIC = "/camera/camera/depth/image_rect_raw";
 const ENABLE_MULTIMODAL_FUNCTION_RESPONSE =
@@ -119,10 +131,70 @@ export const GEMINI_FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
       timeout: { type: "number", description: "Timeout in ms (default 5000)" },
     }),
   },
+  {
+    name: "memory_remember",
+    description:
+      "Store a durable fact in long-term memory. Call this when the user says \"remember that ...\", \"note that ...\", \"from now on ...\", or shares a stable personal fact (preferences, names, places, routines, robot hardware like the camera/eyes the robot has). The store is shared across all AgenticROS adapters talking to this robot (OpenClaw, Claude Desktop, Claude Code, Gemini). Do NOT auto-store chat transcripts. Only available when memory is enabled in config.",
+    parametersJsonSchema: schemaFromProps(
+      {
+        content: { type: "string", description: "The fact to remember, written as a self-contained sentence." },
+        tags: { type: "array", description: "Optional list of tag strings for filtering later." },
+        path: { type: "string", description: "Optional hierarchical hint (e.g. 'preferences.movement.speed')." },
+        namespace: { type: "string", description: "Optional namespace override; defaults to the robot namespace." },
+      },
+      ["content"],
+    ),
+  },
+  {
+    name: "memory_recall",
+    description:
+      "Semantic search of long-term memory. ALWAYS call this BEFORE answering a personal-context question, including: \"what do I have for X?\", \"what's my Y?\", \"where is the Z?\", \"what did I tell you about ...?\", \"do you remember ...?\". The store is shared across every adapter for this robot — a fact saved from Claude Desktop or Claude Code lives in the same store. Returns the top matches ranked by relevance.",
+    parametersJsonSchema: schemaFromProps(
+      {
+        query: { type: "string", description: "Free-text query describing what you want to recall." },
+        limit: { type: "number", description: "Max matches to return (default 5)." },
+        namespace: { type: "string", description: "Optional namespace override; defaults to the robot namespace." },
+      },
+      ["query"],
+    ),
+  },
+  {
+    name: "memory_forget",
+    description:
+      "Delete memories. Provide id (one), query (matches in namespace), or just namespace (all in that namespace). Irreversible.",
+    parametersJsonSchema: schemaFromProps({
+      id: { type: "string", description: "Record id returned by memory_remember." },
+      query: { type: "string", description: "Free-text query; deletes every matching memory in the namespace." },
+      namespace: { type: "string", description: "Namespace to delete from." },
+    }),
+  },
+  {
+    name: "memory_status",
+    description:
+      "Health check for the memory subsystem. Returns enabled state, backend, record count, last write timestamp, and embedder info.",
+    parametersJsonSchema: schemaFromProps({
+      namespace: { type: "string", description: "Optional namespace override; defaults to the robot namespace." },
+    }),
+  },
 ];
 
 /** Single tool object for Gemini (one item in config.tools array). */
 export const GEMINI_TOOLS = [{ functionDeclarations: GEMINI_FUNCTION_DECLARATIONS }];
+
+/**
+ * Build the per-invocation tools list for Gemini, filtering out memory tools
+ * when memory is disabled. Call this from chat.ts so the model never sees
+ * tools it cannot use.
+ */
+export async function buildGeminiTools(config: AgenticROSConfig) {
+  const memory = await ensureMemory(config);
+  const declarations = memory
+    ? GEMINI_FUNCTION_DECLARATIONS
+    : GEMINI_FUNCTION_DECLARATIONS.filter(
+        (d) => !MEMORY_TOOL_NAMES.has(d.name ?? ""),
+      );
+  return [{ functionDeclarations: declarations }];
+}
 
 export interface ToolResult {
   output: string;
@@ -135,6 +207,12 @@ export async function executeTool(
   args: Record<string, unknown>,
   config: AgenticROSConfig,
 ): Promise<ToolResult> {
+  // Memory tools never need the ROS transport — dispatch them before
+  // getTransport() (which throws when zenohd is down). Mirrors the gating in
+  // packages/agenticros-claude-code/src/tools.ts.
+  if (MEMORY_TOOL_NAMES.has(name)) {
+    return executeMemoryTool(name, args, config);
+  }
   const transport = getTransport();
 
   switch (name) {
@@ -383,5 +461,56 @@ export async function executeTool(
 
     default:
       return { output: `Unknown tool: ${name}` };
+  }
+}
+
+/**
+ * Dispatcher for the four memory_* Gemini tools. Kept separate from the ROS
+ * tool switch because memory tools must work without the ROS transport.
+ */
+async function executeMemoryTool(
+  name: string,
+  args: Record<string, unknown>,
+  config: AgenticROSConfig,
+): Promise<ToolResult> {
+  const memory = await ensureMemory(config);
+  if (!memory) {
+    return {
+      output:
+        "Memory is not enabled. Set memory.enabled=true in ~/.agenticros/config.json (backend: 'local' for zero deps, 'mem0' for semantic search). See docs/memory.md.",
+    };
+  }
+  const namespace = resolveMemoryNamespace(config, args["namespace"] as string | undefined);
+  try {
+    if (name === "memory_remember") {
+      const content = String(args["content"] ?? "").trim();
+      if (!content) return { output: "memory_remember requires 'content'." };
+      const tags = Array.isArray(args["tags"]) ? (args["tags"] as unknown[]).map(String) : undefined;
+      const pathHint = typeof args["path"] === "string" ? (args["path"] as string) : undefined;
+      const record = await memory.remember({ content, namespace, tags, path: pathHint });
+      return {
+        output: JSON.stringify({ success: true, id: record.id, namespace: record.namespace, backend: memory.backend }),
+      };
+    }
+    if (name === "memory_recall") {
+      const query = String(args["query"] ?? "").trim();
+      if (!query) return { output: "memory_recall requires 'query'." };
+      const limit = typeof args["limit"] === "number" ? (args["limit"] as number) : 5;
+      const hits = await memory.recall({ query, namespace, limit });
+      return {
+        output: JSON.stringify({ success: true, namespace, backend: memory.backend, count: hits.length, results: hits }),
+      };
+    }
+    if (name === "memory_forget") {
+      const id = typeof args["id"] === "string" ? (args["id"] as string) : undefined;
+      const query = typeof args["query"] === "string" ? (args["query"] as string) : undefined;
+      const result = await memory.forget({ id, query, namespace });
+      return { output: JSON.stringify({ success: true, ...result, namespace, backend: memory.backend }) };
+    }
+    const status = await memory.status(namespace);
+    return { output: JSON.stringify({ success: true, ...status }) };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { output: `${name} failed: ${message}` };
   }
 }
