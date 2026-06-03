@@ -5,6 +5,7 @@ import type { OpenClawPluginApi } from "./plugin-api.js";
 import type { PluginLogger } from "./plugin-api.js";
 import type { AgenticROSConfig } from "@agenticros/core";
 import { readAgenticROSConfigFromFile } from "./config-file.js";
+import { preflightWsEndpoint } from "./preflight.js";
 
 /** Shared transport instance for all tools. */
 let transport: RosTransport | null = null;
@@ -94,6 +95,99 @@ function buildTransportConfig(transportCfg: TransportConfig): TransportConfig {
 }
 
 /**
+ * Preflight state for the configured router WebSocket endpoint.
+ *
+ * We use this to:
+ *  1. Suppress the noisy `WebSocket disconnected from remote-api-plugin: 1006` /
+ *     `Restart connection (N/10)` spam emitted by zenoh-ts (and the analogous
+ *     rosbridge reconnect chatter) when the user simply hasn't started the
+ *     router yet. Instead of calling `Session.open()` against a dead port, we
+ *     short-circuit with one clear actionable message.
+ *  2. Re-print a single positive message when the router becomes reachable
+ *     again, so the user can see in the log that AgenticROS recovered.
+ */
+const routerProbe = {
+  /** True if the last preflight result was reachable. Drives the up/down log message. */
+  lastReachable: null as boolean | null,
+  /** True once the multiline "how to fix it" banner has been printed in the current down-cycle. */
+  bannerPrinted: false,
+};
+
+/** What kind of `ws://`-style endpoint, if any, this transport mode talks to. */
+function getRouterEndpoint(
+  cfg: TransportConfig,
+): { kind: "zenoh router" | "rosbridge"; url: string; startHint: string } | null {
+  if (cfg.mode === "zenoh") {
+    const url = (cfg.zenoh?.routerEndpoint ?? "").trim();
+    if (!url) return null;
+    return {
+      kind: "zenoh router",
+      url,
+      startHint:
+        "Start it with `zenohd -c scripts/zenohd-agenticros.json5` (port 10000, zenoh-plugin-remote-api). See docs/zenoh-agenticros.md.",
+    };
+  }
+  if (cfg.mode === "rosbridge") {
+    const url = (cfg.rosbridge?.url ?? "").trim();
+    if (!url) return null;
+    return {
+      kind: "rosbridge",
+      url,
+      startHint: "Start `rosbridge_server` on the robot (default port 9090).",
+    };
+  }
+  return null;
+}
+
+/**
+ * TCP-probe the router endpoint and emit human-friendly log messages on state
+ * transitions (down→up, up→down). Returns true when the endpoint is reachable
+ * (caller may proceed to open the WebSocket session); returns false when it
+ * isn't (caller should skip Session.open and let the next retry tick handle
+ * recovery).
+ */
+async function checkRouterAndLog(
+  endpoint: { kind: string; url: string; startHint: string },
+  logger: PluginLogger,
+): Promise<boolean> {
+  const result = await preflightWsEndpoint(endpoint.url);
+
+  if (result.reachable) {
+    if (routerProbe.lastReachable === false) {
+      logger.info(
+        `AgenticROS: ${endpoint.kind} is now reachable at ${endpoint.url} — connecting…`,
+      );
+    }
+    routerProbe.lastReachable = true;
+    routerProbe.bannerPrinted = false;
+    return true;
+  }
+
+  if (!routerProbe.bannerPrinted) {
+    const target = result.host && result.port ? `${result.host}:${result.port}` : endpoint.url;
+    logger.warn(
+      [
+        "",
+        "─".repeat(72),
+        `AgenticROS: ${endpoint.kind} not reachable (${result.reason ?? "unknown"}).`,
+        `  endpoint: ${endpoint.url}  (TCP ${target})`,
+        `  ${endpoint.startHint}`,
+        "  Skipping WebSocket session open to avoid `remote-api-plugin: 1006` retry spam.",
+        "  Will keep probing every 10–15s; this message reappears only if the router goes down again.",
+        "─".repeat(72),
+      ].join("\n"),
+    );
+    routerProbe.bannerPrinted = true;
+  } else if (routerProbe.lastReachable !== false) {
+    logger.warn(
+      `AgenticROS: ${endpoint.kind} still not reachable at ${endpoint.url} (${result.reason ?? "unknown"}).`,
+    );
+  }
+  routerProbe.lastReachable = false;
+  return false;
+}
+
+/**
  * Connect the transport (create + connect). Idempotent: if already connected, no-op.
  */
 async function ensureTransportConnected(
@@ -112,6 +206,17 @@ async function ensureTransportConnected(
       }
       transport = null;
       currentMode = null;
+    }
+    // Preflight the router endpoint for ws-based transports. If the port isn't
+    // reachable we skip Session.open() entirely — that's what suppresses the
+    // zenoh-ts internal `remote-api-plugin: 1006` / `Restart connection`
+    // retry spam when the user simply hasn't started zenohd / rosbridge yet.
+    const endpoint = getRouterEndpoint(transportCfg);
+    if (endpoint) {
+      const reachable = await checkRouterAndLog(endpoint, api.logger);
+      if (!reachable) {
+        return;
+      }
     }
     api.logger.info(`Connecting to ROS2 via ${transportCfg.mode} transport...`);
     const newTransport = await createTransport(buildTransportConfig(transportCfg));
