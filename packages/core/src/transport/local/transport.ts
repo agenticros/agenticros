@@ -78,9 +78,20 @@ export class LocalTransport implements RosTransport {
         LocalTransport.rclInitialized = true;
       }
 
-      this.node = this.rclnodejs!.createNode("agenticros_local");
+      // Use a process-unique node name. If two AgenticROS adapters (e.g. the
+      // OpenClaw gateway plugin + the Claude Code MCP server) share the host,
+      // a fixed name collides on the DDS bus: rcl logs "Publisher already
+      // registered for provided node name" and DDS discovery on the duplicate
+      // becomes slow/lossy — listTopics() then returns 0 right after connect.
+      const nodeName = `agenticros_local_${process.pid}`;
+      this.node = this.rclnodejs!.createNode(nodeName);
       this.rclnodejs!.spin(this.node);
       this.entityCache = new EntityCache();
+
+      // Give DDS discovery a brief moment to receive announcements from peers
+      // before we report "connected". Without this the very first listTopics()
+      // can race the executor and return empty even though peers exist.
+      await new Promise<void>((resolve) => setTimeout(resolve, 750));
 
       this.setStatus("connected");
     } catch (err) {
