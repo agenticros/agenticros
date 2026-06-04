@@ -176,7 +176,7 @@ function buildRobotContext(
 function transportMode(config: AgenticROSConfig): "local" | "rosbridge" | "webrtc" | "zenoh" {
   const m = config.transport?.mode;
   if (m === "local" || m === "rosbridge" || m === "webrtc" || m === "zenoh") return m;
-  return "rosbridge";
+  return "local";
 }
 
 /** How AgenticROS reaches ROS 2 — matches plugin transport.mode (injected into the model). */

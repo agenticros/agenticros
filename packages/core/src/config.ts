@@ -10,7 +10,12 @@ const IceServerSchema = z.object({
 export const AgenticROSConfigSchema = z.object({
   transport: z
     .object({
-      mode: z.enum(["rosbridge", "local", "webrtc", "zenoh"]).default("rosbridge"),
+      /**
+       * Default is "local" — assumes the gateway is co-located with the robot
+       * (Mode A: DDS direct via rclnodejs, no router). Switch to "rosbridge",
+       * "zenoh", or "webrtc" when the gateway runs off-robot.
+       */
+      mode: z.enum(["rosbridge", "local", "webrtc", "zenoh"]).default("local"),
     })
     .default({}),
 
@@ -258,7 +263,7 @@ export function parseConfig(raw: Record<string, unknown>): AgenticROSConfig {
  * Build TransportConfig from full config for createTransport().
  */
 export function getTransportConfig(config: AgenticROSConfig): TransportConfig {
-  const mode = config.transport?.mode ?? "rosbridge";
+  const mode = config.transport?.mode ?? "local";
   switch (mode) {
     case "rosbridge":
       return { mode: "rosbridge", rosbridge: config.rosbridge ?? { url: "ws://localhost:9090" } };
@@ -269,6 +274,6 @@ export function getTransportConfig(config: AgenticROSConfig): TransportConfig {
     case "zenoh":
       return { mode: "zenoh", zenoh: config.zenoh ?? {} };
     default:
-      return { mode: "rosbridge", rosbridge: config.rosbridge ?? { url: "ws://localhost:9090" } };
+      return { mode: "local", local: config.local ?? { domainId: 0 } };
   }
 }

@@ -36,7 +36,7 @@ export default {
       api.logger.warn("AgenticROS: could not read config from file: " + msg + " — using gateway pluginConfig.");
       config = parseConfig(api.pluginConfig ?? {});
     }
-    const mode = config.transport?.mode ?? "rosbridge";
+    const mode = config.transport?.mode ?? "local";
     const zenohEndpoint = config.zenoh?.routerEndpoint ?? "";
     api.logger.info(`AgenticROS: transport mode=${mode}${mode === "zenoh" && zenohEndpoint ? ` endpoint=${zenohEndpoint}` : ""}`);
 

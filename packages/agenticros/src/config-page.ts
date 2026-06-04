@@ -43,8 +43,8 @@ export function getConfigPageHtml(): string {
       <div class="field">
         <label for="transport.mode">Mode</label>
         <select id="transport.mode" name="transport.mode">
+          <option value="local">Mode A – Local (same machine as the robot, default)</option>
           <option value="rosbridge">Mode B – Rosbridge (local network)</option>
-          <option value="local">Mode A – Local (same machine)</option>
           <option value="webrtc">Mode C – WebRTC (cloud/remote)</option>
           <option value="zenoh">Mode D – Zenoh</option>
         </select>
@@ -56,7 +56,11 @@ export function getConfigPageHtml(): string {
       <div class="field"><label for="robot.namespace">Namespace</label><input type="text" id="robot.namespace" name="robot.namespace" placeholder="e.g. robot-uuid" /></div>
       <div class="field"><label for="robot.cameraTopic">Camera topic</label><input type="text" id="robot.cameraTopic" name="robot.cameraTopic" placeholder="/camera/.../compressed" /></div>
     </section>
-    <section id="section-rosbridge">
+    <section id="section-local">
+      <h2>Local (Mode A)</h2>
+      <div class="field"><label for="local.domainId">Domain ID</label><input type="number" id="local.domainId" name="local.domainId" min="0" /></div>
+    </section>
+    <section id="section-rosbridge" style="display:none">
       <h2>Rosbridge (Mode B)</h2>
       <div class="field"><label for="rosbridge.url">URL</label><input type="url" id="rosbridge.url" name="rosbridge.url" placeholder="ws://localhost:9090" /></div>
       <div class="field"><label><input type="checkbox" id="rosbridge.reconnect" name="rosbridge.reconnect" /> Reconnect</label></div>
@@ -64,13 +68,9 @@ export function getConfigPageHtml(): string {
     </section>
     <section id="section-zenoh" style="display:none">
       <h2>Zenoh (Mode D)</h2>
-      <div class="field"><label for="zenoh.routerEndpoint">Router endpoint</label><input type="text" id="zenoh.routerEndpoint" name="zenoh.routerEndpoint" placeholder="tcp/localhost:7447" /></div>
+      <div class="field"><label for="zenoh.routerEndpoint">Router endpoint</label><input type="text" id="zenoh.routerEndpoint" name="zenoh.routerEndpoint" placeholder="ws://localhost:10000" /></div>
       <div class="field"><label for="zenoh.domainId">Domain ID</label><input type="number" id="zenoh.domainId" name="zenoh.domainId" min="0" /></div>
       <div class="field"><label for="zenoh.keyFormat">Key format</label><select id="zenoh.keyFormat" name="zenoh.keyFormat"><option value="ros2dds">ros2dds</option><option value="rmw_zenoh">rmw_zenoh</option></select></div>
-    </section>
-    <section id="section-local" style="display:none">
-      <h2>Local (Mode A)</h2>
-      <div class="field"><label for="local.domainId">Domain ID</label><input type="number" id="local.domainId" name="local.domainId" min="0" /></div>
     </section>
     <section id="section-webrtc" style="display:none">
       <h2>WebRTC (Mode C)</h2>
@@ -299,7 +299,7 @@ const CONFIG_PAGE_SCRIPT = `(function() {
       var udsEl = getFormElement('skills.followme.useDepthSectors');
       if (udsEl && udsEl.type === 'checkbox') udsEl.checked = true;
     }
-    var mode = (c.transport && c.transport.mode) || 'rosbridge';
+    var mode = (c.transport && c.transport.mode) || 'local';
     document.getElementById('section-rosbridge').style.display = mode === 'rosbridge' ? 'block' : 'none';
     document.getElementById('section-zenoh').style.display = mode === 'zenoh' ? 'block' : 'none';
     document.getElementById('section-local').style.display = mode === 'local' ? 'block' : 'none';

@@ -146,46 +146,75 @@ This sources the workspace and starts `rosbridge_server`. In another terminal, r
 
 ## Step 4: Configure OpenClaw and the AgenticROS plugin
 
-### If OpenClaw is on the robot (Mode A)
+> **Install note (OpenClaw 2026.6+).** The OpenClaw install-time code-safety
+> scan rejects any `node_modules/*` symlink that resolves outside the plugin
+> install root. pnpm workspaces always trip this (every dep is a symlink into
+> the hoisted store), so `openclaw plugins install -l ./packages/agenticros`
+> no longer works against the source tree. The supported flow is to flatten
+> the plugin into a deploy directory first with `pnpm deploy --prod`, then
+> link that. The helper script `scripts/setup_gateway_plugin.sh` does this
+> end-to-end; the commands below show the manual steps it runs.
 
-Mode A uses **local DDS** (`LocalTransport`): OpenClaw runs on the **same machine** as ROS 2, and the plugin talks to the ROS graph directly (no rosbridge required). `ROS_DOMAIN_ID` must match your stack (often **`0`**).
+### If OpenClaw is on the robot (Mode A) — default
 
-1. Build the plugin (from the repo root, on the robot):
-   ```bash
-   cd /path/to/agenticros
-   pnpm install
-   pnpm build
-   ```
-2. Install the plugin into OpenClaw:
-   ```bash
-   openclaw plugins install -l ./packages/agenticros
-   ```
-3. In OpenClaw, set the AgenticROS plugin config:
-   - **Transport mode:** **`local`** (Mode A)
-   - **Domain ID:** same as **`ROS_DOMAIN_ID`** for your ROS 2 processes (default **`0`**).
-4. (Optional) **Gazebo + TurtleBot3 simulation** on the same host, aligned with the repo bringup package:
-   ```bash
-   source /opt/ros/jazzy/setup.bash
-   cd /path/to/agenticros/ros2_ws && source install/setup.bash
-   ros2 launch agenticros_bringup mode_a_gazebo.launch.py
-   ```
-   Or with RViz: `ros2 launch agenticros_bringup mode_a_gazebo_rviz.launch.py`.  
-   Use `ros_domain_id:=N` if the plugin uses a non-zero domain. See the repository README section **“RViz2 and Gazebo”**.
-5. Start OpenClaw and connect your messaging channel (Telegram, WhatsApp, etc.). The plugin joins the local ROS 2 domain.
+Mode A uses **local DDS** (`LocalTransport`): OpenClaw runs on the **same machine** as ROS 2, and the plugin talks to the ROS graph directly (no rosbridge or Zenoh router required). `ROS_DOMAIN_ID` must match your stack (often **`0`**). **This is the default** — `transport.mode` defaults to `local` in the plugin schema, so you can skip the transport block entirely on the robot.
 
-**Note:** If you prefer rosbridge on localhost instead (e.g. for debugging), you can still run **`rosbridge_server`** and set **Transport mode** to **`rosbridge`** with **`ws://localhost:9090`** — that is closer to Mode B wiring, not strict Mode A.
+One-shot install with the helper script:
+
+```bash
+cd /path/to/agenticros
+./scripts/setup_gateway_plugin.sh \
+    --robot-namespace robot3946b404c33e4aa39a8d16deb1c5c593 \
+    --camera-topic /camera/camera/color/image_raw/compressed
+```
+
+Or the manual equivalent:
+
+```bash
+cd /path/to/agenticros
+pnpm install
+pnpm --filter @agenticros/core build
+pnpm --filter @agenticros/ros-camera build
+pnpm --filter ./packages/agenticros build
+
+# Flatten into a deploy dir OpenClaw will accept
+pnpm --filter ./packages/agenticros deploy --prod ~/.agenticros/plugin-deploy
+rm -f ~/.agenticros/plugin-deploy/node_modules/.pnpm/node_modules/agenticros
+
+# Register with OpenClaw (linked from the deploy dir, not the workspace)
+openclaw plugins install -l ~/.agenticros/plugin-deploy
+
+# Apply
+systemctl --user restart openclaw-gateway.service   # or however you run the gateway
+```
+
+(Optional) **Gazebo + TurtleBot3 simulation** on the same host, aligned with the repo bringup package:
+
+```bash
+source /opt/ros/jazzy/setup.bash
+cd /path/to/agenticros/ros2_ws && source install/setup.bash
+ros2 launch agenticros_bringup mode_a_gazebo.launch.py
+```
+
+Or with RViz: `ros2 launch agenticros_bringup mode_a_gazebo_rviz.launch.py`. Use `ros_domain_id:=N` if the plugin uses a non-zero domain. See the repository README section **“RViz2 and Gazebo”**.
+
+If you prefer rosbridge on localhost instead (e.g. for debugging), you can still run **`rosbridge_server`** and set **Transport mode** to **`rosbridge`** with **`ws://localhost:9090`** — that is closer to Mode B wiring, not strict Mode A.
+
+**Re-deploying after a code change.** The deploy directory is a snapshot, not a symlink to the workspace. After editing the plugin source, re-run `scripts/setup_gateway_plugin.sh` (it's idempotent), or repeat the `pnpm --filter ./packages/agenticros build` + `pnpm deploy --prod ~/.agenticros/plugin-deploy` + gateway-restart steps.
 
 ### If OpenClaw is on another machine (Mode B)
 
 1. On your **laptop/server** where OpenClaw runs:
    ```bash
    cd /path/to/agenticros
-   pnpm install
-   pnpm build
-   openclaw plugins install -l ./packages/agenticros
+   ./scripts/setup_gateway_plugin.sh \
+       --transport rosbridge \
+       --rosbridge-url "ws://<ROBOT_IP>:9090" \
+       --robot-namespace <YOUR_NAMESPACE>
    ```
+   Or the manual equivalent of the deploy flow shown in Mode A.
 2. Find the robot’s IP (on the robot run `hostname -I` or check your router).
-3. In OpenClaw, set the AgenticROS plugin config:
+3. In OpenClaw, the plugin config will already have:
    - **Transport mode:** `rosbridge`
    - **Rosbridge URL:** `ws://<ROBOT_IP>:9090`  
      Example: `ws://192.168.1.50:9090`
@@ -203,11 +232,19 @@ OpenClaw runs in the cloud; the robot runs the **AgenticROS Agent Node** (`agent
 ### If using Zenoh (Mode D)
 
 1. Run a Zenoh router (**zenohd**) with **zenoh-plugin-remote-api** so the plugin can connect. AgenticROS uses **zenoh-ts**, which connects only via **WebSocket** (e.g. `ws://localhost:10000`), not native TCP. If you only start `zenohd` with default TCP (7447), native tools like `z_sub -e tcp/127.0.0.1:7447` will see traffic but AgenticROS will not. See [Zenoh setup for AgenticROS](zenoh-agenticros.md) for a config that enables the remote-api WebSocket on port 10000.
-2. In OpenClaw, set the AgenticROS plugin config:
+2. Install the plugin via the helper script with Zenoh wiring:
+   ```bash
+   cd /path/to/agenticros
+   ./scripts/setup_gateway_plugin.sh \
+       --transport zenoh \
+       --zenoh-endpoint "ws://<ROUTER_IP>:10000" \
+       --robot-namespace <YOUR_NAMESPACE>
+   ```
+3. Or set the AgenticROS plugin config manually:
    - **Transport mode:** `zenoh`
    - **Zenoh Router Endpoint:** `ws://<ROUTER_IP>:10000` (or the URL your router advertises)
    - **Zenoh Domain ID:** match your `ROS_DOMAIN_ID` (default `0`)
-3. Optionally set **ROS2 Robot Namespace** (e.g. `robot-uuid`). Topics will be namespaced (e.g. `/robot-uuid/cmd_vel`). This applies to all transport modes.
+4. Optionally set **ROS2 Robot Namespace** (e.g. `robot-uuid`). Topics will be namespaced (e.g. `/robot-uuid/cmd_vel`). This applies to all transport modes.
 
 ### ROS2 topic namespace
 

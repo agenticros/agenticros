@@ -41,8 +41,8 @@
               "webrtc",
               "zenoh"
             ],
-            "description": "Transport mode: rosbridge (Mode B), local (Mode A), webrtc (Mode C), or zenoh (Mode D)",
-            "default": "rosbridge"
+            "description": "Transport mode: local (Mode A, default — gateway co-located with the robot), rosbridge (Mode B, off-robot via WebSocket), webrtc (Mode C, cloud), or zenoh (Mode D)",
+            "default": "local"
           }
         }
       },

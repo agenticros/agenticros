@@ -197,7 +197,9 @@ Tools are mirrored across three adapters. Add to all three:
 
 ## Loading the OpenClaw plugin
 
-- **From source**: Set the gateway's plugin path to this repo's `packages/agenticros` (OpenClaw loads `.ts` via jiti). Run `pnpm install` and **`pnpm build`** (including `pnpm --filter @agenticros/ros-camera build`) at repo root so `@agenticros/core` and `@agenticros/ros-camera` resolve to built `dist/` entrypoints.
+- **One-shot install**: `./scripts/setup_gateway_plugin.sh` — installs workspace deps, builds the required packages, flattens the plugin via `pnpm deploy --prod` into `~/.agenticros/plugin-deploy`, links it with `openclaw plugins install -l`, and restarts the gateway. Flags: `--transport`, `--rosbridge-url`, `--zenoh-endpoint`, `--robot-namespace`, `--camera-topic`, `--skip-build`, `--no-restart`.
+- **Why the deploy step is required (OpenClaw 2026.6+)**: the install-time code safety scan rejects any `node_modules/*` symlink that resolves outside the plugin install root. pnpm workspace symlinks always trip this, so `openclaw plugins install -l ./packages/agenticros` no longer works against the source tree — `pnpm --filter ./packages/agenticros deploy --prod <dir>` produces a flat tree with all deps contained inside.
+- **Default transport mode is `local`** (DDS direct via rclnodejs). Override with `--transport rosbridge|zenoh|webrtc` when the gateway runs off-robot.
 - **Config**: In the OpenClaw config file (e.g. `~/.openclaw/openclaw.json` or `OPENCLAW_CONFIG`), the AgenticROS plugin config lives under `plugins.entries.agenticros.config`. The config UI is at `/agenticros/config` when the gateway is running.
 
 ## ROS2 workspace (Python nodes)
