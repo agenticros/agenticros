@@ -20,6 +20,7 @@ export interface UpOptions {
   rosDistro?: string;
   namespace?: string;
   rviz?: boolean;
+  headless?: boolean;
   camera?: boolean;
   motors?: boolean;
 }
@@ -42,15 +43,27 @@ export async function upCommand(opts: UpOptions): Promise<void> {
       await runSimAmr({
         namespace: opts.namespace,
         useRviz: opts.rviz === true,
+        headless: resolveHeadless(opts.headless),
       });
       break;
     case "sim-arm":
       await runSimArm({
         namespace: opts.namespace,
         useRviz: opts.rviz === true,
+        headless: resolveHeadless(opts.headless),
       });
       break;
   }
+}
+
+/**
+ * If the user explicitly passed --headless, respect it. Otherwise auto-detect:
+ * no DISPLAY env var (typical SSH session, CI, or docker headless container)
+ * means we should run sim headless — otherwise gz would hang waiting for X.
+ */
+function resolveHeadless(flag: boolean | undefined): boolean {
+  if (flag !== undefined) return flag;
+  return !process.env["DISPLAY"];
 }
 
 async function resolveTarget(raw: string | undefined): Promise<UpTarget> {

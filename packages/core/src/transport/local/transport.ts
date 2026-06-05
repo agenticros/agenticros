@@ -280,12 +280,32 @@ export class LocalTransport implements RosTransport {
   async listTopics(): Promise<TopicInfo[]> {
     this.ensureConnected();
 
-    const namesAndTypes: Array<{ name: string; types: string[] }> =
-      this.node.getTopicNamesAndTypes();
+    // DDS discovery is asynchronous. On a freshly-connected node,
+    // getTopicNamesAndTypes() trickles in results as peers respond - the
+    // first call may return 0, the second 2, the third all of them.
+    // Poll until the count is stable across two consecutive 300ms reads (or
+    // time-bounded to ~3s) so we don't return a partial view.
+    const externalFilter = (t: { name: string; types: string[] }) =>
+      !INTERNAL_TOPIC_PREFIXES.some((prefix) => t.name.startsWith(prefix));
 
-    return namesAndTypes
-      .filter((t) => !INTERNAL_TOPIC_PREFIXES.some((prefix) => t.name.startsWith(prefix)))
-      .map((t) => ({ name: t.name, type: t.types[0] ?? "" }));
+    const deadline = Date.now() + 3000;
+    let raw: Array<{ name: string; types: string[] }> = [];
+    let prevCount = -1;
+    let stableHits = 0;
+    while (Date.now() < deadline) {
+      raw = this.node.getTopicNamesAndTypes();
+      const externalCount = raw.filter(externalFilter).length;
+      if (externalCount === prevCount && externalCount > 0) {
+        stableHits++;
+        if (stableHits >= 1) break; // one stable confirmation is enough
+      } else {
+        stableHits = 0;
+        prevCount = externalCount;
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, 300));
+    }
+
+    return raw.filter(externalFilter).map((t) => ({ name: t.name, type: t.types[0] ?? "" }));
   }
 
   async listServices(): Promise<ServiceInfo[]> {

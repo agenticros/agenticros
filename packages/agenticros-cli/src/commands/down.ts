@@ -1,9 +1,10 @@
 /**
  * `agenticros down` - stop AgenticROS components this CLI brought up.
  *
- * Kills processes recorded in /tmp/agenticros-*.pid (consistent with
- * scripts/start_demo.sh), publishes a zero-twist cmd_vel, optionally leaves
- * camera or gateway running.
+ * Kills processes recorded in /tmp/agenticros-*.pid (sim, camera, mcp,
+ * rosbridge) plus stray gz / rviz / parameter_bridge.  The OpenClaw gateway
+ * service is a persistent host service used by Claude Code / MCP - leave it
+ * running unless the user explicitly passes --stop-gateway.
  */
 
 import { execa } from "execa";
@@ -13,7 +14,8 @@ import { err, header, info, ok, warn, withSpinner } from "../util/logger.js";
 
 export interface DownOptions {
   keepCamera?: boolean;
-  keepGateway?: boolean;
+  /** Default false. When true, also stops openclaw-gateway.service. */
+  stopGateway?: boolean;
 }
 
 const STOPPABLE: ManagedProcess[] = ["sim", "mcp", "rosbridge", "camera"];
@@ -21,12 +23,14 @@ const STOPPABLE: ManagedProcess[] = ["sim", "mcp", "rosbridge", "camera"];
 export async function downCommand(opts: DownOptions): Promise<void> {
   header("AgenticROS - shutting down");
 
+  let stoppedAny = false;
   for (const name of STOPPABLE) {
     if (name === "camera" && opts.keepCamera) {
       info("Skipping camera (--keep-camera).");
       continue;
     }
     if (!isPidAlive(name)) continue;
+    stoppedAny = true;
     await withSpinner(`Stopping ${name}`, async () => {
       const pid = killPid(name, "SIGTERM");
       if (pid === undefined) return;
@@ -35,13 +39,19 @@ export async function downCommand(opts: DownOptions): Promise<void> {
     });
   }
 
-  // Also clean up any stray gz / rviz from the sim that did not write a pidfile.
-  await tryKill(["gz sim", "rviz2", "parameter_bridge"]);
+  // Mop up any stray sim subprocesses that did not write a pidfile (children of
+  // ros2 launch typically inherit termination, but be defensive).
+  await tryKill(["gz sim", "ign gazebo", "rviz2", "parameter_bridge"]);
 
-  if (!opts.keepGateway) {
+  if (opts.stopGateway) {
     await stopGatewayService();
+  } else {
+    info("Leaving openclaw-gateway running (use --stop-gateway to also stop it).");
   }
 
+  if (!stoppedAny && !opts.stopGateway) {
+    info("Nothing to stop.");
+  }
   ok("Done.");
 }
 

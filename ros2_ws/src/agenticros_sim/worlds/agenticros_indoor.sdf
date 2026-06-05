@@ -1,0 +1,183 @@
+<?xml version="1.0"?>
+<!--
+  agenticros_indoor.sdf
+  Gazebo Harmonic 8.x indoor environment for testing AgenticROS' sim AMR.
+
+  Layout:
+    * 12 m x 12 m floor with subtle walls (so SLAM-style demos have something
+      to localize against)
+    * Three free-standing cylinder + box obstacles inside the room so the
+      depth camera and LIDAR see non-trivial data
+    * One human-sized cylinder labeled "person" near the center — used by the
+      ros2_follow_me smoke test
+    * Standard physics + sensors + ros_gz system plugins so the AMR's depth
+      camera / IMU / lidar publish on Gazebo topics that the bridge picks up
+-->
+<sdf version="1.10">
+  <world name="agenticros_indoor">
+
+    <!-- ====== System plugins ====== -->
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+    <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu"/>
+
+    <gravity>0 0 -9.81</gravity>
+
+    <gui fullscreen="false">
+      <plugin filename="MinimalScene" name="3D View">
+        <gz-gui>
+          <title>3D View</title>
+          <property type="bool" key="showTitleBar">false</property>
+          <property type="string" key="state">docked</property>
+        </gz-gui>
+        <engine>ogre2</engine>
+        <scene>scene</scene>
+        <ambient_light>0.4 0.4 0.4</ambient_light>
+        <background_color>0.8 0.8 0.8</background_color>
+        <camera_pose>-7 -7 6 0 0.6 0.78</camera_pose>
+      </plugin>
+    </gui>
+
+    <!-- ====== Lighting ====== -->
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.9 0.9 0.9 1</diffuse>
+      <specular>0.2 0.2 0.2 1</specular>
+      <direction>-0.3 0.2 -0.9</direction>
+    </light>
+
+    <!-- ====== Ground ====== -->
+    <model name="ground_plane">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry><plane><normal>0 0 1</normal><size>20 20</size></plane></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><plane><normal>0 0 1</normal><size>20 20</size></plane></geometry>
+          <material>
+            <ambient>0.6 0.6 0.6 1</ambient>
+            <diffuse>0.75 0.75 0.75 1</diffuse>
+            <specular>0.05 0.05 0.05 1</specular>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ====== Walls (12m x 12m room, 2.5m tall, 0.15m thick) ====== -->
+    <model name="walls">
+      <static>true</static>
+      <link name="link">
+        <!-- North wall (+Y) -->
+        <collision name="north_col">
+          <pose>0 6 1.25 0 0 0</pose>
+          <geometry><box><size>12 0.15 2.5</size></box></geometry>
+        </collision>
+        <visual name="north_vis">
+          <pose>0 6 1.25 0 0 0</pose>
+          <geometry><box><size>12 0.15 2.5</size></box></geometry>
+          <material><ambient>0.85 0.85 0.9 1</ambient><diffuse>0.9 0.9 0.95 1</diffuse></material>
+        </visual>
+        <!-- South wall (-Y) -->
+        <collision name="south_col">
+          <pose>0 -6 1.25 0 0 0</pose>
+          <geometry><box><size>12 0.15 2.5</size></box></geometry>
+        </collision>
+        <visual name="south_vis">
+          <pose>0 -6 1.25 0 0 0</pose>
+          <geometry><box><size>12 0.15 2.5</size></box></geometry>
+          <material><ambient>0.85 0.85 0.9 1</ambient><diffuse>0.9 0.9 0.95 1</diffuse></material>
+        </visual>
+        <!-- East wall (+X) -->
+        <collision name="east_col">
+          <pose>6 0 1.25 0 0 0</pose>
+          <geometry><box><size>0.15 12 2.5</size></box></geometry>
+        </collision>
+        <visual name="east_vis">
+          <pose>6 0 1.25 0 0 0</pose>
+          <geometry><box><size>0.15 12 2.5</size></box></geometry>
+          <material><ambient>0.85 0.85 0.9 1</ambient><diffuse>0.9 0.9 0.95 1</diffuse></material>
+        </visual>
+        <!-- West wall (-X) -->
+        <collision name="west_col">
+          <pose>-6 0 1.25 0 0 0</pose>
+          <geometry><box><size>0.15 12 2.5</size></box></geometry>
+        </collision>
+        <visual name="west_vis">
+          <pose>-6 0 1.25 0 0 0</pose>
+          <geometry><box><size>0.15 12 2.5</size></box></geometry>
+          <material><ambient>0.85 0.85 0.9 1</ambient><diffuse>0.9 0.9 0.95 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ====== Person-sized cylinder (for ros2_follow_me depth-mode smoke test) ====== -->
+    <!--
+      Roughly human-shaped: 0.35 m radius, 1.7 m tall, centered ~2.5 m in front
+      of the AMR's spawn pose (the AMR spawns at origin facing +X by default).
+    -->
+    <model name="person_target">
+      <!-- Static so it doesn't drift or topple when nudged by the AMR. The
+           follow-me smoke test just needs a person-sized object in front of
+           the spawn pose; dynamics would make the smoke test flaky. -->
+      <static>true</static>
+      <pose>2.5 0 0.85 0 0 0</pose>
+      <link name="link">
+        <inertial>
+          <mass>60</mass>
+          <inertia><ixx>14.7</ixx><iyy>14.7</iyy><izz>3.7</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
+        </inertial>
+        <collision name="collision">
+          <geometry><cylinder><radius>0.35</radius><length>1.7</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.35</radius><length>1.7</length></cylinder></geometry>
+          <material><ambient>0.7 0.4 0.3 1</ambient><diffuse>0.8 0.5 0.4 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ====== A few static obstacles to give the LIDAR / depth camera structure ====== -->
+    <model name="obstacle_box_1">
+      <static>true</static>
+      <pose>3 -2.5 0.4 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.8 0.8 0.8</size></box></geometry></collision>
+        <visual name="v">
+          <geometry><box><size>0.8 0.8 0.8</size></box></geometry>
+          <material><ambient>0.3 0.5 0.7 1</ambient><diffuse>0.3 0.5 0.7 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="obstacle_cyl_1">
+      <static>true</static>
+      <pose>-2 2.5 0.6 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><cylinder><radius>0.35</radius><length>1.2</length></cylinder></geometry></collision>
+        <visual name="v">
+          <geometry><cylinder><radius>0.35</radius><length>1.2</length></cylinder></geometry>
+          <material><ambient>0.7 0.6 0.2 1</ambient><diffuse>0.8 0.7 0.2 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="obstacle_box_2">
+      <static>true</static>
+      <pose>-3.5 -3 0.3 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>1.2 0.6 0.6</size></box></geometry></collision>
+        <visual name="v">
+          <geometry><box><size>1.2 0.6 0.6</size></box></geometry>
+          <material><ambient>0.3 0.7 0.4 1</ambient><diffuse>0.3 0.8 0.4 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+  </world>
+</sdf>

@@ -1,0 +1,28 @@
+{
+  "$comment": "AgenticROS config template tuned for sim-amr. Drop this in ~/.agenticros/config.json (or run `agenticros init` and answer 'simulation') to point the MCP server + OpenClaw plugin at the sim's topics. All values match agenticros_sim/config/amr_bridge.yaml. NOTE: robot.namespace is intentionally empty - the sim bridge publishes /cmd_vel, /scan, /imu/data, etc. at the graph root (no robot prefix), so AgenticROS must NOT namespace topics. For multi-robot sim, prefix the topics in amr_bridge.yaml and set namespace here to match.",
+  "transport": {
+    "mode": "local"
+  },
+  "robot": {
+    "namespace": "",
+    "name": "Sim AMR",
+    "cameraTopic": "/camera/camera/color/image_raw"
+  },
+  "safety": {
+    "maxLinearVelocity": 0.5,
+    "maxAngularVelocity": 1.0
+  },
+  "teleop": {
+    "cmdVelTopic": "/cmd_vel",
+    "speedDefault": 0.2,
+    "cameraTopics": [
+      { "topic": "/camera/camera/color/image_raw", "label": "Sim RGB" },
+      { "topic": "/camera/camera/depth/image_rect_raw", "label": "Sim depth" }
+    ]
+  },
+  "skills": {
+    "followme": {
+      "depthTopic": "/camera/camera/depth/image_rect_raw"
+    }
+  }
+}

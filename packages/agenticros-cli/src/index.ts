@@ -41,6 +41,7 @@ program
   .option("--ros-distro <distro>", "ROS 2 distribution (humble, jazzy, ...)")
   .option("--namespace <ns>", "Robot namespace override")
   .option("--rviz", "Open RViz alongside the sim (sim targets only)", false)
+  .option("--headless", "Run gz-sim with no GUI (auto-enabled if $DISPLAY is unset)")
   .option("--no-camera", "Skip starting the RealSense camera (real target only)")
   .option("--no-motors", "Skip starting the motor controller (real target only)")
   .action(async (target: string | undefined, opts) => {
@@ -49,9 +50,11 @@ program
 
 program
   .command("down")
-  .description("Stop any AgenticROS processes that this CLI brought up.")
+  .description(
+    "Stop AgenticROS processes (sim, camera, mcp, rosbridge). Leaves the OpenClaw gateway running by default.",
+  )
   .option("--keep-camera", "Leave the RealSense camera running", false)
-  .option("--keep-gateway", "Leave the OpenClaw gateway service running", false)
+  .option("--stop-gateway", "Also stop the openclaw-gateway service (default: keep it running)", false)
   .action(async (opts) => {
     await downCommand(opts);
   });
@@ -94,7 +97,7 @@ program
   .description(
     "Tail logs. target = camera | mcp | gateway | sim (default: print available logs).",
   )
-  .option("-f, --follow", "Keep streaming new output", true)
+  .option("-f, --follow", "Tail the log (tail -F). Default prints last N lines and exits.", false)
   .option("-n, --lines <n>", "Number of lines from the end to start at", "200")
   .action(async (target: string | undefined, opts) => {
     await logsCommand({ target, ...opts });

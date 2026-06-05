@@ -37,6 +37,8 @@ export async function configCommand(opts: ConfigOptions): Promise<void> {
   switch (action) {
     case "show":
       return showConfig();
+    case "get":
+      return getConfig(opts.keyValue);
     case "set":
       return setConfig(opts.keyValue);
     case "edit":
@@ -44,9 +46,32 @@ export async function configCommand(opts: ConfigOptions): Promise<void> {
     case "reset":
       return resetConfig();
     default:
-      err(`Unknown action '${opts.action}'. Use: show | set | edit | reset.`);
+      err(`Unknown action '${opts.action}'. Use: show | get | set | edit | reset.`);
       process.exit(2);
   }
+}
+
+function getConfig(key: string | undefined): void {
+  if (!key) {
+    err("Usage: agenticros config get <key> (e.g. robot.namespace)");
+    process.exit(2);
+  }
+  const p = configPath();
+  if (!existsSync(p)) {
+    warn("Config file does not exist yet. Run `agenticros init` to create it.");
+    return;
+  }
+  const obj = safeReadJson(p);
+  if (!obj) {
+    err(`Could not parse ${p}.`);
+    process.exit(1);
+  }
+  const value = getByPath(obj, key.split("."));
+  if (value === undefined) {
+    warn(`Key '${key}' is not set in ${p}.`);
+    return;
+  }
+  process.stdout.write(`${typeof value === "string" ? value : JSON.stringify(value)}\n`);
 }
 
 function showConfig(): void {
@@ -117,6 +142,18 @@ function safeReadJson(path: string): Record<string, unknown> | undefined {
   } catch {
     return undefined;
   }
+}
+
+function getByPath(obj: Record<string, unknown>, keys: string[]): unknown {
+  let cursor: unknown = obj;
+  for (const k of keys) {
+    if (cursor && typeof cursor === "object" && !Array.isArray(cursor) && k in (cursor as Record<string, unknown>)) {
+      cursor = (cursor as Record<string, unknown>)[k];
+    } else {
+      return undefined;
+    }
+  }
+  return cursor;
 }
 
 function setByPath(obj: Record<string, unknown>, keys: string[], value: unknown): void {

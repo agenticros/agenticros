@@ -21,6 +21,8 @@ import { writeState } from "../util/state.js";
 export interface SimRunOptions {
   namespace?: string;
   useRviz?: boolean;
+  /** True = headless gz (-s --headless-rendering). Auto-detected from $DISPLAY upstream. */
+  headless?: boolean;
 }
 
 async function runSim(robot: "amr" | "arm", opts: SimRunOptions): Promise<void> {
@@ -43,6 +45,7 @@ async function runSim(robot: "amr" | "arm", opts: SimRunOptions): Promise<void> 
 
   const args = ["--robot", robot, "--namespace", ns];
   if (opts.useRviz) args.push("--rviz");
+  if (opts.headless) args.push("--no-gui");
 
   info(`Invoking ${script} ${args.join(" ")}…`);
   try {

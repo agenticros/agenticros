@@ -37,10 +37,10 @@ export async function logsCommand(opts: LogsOptions): Promise<void> {
   }
   if (!TARGETS.includes(target)) {
     warn(`Unknown log target '${opts.target}'. Valid: ${TARGETS.join(", ")}.`);
-    return;
+    process.exit(2);
   }
 
-  const follow = opts.follow !== false;
+  const follow = opts.follow === true;
   const n = Number(opts.lines ?? 200);
 
   if (target === "gateway") {

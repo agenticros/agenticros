@@ -8,7 +8,7 @@
 
 import { execa } from "execa";
 
-import { isPidAlive, readPid, type ManagedProcess } from "../util/pidfile.js";
+import { clearPid, isPidAlive, readPid, type ManagedProcess } from "../util/pidfile.js";
 import { colors, header, info } from "../util/logger.js";
 import { readState } from "../util/state.js";
 
@@ -21,11 +21,15 @@ export interface StatusOptions {
 export async function statusCommand(opts: StatusOptions): Promise<void> {
   const state = readState();
   const components: { name: string; running: boolean; pid: number | undefined }[] = COMPONENTS.map(
-    (name) => ({
-      name,
-      running: isPidAlive(name),
-      pid: readPid(name),
-    }),
+    (name) => {
+      const alive = isPidAlive(name);
+      const pid = readPid(name);
+      // Auto-clean stale pidfiles so subsequent runs aren't confused by ghosts.
+      if (!alive && pid !== undefined) {
+        clearPid(name);
+      }
+      return { name, running: alive, pid: alive ? pid : undefined };
+    },
   );
 
   let gatewayActive = false;
