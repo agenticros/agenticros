@@ -62,7 +62,8 @@ program
   .option("--ros-distro <distro>", "ROS 2 distribution (humble, jazzy, ...)")
   .option("--namespace <ns>", "Robot namespace override")
   .option("--rviz", "Open RViz alongside the sim (sim targets only)", false)
-  .option("--headless", "Run gz-sim with no GUI (auto-enabled if $DISPLAY is unset)")
+  .option("--headless", "Run gz-sim with no GUI (auto-enabled on Jetson or when $DISPLAY is unset)")
+  .option("--no-headless", "Force gz-sim GUI on (override Jetson auto-headless)")
   .option("--no-camera", "Skip starting the RealSense camera (real target only)")
   .option("--no-motors", "Skip starting the motor controller (real target only)")
   .action(async (target: string | undefined, opts) => {

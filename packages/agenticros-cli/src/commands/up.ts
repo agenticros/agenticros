@@ -8,11 +8,13 @@
  * That keeps phase-1 light and the scripts independently usable.
  */
 
+import { existsSync } from "node:fs";
+
 import { select } from "@inquirer/prompts";
 
 import { runRealRobot } from "../runners/real-robot.js";
 import { runSimAmr, runSimArm } from "../runners/sim.js";
-import { err, info } from "../util/logger.js";
+import { err, info, warn } from "../util/logger.js";
 import { writeState } from "../util/state.js";
 
 export interface UpOptions {
@@ -57,13 +59,34 @@ export async function upCommand(opts: UpOptions): Promise<void> {
 }
 
 /**
- * If the user explicitly passed --headless, respect it. Otherwise auto-detect:
- * no DISPLAY env var (typical SSH session, CI, or docker headless container)
- * means we should run sim headless — otherwise gz would hang waiting for X.
+ * If the user explicitly passed --headless / --no-headless, respect it.
+ * Otherwise auto-detect headless when *either* of:
+ *   - no DISPLAY env var (SSH session, CI, headless docker container)
+ *   - this is a Jetson (Tegra). On Jetson L4T the gz GUI viewport renders
+ *     as a solid white window because libEGL falls back through Mesa's
+ *     nvidia-drm DRI driver (which doesn't exist on Tegra). We have no good
+ *     workaround inside the CLI, so by default we skip the broken gz GUI
+ *     and let RViz be the primary visualisation. Users who want to force
+ *     the gz GUI anyway can pass `--no-headless` (and optionally set
+ *     AGENTICROS_GZ_SOFTWARE_RENDER=1 to fall back to llvmpipe).
  */
 function resolveHeadless(flag: boolean | undefined): boolean {
   if (flag !== undefined) return flag;
-  return !process.env["DISPLAY"];
+  if (!process.env["DISPLAY"]) return true;
+  if (isJetson()) {
+    warn(
+      "Jetson detected (Tegra). The gz GUI viewport renders blank on Jetson;\n" +
+        "  defaulting to --headless. Use RViz with --rviz to visualise the AMR\n" +
+        "  (or override with `--no-headless` if you want to try the gz GUI).",
+    );
+    return true;
+  }
+  return false;
+}
+
+/** Detect NVIDIA Jetson / Tegra via the L4T release file. */
+function isJetson(): boolean {
+  return existsSync("/etc/nv_tegra_release");
 }
 
 async function resolveTarget(raw: string | undefined): Promise<UpTarget> {

@@ -127,19 +127,25 @@ when it detects `/usr/lib/aarch64-linux-gnu/tegra-egl/libEGL_nvidia.so.0`,
 but the gz GUI's Ogre2 renderer initialises its own EGL context which still
 hits Mesa, so the fix is best-effort.
 
-**Recommended workflow on Jetson**: skip the gz GUI and use **RViz** as the
-primary visualisation. RViz renders the URDF (chassis, wheels, caster, lidar
-cylinder, camera box) plus the live `/scan`, `/camera/...` image, depth point
-cloud, and TF tree.
+**Default on Jetson**: the CLI now auto-detects Tegra (`/etc/nv_tegra_release`)
+and runs gz-sim headless, so you'll never see the white window. RViz is the
+primary visualisation and renders the URDF (chassis, wheels, caster, lidar
+cylinder, camera box) plus live `/scan`, `/camera/...` image, depth point
+cloud, and TF tree:
 
 ```bash
-# Headless gz (no GUI window) + RViz with full robot model + sensors
-agenticros up sim-amr --rviz --headless
+agenticros up sim-amr --rviz     # gz headless + RViz visible (default on Jetson)
 ```
 
-If you really need the Gazebo GUI on Jetson, set
-`AGENTICROS_GZ_SOFTWARE_RENDER=1` before `agenticros up` to fall back to
-Mesa's llvmpipe software rasteriser — slow (~5 fps) but actually renders.
+To force the Gazebo GUI on anyway (e.g. you have a working Ogre install or
+want to try software rendering):
+
+```bash
+AGENTICROS_GZ_SOFTWARE_RENDER=1 agenticros up sim-amr --rviz --no-headless
+```
+
+`AGENTICROS_GZ_SOFTWARE_RENDER=1` falls back to Mesa's llvmpipe rasteriser —
+slow (~5 fps) but at least the viewport renders.
 
 ### RViz shows only TF axes, no robot mesh
 
