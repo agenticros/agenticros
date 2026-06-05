@@ -1,0 +1,77 @@
+import type {
+  ConnectionStatus,
+  ConnectionHandler,
+  Subscription,
+  PublishOptions,
+  AdvertiseOptions,
+  SubscribeOptions,
+  ServiceCallOptions,
+  ServiceCallResult,
+  ActionGoalOptions,
+  ActionResult,
+  TopicInfo,
+  ServiceInfo,
+  ActionInfo,
+  MessageHandler,
+} from "./types.js";
+
+/**
+ * Unified transport interface for ROS2 communication.
+ *
+ * All deployment modes (local DDS, rosbridge WebSocket, WebRTC data channel)
+ * implement this interface so that plugin tools work identically regardless
+ * of the underlying transport.
+ */
+export interface RosTransport {
+  // --- Connection lifecycle ---
+
+  /** Establish the transport connection. */
+  connect(): Promise<void>;
+
+  /** Gracefully close the transport connection. */
+  disconnect(): Promise<void>;
+
+  /** Get current connection status. */
+  getStatus(): ConnectionStatus;
+
+  /** Register a connection status change handler. Returns a cleanup function. */
+  onConnection(handler: ConnectionHandler): () => void;
+
+  // --- Topics ---
+
+  /** Optional: advertise topic with type (rosbridge uses this so publish works when topic not yet established). */
+  advertise?(options: AdvertiseOptions): void;
+
+  /** Publish a message to a ROS2 topic. May return a Promise so callers can await delivery (e.g. Zenoh put). */
+  publish(options: PublishOptions): void | Promise<void>;
+
+  /** Subscribe to a ROS2 topic. Returns a Subscription handle. */
+  subscribe(options: SubscribeOptions, handler: MessageHandler): Subscription;
+
+  /** Optional: async subscribe so the subscriber is declared before returning (Zenoh). Use when waiting for first message immediately. */
+  subscribeAsync?(options: SubscribeOptions, handler: MessageHandler): Promise<Subscription>;
+
+  // --- Services ---
+
+  /** Call a ROS2 service and return the result. */
+  callService(options: ServiceCallOptions): Promise<ServiceCallResult>;
+
+  // --- Actions ---
+
+  /** Send a goal to a ROS2 action server. */
+  sendActionGoal(options: ActionGoalOptions): Promise<ActionResult>;
+
+  /** Cancel an in-progress action goal. */
+  cancelActionGoal(action: string): Promise<void>;
+
+  // --- Introspection ---
+
+  /** List all available ROS2 topics. */
+  listTopics(): Promise<TopicInfo[]>;
+
+  /** List all available ROS2 services. */
+  listServices(): Promise<ServiceInfo[]>;
+
+  /** List all available ROS2 action servers. */
+  listActions(): Promise<ActionInfo[]>;
+}

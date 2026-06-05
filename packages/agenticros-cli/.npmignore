@@ -1,0 +1,19 @@
+# Source isn't shipped — only the bundled dist/ + runtime/ are.
+src/
+tsconfig.json
+tsconfig.tsbuildinfo
+tsup.config.ts
+
+# Tests, internal scratch
+__tests__/
+*.test.ts
+*.test.js
+*.spec.ts
+.eslintrc*
+
+# Dev artefacts
+node_modules/
+.DS_Store
+*.log
+*.swp
+.vscode/

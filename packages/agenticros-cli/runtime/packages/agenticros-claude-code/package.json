@@ -1,0 +1,29 @@
+{
+  "name": "@agenticros/claude-code",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "AgenticROS MCP server for Claude Code CLI — chat with your ROS2 robot from the terminal",
+  "main": "./dist/index.js",
+  "bin": {
+    "agenticros-mcp": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@agenticros/core": "workspace:*",
+    "@agenticros/ros-camera": "workspace:*",
+    "@huggingface/transformers": "^3.0.0",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "onnxruntime-node": "^1.20.0",
+    "sharp": "^0.33.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "typescript": "^5.7.0"
+  },
+  "author": "PlaiPin",
+  "license": "Apache-2.0"
+}

@@ -1,0 +1,11 @@
+{
+  "packedAt": "2026-06-05T20:01:29.764Z",
+  "repo": "https://github.com/PlaiPin/agenticros",
+  "note": "This directory is a snapshot of the agenticros monorepo source. `agenticros init` will copy it to ~/agenticros and run pnpm install + colcon build there.",
+  "layout": {
+    "scripts": "scripts/",
+    "ros2_packages": "ros2_ws/src/agenticros_*",
+    "js_packages": "packages/*",
+    "mcp_prebuilt": "packages/agenticros-claude-code/dist/index.js"
+  }
+}
