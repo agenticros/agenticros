@@ -1,1 +1,0 @@
-# AgenticROS Follow Me mission

@@ -1,1 +1,0 @@
-# AgenticROS bringup package
