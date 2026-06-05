@@ -210,7 +210,14 @@
       <wheel_separation>0.36</wheel_separation>
       <wheel_radius>0.08</wheel_radius>
       <odom_publish_frequency>50</odom_publish_frequency>
-      <topic>cmd_vel</topic>
+      <!--
+        Intentionally NOT setting <topic> so gz-sim uses its documented default
+        of /model/<model_name>/cmd_vel. The bridge in config/amr_bridge.yaml
+        publishes there, so plugin and bridge agree.
+        Previously had <topic>cmd_vel</topic> which gz interpreted as a
+        relative/no-namespace topic and bound to /cmd_vel - the bridge then
+        published into a void and the robot never moved.
+      -->
       <odom_topic>odometry</odom_topic>
       <tf_topic>tf</tf_topic>
       <frame_id>odom</frame_id>
