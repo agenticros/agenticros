@@ -213,6 +213,55 @@ try {
   }
   ok(`Patched zenoh-ts present in store: ${patched.slice(0, 70)}...`);
 
+  // 8. Refresh-over-existing-install coverage. Mirrors what init.ts does in
+  // "installed mode" - overlay-copy bundle paths over an existing install
+  // without nuking pnpm's per-package symlinks. Regression test for 0.1.7:
+  // cp -a SRC/. DST/ blows up when DST is a file (e.g. tsconfig.base.json).
+  step("Simulating refresh over a pre-existing snapshot (regression test for 0.1.7)...");
+  const fakeOld = join(work, "old-install");
+  mkdirSync(fakeOld);
+  fs.writeFileSync(join(fakeOld, "tsconfig.base.json"), '{"old":"to-be-overwritten"}');
+  mkdirSync(join(fakeOld, "packages"), { recursive: true });
+  fs.writeFileSync(
+    join(fakeOld, "packages", "preserved.txt"),
+    "must survive overlay refresh",
+  );
+
+  // Replay the refresh logic from init.ts. If init.ts changes its branching,
+  // update this block in lockstep.
+  const refreshTargets = ["tsconfig.base.json", "packages"];
+  for (const rel of refreshTargets) {
+    const src = join(runtimeInTar, rel);
+    const dst = join(fakeOld, rel);
+    if (!existsSync(src)) continue;
+    const srcIsDir = fs.statSync(src).isDirectory();
+    if (srcIsDir && existsSync(dst)) {
+      run("cp", ["-a", `${src}/.`, `${dst}/`]);
+    } else {
+      if (existsSync(dst) && !srcIsDir) run("rm", ["-f", dst]);
+      run("cp", ["-a", src, dst]);
+    }
+  }
+
+  const tsStat = fs.statSync(join(fakeOld, "tsconfig.base.json"));
+  if (!tsStat.isFile()) {
+    fail("Refresh turned tsconfig.base.json into a non-file. cp branching is wrong.");
+    process.exit(1);
+  }
+  const tsContent = fs.readFileSync(join(fakeOld, "tsconfig.base.json"), "utf8");
+  if (tsContent.includes('"old":"to-be-overwritten"')) {
+    fail("Refresh failed to overwrite tsconfig.base.json with the bundle's version.");
+    process.exit(1);
+  }
+  if (!existsSync(join(fakeOld, "packages", "preserved.txt"))) {
+    fail(
+      "Refresh wiped a pre-existing file inside packages/. Overlay semantics " +
+        "are broken - this is exactly what kills pnpm's per-package node_modules symlinks.",
+    );
+    process.exit(1);
+  }
+  ok("Refresh-over-existing-install preserves files and overwrites cleanly.");
+
   ok("ALL CHECKS PASSED. Tarball is publish-ready.");
 } finally {
   // best-effort cleanup; don't mask earlier errors

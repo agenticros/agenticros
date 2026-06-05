@@ -14,7 +14,7 @@
  * Reuses the existing shell scripts as subprocesses (no logic duplication).
  */
 
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 import { confirm, input, password, select } from "@inquirer/prompts";
@@ -403,11 +403,20 @@ async function refreshShippedCode(installDir: string): Promise<void> {
       const src = join(source, rel);
       const dst = join(installDir, rel);
       mkdirSync(dirname(dst), { recursive: true });
-      if (existsSync(dst)) {
+
+      const srcIsDir = statSync(src).isDirectory();
+      if (srcIsDir && existsSync(dst)) {
         // Directory overlay: copy contents of SRC into DST, overwriting same-
-        // named files but leaving everything else alone.
+        // named files but leaving everything else alone (preserves pnpm's
+        // per-package node_modules symlinks).
         await execa("cp", ["-a", `${src}/.`, `${dst}/`]);
       } else {
+        // File, OR directory that doesn't exist at dest yet: plain `cp -a`.
+        // Strip a stale dst first only when it's a non-dir leaf file we
+        // need to overwrite (e.g. tsconfig.base.json).
+        if (existsSync(dst) && !srcIsDir) {
+          await execa("rm", ["-f", dst]);
+        }
         await execa("cp", ["-a", src, dst]);
       }
     }
