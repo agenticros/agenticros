@@ -24,6 +24,7 @@ import { runDoctorChecks } from "./doctor.js";
 import { getCliPaths, resetPathsCache } from "../util/paths.js";
 import { header, info, ok, warn, err, dim, withSpinner } from "../util/logger.js";
 import { writeState } from "../util/state.js";
+import { isWorkspaceBuilt, isWorkspaceInstalled } from "../util/workspace.js";
 
 export interface InitOptions {
   force?: boolean;
@@ -91,8 +92,11 @@ export async function initCommand(opts: InitOptions): Promise<void> {
 
   const before = await runDoctorChecks();
 
-  // Step: workspace deps.
-  if (opts.force || !nodeModulesPresent(repoRoot)) {
+  // Step: workspace deps. We check for `.modules.yaml` (not just node_modules/)
+  // so a partial / aborted previous install still triggers a fresh `pnpm
+  // install`. Otherwise users got stuck in "node_modules exists but tsc isn't
+  // in .bin" purgatory.
+  if (opts.force || !isWorkspaceInstalled(repoRoot)) {
     await runStep("Installing JS workspace dependencies (pnpm install)", async () => {
       // Explicitly pass the flags here in addition to writing them to .npmrc.
       // Reason: in some environments (containers, ephemeral CI, certain pnpm
@@ -122,10 +126,12 @@ export async function initCommand(opts: InitOptions): Promise<void> {
     ok("JS workspace deps already installed (skip).");
   }
 
-  // Step: build TS workspace.
-  if (opts.force || !mcpDistExists()) {
+  // Step: build TS workspace. Check core/dist (not just MCP dist) - the MCP
+  // dist is pre-built in the bundle but core/ros-camera need to be built so
+  // claude-code's downstream consumers (and start_demo.sh) can find them.
+  if (opts.force || !isWorkspaceBuilt(repoRoot)) {
     await runStep("Building TypeScript workspace (pnpm build)", async () => {
-      await execa("pnpm", ["build"], { cwd: repoRoot, stdio: "inherit" });
+      await execa("pnpm", ["-r", "build"], { cwd: repoRoot, stdio: "inherit" });
     });
   } else {
     ok("TypeScript dist already built (skip).");
@@ -207,13 +213,6 @@ async function runShell(cmd: string): Promise<void> {
   await execa("bash", ["-lc", cmd], { stdio: "inherit" });
 }
 
-function nodeModulesPresent(repoRoot: string): boolean {
-  return existsSync(join(repoRoot, "node_modules"));
-}
-
-function mcpDistExists(): boolean {
-  return existsSync(getCliPaths().mcpDistDir);
-}
 
 function colconBuilt(ws: string): boolean {
   return existsSync(join(ws, "install", "setup.bash"));
@@ -380,14 +379,16 @@ function writeInitNpmrcInline(installDir: string): void {
 /**
  * Refresh paths in ALWAYS_REFRESH_FROM_BUNDLE from the bundled runtime/.
  *
- * This is destructive *within* the listed paths: e.g. an existing
- * ~/agenticros/scripts/start_demo.sh will be overwritten by the new bundle's
- * version. Paths NOT on the list (config/, node_modules/, ros2_ws/build/,
- * the user's own files, etc.) are untouched.
+ * Overlay copy semantics:
+ *   * Files present in both bundle and install -> OVERWRITTEN with bundle version
+ *   * Files in install but NOT in bundle -> PRESERVED (so pnpm's per-package
+ *     node_modules symlinks inside packages/<pkg>/ survive a refresh)
+ *   * Files in bundle but NOT in install -> ADDED
  *
- * Uses `cp -a` per path so symlinks, perms, and mtimes are preserved. Each
- * destination is wiped first to handle "file removed from the new bundle"
- * cleanly (e.g. an obsolete script being deleted).
+ * Uses `cp -a SRC/. DST/` per path so symlinks, perms, and mtimes are
+ * preserved. We deliberately do NOT `rm -rf` the destination first: doing so
+ * destroys pnpm's per-package node_modules/.bin symlinks and breaks subsequent
+ * builds even though root node_modules looks healthy.
  */
 async function refreshShippedCode(installDir: string): Promise<void> {
   const paths = getCliPaths();
@@ -401,14 +402,14 @@ async function refreshShippedCode(installDir: string): Promise<void> {
     for (const rel of targets) {
       const src = join(source, rel);
       const dst = join(installDir, rel);
-      // Wipe the destination first so removed files in the new bundle don't
-      // linger. We're only ever inside ALWAYS_REFRESH_FROM_BUNDLE paths, which
-      // never contain user data.
-      if (existsSync(dst)) {
-        await execa("rm", ["-rf", dst]);
-      }
       mkdirSync(dirname(dst), { recursive: true });
-      await execa("cp", ["-a", src, dst]);
+      if (existsSync(dst)) {
+        // Directory overlay: copy contents of SRC into DST, overwriting same-
+        // named files but leaving everything else alone.
+        await execa("cp", ["-a", `${src}/.`, `${dst}/`]);
+      } else {
+        await execa("cp", ["-a", src, dst]);
+      }
     }
   });
 }
