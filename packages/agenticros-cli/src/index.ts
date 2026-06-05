@@ -20,8 +20,29 @@ import { logsCommand } from "./commands/logs.js";
 import { configCommand } from "./commands/config.js";
 import { runMenu } from "./menu.js";
 import { err } from "./util/logger.js";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 
-const VERSION = "0.1.0";
+/**
+ * Read the runtime version from the published package.json so `--version`
+ * never drifts from the npm tag. (Previously we hard-coded "0.1.0" here and
+ * it lagged behind the package.json bump on each release.)
+ */
+function readVersion(): string {
+  try {
+    const here = dirname(fileURLToPath(import.meta.url));
+    // dist/index.js -> ../package.json
+    const pkg = JSON.parse(readFileSync(join(here, "..", "package.json"), "utf8")) as {
+      version?: string;
+    };
+    return pkg.version ?? "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+}
+
+const VERSION = readVersion();
 
 const program = new Command();
 
