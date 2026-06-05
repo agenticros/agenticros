@@ -45,6 +45,21 @@ export async function initCommand(opts: InitOptions): Promise<void> {
     if (opts.force) {
       warn("--force given; refreshing install dir from the published bundle.");
       await syncBundleToInstallDir(targetInstallDir, { overwrite: true });
+    } else {
+      // Auto-heal: if any critical bundle files are missing (e.g. user installed
+      // an older CLI version that didn't bundle patches/), copy them in
+      // non-destructively before pnpm install hits ENOENT. We don't overwrite
+      // existing files so the user's customisations to config/, scripts/, etc.
+      // are preserved.
+      const missing = findMissingBundleFiles(paths.repoRoot!);
+      if (missing.length > 0) {
+        warn(
+          `Existing install is missing ${missing.length} file(s) shipped in this CLI version:`,
+        );
+        for (const m of missing.slice(0, 5)) dim(`    ${m}`);
+        if (missing.length > 5) dim(`    ... +${missing.length - 5} more`);
+        await syncBundleToInstallDir(targetInstallDir, { overwrite: false, additive: true });
+      }
     }
   } else {
     info("Bundle mode detected. Copying the published snapshot to:");
@@ -259,13 +274,42 @@ async function promptAndConfigureOpenAi(): Promise<void> {
 }
 
 /**
+ * Files / directories that MUST exist in the install dir for `pnpm install`
+ * and `colcon build` to succeed. If any of these are missing on an existing
+ * install (because the user previously installed an older CLI version that
+ * didn't bundle them), the init flow re-syncs additively.
+ *
+ * Order: most-likely-to-break-first.
+ */
+const CRITICAL_BUNDLE_FILES = [
+  "patches",
+  "patches/@eclipse-zenoh__zenoh-ts@1.9.0.patch",
+  ".npmrc",
+  "pnpm-workspace.yaml",
+  "pnpm-lock.yaml",
+  "package.json",
+  "ros2_ws/src/agenticros_sim",
+  "ros2_ws/src/agenticros_sim/urdf/agenticros_amr.urdf.xacro",
+  "scripts/sim/run_sim.sh",
+];
+
+function findMissingBundleFiles(installDir: string): string[] {
+  return CRITICAL_BUNDLE_FILES.filter((f) => !existsSync(join(installDir, f)));
+}
+
+/**
  * Copy the bundled monorepo snapshot (`packages/agenticros-cli/runtime/`) into
  * the user's install dir (default ~/agenticros) so colcon and pnpm have a full
- * tree to operate on. Idempotent by default; pass overwrite to clobber.
+ * tree to operate on.
+ *
+ * Modes:
+ *   - default            ->  no-op if targetDir exists
+ *   - overwrite=true     ->  cp -a SRC/. DEST   (clobbers)
+ *   - additive=true      ->  cp -an SRC/. DEST  (fills in missing files; never clobbers)
  */
 async function syncBundleToInstallDir(
   targetDir: string,
-  opts: { overwrite?: boolean } = {},
+  opts: { overwrite?: boolean; additive?: boolean } = {},
 ): Promise<void> {
   const paths = getCliPaths();
   const source = paths.bundleDir;
@@ -277,14 +321,25 @@ async function syncBundleToInstallDir(
     );
     process.exit(1);
   }
-  if (existsSync(targetDir) && !opts.overwrite) {
+  if (existsSync(targetDir) && !opts.overwrite && !opts.additive) {
     ok(`Install directory ${targetDir} already exists (skipping copy).`);
     return;
   }
-  await withSpinner(`Copying bundled snapshot to ${targetDir}`, async () => {
+  const label = opts.additive
+    ? `Healing install at ${targetDir} (adding missing files only)`
+    : `Copying bundled snapshot to ${targetDir}`;
+  await withSpinner(label, async () => {
     mkdirSync(targetDir, { recursive: true });
-    // `cp -a SRC/. DEST` copies SRC's contents directly into DEST (preserving
-    // hidden files like .npmrc), matching the live-monorepo layout exactly.
-    await execa("cp", ["-a", `${source}/.`, targetDir]);
+    // `cp -a SRC/. DEST`   copies contents preserving attrs (clobbering).
+    // `cp -an SRC/. DEST`  same, but `-n` = never overwrite existing files.
+    const cpArgs = opts.additive ? ["-an", `${source}/.`, targetDir] : ["-a", `${source}/.`, targetDir];
+    // `cp -n` reports "would not overwrite" as exit 0 on GNU coreutils, which
+    // is the behaviour we want. macOS / BSD cp may exit 1 - tolerate it.
+    try {
+      await execa("cp", cpArgs);
+    } catch (e) {
+      if (!opts.additive) throw e;
+      dim(`(cp -an returned non-zero; this is OK if some targets pre-existed)`);
+    }
   });
 }
