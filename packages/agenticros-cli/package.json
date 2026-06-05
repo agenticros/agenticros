@@ -37,7 +37,8 @@
     "clean": "rm -rf dist runtime tsconfig.tsbuildinfo",
     "pack:runtime": "node ../../scripts/pack-runtime.mjs",
     "size:check": "node ../../scripts/check-cli-tarball-size.mjs",
-    "prepublishOnly": "pnpm run clean && pnpm run build && pnpm run pack:runtime && pnpm run size:check"
+    "tarball:check": "node ../../scripts/check-cli-tarball-install.mjs",
+    "prepublishOnly": "pnpm run clean && pnpm run build && pnpm run pack:runtime && pnpm run size:check && pnpm run tarball:check"
   },
   "dependencies": {
     "@inquirer/prompts": "^7.0.0",
