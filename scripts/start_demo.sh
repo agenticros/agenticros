@@ -43,9 +43,20 @@ else
     echo "   Started (pid $(cat "$CAMERA_PID_FILE"))"
 fi
 
-echo "==> Building @agenticros/claude-code MCP server"
+echo "==> Building TypeScript workspace (@agenticros/core, ros-camera, claude-code, ...)"
 cd "$REPO_ROOT"
-pnpm --filter @agenticros/claude-code build
+# Build claude-code AND all its dependencies (@agenticros/core, ros-camera).
+# Without the leading dots we'd only build claude-code itself and TS would
+# fail to resolve @agenticros/core because the dependency has no dist/ yet.
+# `--workspace-concurrency=1` keeps logs readable on slow Jetson SDs.
+if ! pnpm --filter '...@agenticros/claude-code' --workspace-concurrency=1 build; then
+  echo ""
+  echo "    Workspace build failed. If this is your first run, do:" >&2
+  echo "      agenticros init     # installs deps + builds workspace" >&2
+  echo "    or, from this dir:" >&2
+  echo "      pnpm install && pnpm build" >&2
+  exit 2
+fi
 
 echo "==> Starting motor controller (robotics start motors)"
 robotics start motors

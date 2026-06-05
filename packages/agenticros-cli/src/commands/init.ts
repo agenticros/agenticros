@@ -15,7 +15,7 @@
  */
 
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import { confirm, input, password, select } from "@inquirer/prompts";
 import { execa } from "execa";
@@ -46,11 +46,13 @@ export async function initCommand(opts: InitOptions): Promise<void> {
       warn("--force given; refreshing install dir from the published bundle.");
       await syncBundleToInstallDir(targetInstallDir, { overwrite: true });
     } else {
-      // Auto-heal: if any critical bundle files are missing (e.g. user installed
-      // an older CLI version that didn't bundle patches/), copy them in
-      // non-destructively before pnpm install hits ENOENT. We don't overwrite
-      // existing files so the user's customisations to config/, scripts/, etc.
-      // are preserved.
+      // Step 1: always refresh shipped code (scripts/, packages/, patches/, ...)
+      // from the bundle. These are CLI-controlled paths, not user data, so
+      // overwriting them is safe and lets bug fixes propagate without --force.
+      await refreshShippedCode(targetInstallDir);
+
+      // Step 2: additive cp -an for any *missing* critical paths that weren't
+      // covered by Step 1 (e.g. pnpm-lock.yaml). Never clobbers existing files.
       const missing = findMissingBundleFiles(paths.repoRoot!);
       if (missing.length > 0) {
         warn(
@@ -324,6 +326,25 @@ const CRITICAL_BUNDLE_FILES = [
   "scripts/sim/run_sim.sh",
 ];
 
+/**
+ * Files / directories the CLI considers "shipped code" - never user-modifiable
+ * - that should ALWAYS be refreshed from the bundle on init, even if they
+ * already exist. This is what lets the heal flow pick up downstream bug
+ * fixes (e.g. start_demo.sh learning to build workspace deps) without the
+ * user having to `rm -rf ~/agenticros && npx agenticros` every release.
+ *
+ * Add anything that is pure CLI-controlled code here. Do NOT add data dirs
+ * like ros2_ws/build, node_modules, or user-touchable configs.
+ */
+const ALWAYS_REFRESH_FROM_BUNDLE = [
+  "scripts",         // start_demo.sh, sim/run_sim.sh, setup_gateway_plugin.sh, ...
+  "patches",         // patched dep tarballs - immutable, must match package.json
+  "packages",        // workspace TS sources & the prebuilt MCP dist
+  "ros2_ws/src",     // ROS 2 package sources (msgs, sim, follow_me, ...)
+  "tsconfig.base.json",
+  "pnpm-workspace.yaml",
+];
+
 function findMissingBundleFiles(installDir: string): string[] {
   return CRITICAL_BUNDLE_FILES.filter((f) => !existsSync(join(installDir, f)));
 }
@@ -354,6 +375,42 @@ function writeInitNpmrcInline(installDir: string): void {
   ].join("\n");
   writeFileSync(target, contents);
   ok(`Wrote install-friendly .npmrc to ${target}`);
+}
+
+/**
+ * Refresh paths in ALWAYS_REFRESH_FROM_BUNDLE from the bundled runtime/.
+ *
+ * This is destructive *within* the listed paths: e.g. an existing
+ * ~/agenticros/scripts/start_demo.sh will be overwritten by the new bundle's
+ * version. Paths NOT on the list (config/, node_modules/, ros2_ws/build/,
+ * the user's own files, etc.) are untouched.
+ *
+ * Uses `cp -a` per path so symlinks, perms, and mtimes are preserved. Each
+ * destination is wiped first to handle "file removed from the new bundle"
+ * cleanly (e.g. an obsolete script being deleted).
+ */
+async function refreshShippedCode(installDir: string): Promise<void> {
+  const paths = getCliPaths();
+  const source = paths.bundleDir;
+  if (!source || !existsSync(source)) return;
+
+  const targets = ALWAYS_REFRESH_FROM_BUNDLE.filter((p) => existsSync(join(source, p)));
+  if (targets.length === 0) return;
+
+  await withSpinner("Refreshing CLI-shipped code from the new bundle", async () => {
+    for (const rel of targets) {
+      const src = join(source, rel);
+      const dst = join(installDir, rel);
+      // Wipe the destination first so removed files in the new bundle don't
+      // linger. We're only ever inside ALWAYS_REFRESH_FROM_BUNDLE paths, which
+      // never contain user data.
+      if (existsSync(dst)) {
+        await execa("rm", ["-rf", dst]);
+      }
+      mkdirSync(dirname(dst), { recursive: true });
+      await execa("cp", ["-a", src, dst]);
+    }
+  });
 }
 
 /**

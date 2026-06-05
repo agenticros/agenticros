@@ -14,7 +14,7 @@ import { execa } from "execa";
 
 import { getCliPaths } from "../util/paths.js";
 import { detectRosDistro } from "../util/env.js";
-import { err, header, info } from "../util/logger.js";
+import { err, header, info, warn } from "../util/logger.js";
 
 export interface RealRobotOptions {
   rosDistro?: string;
@@ -33,6 +33,30 @@ export async function runRealRobot(opts: RealRobotOptions): Promise<void> {
       "Run `agenticros init` first; if you're using `npx`, this is a CLI bug — file an issue.",
     );
     process.exit(1);
+  }
+
+  // Precondition check: workspace must be installed + built. start_demo.sh
+  // now does this itself, but giving a clearer error here (before any RealSense
+  // launches) saves the user from a 200-line tsc dump.
+  const repoRoot = paths.repoRoot;
+  if (repoRoot) {
+    const nodeModules = join(repoRoot, "node_modules");
+    if (!existsSync(nodeModules)) {
+      err("JS workspace deps not installed. Run `agenticros init` first.");
+      process.exit(1);
+    }
+    // We only ship one prebuilt dist (claude-code). Core/ros-camera get built
+    // by `pnpm install`'s lifecycle or by `agenticros init`. If their dist is
+    // missing, start_demo.sh's `pnpm --filter ...@agenticros/claude-code build`
+    // will build them; warn the user so they don't think the CLI is stuck.
+    const coreDist = join(repoRoot, "packages", "core", "dist", "index.js");
+    if (!existsSync(coreDist)) {
+      warn(
+        "@agenticros/core dist/ missing — start_demo.sh will rebuild the\n" +
+          "  workspace before launching the MCP server (~30-90s on Jetson).\n" +
+          "  Tip: run `agenticros init` once after install to do this up front.",
+      );
+    }
   }
 
   const ros = detectRosDistro(opts.rosDistro);
