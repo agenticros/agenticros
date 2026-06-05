@@ -115,6 +115,29 @@ if [[ -n "$NAMESPACE" ]]; then
   export AGENTICROS_ROBOT_NAMESPACE="$NAMESPACE"
 fi
 
+# Jetson rendering fix. On Tegra boards Mesa is picked first and tries to load
+# nvidia-drm_dri.so which doesn't exist, so the gz GUI viewport comes up solid
+# white. We:
+#   1. Point libglvnd at the NVIDIA EGL vendor (works for some Jetson L4T images)
+#   2. As a fallback, allow AGENTICROS_GZ_SOFTWARE_RENDER=1 to force llvmpipe -
+#      slow (~5 fps) but actually renders the world so the demo is viewable.
+# Honor AGENTICROS_GZ_NO_TWEAKS=1 to skip both (useful on x86/laptops).
+if [[ "$GUI" == "true" ]] && [[ -z "${AGENTICROS_GZ_NO_TWEAKS:-}" ]]; then
+  if [[ -f /usr/lib/aarch64-linux-gnu/tegra-egl/libEGL_nvidia.so.0 ]]; then
+    log "Jetson detected: forcing NVIDIA EGL/GL vendor"
+    export __GLX_VENDOR_LIBRARY_NAME="${__GLX_VENDOR_LIBRARY_NAME:-nvidia}"
+    export __EGL_VENDOR_LIBRARY_FILENAMES="${__EGL_VENDOR_LIBRARY_FILENAMES:-/usr/share/glvnd/egl_vendor.d/10_nvidia.json}"
+    export LD_LIBRARY_PATH="/usr/lib/aarch64-linux-gnu/tegra-egl:/usr/lib/aarch64-linux-gnu/tegra:${LD_LIBRARY_PATH:-}"
+  fi
+  if [[ -n "${AGENTICROS_GZ_SOFTWARE_RENDER:-}" ]]; then
+    log "AGENTICROS_GZ_SOFTWARE_RENDER set - forcing Mesa llvmpipe software renderer"
+    export LIBGL_ALWAYS_SOFTWARE=1
+    export GALLIUM_DRIVER=llvmpipe
+    export MESA_GL_VERSION_OVERRIDE=4.5
+    export OGRE_RTT_MODE=Copy
+  fi
+fi
+
 LAUNCH_ARGS=(
   "use_rviz:=$USE_RVIZ"
   "gui:=$GUI"

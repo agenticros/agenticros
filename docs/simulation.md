@@ -115,6 +115,44 @@ When CPU-bound, drop the depth camera update rate from 30 → 15 Hz in
 
 ## Troubleshooting
 
+### Jetson display rendering
+
+On Jetson L4T images the desktop libEGL search path puts Mesa first and Mesa
+tries to load `nvidia-drm_dri.so` (a Mesa DRI driver that doesn't exist on
+Tegra), so the **Gazebo GUI window comes up solid white** with no grid, no
+robot, and no scene. The physics server and all sensors still run; only the
+3D viewport is broken. `run_sim.sh` already exports
+`__GLX_VENDOR_LIBRARY_NAME=nvidia` and `__EGL_VENDOR_LIBRARY_FILENAMES=…`
+when it detects `/usr/lib/aarch64-linux-gnu/tegra-egl/libEGL_nvidia.so.0`,
+but the gz GUI's Ogre2 renderer initialises its own EGL context which still
+hits Mesa, so the fix is best-effort.
+
+**Recommended workflow on Jetson**: skip the gz GUI and use **RViz** as the
+primary visualisation. RViz renders the URDF (chassis, wheels, caster, lidar
+cylinder, camera box) plus the live `/scan`, `/camera/...` image, depth point
+cloud, and TF tree.
+
+```bash
+# Headless gz (no GUI window) + RViz with full robot model + sensors
+agenticros up sim-amr --rviz --headless
+```
+
+If you really need the Gazebo GUI on Jetson, set
+`AGENTICROS_GZ_SOFTWARE_RENDER=1` before `agenticros up` to fall back to
+Mesa's llvmpipe software rasteriser — slow (~5 fps) but actually renders.
+
+### RViz shows only TF axes, no robot mesh
+
+You're running an older sim build. The launch file now includes
+`robot_state_publisher` with a URDF mirror of the SDF, which publishes
+`/robot_description`. Rebuild the sim package:
+
+```bash
+cd ros2_ws && colcon build --packages-select agenticros_sim --symlink-install
+```
+
+### Other
+
 - **`gz sim` fails to start, no error** — make sure `/usr/share/gz/` is
   populated by `apt install gz-harmonic`. Run `gz sim --versions` to confirm.
 - **No topics appear in `ros2 topic list`** — the bridge is started by

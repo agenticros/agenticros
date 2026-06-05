@@ -39,6 +39,8 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
+from launch_ros.parameter_descriptions import ParameterValue
+from launch.substitutions import Command
 
 
 PKG_NAME = "agenticros_sim"
@@ -50,6 +52,7 @@ def generate_launch_description() -> LaunchDescription:
     default_bridge = os.path.join(pkg_share, "config", "amr_bridge.yaml")
     default_rviz = os.path.join(pkg_share, "config", "amr_view.rviz")
     model_sdf = os.path.join(pkg_share, "models", "agenticros_amr", "model.sdf")
+    urdf_xacro = os.path.join(pkg_share, "urdf", "agenticros_amr.urdf.xacro")
 
     # --- Launch arguments ---
     world_arg = DeclareLaunchArgument(
@@ -110,6 +113,27 @@ def generate_launch_description() -> LaunchDescription:
         }],
     )
 
+    # ---------- robot_state_publisher (URDF mirror of the SDF) ----------
+    # Without this, RViz only has TF axes - it doesn't know the robot's geometry
+    # and can't render a 3D model in the RobotModel display. The URDF is purely
+    # for visualization; physics + sensors stay in the SDF.
+    # NOTE: `Command(... on_stderr='ignore')` is critical - xacro often prints
+    # benign warnings ("redefining global symbol: pi", etc.) to stderr, and the
+    # default behaviour of Command is to FAIL the launch on any stderr output.
+    robot_description = ParameterValue(
+        Command(["xacro ", urdf_xacro], on_stderr="ignore"), value_type=str,
+    )
+    rsp = Node(
+        package="robot_state_publisher",
+        executable="robot_state_publisher",
+        name="robot_state_publisher",
+        output="screen",
+        parameters=[{
+            "robot_description": robot_description,
+            "use_sim_time": LaunchConfiguration("use_sim_time"),
+        }],
+    )
+
     # ---------- Optional RViz ----------
     rviz = Node(
         package="rviz2",
@@ -135,6 +159,7 @@ def generate_launch_description() -> LaunchDescription:
         OpaqueFunction(function=_launch_gz_sim),
         spawn_amr,
         bridge,
+        rsp,
         rviz,
     ])
 

@@ -12,6 +12,7 @@ install(DIRECTORY
   worlds
   models
   config
+  urdf
   DESTINATION share/${PROJECT_NAME}/
 )
 

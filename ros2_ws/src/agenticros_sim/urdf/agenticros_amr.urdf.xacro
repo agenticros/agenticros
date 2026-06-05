@@ -1,0 +1,127 @@
+<?xml version="1.0"?>
+<!--
+  agenticros_amr.urdf.xacro
+
+  URDF mirror of models/agenticros_amr/model.sdf, used by robot_state_publisher
+  so RViz's RobotModel display can render a 3D mesh of the AMR. Dimensions and
+  pose offsets match the SDF exactly:
+    * base_link: 0.40 x 0.30 x 0.15 m box, mounted at z=0.10 m above ground
+    * wheels: 0.08 m radius, 0.04 m thickness, at ±0.18 m y, z=0.08 m
+    * caster: 0.04 m sphere at x=0.16, z=0.04
+    * depth camera at x=0.20, z=0.20 (front of chassis, top)
+    * 2D lidar at z=0.30 (above chassis)
+
+  The wheel joints are continuous so /joint_states updates wheel spin when the
+  diff-drive plugin publishes joint angles via the JointStatePublisher system.
+
+  Note: This is purely for visualization. The physics, sensors, and actuators
+  all live in the SDF that Gazebo loads.
+-->
+<robot name="agenticros_amr" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- ===================== base_link ===================== -->
+  <link name="base_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><box size="0.40 0.30 0.15"/></geometry>
+      <material name="chassis_grey"><color rgba="0.3 0.3 0.35 1"/></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><box size="0.40 0.30 0.15"/></geometry>
+    </collision>
+    <inertial>
+      <mass value="5.0"/>
+      <inertia ixx="0.10" iyy="0.15" izz="0.20" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+  </link>
+
+  <!-- ===================== Wheels ===================== -->
+  <!-- xacro provides ${pi} as a built-in property; don't redefine it. -->
+  <xacro:macro name="wheel" params="prefix y_offset">
+    <link name="${prefix}_wheel_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        <geometry><cylinder radius="0.08" length="0.04"/></geometry>
+        <material name="wheel_black"><color rgba="0.15 0.15 0.15 1"/></material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        <geometry><cylinder radius="0.08" length="0.04"/></geometry>
+      </collision>
+      <inertial>
+        <mass value="0.5"/>
+        <inertia ixx="0.0008" iyy="0.0008" izz="0.0015" ixy="0" ixz="0" iyz="0"/>
+      </inertial>
+    </link>
+    <joint name="${prefix}_wheel_joint" type="continuous">
+      <parent link="base_link"/>
+      <child link="${prefix}_wheel_link"/>
+      <origin xyz="0 ${y_offset} -0.02" rpy="0 0 0"/>
+      <axis xyz="0 1 0"/>
+    </joint>
+  </xacro:macro>
+  <xacro:wheel prefix="left"  y_offset="0.18"/>
+  <xacro:wheel prefix="right" y_offset="-0.18"/>
+
+  <!-- ===================== Caster ===================== -->
+  <link name="caster_link">
+    <visual>
+      <geometry><sphere radius="0.04"/></geometry>
+      <material name="wheel_black"/>
+    </visual>
+    <collision>
+      <geometry><sphere radius="0.04"/></geometry>
+    </collision>
+    <inertial>
+      <mass value="0.1"/>
+      <inertia ixx="0.00004" iyy="0.00004" izz="0.00004" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+  </link>
+  <joint name="caster_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="caster_link"/>
+    <origin xyz="0.16 0 -0.06" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ===================== Depth camera ===================== -->
+  <link name="camera_link">
+    <visual>
+      <geometry><box size="0.025 0.09 0.025"/></geometry>
+      <material name="camera_alu"><color rgba="0.1 0.1 0.15 1"/></material>
+    </visual>
+  </link>
+  <joint name="camera_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="camera_link"/>
+    <origin xyz="0.20 0 0.10" rpy="0 0 0"/>
+  </joint>
+  <!-- Optical frame: REP-103 (z forward, x right, y down) used by image topics -->
+  <link name="camera_optical_link"/>
+  <joint name="camera_optical_joint" type="fixed">
+    <parent link="camera_link"/>
+    <child link="camera_optical_link"/>
+    <origin xyz="0 0 0" rpy="${-pi/2} 0 ${-pi/2}"/>
+  </joint>
+
+  <!-- ===================== 2D LiDAR ===================== -->
+  <link name="lidar_link">
+    <visual>
+      <geometry><cylinder radius="0.04" length="0.04"/></geometry>
+      <material name="lidar_white"><color rgba="0.9 0.9 0.9 1"/></material>
+    </visual>
+  </link>
+  <joint name="lidar_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="lidar_link"/>
+    <origin xyz="0 0 0.10" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ===================== IMU ===================== -->
+  <link name="imu_link"/>
+  <joint name="imu_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="imu_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+</robot>
