@@ -16,6 +16,7 @@ import { getTransport } from "./transport.js";
 import { checkPublishSafety } from "./safety.js";
 import { getDepthDistance } from "./depth.js";
 import { getFollowMeLocal } from "./follow-me/loop.js";
+import { getFollowMeDepth } from "./follow-me/depth-loop.js";
 import { findObject } from "./find-object/find-object.js";
 import { ensureMemory } from "./memory.js";
 
@@ -158,39 +159,39 @@ export const TOOLS: McpTool[] = [
   {
     name: "ros2_follow_me_start",
     description:
-      "Start the follow-me skill — the robot follows a person. Optional target description to lock onto a specific person; otherwise follows the closest. Modes: 'node' (default) sends a command to the agenticros_follow_me ROS2 node running on the robot; 'local' runs an in-process YOLOv8n loop in the MCP server (no ROS2 node required, ~8 Hz).",
+      "Start the follow-me skill — the robot follows a person. Optional target description to lock onto a specific person; otherwise follows the closest. Modes: 'depth' (default) runs an in-process depth-only loop in the MCP server (no neural net, no model file, just RealSense depth — drives toward the closest blob in [0.5, 4.0] m); 'node' sends a command to the agenticros_follow_me ROS2 node running on the robot; 'local' runs an in-process YOLOv8n loop (requires yolov8n.onnx, ~8 Hz).",
     inputSchema: {
       type: "object",
       properties: {
         mode: {
           type: "string",
-          description: "'node' (default) for the ROS2 node, or 'local' for the in-process MCP loop.",
+          description: "'depth' (default) for the in-process depth-only loop, 'node' for the ROS2 node, or 'local' for the in-process YOLO loop.",
         },
         target_description: {
           type: "string",
-          description: "Optional description of the person to follow (e.g., 'person in red shirt'). Empty = follow closest.",
+          description: "Optional description of the person to follow (e.g., 'person in red shirt'). Empty = follow closest. Note: depth mode ignores this — it always follows the closest object.",
         },
       },
     },
   },
   {
     name: "ros2_follow_me_stop",
-    description: "Stop the follow-me skill. Robot will stop sending follow velocity commands. Pass mode='local' to stop the in-process loop.",
+    description: "Stop the follow-me skill. Robot will stop sending follow velocity commands. Pass mode='local' for the YOLO loop or mode='depth' for the depth-only loop.",
     inputSchema: {
       type: "object",
       properties: {
-        mode: { type: "string", description: "'node' (default) or 'local'." },
+        mode: { type: "string", description: "'depth' (default), 'node', or 'local'." },
       },
     },
   },
   {
     name: "ros2_follow_me_status",
     description:
-      "Read the current follow-me status (enabled, tracking, target distance, persons detected). For mode='node' returns the latest message from follow_me/status; for mode='local' returns the in-process loop status.",
+      "Read the current follow-me status (enabled, tracking, target distance, persons detected). For mode='node' returns the latest message from follow_me/status; for mode='depth' or 'local' returns the in-process loop status.",
     inputSchema: {
       type: "object",
       properties: {
-        mode: { type: "string", description: "'node' (default) or 'local'." },
+        mode: { type: "string", description: "'depth' (default), 'node', or 'local'." },
         timeout: { type: "number", description: "Timeout in milliseconds (default: 3000). Only used for mode='node'." },
       },
     },
@@ -201,7 +202,7 @@ export const TOOLS: McpTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        mode: { type: "string", description: "'node' (default) or 'local'." },
+        mode: { type: "string", description: "'depth' (default), 'node', or 'local'." },
         distance: { type: "number", description: "Target distance in meters (0.2 to 5.0)" },
       },
       required: ["distance"],
@@ -214,7 +215,7 @@ export const TOOLS: McpTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        mode: { type: "string", description: "'node' (default) or 'local'." },
+        mode: { type: "string", description: "'depth' (default), 'node', or 'local'." },
         description: { type: "string", description: "Description of the person to follow" },
       },
       required: ["description"],
@@ -309,9 +310,11 @@ export const TOOLS: McpTool[] = [
 
 export type ToolContent = { type: "text"; text: string } | { type: "image"; data: string; mimeType: string };
 
-function followMeMode(args: Record<string, unknown>): "node" | "local" {
-  const raw = String(args["mode"] ?? "node").toLowerCase().trim();
-  return raw === "local" ? "local" : "node";
+function followMeMode(args: Record<string, unknown>): "node" | "local" | "depth" {
+  const raw = String(args["mode"] ?? "depth").toLowerCase().trim();
+  if (raw === "local") return "local";
+  if (raw === "depth") return "depth";
+  return "node";
 }
 
 async function publishFollowMeCmd(
@@ -621,6 +624,22 @@ export async function handleToolCall(
           return { content: [{ type: "text", text: `Follow-me local start failed: ${err instanceof Error ? err.message : String(err)}` }], isError: true };
         }
       }
+      if (mode === "depth") {
+        if (transport.getStatus() !== "connected") {
+          return {
+            content: [{ type: "text", text: "Transport not connected. Check ROS2/transport and config." }],
+            isError: true,
+          };
+        }
+        try {
+          const loop = getFollowMeDepth(config, transport);
+          await loop.start({ targetDescription: desc || undefined });
+          const text = `Follow-me (depth-only) started — driving toward the closest blob in [0.5, 4.0] m. No person recognition; will follow whatever object is closest. Use ros2_follow_me_status with mode='depth' to check tracking state.`;
+          return { content: [{ type: "text", text }] };
+        } catch (err) {
+          return { content: [{ type: "text", text: `Follow-me depth start failed: ${err instanceof Error ? err.message : String(err)}` }], isError: true };
+        }
+      }
       try {
         const { topic } = await publishFollowMeCmd(config, {
           action: "start",
@@ -644,6 +663,15 @@ export async function handleToolCall(
           return { content: [{ type: "text", text: `Follow-me local stop failed: ${err instanceof Error ? err.message : String(err)}` }], isError: true };
         }
       }
+      if (mode === "depth") {
+        try {
+          const loop = getFollowMeDepth(config, transport);
+          await loop.stop();
+          return { content: [{ type: "text", text: "Follow-me (depth) stopped. cmd_vel zeroed." }] };
+        } catch (err) {
+          return { content: [{ type: "text", text: `Follow-me depth stop failed: ${err instanceof Error ? err.message : String(err)}` }], isError: true };
+        }
+      }
       try {
         const { topic } = await publishFollowMeCmd(config, { action: "stop" });
         return { content: [{ type: "text", text: `Follow-me stop sent to ${topic}.` }] };
@@ -665,6 +693,10 @@ export async function handleToolCall(
         getFollowMeLocal(config, transport).setTargetDistance(distance);
         return { content: [{ type: "text", text: `Follow-me (local) target distance set to ${distance} m.` }] };
       }
+      if (mode === "depth") {
+        getFollowMeDepth(config, transport).setTargetDistance(distance);
+        return { content: [{ type: "text", text: `Follow-me (depth) target distance set to ${distance} m.` }] };
+      }
       try {
         const { topic } = await publishFollowMeCmd(config, { action: "set_distance", distance });
         return { content: [{ type: "text", text: `Follow-me set_distance=${distance} sent to ${topic}.` }] };
@@ -683,6 +715,10 @@ export async function handleToolCall(
         getFollowMeLocal(config, transport).setTargetDescription(description);
         return { content: [{ type: "text", text: `Follow-me (local) target description set: ${description}. (Note: local mode currently follows the largest person; description is recorded but not yet used for re-id.)` }] };
       }
+      if (mode === "depth") {
+        getFollowMeDepth(config, transport).setTargetDescription(description);
+        return { content: [{ type: "text", text: `Follow-me (depth) target description recorded: ${description}. (Depth mode has no semantic recognition; it always follows the closest blob.)` }] };
+      }
       try {
         const { topic } = await publishFollowMeCmd(config, { action: "set_target", description });
         return { content: [{ type: "text", text: `Follow-me set_target sent to ${topic} (description: ${description}).` }] };
@@ -696,6 +732,10 @@ export async function handleToolCall(
       if (mode === "local") {
         const status = getFollowMeLocal(config, transport).status();
         return { content: [{ type: "text", text: JSON.stringify({ success: true, mode: "local", status }) }] };
+      }
+      if (mode === "depth") {
+        const status = getFollowMeDepth(config, transport).status();
+        return { content: [{ type: "text", text: JSON.stringify({ success: true, mode: "depth", status }) }] };
       }
       const topic = toNamespacedTopicFull(config, "/follow_me/status");
       const timeout = (args["timeout"] as number | undefined) ?? 3000;
