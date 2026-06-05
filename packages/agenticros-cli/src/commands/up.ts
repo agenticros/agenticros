@@ -14,7 +14,8 @@ import { select } from "@inquirer/prompts";
 
 import { runRealRobot } from "../runners/real-robot.js";
 import { runSimAmr, runSimArm } from "../runners/sim.js";
-import { err, info, warn } from "../util/logger.js";
+import { err, info, ok, warn } from "../util/logger.js";
+import { ensureProfilesExist, readActiveMode, switchMode, type Mode } from "../util/profiles.js";
 import { writeState } from "../util/state.js";
 
 export interface UpOptions {
@@ -32,6 +33,13 @@ type UpTarget = "real" | "sim-amr" | "sim-arm";
 export async function upCommand(opts: UpOptions): Promise<void> {
   const target = await resolveTarget(opts.target);
   writeState({ lastMode: target, lastUpAt: new Date().toISOString() });
+
+  // Make sure ~/.agenticros/config.json points at the right profile for
+  // the requested target BEFORE the runner launches anything. Both sim
+  // targets share the "sim" profile (empty namespace + /cmd_vel at root);
+  // "real" gets the "real" profile.
+  syncActiveProfile(target);
+  warnIfMcpNamespaceShadowsMode(target);
 
   switch (target) {
     case "real":
@@ -87,6 +95,55 @@ function resolveHeadless(flag: boolean | undefined): boolean {
 /** Detect NVIDIA Jetson / Tegra via the L4T release file. */
 function isJetson(): boolean {
   return existsSync("/etc/nv_tegra_release");
+}
+
+/**
+ * Ensure ~/.agenticros/config.json mirrors the profile for the requested
+ * target. Idempotent: if we're already on the right profile we still
+ * re-copy (cheap) so any out-of-band edits to the profile take effect.
+ */
+function syncActiveProfile(target: UpTarget): void {
+  ensureProfilesExist();
+  const desired: Mode = target === "real" ? "real" : "sim";
+  const current = readActiveMode();
+  switchMode(desired);
+  if (current === desired) {
+    info(`Active profile already '${desired}'. (~/.agenticros/config.json refreshed.)`);
+  } else {
+    ok(`Switched ~/.agenticros/config.json to '${desired}' profile (was: ${current ?? "unset"}).`);
+    warn(
+      "If an MCP server (Claude Code, Claude desktop, OpenClaw) is already running,\n" +
+        "  restart it so it re-reads the namespace. New launches pick it up automatically.",
+    );
+  }
+}
+
+/**
+ * Warn loudly if AGENTICROS_ROBOT_NAMESPACE is set in the process env to a
+ * value that doesn't match the active mode. The MCP server's
+ * applyMcpEnvOverrides() lets this env var unconditionally override the
+ * config file's namespace, so a leftover value in .mcp.json (or shell
+ * exports) silently breaks the mode switch.
+ */
+function warnIfMcpNamespaceShadowsMode(target: UpTarget): void {
+  const env = process.env["AGENTICROS_ROBOT_NAMESPACE"];
+  if (env === undefined) return;
+  const trimmed = env.trim();
+  if (trimmed.length === 0) return; // empty == falls through to config, fine
+  // Real-robot mode: only warn if the env doesn't look like a robot id.
+  // Sim mode: ANY non-empty value sabotages routing because sim publishes
+  // /cmd_vel at the root.
+  if (target === "real") {
+    // Almost certainly intentional - the user has their real-robot namespace
+    // exported. No warning.
+    return;
+  }
+  warn(
+    `AGENTICROS_ROBOT_NAMESPACE is set to '${trimmed}' but you're launching a sim.\n` +
+      `  The MCP server will publish to /${trimmed}/cmd_vel; the sim listens on /cmd_vel.\n` +
+      "  Robot will not move. Unset that env var (or edit .mcp.json / claude_desktop_config.json\n" +
+      "  to set it to \"\") and restart your MCP client.",
+  );
 }
 
 async function resolveTarget(raw: string | undefined): Promise<UpTarget> {

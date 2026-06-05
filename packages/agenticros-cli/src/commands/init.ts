@@ -23,6 +23,7 @@ import { execa } from "execa";
 import { runDoctorChecks } from "./doctor.js";
 import { getCliPaths, resetPathsCache } from "../util/paths.js";
 import { header, info, ok, warn, err, dim, withSpinner } from "../util/logger.js";
+import { ensureProfilesExist, switchMode } from "../util/profiles.js";
 import { writeState } from "../util/state.js";
 import { isWorkspaceBuilt, isWorkspaceInstalled } from "../util/workspace.js";
 
@@ -272,6 +273,13 @@ async function promptAndWriteRobotConfig(): Promise<void> {
   writeFileSync(join(userData, "config.json"), JSON.stringify(cfg, null, 2));
   ok(`Wrote ~/.agenticros/config.json (namespace=${namespace}).`);
   writeState({ lastNamespace: namespace });
+
+  // Seed both mode profiles and persist which one this fresh install
+  // represents. From here on, switching is a `agenticros mode <real|sim>`
+  // away - no more hand-editing JSON between sim and real-robot runs.
+  ensureProfilesExist();
+  switchMode(isSim ? "sim" : "real");
+  ok(`Mode profiles created at ~/.agenticros/profiles/. Active mode: ${isSim ? "sim" : "real"}.`);
 }
 
 async function promptAndConfigureOpenAi(): Promise<void> {

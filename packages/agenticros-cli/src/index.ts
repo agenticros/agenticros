@@ -128,10 +128,20 @@ program
 program
   .command("config [action] [keyValue]")
   .description(
-    "Read or edit ~/.agenticros/config.json. action = show | set | edit | reset.",
+    "Read or edit ~/.agenticros/config.json. action = show | get | set | edit | reset | use.",
   )
   .action(async (action: string | undefined, keyValue: string | undefined) => {
     await configCommand({ action, keyValue });
+  });
+
+// Shorter alias for the most common mode-switching workflow.
+program
+  .command("mode [target]")
+  .description(
+    "Switch ~/.agenticros/config.json between profiles. target = real | sim. Equivalent to `agenticros config use <target>`.",
+  )
+  .action(async (target: string | undefined) => {
+    await configCommand({ action: "use", keyValue: target });
   });
 
 async function main(): Promise<void> {

@@ -16,6 +16,7 @@ import { execa } from "execa";
 import { getCliPaths } from "../util/paths.js";
 import { detectRosDistro, hasGazeboHarmonic } from "../util/env.js";
 import { colors, header, ok, warn, err, info } from "../util/logger.js";
+import { activeConfigPath, profilesDir, readActiveMode } from "../util/profiles.js";
 
 export type Severity = "green" | "yellow" | "red";
 
@@ -196,6 +197,45 @@ export async function runDoctorChecks(): Promise<DoctorReport> {
       ? undefined
       : "Required only for simulation. Install with: sudo apt install gz-harmonic ros-humble-ros-gz",
   });
+
+  // Mode profile + namespace shadowing. Each mode (real / sim) needs its own
+  // namespace in ~/.agenticros/config.json. If AGENTICROS_ROBOT_NAMESPACE is
+  // exported in the shell (or hardcoded in .mcp.json env), it unconditionally
+  // overrides the config file - silently breaking the other mode.
+  const mode = readActiveMode();
+  const cfgPath = activeConfigPath();
+  if (mode) {
+    checks.push({
+      id: "active-mode",
+      label: `Active mode: ${mode} (~/.agenticros/profiles/${mode}.json)`,
+      severity: existsSync(cfgPath) ? "green" : "yellow",
+      hint: existsSync(cfgPath)
+        ? undefined
+        : "Run `agenticros mode real` (or sim) to populate ~/.agenticros/config.json.",
+    });
+  } else {
+    checks.push({
+      id: "active-mode",
+      label: "Active mode profile not set",
+      severity: existsSync(profilesDir()) ? "yellow" : "yellow",
+      hint: "Run `agenticros mode real` (or sim) to pick a profile.",
+    });
+  }
+
+  const envNs = (process.env["AGENTICROS_ROBOT_NAMESPACE"] ?? "").trim();
+  if (envNs.length > 0) {
+    const shadowsSim = mode === "sim" || mode === null;
+    checks.push({
+      id: "ns-env-shadow",
+      label: shadowsSim
+        ? `AGENTICROS_ROBOT_NAMESPACE env shadows config (set to '${envNs}')`
+        : `AGENTICROS_ROBOT_NAMESPACE env overrides config (set to '${envNs}')`,
+      severity: shadowsSim ? "red" : "yellow",
+      hint: shadowsSim
+        ? "Unset that env var (or set it to \"\" in .mcp.json / claude_desktop_config.json) so the active mode profile drives the namespace."
+        : "Fine for real-robot mode if the value matches your robot's namespace.",
+    });
+  }
 
   // OpenAI key.
   const home = process.env["HOME"] ?? "";

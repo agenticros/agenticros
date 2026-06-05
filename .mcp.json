@@ -1,11 +1,12 @@
 {
+  "$comment": "AGENTICROS_ROBOT_NAMESPACE intentionally NOT set here. Namespace is driven by ~/.agenticros/config.json (swappable per-mode via `agenticros config use <real|sim>` / `agenticros mode <real|sim>`). Setting it here would force the same namespace for both real-robot and sim runs, which makes Claude publish into a void during simulation. Leave the env empty.",
   "mcpServers": {
     "agenticros": {
       "type": "stdio",
       "command": "sh",
       "args": ["-c", "node packages/agenticros-claude-code/dist/index.js 2>>/tmp/agenticros-mcp.log"],
       "env": {
-        "AGENTICROS_ROBOT_NAMESPACE": "robotbb869116657b4220bb09e34f3a64fcdf"
+        "AGENTICROS_ROBOT_NAMESPACE": ""
       }
     }
   }

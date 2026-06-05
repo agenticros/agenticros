@@ -21,6 +21,13 @@ import { execa } from "execa";
 
 import { getCliPaths } from "../util/paths.js";
 import { header, info, ok, warn, err } from "../util/logger.js";
+import {
+  ensureProfilesExist,
+  profilePath,
+  readActiveMode,
+  switchMode,
+  type Mode,
+} from "../util/profiles.js";
 
 export interface ConfigOptions {
   action?: string;
@@ -45,10 +52,46 @@ export async function configCommand(opts: ConfigOptions): Promise<void> {
       return editConfig();
     case "reset":
       return resetConfig();
+    case "use":
+    case "mode":
+      return useMode(opts.keyValue);
     default:
-      err(`Unknown action '${opts.action}'. Use: show | get | set | edit | reset.`);
+      err(`Unknown action '${opts.action}'. Use: show | get | set | edit | reset | use.`);
       process.exit(2);
   }
+}
+
+/**
+ * `agenticros config use <real|sim>` - swap ~/.agenticros/config.json to the
+ * named mode's profile. Designed to be called both interactively by the user
+ * and automatically by `agenticros up <target>`.
+ */
+function useMode(arg: string | undefined): void {
+  const mode = (arg ?? "").trim().toLowerCase();
+  if (mode !== "real" && mode !== "sim") {
+    err("Usage: agenticros config use <real|sim>   (or `agenticros mode <real|sim>`)");
+    err("");
+    err("Modes:");
+    err("  real  Use ~/.agenticros/profiles/real.json  (real-robot namespace + transport)");
+    err("  sim   Use ~/.agenticros/profiles/sim.json   (empty namespace, /cmd_vel at root)");
+    process.exit(2);
+  }
+  const created = ensureProfilesExist();
+  const active = readActiveMode();
+  const dst = switchMode(mode as Mode);
+  if (created) {
+    info(`Bootstrapped profiles at ~/.agenticros/profiles/{real,sim}.json.`);
+    info(`Edit ${profilePath("real")} to set your real-robot namespace.`);
+  }
+  if (active === mode) {
+    ok(`Already on '${mode}' mode. Refreshed ${dst} from the profile anyway.`);
+  } else {
+    ok(`Switched to '${mode}' mode. ${dst} now mirrors profile.`);
+  }
+  warn(
+    "Restart any running MCP servers (Claude Code, Claude desktop, OpenClaw)\n" +
+      "  so they re-read the config. Tools currently connected will keep the old namespace.",
+  );
 }
 
 function getConfig(key: string | undefined): void {
