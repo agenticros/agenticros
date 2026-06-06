@@ -91,7 +91,11 @@ export class LocalTransport implements RosTransport {
       // Give DDS discovery a brief moment to receive announcements from peers
       // before we report "connected". Without this the very first listTopics()
       // can race the executor and return empty even though peers exist.
-      await new Promise<void>((resolve) => setTimeout(resolve, 750));
+      // 1500ms was chosen empirically on Jetson + Humble where /arm/*/cmd_pos
+      // topics from a sim_arm gz_bridge child take ~1.2s to propagate via
+      // multicast (vs ~400ms on x86); the prior 750ms cap caused first
+      // list_topics() calls to miss them.
+      await new Promise<void>((resolve) => setTimeout(resolve, 1500));
 
       this.setStatus("connected");
     } catch (err) {
@@ -280,24 +284,41 @@ export class LocalTransport implements RosTransport {
   async listTopics(): Promise<TopicInfo[]> {
     this.ensureConnected();
 
-    // DDS discovery is asynchronous. On a freshly-connected node,
-    // getTopicNamesAndTypes() trickles in results as peers respond - the
-    // first call may return 0, the second 2, the third all of them.
-    // Poll until the count is stable across two consecutive 300ms reads (or
-    // time-bounded to ~3s) so we don't return a partial view.
+    // DDS discovery is asynchronous AND stateful. On a freshly-connected
+    // node, getTopicNamesAndTypes() trickles in results as peers respond -
+    // the first call may return 0, the second 2, the third all of them.
+    //
+    // Two issues motivated the current tuning:
+    //
+    //   1. A short single-stable-hit policy (600ms) was returning truncated
+    //      views to Claude: e.g. with the AMR sim alone it'd see /cmd_vel
+    //      etc. on first call, then a second call 2s later would see all
+    //      29 topics including /arm/*/cmd_pos. Claude only calls
+    //      list_topics once and was missing arm joint topics entirely.
+    //
+    //   2. DDS multicast announcements on Jetson take longer than on x86 -
+    //      we routinely see /arm/* topics appear ~1.5s after first call.
+    //
+    // Fix: require 3 consecutive matching polls (2 stable hits at 300ms
+    // intervals = ~900ms of stability), with a 6 s deadline. Worst case
+    // ~900ms latency on a steady graph, ~5s+ if discovery is still
+    // streaming. The min-count guard (>=3) avoids exiting early when only
+    // /clock + /tf + /tf_static have come through.
     const externalFilter = (t: { name: string; types: string[] }) =>
       !INTERNAL_TOPIC_PREFIXES.some((prefix) => t.name.startsWith(prefix));
 
-    const deadline = Date.now() + 3000;
+    const deadline = Date.now() + 6000;
+    const MIN_STABLE_COUNT = 3;
+    const REQUIRED_STABLE_HITS = 2;
     let raw: Array<{ name: string; types: string[] }> = [];
     let prevCount = -1;
     let stableHits = 0;
     while (Date.now() < deadline) {
       raw = this.node.getTopicNamesAndTypes();
       const externalCount = raw.filter(externalFilter).length;
-      if (externalCount === prevCount && externalCount > 0) {
+      if (externalCount === prevCount && externalCount >= MIN_STABLE_COUNT) {
         stableHits++;
-        if (stableHits >= 1) break; // one stable confirmation is enough
+        if (stableHits >= REQUIRED_STABLE_HITS) break;
       } else {
         stableHits = 0;
         prevCount = externalCount;

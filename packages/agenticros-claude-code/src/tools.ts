@@ -360,11 +360,40 @@ export async function handleToolCall(
       const topics = await transport.listTopics();
       const MAX = 50;
       const truncated = topics.length > MAX ? topics.slice(0, MAX) : topics;
+
+      // Surface task-specific control hints so the agent (and any LLM
+      // calling list_topics to figure out what's available) doesn't have to
+      // memorise the topic surface for each demo. Cheap to compute and only
+      // included when matching topics are actually present.
+      const hints: Record<string, string> = {};
+      const armJoints = topics
+        .filter((t) => /^\/arm\/[a-z0-9_]+\/cmd_pos$/i.test(t.name))
+        .map((t) => t.name.replace(/^\/arm\/(.+)\/cmd_pos$/, "$1"));
+      if (armJoints.length > 0) {
+        hints["arm"] =
+          `Detected the AgenticROS sim arm (joints: ${armJoints.join(", ")}). ` +
+          "To move a joint, call ros2_publish with topic '/arm/<joint>/cmd_pos', " +
+          "type 'std_msgs/msg/Float64', message {data: <radians>}. " +
+          "Example: rotate shoulder_pan 90 degrees left -> publish {data: 1.5707} " +
+          "to /arm/shoulder_pan/cmd_pos. Listen to /joint_states (sensor_msgs/msg/JointState) " +
+          "to read current positions.";
+      }
+      const baseTwistTopics = topics.filter(
+        (t) => /\/cmd_vel$/.test(t.name) && t.type === "geometry_msgs/msg/Twist",
+      );
+      if (baseTwistTopics.length > 0) {
+        hints["base"] =
+          "To drive the base, publish geometry_msgs/msg/Twist to a cmd_vel topic. " +
+          `Available cmd_vel topics: ${baseTwistTopics.map((t) => t.name).join(", ")}. ` +
+          "When in sim mode the unnamespaced /cmd_vel is the one the simulator listens on.";
+      }
+
       const text = JSON.stringify({
         success: true,
         topics: truncated,
         total: topics.length,
         truncated: topics.length > MAX,
+        ...(Object.keys(hints).length > 0 ? { hints } : {}),
       });
       return { content: [{ type: "text", text }] };
     }
