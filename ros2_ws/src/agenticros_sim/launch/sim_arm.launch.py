@@ -1,6 +1,7 @@
 """sim_arm.launch.py
 
-Bring up the AgenticROS 6-DOF arm in Gazebo Harmonic with full ROS-side
+Bring up the AgenticROS 6-DOF arm in Gazebo (Fortress / ign-gazebo 6 on
+Humble Jetson, or Harmonic / gz-sim 8 on Jazzy) with full ROS-side
 plumbing:
   * gz sim agenticros_indoor.sdf                  (the world)
   * ros_gz_sim create                             (spawn the arm)
@@ -149,17 +150,22 @@ def generate_launch_description() -> LaunchDescription:
         }],
     )
 
-    # ---------- One-shot home-pose publisher ----------
-    # The gz JointPositionController is "torque idle" until it receives its
-    # first message on the cmd topic. Without a startup nudge the arm just
-    # follows gravity into whatever equilibrium the damping allows. We wait
-    # for the bridge to come up (8 s) then publish each joint's home angle
-    # exactly once. After that, normal `ros2 topic pub` from agents takes
-    # over.
+    # ---------- Redundant home-pose publisher ----------
+    # The SDF already sets <initial_position> on the joints and the
+    # JointPositionController plugins so the arm spawns at home pose and
+    # the controllers hold it there immediately. This timer is a safety
+    # net: if a user `gz service`-spawned a fresh arm from a controller
+    # config that didn't include initial_position, this still gets it
+    # into a sane pose.
+    #
+    # `ros2 topic pub --once` is unreliable: the publisher exits before
+    # discovery completes, so the bridge often drops the message.
+    # `--times 5 --rate 5` publishes 5 copies over 1 s, which is enough
+    # for the bridge subscription to come up and consume at least one.
     home_publishers = [
         ExecuteProcess(
             cmd=[
-                "ros2", "topic", "pub", "--once",
+                "ros2", "topic", "pub", "--times", "5", "--rate", "5",
                 f"/arm/{joint}/cmd_pos", "std_msgs/msg/Float64",
                 f"{{data: {angle}}}",
             ],

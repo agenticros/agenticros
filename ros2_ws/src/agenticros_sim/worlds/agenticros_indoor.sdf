@@ -13,7 +13,7 @@
     * Standard physics + sensors + ros_gz system plugins so the AMR's depth
       camera / IMU / lidar publish on Gazebo topics that the bridge picks up
 -->
-<sdf version="1.10">
+<sdf version="1.9">
   <world name="agenticros_indoor">
 
     <!-- ====== System plugins ====== -->

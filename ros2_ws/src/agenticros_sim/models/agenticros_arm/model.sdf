@@ -47,7 +47,7 @@
   the relatively coarse default gz physics step (1 ms). If you want a
   snappier feel, drop the masses by 50% and bump kp to ~800.
 -->
-<sdf version="1.10">
+<sdf version="1.9">
   <model name="agenticros_arm">
 
     <!-- ============================================================
@@ -197,6 +197,11 @@
           <velocity>2.0</velocity><effort>30.0</effort>
         </limit>
         <dynamics><damping>1.5</damping><friction>0.5</friction></dynamics>
+        <!-- Home: +pi/2 puts the forearm horizontal forming an L with the
+             upper arm (which is at -pi/2). This is the "ready to grasp"
+             pose; without it the elbow spawns straight and the arm sticks
+             out vertically. -->
+        <initial_position>1.5707963</initial_position>
       </axis>
     </joint>
 
@@ -335,43 +340,62 @@
       PD gains are deliberately high so the arm holds against gravity
       without an integral term (which can cause oscillation in gz's
       relatively coarse default step).
+
+      Plugin filename:
+        We use the "ignition-gazebo-*" prefix (Fortress / ign-gazebo 6)
+        rather than the more modern "gz-sim-*" prefix because the
+        ros-humble-ros-gz-bridge that ships with Humble is linked
+        against Fortress (libignition-msgs8 / libignition-transport11).
+        Fortress *does* ship a backward-compat shim that maps
+        "gz-sim-diff-drive-system" -> the Fortress library, which is
+        why agenticros_amr's diff-drive plugin works under the
+        gz-sim-* name; but no equivalent shim exists for the joint
+        position controller. Using the Fortress-native filename here
+        is the only one that loads reliably on Jetson Humble.
+
+        If you migrate this stack to Jazzy / Harmonic later, switch
+        the six filenames below to "gz-sim-joint-position-controller-system".
     -->
-    <plugin filename="gz-sim-joint-position-controller-system"
+    <plugin filename="ignition-gazebo-joint-position-controller-system"
             name="gz::sim::systems::JointPositionController">
       <joint_name>shoulder_pan_joint</joint_name>
       <topic>/arm/shoulder_pan/cmd_pos</topic>
       <p_gain>800</p_gain><d_gain>80</d_gain><i_gain>0</i_gain>
       <cmd_max>100</cmd_max><cmd_min>-100</cmd_min>
     </plugin>
-    <plugin filename="gz-sim-joint-position-controller-system"
+    <plugin filename="ignition-gazebo-joint-position-controller-system"
             name="gz::sim::systems::JointPositionController">
       <joint_name>shoulder_lift_joint</joint_name>
       <topic>/arm/shoulder_lift/cmd_pos</topic>
       <p_gain>1200</p_gain><d_gain>120</d_gain><i_gain>0</i_gain>
       <cmd_max>100</cmd_max><cmd_min>-100</cmd_min>
+      <!-- Match the joint's <initial_position> so the controller's first
+           setpoint isn't 0 (which would jerk the arm down at startup). -->
+      <initial_position>-1.5707963</initial_position>
     </plugin>
-    <plugin filename="gz-sim-joint-position-controller-system"
+    <plugin filename="ignition-gazebo-joint-position-controller-system"
             name="gz::sim::systems::JointPositionController">
       <joint_name>elbow_joint</joint_name>
       <topic>/arm/elbow/cmd_pos</topic>
       <p_gain>800</p_gain><d_gain>80</d_gain><i_gain>0</i_gain>
       <cmd_max>80</cmd_max><cmd_min>-80</cmd_min>
+      <initial_position>1.5707963</initial_position>
     </plugin>
-    <plugin filename="gz-sim-joint-position-controller-system"
+    <plugin filename="ignition-gazebo-joint-position-controller-system"
             name="gz::sim::systems::JointPositionController">
       <joint_name>wrist_1_joint</joint_name>
       <topic>/arm/wrist_1/cmd_pos</topic>
       <p_gain>400</p_gain><d_gain>40</d_gain><i_gain>0</i_gain>
       <cmd_max>15</cmd_max><cmd_min>-15</cmd_min>
     </plugin>
-    <plugin filename="gz-sim-joint-position-controller-system"
+    <plugin filename="ignition-gazebo-joint-position-controller-system"
             name="gz::sim::systems::JointPositionController">
       <joint_name>wrist_2_joint</joint_name>
       <topic>/arm/wrist_2/cmd_pos</topic>
       <p_gain>300</p_gain><d_gain>30</d_gain><i_gain>0</i_gain>
       <cmd_max>15</cmd_max><cmd_min>-15</cmd_min>
     </plugin>
-    <plugin filename="gz-sim-joint-position-controller-system"
+    <plugin filename="ignition-gazebo-joint-position-controller-system"
             name="gz::sim::systems::JointPositionController">
       <joint_name>wrist_3_joint</joint_name>
       <topic>/arm/wrist_3/cmd_pos</topic>
