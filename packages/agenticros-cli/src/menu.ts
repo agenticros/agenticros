@@ -78,7 +78,7 @@ export async function runMenu(): Promise<void> {
         choices: [
           { name: "2-wheel AMR (camera + depth + LiDAR)", value: "sim-amr" },
           {
-            name: "6-DOF arm (UR5e + MoveIt2)  [needs ros-humble-moveit, ~400 MB]",
+            name: "6-DOF arm (UR5e-shaped, per-joint position control)",
             value: "sim-arm",
           },
         ],

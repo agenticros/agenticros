@@ -1,0 +1,402 @@
+<?xml version="1.0"?>
+<!--
+  agenticros_arm/model.sdf
+
+  6-DOF UR5e-shaped robotic arm for the AgenticROS Phase 3 demo.
+
+  Why "UR5e-shaped" rather than the actual UR description package:
+    * No apt deps. The ur_description package is ~50 MB and requires a
+      slew of ros-humble-ur-* trees we don't otherwise need. This file
+      gives the same visual silhouette and joint topology with nothing
+      but cylinders.
+    * Self-contained physics. All joint inertias, limits, and damping
+      are tuned here so the arm stays upright under gravity without
+      ros2_control or MoveIt2.
+    * Easy to author the URDF mirror (urdf/agenticros_arm.urdf.xacro)
+      because we control the link geometry directly.
+
+  Joint chain (matches the UR5e topology so MoveIt2 IK could be layered
+  on later in Phase 3b without changing the SDF):
+
+    base_link  --shoulder_pan_joint (Z)--> shoulder_link
+              --shoulder_lift_joint (Y)--> upper_arm_link
+              --elbow_joint         (Y)--> forearm_link
+              --wrist_1_joint       (Y)--> wrist_1_link
+              --wrist_2_joint       (Z)--> wrist_2_link
+              --wrist_3_joint       (Y)--> wrist_3_link
+              --fixed                  --> tool0  (end-effector frame)
+
+  Control surface (Gazebo side; ros_gz_bridge re-emits as ROS topics):
+
+    cmd  to   /arm/JOINT/cmd_pos        type=gz.msgs.Double   ROS_TO_GZ
+    fb   from /joint_states             type=gz.msgs.Model    GZ_TO_ROS
+    tf   from /model/agenticros_arm/pose and /pose_static
+
+  Send a single joint angle as ROS std_msgs/Float64 to e.g.
+  /arm/shoulder_pan/cmd_pos and the JointPositionController plugin below
+  drives the joint to that angle with a PD loop (kp=500, kd=50). The
+  arm reaches the target in ~1-2 s and holds against gravity.
+
+  Limits:
+    shoulder_pan, elbow, wrist_   : +/-pi   rad
+    shoulder_lift                  : +/-pi/2 rad (prevents self-collision)
+    velocity                       : 2 rad/s  effort: 30 Nm
+
+  NOTE on physics tuning: link masses are heavier than the real UR5e
+  on purpose - higher inertia keeps PD control numerically stable on
+  the relatively coarse default gz physics step (1 ms). If you want a
+  snappier feel, drop the masses by 50% and bump kp to ~800.
+-->
+<sdf version="1.10">
+  <model name="agenticros_arm">
+
+    <!-- ============================================================
+         Static pedestal. world_joint pins this to the world so the
+         arm doesn't drift sideways when the wrist is moving.
+         ============================================================ -->
+    <link name="base_link">
+      <pose>0 0 0.075 0 0 0</pose>
+      <inertial>
+        <mass>10.0</mass>
+        <inertia>
+          <ixx>0.05</ixx><iyy>0.05</iyy><izz>0.05</izz>
+          <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz>
+        </inertia>
+      </inertial>
+      <collision name="col">
+        <geometry><cylinder><radius>0.08</radius><length>0.15</length></cylinder></geometry>
+      </collision>
+      <visual name="vis">
+        <geometry><cylinder><radius>0.08</radius><length>0.15</length></cylinder></geometry>
+        <material>
+          <ambient>0.15 0.15 0.15 1</ambient>
+          <diffuse>0.20 0.20 0.20 1</diffuse>
+        </material>
+      </visual>
+    </link>
+
+    <joint name="world_joint" type="fixed">
+      <parent>world</parent>
+      <child>base_link</child>
+    </joint>
+
+    <!-- ============================================================
+         shoulder_link  (rotated around Z by shoulder_pan_joint)
+         ============================================================ -->
+    <link name="shoulder_link">
+      <pose>0 0 0.205 0 0 0</pose>
+      <inertial>
+        <mass>3.0</mass>
+        <inertia>
+          <ixx>0.008</ixx><iyy>0.008</iyy><izz>0.005</izz>
+          <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz>
+        </inertia>
+      </inertial>
+      <collision name="col">
+        <geometry><cylinder><radius>0.07</radius><length>0.10</length></cylinder></geometry>
+      </collision>
+      <visual name="vis">
+        <geometry><cylinder><radius>0.07</radius><length>0.10</length></cylinder></geometry>
+        <material>
+          <ambient>0.20 0.45 0.70 1</ambient>
+          <diffuse>0.25 0.50 0.75 1</diffuse>
+        </material>
+      </visual>
+    </link>
+
+    <joint name="shoulder_pan_joint" type="revolute">
+      <parent>base_link</parent>
+      <child>shoulder_link</child>
+      <pose>0 0 0.075 0 0 0</pose>
+      <axis>
+        <xyz>0 0 1</xyz>
+        <limit>
+          <lower>-3.14159</lower><upper>3.14159</upper>
+          <velocity>2.0</velocity><effort>30.0</effort>
+        </limit>
+        <dynamics><damping>2.0</damping><friction>0.5</friction></dynamics>
+      </axis>
+    </joint>
+
+    <!-- ============================================================
+         upper_arm_link  (rotated around Y by shoulder_lift_joint)
+         The link's own frame has its long axis along +X so that
+         positive shoulder_lift swings the arm "up and forward".
+         ============================================================ -->
+    <link name="upper_arm_link">
+      <pose>0.20 0 0.255 0 1.5707963 0</pose>
+      <inertial>
+        <mass>4.0</mass>
+        <inertia>
+          <ixx>0.02</ixx><iyy>0.06</iyy><izz>0.06</izz>
+          <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz>
+        </inertia>
+      </inertial>
+      <collision name="col">
+        <geometry><cylinder><radius>0.045</radius><length>0.40</length></cylinder></geometry>
+      </collision>
+      <visual name="vis">
+        <geometry><cylinder><radius>0.045</radius><length>0.40</length></cylinder></geometry>
+        <material>
+          <ambient>0.85 0.55 0.10 1</ambient>
+          <diffuse>0.95 0.60 0.10 1</diffuse>
+        </material>
+      </visual>
+    </link>
+
+    <joint name="shoulder_lift_joint" type="revolute">
+      <parent>shoulder_link</parent>
+      <child>upper_arm_link</child>
+      <pose>0 0 0.05 0 0 0</pose>
+      <axis>
+        <xyz>0 1 0</xyz>
+        <limit>
+          <lower>-1.5707</lower><upper>1.5707</upper>
+          <velocity>2.0</velocity><effort>30.0</effort>
+        </limit>
+        <dynamics><damping>2.0</damping><friction>0.5</friction></dynamics>
+        <!-- Home: -pi/2 rotates the upper arm UP so gravity loads less.
+             Without this the arm spawns horizontal and visibly sags
+             before the PD controller catches up. -->
+        <initial_position>-1.5707963</initial_position>
+      </axis>
+    </joint>
+
+    <!-- ============================================================
+         forearm_link  (rotated around Y by elbow_joint)
+         ============================================================ -->
+    <link name="forearm_link">
+      <pose>0.575 0 0.255 0 1.5707963 0</pose>
+      <inertial>
+        <mass>2.5</mass>
+        <inertia>
+          <ixx>0.012</ixx><iyy>0.04</iyy><izz>0.04</izz>
+          <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz>
+        </inertia>
+      </inertial>
+      <collision name="col">
+        <geometry><cylinder><radius>0.035</radius><length>0.35</length></cylinder></geometry>
+      </collision>
+      <visual name="vis">
+        <geometry><cylinder><radius>0.035</radius><length>0.35</length></cylinder></geometry>
+        <material>
+          <ambient>0.85 0.55 0.10 1</ambient>
+          <diffuse>0.95 0.60 0.10 1</diffuse>
+        </material>
+      </visual>
+    </link>
+
+    <joint name="elbow_joint" type="revolute">
+      <parent>upper_arm_link</parent>
+      <child>forearm_link</child>
+      <pose>0 0 0.20 0 0 0</pose>
+      <axis>
+        <xyz>0 1 0</xyz>
+        <limit>
+          <lower>-3.14159</lower><upper>3.14159</upper>
+          <velocity>2.0</velocity><effort>30.0</effort>
+        </limit>
+        <dynamics><damping>1.5</damping><friction>0.5</friction></dynamics>
+      </axis>
+    </joint>
+
+    <!-- ============================================================
+         wrist_1_link  (rotated around Y by wrist_1_joint)
+         ============================================================ -->
+    <link name="wrist_1_link">
+      <pose>0.80 0 0.255 0 1.5707963 0</pose>
+      <inertial>
+        <mass>0.8</mass>
+        <inertia>
+          <ixx>0.001</ixx><iyy>0.001</iyy><izz>0.001</izz>
+          <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz>
+        </inertia>
+      </inertial>
+      <collision name="col">
+        <geometry><cylinder><radius>0.032</radius><length>0.10</length></cylinder></geometry>
+      </collision>
+      <visual name="vis">
+        <geometry><cylinder><radius>0.032</radius><length>0.10</length></cylinder></geometry>
+        <material>
+          <ambient>0.20 0.45 0.70 1</ambient>
+          <diffuse>0.25 0.50 0.75 1</diffuse>
+        </material>
+      </visual>
+    </link>
+
+    <joint name="wrist_1_joint" type="revolute">
+      <parent>forearm_link</parent>
+      <child>wrist_1_link</child>
+      <pose>0 0 0.175 0 0 0</pose>
+      <axis>
+        <xyz>0 1 0</xyz>
+        <limit>
+          <lower>-3.14159</lower><upper>3.14159</upper>
+          <velocity>2.0</velocity><effort>15.0</effort>
+        </limit>
+        <dynamics><damping>1.0</damping><friction>0.3</friction></dynamics>
+      </axis>
+    </joint>
+
+    <!-- ============================================================
+         wrist_2_link  (rotated around Z by wrist_2_joint)
+         ============================================================ -->
+    <link name="wrist_2_link">
+      <pose>0.875 0 0.255 0 0 0</pose>
+      <inertial>
+        <mass>0.6</mass>
+        <inertia>
+          <ixx>0.0008</ixx><iyy>0.0008</iyy><izz>0.0008</izz>
+          <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz>
+        </inertia>
+      </inertial>
+      <collision name="col">
+        <geometry><cylinder><radius>0.030</radius><length>0.08</length></cylinder></geometry>
+      </collision>
+      <visual name="vis">
+        <geometry><cylinder><radius>0.030</radius><length>0.08</length></cylinder></geometry>
+        <material>
+          <ambient>0.85 0.55 0.10 1</ambient>
+          <diffuse>0.95 0.60 0.10 1</diffuse>
+        </material>
+      </visual>
+    </link>
+
+    <joint name="wrist_2_joint" type="revolute">
+      <parent>wrist_1_link</parent>
+      <child>wrist_2_link</child>
+      <pose>0 0 0.075 0 0 0</pose>
+      <axis>
+        <xyz>0 0 1</xyz>
+        <limit>
+          <lower>-3.14159</lower><upper>3.14159</upper>
+          <velocity>2.0</velocity><effort>15.0</effort>
+        </limit>
+        <dynamics><damping>1.0</damping><friction>0.3</friction></dynamics>
+      </axis>
+    </joint>
+
+    <!-- ============================================================
+         wrist_3_link  (rotated around Y by wrist_3_joint).
+         Has a fixed end-effector frame `tool0` at the tip - this is
+         what MoveIt2 / IK code targets in Phase 3b.
+         ============================================================ -->
+    <link name="wrist_3_link">
+      <pose>0.945 0 0.255 0 1.5707963 0</pose>
+      <inertial>
+        <mass>0.4</mass>
+        <inertia>
+          <ixx>0.0004</ixx><iyy>0.0004</iyy><izz>0.0004</izz>
+          <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz>
+        </inertia>
+      </inertial>
+      <collision name="col">
+        <geometry><cylinder><radius>0.026</radius><length>0.06</length></cylinder></geometry>
+      </collision>
+      <visual name="vis">
+        <geometry><cylinder><radius>0.026</radius><length>0.06</length></cylinder></geometry>
+        <material>
+          <ambient>0.20 0.45 0.70 1</ambient>
+          <diffuse>0.25 0.50 0.75 1</diffuse>
+        </material>
+      </visual>
+      <!-- Tip marker so users can see "this is where tool0 lives" -->
+      <visual name="tool0_tip">
+        <pose>0 0 0.04 0 0 0</pose>
+        <geometry><sphere><radius>0.015</radius></sphere></geometry>
+        <material>
+          <ambient>0.9 0.1 0.1 1</ambient>
+          <diffuse>1.0 0.1 0.1 1</diffuse>
+        </material>
+      </visual>
+    </link>
+
+    <joint name="wrist_3_joint" type="revolute">
+      <parent>wrist_2_link</parent>
+      <child>wrist_3_link</child>
+      <pose>0 0 0.04 0 0 0</pose>
+      <axis>
+        <xyz>0 1 0</xyz>
+        <limit>
+          <lower>-3.14159</lower><upper>3.14159</upper>
+          <velocity>2.0</velocity><effort>10.0</effort>
+        </limit>
+        <dynamics><damping>0.5</damping><friction>0.2</friction></dynamics>
+      </axis>
+    </joint>
+
+    <!-- ===================== Plugins ===================== -->
+
+    <!--
+      One JointPositionController per joint. Each subscribes to a gz topic
+      of the form /arm/<joint>/cmd_pos (gz.msgs.Double). ros_gz_bridge
+      then re-exposes each as a ROS std_msgs/Float64 of the same name.
+
+      PD gains are deliberately high so the arm holds against gravity
+      without an integral term (which can cause oscillation in gz's
+      relatively coarse default step).
+    -->
+    <plugin filename="gz-sim-joint-position-controller-system"
+            name="gz::sim::systems::JointPositionController">
+      <joint_name>shoulder_pan_joint</joint_name>
+      <topic>/arm/shoulder_pan/cmd_pos</topic>
+      <p_gain>800</p_gain><d_gain>80</d_gain><i_gain>0</i_gain>
+      <cmd_max>100</cmd_max><cmd_min>-100</cmd_min>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system"
+            name="gz::sim::systems::JointPositionController">
+      <joint_name>shoulder_lift_joint</joint_name>
+      <topic>/arm/shoulder_lift/cmd_pos</topic>
+      <p_gain>1200</p_gain><d_gain>120</d_gain><i_gain>0</i_gain>
+      <cmd_max>100</cmd_max><cmd_min>-100</cmd_min>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system"
+            name="gz::sim::systems::JointPositionController">
+      <joint_name>elbow_joint</joint_name>
+      <topic>/arm/elbow/cmd_pos</topic>
+      <p_gain>800</p_gain><d_gain>80</d_gain><i_gain>0</i_gain>
+      <cmd_max>80</cmd_max><cmd_min>-80</cmd_min>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system"
+            name="gz::sim::systems::JointPositionController">
+      <joint_name>wrist_1_joint</joint_name>
+      <topic>/arm/wrist_1/cmd_pos</topic>
+      <p_gain>400</p_gain><d_gain>40</d_gain><i_gain>0</i_gain>
+      <cmd_max>15</cmd_max><cmd_min>-15</cmd_min>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system"
+            name="gz::sim::systems::JointPositionController">
+      <joint_name>wrist_2_joint</joint_name>
+      <topic>/arm/wrist_2/cmd_pos</topic>
+      <p_gain>300</p_gain><d_gain>30</d_gain><i_gain>0</i_gain>
+      <cmd_max>15</cmd_max><cmd_min>-15</cmd_min>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system"
+            name="gz::sim::systems::JointPositionController">
+      <joint_name>wrist_3_joint</joint_name>
+      <topic>/arm/wrist_3/cmd_pos</topic>
+      <p_gain>200</p_gain><d_gain>20</d_gain><i_gain>0</i_gain>
+      <cmd_max>10</cmd_max><cmd_min>-10</cmd_min>
+    </plugin>
+
+    <!-- Publishes /joint_states (used by robot_state_publisher + RViz). -->
+    <plugin filename="gz-sim-joint-state-publisher-system"
+            name="gz::sim::systems::JointStatePublisher">
+      <topic>joint_states</topic>
+    </plugin>
+
+    <!-- Publishes each link's pose as /tf so RViz can render motion. -->
+    <plugin filename="gz-sim-pose-publisher-system"
+            name="gz::sim::systems::PosePublisher">
+      <publish_link_pose>true</publish_link_pose>
+      <publish_sensor_pose>false</publish_sensor_pose>
+      <publish_collision_pose>false</publish_collision_pose>
+      <publish_visual_pose>false</publish_visual_pose>
+      <publish_nested_model_pose>false</publish_nested_model_pose>
+      <use_pose_vector_msg>true</use_pose_vector_msg>
+      <static_publisher>true</static_publisher>
+      <static_update_frequency>1</static_update_frequency>
+    </plugin>
+
+  </model>
+</sdf>

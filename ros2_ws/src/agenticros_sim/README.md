@@ -1,9 +1,9 @@
 # agenticros_sim
 
 Gazebo Harmonic simulation assets for the AgenticROS project: an indoor world,
-a 2-wheel diff-drive AMR with a depth camera + 2D lidar + IMU, and a `ros_gz_
-bridge` config that exposes everything on the topic names the real-robot
-plugin already expects.
+a 2-wheel diff-drive AMR (depth camera + 2D lidar + IMU), a 6-DOF UR5e-shaped
+robotic arm, and a `ros_gz_bridge` config that exposes everything on the topic
+names the real-robot plugin already expects.
 
 ## What's inside
 
@@ -11,13 +11,20 @@ plugin already expects.
 agenticros_sim/
 ├── worlds/agenticros_indoor.sdf       12 x 12 m indoor room with obstacles
 │                                      and one "person" target for follow-me
-├── models/agenticros_amr/              2-wheel diff-drive AMR with sensors
-│   ├── model.config
-│   └── model.sdf
+├── models/
+│   ├── agenticros_amr/                 2-wheel diff-drive AMR with sensors
+│   └── agenticros_arm/                 6-DOF UR5e-shaped robotic arm
+├── urdf/
+│   ├── agenticros_amr.urdf.xacro       URDF mirror for RViz (AMR)
+│   └── agenticros_arm.urdf.xacro       URDF mirror for RViz (arm)
 ├── config/
-│   ├── amr_bridge.yaml                 gz <-> ROS topic mapping
-│   └── amr_view.rviz                   RViz config showing camera, scan, TF
-├── launch/sim_amr.launch.py            One-stop launcher
+│   ├── amr_bridge.yaml                 gz <-> ROS topic mapping (AMR)
+│   ├── amr_view.rviz                   RViz config: camera, scan, TF
+│   ├── arm_bridge.yaml                 gz <-> ROS topic mapping (arm)
+│   └── arm_view.rviz                   RViz config: RobotModel + TF
+├── launch/
+│   ├── sim_amr.launch.py               One-stop launcher (AMR)
+│   └── sim_arm.launch.py               One-stop launcher (arm)
 ├── env-hooks/                          Add the package's share/ to GZ_SIM_RESOURCE_PATH
 └── CMakeLists.txt + package.xml        Standard ament_cmake skeleton
 ```
@@ -26,17 +33,49 @@ agenticros_sim/
 
 ```bash
 # Easiest: use the agenticros CLI (handles ROS sourcing + workspace build).
-agenticros up sim-amr            # GUI
-agenticros up sim-amr --rviz     # GUI + RViz panel
-agenticros up sim-amr --no-camera # (no effect for sim - flag is real-only)
+agenticros up sim-amr            # AMR: GUI
+agenticros up sim-amr --rviz     # AMR: GUI + RViz panel
+agenticros up sim-arm            # Arm: GUI
+agenticros up sim-arm --rviz     # Arm: GUI + RViz (RobotModel + TF)
 
-# Or run the launch file directly:
+# Or run the launch files directly:
 cd ros2_ws && colcon build --symlink-install --packages-select agenticros_sim
 source install/setup.bash
 ros2 launch agenticros_sim sim_amr.launch.py
 ros2 launch agenticros_sim sim_amr.launch.py use_rviz:=true
 ros2 launch agenticros_sim sim_amr.launch.py gui:=false      # headless
+ros2 launch agenticros_sim sim_arm.launch.py
+ros2 launch agenticros_sim sim_arm.launch.py use_rviz:=true
 ```
+
+## Arm topic layout
+
+The arm exposes one position-command topic per joint plus the usual
+`/joint_states`, `/tf`, and `/clock`. Send a target angle in radians as a
+`std_msgs/Float64` and the PD controller drives the joint there.
+
+| Topic                              | Type                          | Direction |
+|------------------------------------|-------------------------------|-----------|
+| `/arm/shoulder_pan/cmd_pos`        | `std_msgs/msg/Float64`        | ROS -> GZ |
+| `/arm/shoulder_lift/cmd_pos`       | `std_msgs/msg/Float64`        | ROS -> GZ |
+| `/arm/elbow/cmd_pos`               | `std_msgs/msg/Float64`        | ROS -> GZ |
+| `/arm/wrist_1/cmd_pos`             | `std_msgs/msg/Float64`        | ROS -> GZ |
+| `/arm/wrist_2/cmd_pos`             | `std_msgs/msg/Float64`        | ROS -> GZ |
+| `/arm/wrist_3/cmd_pos`             | `std_msgs/msg/Float64`        | ROS -> GZ |
+| `/joint_states`                    | `sensor_msgs/msg/JointState`  | GZ -> ROS |
+| `/tf`, `/tf_static`                | `tf2_msgs/msg/TFMessage`      | GZ -> ROS |
+| `/clock`                           | `rosgraph_msgs/msg/Clock`     | GZ -> ROS |
+
+Example - wave the elbow back and forth from the command line:
+
+```bash
+ros2 topic pub /arm/elbow/cmd_pos std_msgs/msg/Float64 'data: 1.0' --once
+sleep 2
+ros2 topic pub /arm/elbow/cmd_pos std_msgs/msg/Float64 'data: -0.5' --once
+```
+
+The same via an MCP `ros2_publish` tool call from Claude / Codex / Gemini works
+identically.
 
 ## Topic layout
 
