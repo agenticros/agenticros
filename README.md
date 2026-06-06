@@ -78,6 +78,7 @@ The first run launches the interactive menu:
   Launch with real robot
 ❯ Launch with simulation
   First-time setup (workspace + OpenClaw plugin + API key)
+  Manage skills (2 registered, 0 available, 0 broken)
   Stop everything
   Doctor (health check)
   Configure (API keys, namespace, transport)
@@ -106,6 +107,7 @@ agenticros up real              # real robot stack
 agenticros up sim-amr           # simulated AMR (Gazebo + RViz, headless on Jetson)
 agenticros up sim-arm           # simulated 6-DOF arm
 agenticros mode <real|sim>      # swap the active config profile (namespace, transport)
+agenticros skills               # list / add / remove AgenticROS skills (see below)
 agenticros doctor               # coloured health check
 agenticros down                 # stop everything we started
 ```
@@ -320,14 +322,67 @@ Add `{ "memory": { "enabled": true, "backend": "mem0" } }` to `~/.agenticros/con
 
 ## Skills
 
-AgenticROS **skills** are optional packages that add tools and behaviors to the plugin. They are loaded at gateway start.
+AgenticROS **skills** are optional packages that add tools and behaviors to the plugin (e.g. `follow_robot`, `find_object`). They are loaded at OpenClaw gateway start. **[AgenticROS Skills](https://github.com/agenticros/agenticros-skills)** is a curated list — use it to discover skills for your robot and to submit your own.
 
-**[AgenticROS Skills](https://github.com/agenticros/agenticros-skills)** is a curated list of skills — use it to discover skills for your robot and to submit your own via pull request.
+### Managing skills with the CLI
 
-- **Install**: In the OpenClaw config file, under `plugins.entries.agenticros.config`, set `**skillPackages`** (e.g. `["agenticros-skill-followme"]`) and ensure the package is installed where the gateway runs, or set `**skillPaths`** to directories containing skill packages. Restart the gateway after changes.
-- **Config**: Each skill reads its options from `**config.skills.<skillId>`** (e.g. `config.skills.followme`).
-- **Contract and creating a skill**: See **[docs/skills.md](docs/skills.md)** for the full contract, install steps, and how to build a third-party skill.
-- **Reference skill**: **[agenticros-skill-followme](https://github.com/your-org/agenticros-skill-followme)** — Follow Me (depth + optional Ollama), with tools `follow_robot`, `follow_me_see`, and `ollama_status`. Use its README as a template for new skills.
+The `agenticros skills` command (and the **Manage skills** menu entry) does everything for you: it scans the usual locations for clones, edits `~/.openclaw/openclaw.json`, refreshes the plugin manifest's `contracts.tools` allowlist, and reminds you to bounce the gateway.
+
+```bash
+agenticros skills                       # list registered + cloned-but-unregistered
+agenticros skills discover              # interactive picker over candidates on disk
+agenticros skills add <path-or-name>    # register a clone (path) or npm package
+agenticros skills remove <id-or-name>   # unregister
+agenticros skills sync                  # refresh OpenClaw contracts.tools allowlist
+```
+
+A typical first-run looks like:
+
+```bash
+# clone whichever skills you want, anywhere near the repo
+cd ~/Projects
+git clone https://github.com/agenticros/agenticros-skill-followme
+git clone https://github.com/agenticros/agenticros-skill-find
+
+# build them (skills compile independently of the main workspace)
+cd agenticros-skill-followme && pnpm install && pnpm build && cd ..
+cd agenticros-skill-find     && pnpm install && pnpm build && cd ..
+
+# register both — short ids resolve against the discovered clones
+agenticros skills add followme
+agenticros skills add find
+agenticros skills sync                  # update contracts.tools
+systemctl --user restart openclaw-gateway.service
+```
+
+`agenticros skills` then shows them as registered, and `agenticros doctor` includes a skills health-check that flags any clone that hasn't been built or whose `skillPaths` entry no longer exists.
+
+Listing output:
+
+```text
+╔─────────────────────╗
+║  AgenticROS skills  ║
+╚─────────────────────╝
+
+› OpenClaw config: /home/you/.openclaw/openclaw.json
+
+Registered:
+  ● followme  agenticros-skill-followme
+      via path  →  /home/you/Projects/agenticros-skill-followme
+  ● find      agenticros-skill-find
+      via path  →  /home/you/Projects/agenticros-skill-find
+```
+
+### What the CLI writes
+
+- `~/.openclaw/openclaw.json` → `plugins.entries.agenticros.config.skillPaths[]` and `.skillPackages[]` (the only place the plugin actually reads from at gateway start).
+- `packages/agenticros/openclaw.plugin.json` → `contracts.tools` allowlist via `scripts/sync-skill-tools.mjs`. Required on OpenClaw **2026+**, which silently drops any tool a plugin registers but hasn't declared.
+
+Per-skill behaviour lives under `config.skills.<skillId>` (e.g. `config.skills.followme.depthTopic`). The CLI doesn't auto-write these — use `agenticros config set skills.find.confidence=0.5` or edit `~/.openclaw/openclaw.json` directly. See each skill's README for its options.
+
+### Contract & writing your own skill
+
+A skill is a Node package with `"agenticrosSkill": true` in `package.json` and a `registerSkill(api, config, context)` export from `main`. See **[docs/skills.md](docs/skills.md)** for the full contract and **[agenticros-skill-followme](https://github.com/your-org/agenticros-skill-followme)** as a reference template.
 
 ## License
 
