@@ -17,6 +17,7 @@ import { getCliPaths } from "../util/paths.js";
 import { detectRosDistro, hasGazeboHarmonic } from "../util/env.js";
 import { colors, header, ok, warn, err, info } from "../util/logger.js";
 import { activeConfigPath, profilesDir, readActiveMode } from "../util/profiles.js";
+import { listSkills } from "../util/skills.js";
 
 export type Severity = "green" | "yellow" | "red";
 
@@ -260,6 +261,63 @@ export async function runDoctorChecks(): Promise<DoctorReport> {
     severity: existsSync(ocConfig) ? "green" : "red",
     hint: existsSync(ocConfig) ? undefined : "Run `agenticros init` to install the OpenClaw plugin.",
   });
+
+  // Skills (only meaningful once the OpenClaw config exists).
+  if (existsSync(ocConfig)) {
+    try {
+      const skills = listSkills();
+      if (skills.brokenPaths.length > 0) {
+        checks.push({
+          id: "skills",
+          label: `Skills: ${skills.registered.length} registered, ${skills.brokenPaths.length} broken`,
+          severity: "yellow",
+          detail: skills.available.length > 0 ? `${skills.available.length} cloned but unregistered` : undefined,
+          hint:
+            "Run `agenticros skills` to inspect; broken paths point at directories that no longer contain a valid skill.",
+        });
+      } else if (skills.registered.length > 0) {
+        const ids = skills.registered.map((s) => s.id).join(", ");
+        const unbuilt = skills.registered.filter((s) => s.dir && s.built === false);
+        if (unbuilt.length > 0) {
+          checks.push({
+            id: "skills",
+            label: `Skills: ${skills.registered.length} registered, ${unbuilt.length} not built (${unbuilt.map((s) => s.id).join(", ")})`,
+            severity: "yellow",
+            hint:
+              `Build them so the OpenClaw plugin can load their tools:\n` +
+              unbuilt.map((s) => `      cd ${s.dir} && pnpm build`).join("\n"),
+          });
+        } else {
+          checks.push({
+            id: "skills",
+            label: `Skills: ${skills.registered.length} registered (${ids})`,
+            severity: "green",
+            detail:
+              skills.available.length > 0
+                ? `${skills.available.length} cloned but unregistered`
+                : undefined,
+            hint:
+              skills.available.length > 0
+                ? "Run `agenticros skills discover` to register the cloned-but-unregistered ones."
+                : undefined,
+          });
+        }
+      } else {
+        checks.push({
+          id: "skills",
+          label: "Skills: none registered",
+          severity: "yellow",
+          detail: skills.available.length > 0 ? `${skills.available.length} cloned but unregistered` : "(none cloned)",
+          hint:
+            skills.available.length > 0
+              ? "Run `agenticros skills discover` to register cloned skills."
+              : "Skills are optional. Clone any `agenticros-skill-*` repo near this one to make it discoverable.",
+        });
+      }
+    } catch {
+      // Skip silently if listing fails (already covered by openclaw-config check).
+    }
+  }
 
   // OpenClaw gateway service.
   try {

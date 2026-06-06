@@ -23,7 +23,8 @@
       "memory_status",
       "follow_robot",
       "follow_me_see",
-      "ollama_status"
+      "ollama_status",
+      "find_object"
     ]
   },
   "configSchema": {
@@ -311,7 +312,10 @@
           },
           "backend": {
             "type": "string",
-            "enum": ["local", "mem0"],
+            "enum": [
+              "local",
+              "mem0"
+            ],
             "default": "local",
             "description": "local = JSON-on-disk, no deps; mem0 = semantic search via mem0ai (requires `pnpm add mem0ai`)."
           },

@@ -15,8 +15,10 @@ import { doctorCommand, hasRedChecks } from "./commands/doctor.js";
 import { statusCommand } from "./commands/status.js";
 import { logsCommand } from "./commands/logs.js";
 import { configCommand } from "./commands/config.js";
+import { skillsCommand } from "./commands/skills.js";
 import { header, info, isTty, dim } from "./util/logger.js";
 import { readState, formatAge } from "./util/state.js";
+import { listSkills } from "./util/skills.js";
 
 interface MenuChoice {
   name: string;
@@ -43,10 +45,14 @@ export async function runMenu(): Promise<void> {
   // Need-setup detection. Doctor returns a count; we use that to reorder.
   const setupNeeded = await hasRedChecks();
 
+  const skillsListing = safeListSkills();
+  const skillsSuffix = formatSkillsSuffix(skillsListing);
+
   const baseChoices: MenuChoice[] = [
     { name: "Launch with real robot", value: "real" },
     { name: "Launch with simulation", value: "sim" },
     { name: "First-time setup (workspace + OpenClaw plugin + API key)", value: "init" },
+    { name: `Manage skills${skillsSuffix}`, value: "skills" },
     { name: "Stop everything", value: "down" },
     { name: "Doctor (health check)", value: "doctor" },
     { name: "Configure (API keys, namespace, transport)", value: "config" },
@@ -100,6 +106,9 @@ export async function runMenu(): Promise<void> {
     case "config":
       await configCommand({ action: "show" });
       break;
+    case "skills":
+      await skillsSubmenu();
+      break;
     case "logs":
       await logsCommand({ target: undefined });
       break;
@@ -110,4 +119,59 @@ export async function runMenu(): Promise<void> {
     default:
       break;
   }
+}
+
+/**
+ * Skills sub-menu. Reads the OpenClaw config so the prompt can show how many
+ * skills are registered and offer the right next step (discover when nothing
+ * is registered yet, otherwise list-first).
+ */
+async function skillsSubmenu(): Promise<void> {
+  const listing = safeListSkills();
+  const hasAvailable = listing && listing.available.length > 0;
+  const hasRegistered = listing && listing.registered.length > 0;
+  const action = await select<string>({
+    message: "Skills:",
+    choices: [
+      { name: "List registered + available", value: "list" },
+      {
+        name: hasAvailable
+          ? `Discover & register (${listing!.available.length} unregistered found)`
+          : "Discover & register (interactive picker)",
+        value: "discover",
+      },
+      { name: "Add a skill by path or package name", value: "add" },
+      { name: "Remove a skill", value: "remove" },
+      { name: "Sync OpenClaw contracts.tools allowlist", value: "sync" },
+      { name: "Back", value: "back" },
+    ],
+    default: hasRegistered ? "list" : "discover",
+  });
+  if (action === "back") return;
+  await skillsCommand({ action });
+}
+
+/** Read skills without throwing; the menu must keep working even if the config is broken. */
+function safeListSkills(): ReturnType<typeof listSkills> | undefined {
+  try {
+    return listSkills();
+  } catch {
+    return undefined;
+  }
+}
+
+/** Inline summary attached to the "Manage skills" menu label. */
+function formatSkillsSuffix(listing: ReturnType<typeof listSkills> | undefined): string {
+  if (!listing) return "";
+  const parts: string[] = [];
+  if (listing.registered.length > 0) {
+    parts.push(`${listing.registered.length} registered`);
+  }
+  if (listing.available.length > 0) {
+    parts.push(`${listing.available.length} available`);
+  }
+  if (listing.brokenPaths.length > 0) {
+    parts.push(`${listing.brokenPaths.length} broken`);
+  }
+  return parts.length > 0 ? ` (${parts.join(", ")})` : "";
 }

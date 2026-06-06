@@ -18,6 +18,7 @@ import { doctorCommand } from "./commands/doctor.js";
 import { statusCommand } from "./commands/status.js";
 import { logsCommand } from "./commands/logs.js";
 import { configCommand } from "./commands/config.js";
+import { skillsCommand } from "./commands/skills.js";
 import { runMenu } from "./menu.js";
 import { err } from "./util/logger.js";
 import { readFileSync } from "node:fs";
@@ -142,6 +143,15 @@ program
   )
   .action(async (target: string | undefined) => {
     await configCommand({ action: "use", keyValue: target });
+  });
+
+program
+  .command("skills [action] [arg]")
+  .description(
+    "Manage AgenticROS skills (OpenClaw plugin). action = list | discover | add <path|name> | remove <id|name> | sync.",
+  )
+  .action(async (action: string | undefined, arg: string | undefined) => {
+    await skillsCommand({ action, arg });
   });
 
 async function main(): Promise<void> {
