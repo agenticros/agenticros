@@ -14,8 +14,9 @@
  * Reuses the existing shell scripts as subprocesses (no logic duplication).
  */
 
-import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { confirm, input, password, select } from "@inquirer/prompts";
 import { execa } from "execa";
@@ -139,14 +140,23 @@ export async function initCommand(opts: InitOptions): Promise<void> {
   }
 
   // Step: colcon workspace.
+  // We rebuild whenever the colcon install/ is missing OR the build stamp
+  // doesn't match this CLI version. The CLI-version stamp catches the
+  // common "refreshShippedCode just dropped new launch/sdf files into
+  // src/ but install/ is from the previous CLI version" case - without
+  // it, init's skip-because-install-exists logic ships users a
+  // stale install dir (e.g. 0.1.10 added sim_arm.launch.py but
+  // colconBuilt() saw install/setup.bash from 0.1.9 and skipped the
+  // rebuild).
   const ros2WsRoot = join(repoRoot, "ros2_ws");
-  if (opts.force || !colconBuilt(ros2WsRoot)) {
+  if (opts.force || !colconBuiltForCurrentCli(ros2WsRoot)) {
     await runStep("Building ROS 2 workspace (colcon)", async () => {
       await runShell(
         `mkdir -p "${ros2WsRoot}" && cd "${ros2WsRoot}" && \
          . /opt/ros/$(ls /opt/ros 2>/dev/null | head -1)/setup.bash && \
          colcon build --symlink-install`,
       );
+      writeRos2WsBuildStamp(ros2WsRoot);
     });
   } else {
     ok("ROS 2 workspace already built (skip).");
@@ -215,8 +225,62 @@ async function runShell(cmd: string): Promise<void> {
 }
 
 
-function colconBuilt(ws: string): boolean {
-  return existsSync(join(ws, "install", "setup.bash"));
+/**
+ * Read the CLI version from its own package.json. Mirrors the helper in
+ * src/index.ts (kept local so init can import without circular deps).
+ */
+function readCliVersion(): string {
+  try {
+    const here = dirname(fileURLToPath(import.meta.url));
+    // dist/commands -> ../../package.json (workspace) or ../package.json (bundle).
+    const candidates = [
+      join(here, "..", "..", "package.json"),
+      join(here, "..", "package.json"),
+    ];
+    for (const c of candidates) {
+      if (!existsSync(c)) continue;
+      const pkg = JSON.parse(readFileSync(c, "utf8")) as { name?: string; version?: string };
+      if (pkg.name === "agenticros" && typeof pkg.version === "string") return pkg.version;
+    }
+  } catch {
+    // ignore - we'll fall through to a sentinel.
+  }
+  return "0.0.0";
+}
+
+/** Path of the build-stamp file we write alongside the colcon install/. */
+function ros2WsBuildStampPath(ws: string): string {
+  return join(ws, ".agenticros-cli-build-stamp");
+}
+
+/** Record the CLI version that produced the current colcon install/. */
+function writeRos2WsBuildStamp(ws: string): void {
+  try {
+    writeFileSync(ros2WsBuildStampPath(ws), readCliVersion() + "\n");
+  } catch {
+    // best-effort - a missing stamp just means we rebuild next time, which is safe.
+  }
+}
+
+/**
+ * The colcon workspace counts as "built" for THIS CLI version only if:
+ *   1. ros2_ws/install/setup.bash exists (some colcon ran successfully).
+ *   2. ros2_ws/.agenticros-cli-build-stamp matches our package.json version.
+ *
+ * (2) is what catches stale installs after a CLI upgrade: refreshShippedCode
+ * may have just rewritten ros2_ws/src/, but if install/ is from an older CLI,
+ * its install/<pkg>/share/ won't contain the new launch / model files.
+ */
+function colconBuiltForCurrentCli(ws: string): boolean {
+  if (!existsSync(join(ws, "install", "setup.bash"))) return false;
+  try {
+    const stamp = readFileSync(ros2WsBuildStampPath(ws), "utf8").trim();
+    return stamp === readCliVersion();
+  } catch {
+    // No stamp -> assume the install/ predates this CLI version's stamp
+    // logic and force a fresh build so we end up in a known-good state.
+    return false;
+  }
 }
 
 function openclawPluginInstalled(): boolean {
