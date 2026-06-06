@@ -56,34 +56,95 @@ Gemini CLI → @agenticros/gemini (function calling) → Core → ROS2 robots
 - `**docker/**` — Docker Compose and Dockerfiles for ROS2 + plugin images.
 - `**examples/**` — Example projects.
 
-## Requirements
+## Install
 
-- Node.js >= 20, pnpm >= 9
-- ROS2 (Jazzy or compatible) for building and running the ROS2 packages
-- OpenClaw gateway for the OpenClaw plugin
+You only need one command. The `agenticros` CLI handles everything else —
+installing the ROS 2 workspace, building the MCP server, registering the
+OpenClaw plugin, and wiring up your robot config.
 
-## Quick start
+```bash
+npx agenticros
+```
 
-1. **Install dependencies**
-  ```bash
-   pnpm install
-  ```
-2. **Build ROS2 workspace** (optional, if you need discovery/agent/follow_me nodes)
-  ```bash
-   cd ros2_ws
-   colcon build --packages-select agenticros_msgs agenticros_bringup agenticros_discovery agenticros_agent agenticros_follow_me
-   source install/setup.bash
-  ```
-3. **Type-check packages**
-  ```bash
-   pnpm typecheck
-  ```
-4. **Install and test the OpenClaw plugin**
-  Point the OpenClaw gateway at this repo’s `packages/agenticros` (or at a built package). Configure the plugin under `plugins.entries.agenticros.config` in your OpenClaw config file. Run `./scripts/setup_gateway_plugin.sh` from the repo root to register the plugin and print next steps. **Recommended:** OpenClaw **2026.3.11** or later — plugin routes work at [http://127.0.0.1:18789/plugins/agenticros/](http://127.0.0.1:18789/plugins/agenticros/) (config, teleop). For local dev without token auth, run `**node scripts/setup-openclaw-local.cjs`** then restart the gateway. **If URLs don't load** (e.g. gateway logs "missing or invalid auth" on older versions): run `**./scripts/use-openclaw-2026.2.26.sh`** as fallback. See **docs/openclaw-releases-and-plugin-routes.md**.
+That's it. Run it on any machine with **Node ≥ 20**, no `git clone` required.
+The first run launches the interactive menu:
 
-**With token auth:** Run `node scripts/agenticros-proxy.cjs 18790` and open [http://127.0.0.1:18790/plugins/agenticros/](http://127.0.0.1:18790/plugins/agenticros/). See **docs/teleop.md**.
+```text
+╔──────────────────────────────────────────────────╗
+║  AgenticROS - agentic AI for ROS-powered robots  ║
+╚──────────────────────────────────────────────────╝
 
-See `**docs/`** for robot setup, skills, teleop, and Docker.
+? What would you like to do?
+  Launch with real robot
+❯ Launch with simulation
+  First-time setup (workspace + OpenClaw plugin + API key)
+  Stop everything
+  Doctor (health check)
+  Configure (API keys, namespace, transport)
+  Tail logs
+```
+
+Pick **First-time setup** once (workspace + OpenClaw plugin + API key, all
+idempotent), then choose how you want to run:
+
+| You want to … | Pick |
+|---|---|
+| Drive your **real robot** (RealSense + motors + MCP) | **Launch with real robot** |
+| Demo a **simulated 2-wheel AMR** in Gazebo + RViz | **Launch with simulation → AMR** |
+| Demo a **simulated 6-DOF arm** (UR5e-shaped, per-joint position control) | **Launch with simulation → 6-DOF arm** |
+
+Once a stack is up, point any of the supported agents — OpenClaw, Claude Code,
+Claude Desktop / Dispatch, or Gemini CLI — at the same robot and start talking
+to it. The CLI tracks what it spawned (pidfiles + logs under `/tmp/agenticros-*`),
+so **Stop everything** cleanly tears the demo down.
+
+Prefer scripted invocations? Every menu item maps to a direct command:
+
+```bash
+npx agenticros init             # one-time workspace + plugin + API key
+agenticros up real              # real robot stack
+agenticros up sim-amr           # simulated AMR (Gazebo + RViz, headless on Jetson)
+agenticros up sim-arm           # simulated 6-DOF arm
+agenticros mode <real|sim>      # swap the active config profile (namespace, transport)
+agenticros doctor               # coloured health check
+agenticros down                 # stop everything we started
+```
+
+Full CLI reference: **[packages/agenticros-cli/README.md](packages/agenticros-cli/README.md)**.
+
+### Requirements
+
+- **Node.js ≥ 20** (the only hard requirement — `npx agenticros` installs pnpm
+  itself if missing)
+- **ROS 2 Humble or Jazzy** if you plan to use the real-robot stack or any
+  simulation (the CLI sources `/opt/ros/<distro>/setup.bash` and runs
+  `colcon build` for you)
+- **OpenClaw gateway** only if you also want the OpenClaw web UI / chat /
+  teleop adapter
+
+### Contributing / building from source
+
+Hacking on the packages themselves? Clone and use the local checkout — the CLI
+auto-detects the workspace and uses live sources instead of the bundled snapshot:
+
+```bash
+git clone https://github.com/PlaiPin/agenticros && cd agenticros
+pnpm install && pnpm build
+./agenticros                    # repo-local CLI shim, same menu as `npx agenticros`
+```
+
+For the OpenClaw plugin specifically, point the gateway at this repo's
+`packages/agenticros` and configure under `plugins.entries.agenticros.config`.
+**Recommended:** OpenClaw **2026.3.11+** — routes work at
+[http://127.0.0.1:18789/plugins/agenticros/](http://127.0.0.1:18789/plugins/agenticros/)
+(config, teleop). For local dev without token auth:
+`node scripts/setup-openclaw-local.cjs` then restart the gateway. Older gateways
+needing token auth: run `node scripts/agenticros-proxy.cjs 18790` and open
+[http://127.0.0.1:18790/plugins/agenticros/](http://127.0.0.1:18790/plugins/agenticros/).
+See **[docs/openclaw-releases-and-plugin-routes.md](docs/openclaw-releases-and-plugin-routes.md)**
+and **[docs/teleop.md](docs/teleop.md)**.
+
+See **`docs/`** for robot setup, skills, teleop, simulation internals, and Docker.
 
 ## RViz2 and Gazebo (TurtleBot3 + rosbridge)
 

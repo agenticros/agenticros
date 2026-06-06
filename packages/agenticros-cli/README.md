@@ -11,7 +11,8 @@ workspace healthy from a single binary.
 npx agenticros init     # workspace + plugin + API key + doctor
 agenticros              # interactive menu
 agenticros up real      # bring up the real-robot stack
-agenticros up sim-amr   # bring up a simulated 2-wheel AMR (Phase 2)
+agenticros up sim-amr   # bring up a simulated 2-wheel AMR
+agenticros up sim-arm   # bring up a simulated 6-DOF arm
 agenticros doctor       # health check
 agenticros down         # stop everything we started
 ```
@@ -49,7 +50,7 @@ Three ways, listed easiest first:
 | `agenticros init` | First-time setup wizard. Idempotent. |
 | `agenticros up real` | Bring up the real-robot stack (RealSense + motors + MCP). |
 | `agenticros up sim-amr` | Bring up the simulated 2-wheel AMR. |
-| `agenticros up sim-arm` | Bring up the simulated UR5e arm + MoveIt2. |
+| `agenticros up sim-arm` | Bring up the simulated 6-DOF arm (UR5e-shaped, per-joint position control). |
 | `agenticros down` | Stop everything we started. |
 | `agenticros doctor` | Coloured health-check table; `--json` for CI. |
 | `agenticros status` | Snapshot of running components + last mode. |
