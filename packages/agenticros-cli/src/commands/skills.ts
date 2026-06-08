@@ -34,7 +34,12 @@ import {
 } from "../util/skills.js";
 import { getCliPaths } from "../util/paths.js";
 import { colors, dim, err, header, info, isTty, ok, warn } from "../util/logger.js";
-import { openclawConfigPath } from "../util/openclaw-config.js";
+import {
+  ensureToolsAlsoAllow,
+  openclawConfigExists,
+  openclawConfigPath,
+  readAgenticrosContractTools,
+} from "../util/openclaw-config.js";
 
 export interface SkillsOptions {
   action?: string;
@@ -328,6 +333,7 @@ async function syncManifest(): Promise<void> {
     if (stderr.trim()) process.stderr.write(stderr.endsWith("\n") ? stderr : `${stderr}\n`);
     if (exitCode === 0) {
       ok("sync-skill-tools complete.");
+      syncAlsoAllowFromManifest(paths.repoRoot ?? paths.installDir);
       hintRestartGateway();
     } else {
       err(`sync-skill-tools exited with code ${exitCode}.`);
@@ -337,6 +343,26 @@ async function syncManifest(): Promise<void> {
     err(`Failed to run sync-skill-tools: ${e instanceof Error ? e.message : String(e)}`);
     process.exit(1);
   }
+}
+
+/**
+ * Mirror the plugin manifest's `contracts.tools` into the user's OpenClaw
+ * `tools.alsoAllow`. This is the "chat actually sees the new skill's tools"
+ * step — without it, OpenClaw 2026.6+ tool profiles (`coding`, `standard`,
+ * …) silently drop any plugin-registered tool that the user hasn't opted
+ * into. Run after every config-changing skill op so the allowlist tracks
+ * whatever `sync-skill-tools.mjs` just wrote into `contracts.tools`.
+ */
+function syncAlsoAllowFromManifest(repoRoot: string): void {
+  if (!openclawConfigExists()) return;
+  const tools = readAgenticrosContractTools(repoRoot);
+  if (!tools || tools.length === 0) return;
+  const result = ensureToolsAlsoAllow(tools);
+  if (!result || !result.changed) return;
+  ok(
+    `Added ${result.added.length} tool(s) to OpenClaw tools.alsoAllow so the chat agent can see them:`,
+  );
+  dim(`  + ${result.added.join(", ")}`);
 }
 
 interface FollowupOpts {

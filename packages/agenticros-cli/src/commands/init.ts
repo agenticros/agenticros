@@ -24,6 +24,11 @@ import { execa } from "execa";
 import { runDoctorChecks } from "./doctor.js";
 import { getCliPaths, resetPathsCache } from "../util/paths.js";
 import { header, info, ok, warn, err, dim, withSpinner } from "../util/logger.js";
+import {
+  ensureToolsAlsoAllow,
+  openclawConfigExists,
+  readAgenticrosContractTools,
+} from "../util/openclaw-config.js";
 import { ensureProfilesExist, switchMode } from "../util/profiles.js";
 import { writeState } from "../util/state.js";
 import { isWorkspaceBuilt, isWorkspaceInstalled } from "../util/workspace.js";
@@ -182,6 +187,14 @@ export async function initCommand(opts: InitOptions): Promise<void> {
     ok("OpenClaw plugin already installed (skip).");
   }
 
+  // Step: keep `tools.alsoAllow` in sync with the plugin manifest.
+  // OpenClaw 2026.6+ tool profiles (e.g. "coding") are strict allowlists; any
+  // `api.registerTool(...)` call the plugin makes is silently filtered out
+  // unless the tool id is opted into `tools.alsoAllow`. Without this step the
+  // chat agent loads the AgenticROS plugin successfully yet still tells the
+  // user "I don't have ros2_camera_snapshot / ros2_* tools exposed".
+  syncToolsAlsoAllow(repoRoot);
+
   // Step: robot config.
   if (opts.force || !userConfigExists()) {
     await promptAndWriteRobotConfig();
@@ -286,6 +299,38 @@ function colconBuiltForCurrentCli(ws: string): boolean {
 function openclawPluginInstalled(): boolean {
   const home = process.env["HOME"] ?? "";
   return existsSync(join(home, ".openclaw", "openclaw.json"));
+}
+
+/**
+ * Merge the plugin manifest's `contracts.tools` into the user's OpenClaw
+ * `tools.alsoAllow`. No-op when either the OpenClaw config or the manifest
+ * isn't present yet (e.g. a sim-only install where the OpenClaw plugin step
+ * was skipped). Side-effect free in that case.
+ */
+function syncToolsAlsoAllow(repoRoot: string): void {
+  if (!openclawConfigExists()) {
+    dim("OpenClaw config not present; skipping tools.alsoAllow sync.");
+    return;
+  }
+  const tools = readAgenticrosContractTools(repoRoot);
+  if (!tools || tools.length === 0) {
+    dim("AgenticROS plugin manifest not found yet; tools.alsoAllow sync deferred.");
+    return;
+  }
+  const result = ensureToolsAlsoAllow(tools);
+  if (!result) {
+    warn("Could not read OpenClaw config to update tools.alsoAllow.");
+    return;
+  }
+  if (result.changed) {
+    ok(
+      `Added ${result.added.length} AgenticROS tool(s) to OpenClaw tools.alsoAllow ` +
+        "(strict tool profile would otherwise hide them from the chat agent).",
+    );
+    dim(`  + ${result.added.join(", ")}`);
+  } else {
+    ok("OpenClaw tools.alsoAllow already covers every AgenticROS tool (skip).");
+  }
 }
 
 function userConfigExists(): boolean {

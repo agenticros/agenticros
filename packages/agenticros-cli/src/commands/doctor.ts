@@ -17,6 +17,11 @@ import { getCliPaths } from "../util/paths.js";
 import { detectRosDistro, hasGazeboHarmonic } from "../util/env.js";
 import { colors, header, ok, warn, err, info } from "../util/logger.js";
 import { activeConfigPath, profilesDir, readActiveMode } from "../util/profiles.js";
+import {
+  ensureToolsAlsoAllow,
+  readAgenticrosContractTools,
+  readOpenclawConfig,
+} from "../util/openclaw-config.js";
 import { listSkills } from "../util/skills.js";
 
 export type Severity = "green" | "yellow" | "red";
@@ -261,6 +266,36 @@ export async function runDoctorChecks(): Promise<DoctorReport> {
     severity: existsSync(ocConfig) ? "green" : "red",
     hint: existsSync(ocConfig) ? undefined : "Run `agenticros init` to install the OpenClaw plugin.",
   });
+
+  // tools.alsoAllow vs plugin contracts.tools. OpenClaw 2026.6+ tool profiles
+  // ("coding", "standard", …) are strict allowlists applied BEFORE plugin tools
+  // are merged in - missing entries here is why "OpenClaw says it has no
+  // ros2_camera_snapshot" even when the plugin loaded successfully. We do a
+  // dry-run sync (write:false) to compute the delta without touching the file.
+  if (existsSync(ocConfig)) {
+    const cfg = readOpenclawConfig();
+    const tools = readAgenticrosContractTools(paths.repoRoot ?? paths.installDir);
+    if (cfg && tools && tools.length > 0) {
+      const dry = ensureToolsAlsoAllow(tools, { cfg, write: false });
+      if (dry && dry.added.length > 0) {
+        const profile = (cfg["tools"] as Record<string, unknown> | undefined)?.["profile"];
+        const profileStr = typeof profile === "string" ? profile : "(default)";
+        checks.push({
+          id: "tools-alsoallow",
+          label: `OpenClaw tools.alsoAllow missing ${dry.added.length} AgenticROS tool(s)`,
+          severity: "red",
+          detail: `tools.profile = ${profileStr}; chat agent will not see: ${dry.added.slice(0, 4).join(", ")}${dry.added.length > 4 ? ", …" : ""}`,
+          hint: "Run `agenticros skills sync` (or re-run `agenticros init`) to repair the allowlist.",
+        });
+      } else {
+        checks.push({
+          id: "tools-alsoallow",
+          label: `OpenClaw tools.alsoAllow covers every AgenticROS tool`,
+          severity: "green",
+        });
+      }
+    }
+  }
 
   // Skills (only meaningful once the OpenClaw config exists).
   if (existsSync(ocConfig)) {
