@@ -61,11 +61,16 @@ export default {
         api.logger.error("AgenticROS: memory init failed: " + msg);
       });
 
-    // Load optional skills from skillPackages and skillPaths (async; OpenClaw 2026.5+ requires sync register())
-    void loadSkills(api, config).catch((e) => {
+    // Load optional skills synchronously. OpenClaw 2026.6's plugin host snapshots
+    // captured.tools the instant register() returns, so any skill that registers
+    // tools must do so inline with this call (not via a Promise). See
+    // skill-loader.ts for the require(esm)-based mechanism.
+    try {
+      loadSkills(api, config);
+    } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       api.logger.error("AgenticROS: skill load failed: " + msg);
-    });
+    }
 
     // Register safety validation hook (before_tool_call)
     registerSafetyHook(api, config);
