@@ -354,6 +354,60 @@ export async function runDoctorChecks(): Promise<DoctorReport> {
     }
   }
 
+  // Skill config sanity: detect "phantom blanks" in OpenClaw's plugin config that
+  // historically broke skills (e.g. config UI saving every field as "" or 0 →
+  // depthTopic="" → follow_robot publishes linear.x=0 → no motor motion).
+  // Modern agenticros-skill-followme treats blanks/zeros as "use default", but a
+  // user running an older skill version will still see the bug. We surface it.
+  if (existsSync(ocConfig)) {
+    try {
+      const oc = readOpenclawConfig() as Record<string, unknown> | null;
+      const ag = (oc?.plugins as Record<string, unknown> | undefined)?.entries as
+        | Record<string, unknown>
+        | undefined;
+      const fm = (
+        (((ag?.agenticros as Record<string, unknown> | undefined)?.config as
+          | Record<string, unknown>
+          | undefined)?.skills as Record<string, unknown> | undefined)?.followme
+      ) as Record<string, unknown> | undefined;
+      if (fm) {
+        const stringKeysNeedingValue = [
+          "depthTopic",
+          "cameraTopic",
+          "vlmModel",
+          "ollamaUrl",
+        ];
+        const numericKeysExpectedPositive = [
+          "rateHz",
+          "targetDistance",
+          "searchAngularVelocity",
+          "searchTicksBeforeSwitch",
+          "criticalStopDistanceM",
+          "maxVelocityFraction",
+        ];
+        const blankStrings = stringKeysNeedingValue.filter(
+          (k) => typeof fm[k] === "string" && (fm[k] as string).trim() === "",
+        );
+        const zeroNumbers = numericKeysExpectedPositive.filter(
+          (k) => typeof fm[k] === "number" && (fm[k] as number) === 0,
+        );
+        const phantom = [...blankStrings, ...zeroNumbers];
+        if (phantom.length > 0) {
+          checks.push({
+            id: "skills-followme-blanks",
+            label: `follow_me config has ${phantom.length} blank/zero field(s)`,
+            severity: "yellow",
+            detail: `Empty: ${phantom.slice(0, 6).join(", ")}${phantom.length > 6 ? ", …" : ""} - modern skill versions default these, but older builds may not.`,
+            hint:
+              "Open the OpenClaw config UI and clear (or fix) the fields - or upgrade agenticros-skill-followme to a version where getFollowMeConfig() treats blanks as 'use default'.",
+          });
+        }
+      }
+    } catch {
+      // Non-fatal; doctor's openclaw-config check covers parse errors.
+    }
+  }
+
   // OpenClaw gateway service.
   try {
     const { exitCode } = await execa(
