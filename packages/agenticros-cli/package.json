@@ -1,6 +1,6 @@
 {
   "name": "agenticros",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "type": "module",
   "description": "AgenticROS - agentic AI for ROS-powered robots. Single CLI to launch real-robot or simulated demos, manage configuration, and inspect status.",
   "keywords": [
@@ -51,12 +51,12 @@
     "@types/node": "^20.17.0",
     "typescript": "^5.7.0"
   },
-  "author": "PlaiPin",
+  "author": "Chris Matthieu",
   "license": "Apache-2.0",
-  "homepage": "https://github.com/PlaiPin/agenticros",
+  "homepage": "https://agenticros.com",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/PlaiPin/agenticros.git",
+    "url": "git+https://github.com/agenticros/agenticros.git",
     "directory": "packages/agenticros-cli"
   }
 }
