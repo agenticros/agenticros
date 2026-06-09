@@ -1,12 +1,21 @@
 /**
  * Interactive top-level menu for `agenticros` (invoked with no subcommand).
  *
- * Adaptive: when doctor reports a red check (workspace not built, no API key,
- * etc.) the first option becomes "First-time setup" so brand-new users land
- * naturally on `agenticros init`. Otherwise we lead with "Launch with real robot".
+ * Behavior:
+ * - Looping: the menu redisplays after every non-launch action (doctor, config,
+ *   skills, etc.) so the user keeps a stable home base. Only the real-robot and
+ *   simulation launches hand off the terminal to a long-running process and
+ *   therefore terminate the menu.
+ * - Every sub-prompt offers an explicit "Back to main menu" option so users
+ *   never get trapped on a path they accidentally entered (notably the sim
+ *   robot picker, which previously had no escape hatch).
+ * - Adaptive: when doctor reports a red check (workspace not built, no API key,
+ *   etc.) the first option becomes "First-time setup" so brand-new users land
+ *   naturally on `agenticros init`. Otherwise we lead with "Launch with real
+ *   robot".
  */
 
-import { select, confirm } from "@inquirer/prompts";
+import { select } from "@inquirer/prompts";
 
 import { upCommand } from "./commands/up.js";
 import { downCommand } from "./commands/down.js";
@@ -26,6 +35,9 @@ interface MenuChoice {
   description?: string;
 }
 
+/** Sentinel used by sub-prompts to ask the main loop to redraw without acting. */
+const BACK = "__back__" as const;
+
 export async function runMenu(): Promise<void> {
   if (!isTty) {
     info(
@@ -36,13 +48,24 @@ export async function runMenu(): Promise<void> {
 
   header("AgenticROS - agentic AI for ROS-powered robots");
 
+  while (true) {
+    const shouldExit = await runMenuOnce();
+    if (shouldExit) return;
+  }
+}
+
+/**
+ * Render the main menu once and dispatch the chosen action.
+ * @returns true if the menu should exit (the action either launched a
+ * long-running process or the user asked to quit).
+ */
+async function runMenuOnce(): Promise<boolean> {
   const state = readState();
   if (state.lastMode) {
     const age = formatAge(state.lastUpAt);
     dim(`Last mode: ${state.lastMode}${age ? ` (${age})` : ""}`);
   }
 
-  // Need-setup detection. Doctor returns a count; we use that to reorder.
   const setupNeeded = await hasRedChecks();
 
   const skillsListing = safeListSkills();
@@ -71,84 +94,116 @@ export async function runMenu(): Promise<void> {
   const choice = await select<string>({
     message: "What would you like to do?",
     choices,
-    default: setupNeeded ? "init" : state.lastMode === "sim-amr" || state.lastMode === "sim-arm" ? "sim" : "real",
+    default: setupNeeded
+      ? "init"
+      : state.lastMode === "sim-amr" || state.lastMode === "sim-arm"
+        ? "sim"
+        : "real",
   });
 
   switch (choice) {
     case "real":
       await upCommand({ target: "real" });
-      break;
+      // Hands control to the foreground launcher; menu is done.
+      return true;
     case "sim": {
-      const sub = await select<"sim-amr" | "sim-arm">({
-        message: "Which simulated robot?",
-        choices: [
-          { name: "2-wheel AMR (camera + depth + LiDAR)", value: "sim-amr" },
-          {
-            name: "6-DOF arm (UR5e-shaped, per-joint position control)",
-            value: "sim-arm",
-          },
-        ],
-        default: "sim-amr",
-      });
-      const rviz = await confirm({ message: "Show RViz?", default: false });
-      await upCommand({ target: sub, rviz });
-      break;
+      const launched = await runSimFlow();
+      // launched === true ⇒ upCommand has taken over; otherwise back to main.
+      return launched;
     }
     case "init":
       await initCommand({});
-      break;
+      return false;
     case "down":
       await downCommand({});
-      break;
+      return false;
     case "doctor":
       await doctorCommand({});
-      break;
+      return false;
     case "config":
       await configCommand({ action: "show" });
-      break;
+      return false;
     case "skills":
       await skillsSubmenu();
-      break;
+      return false;
     case "logs":
       await logsCommand({ target: undefined });
-      break;
+      return false;
     case "status":
       await statusCommand({});
-      break;
+      return false;
     case "quit":
     default:
-      break;
+      return true;
   }
 }
 
 /**
- * Skills sub-menu. Reads the OpenClaw config so the prompt can show how many
- * skills are registered and offer the right next step (discover when nothing
- * is registered yet, otherwise list-first).
+ * Simulation launch flow. Two prompts (which robot, then RViz?) — both expose
+ * "Back to main menu" so the user can bail out at any step without launching.
+ * @returns true if a simulation was launched (caller should exit the menu),
+ * false if the user backed out.
+ */
+async function runSimFlow(): Promise<boolean> {
+  const target = await select<"sim-amr" | "sim-arm" | typeof BACK>({
+    message: "Which simulated robot?",
+    choices: [
+      { name: "2-wheel AMR (camera + depth + LiDAR)", value: "sim-amr" },
+      {
+        name: "6-DOF arm (UR5e-shaped, per-joint position control)",
+        value: "sim-arm",
+      },
+      { name: "Back to main menu", value: BACK },
+    ],
+    default: "sim-amr",
+  });
+  if (target === BACK) return false;
+
+  const rvizChoice = await select<"yes" | "no" | typeof BACK>({
+    message: "Show RViz?",
+    choices: [
+      { name: "No", value: "no" },
+      { name: "Yes", value: "yes" },
+      { name: "Back to main menu", value: BACK },
+    ],
+    default: "no",
+  });
+  if (rvizChoice === BACK) return false;
+
+  await upCommand({ target, rviz: rvizChoice === "yes" });
+  return true;
+}
+
+/**
+ * Skills sub-menu. Loops until the user picks "Back to main menu" so the user
+ * can run several skill actions (list, then discover, then sync, …) without
+ * round-tripping through the top-level menu each time.
  */
 async function skillsSubmenu(): Promise<void> {
-  const listing = safeListSkills();
-  const hasAvailable = listing && listing.available.length > 0;
-  const hasRegistered = listing && listing.registered.length > 0;
-  const action = await select<string>({
-    message: "Skills:",
-    choices: [
-      { name: "List registered + available", value: "list" },
-      {
-        name: hasAvailable
-          ? `Discover & register (${listing!.available.length} unregistered found)`
-          : "Discover & register (interactive picker)",
-        value: "discover",
-      },
-      { name: "Add a skill by path or package name", value: "add" },
-      { name: "Remove a skill", value: "remove" },
-      { name: "Sync OpenClaw contracts.tools allowlist", value: "sync" },
-      { name: "Back", value: "back" },
-    ],
-    default: hasRegistered ? "list" : "discover",
-  });
-  if (action === "back") return;
-  await skillsCommand({ action });
+  while (true) {
+    const listing = safeListSkills();
+    const hasAvailable = listing && listing.available.length > 0;
+    const hasRegistered = listing && listing.registered.length > 0;
+    const action = await select<string>({
+      message: "Skills:",
+      choices: [
+        { name: "List registered + available", value: "list" },
+        {
+          name: hasAvailable
+            ? `Discover & register (${listing!.available.length} unregistered found)`
+            : "Discover & register (interactive picker)",
+          value: "discover",
+        },
+        { name: "Add a skill by path or package name", value: "add" },
+        { name: "Remove a skill", value: "remove" },
+        { name: "Sync OpenClaw contracts.tools allowlist", value: "sync" },
+        { name: "Back to main menu", value: BACK },
+      ],
+      default: hasRegistered ? "list" : "discover",
+    });
+    if (action === BACK) return;
+    await skillsCommand({ action });
+  }
 }
 
 /** Read skills without throwing; the menu must keep working even if the config is broken. */
