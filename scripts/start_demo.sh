@@ -36,11 +36,34 @@ echo "==> Starting RealSense camera (logs: $CAMERA_LOG)"
 if [[ -f "$CAMERA_PID_FILE" ]] && kill -0 "$(cat "$CAMERA_PID_FILE")" 2>/dev/null; then
     echo "   Already running (pid $(cat "$CAMERA_PID_FILE")) — skipping"
 elif pgrep -f "realsense2_camera_node" >/dev/null; then
-    echo "   Detected an existing realsense2_camera_node — skipping"
+    # Camera node from a prior session is still running but our pidfile is gone.
+    # Re-adopt it so `agenticros down` can find and stop it (turning off the IR
+    # projector). We point the pidfile at the actual node, not a launch parent,
+    # because that's what's holding the USB device.
+    existing_pid=$(pgrep -f "realsense2_camera_node" | head -n 1)
+    echo "$existing_pid" >"$CAMERA_PID_FILE"
+    echo "   Detected an existing realsense2_camera_node (pid $existing_pid) — adopted into $CAMERA_PID_FILE"
 else
     nohup ros2 launch realsense2_camera rs_launch.py >"$CAMERA_LOG" 2>&1 &
-    echo $! >"$CAMERA_PID_FILE"
-    echo "   Started (pid $(cat "$CAMERA_PID_FILE"))"
+    # $! is the `ros2 launch` parent; the actual camera node is a child that
+    # comes up a moment later. Wait briefly so we can record the node's PID
+    # (what holds the USB / projector) instead of the parent's.
+    launch_pid=$!
+    node_pid=""
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+        node_pid=$(pgrep -f "realsense2_camera_node" | head -n 1 || true)
+        [[ -n "$node_pid" ]] && break
+        sleep 0.5
+    done
+    if [[ -n "$node_pid" ]]; then
+        echo "$node_pid" >"$CAMERA_PID_FILE"
+        echo "   Started (node pid $node_pid, launch pid $launch_pid)"
+    else
+        # Fallback: launch parent. `agenticros down` also pkills by name, so
+        # this still gets cleaned up even if we miss the node PID.
+        echo "$launch_pid" >"$CAMERA_PID_FILE"
+        echo "   Started (launch pid $launch_pid — node not yet visible; pkill fallback will clean up)"
+    fi
 fi
 
 echo "==> Building TypeScript workspace (@agenticros/core, ros-camera, claude-code, ...)"
