@@ -44,6 +44,61 @@ Claude (Code / desktop / Dispatch) → agenticros MCP server → Core → ROS2 r
 Gemini CLI → @agenticros/gemini (function calling) → Core → ROS2 robots
 ```
 
+## A shared mission language for robots
+
+The same tool surface across every adapter — Claude Code, Codex, Gemini, OpenClaw — so two different agents on two different stacks can both speak the same dialect when controlling the same robot. Built around five capabilities.
+
+### Capability manifests — robots advertise *verbs*
+
+Every AgenticROS-enabled robot exposes a typed list of named verbs through `ros2_list_capabilities`: `drive_base`, `take_snapshot`, `measure_depth`, `find_object`, `follow_person`, plus whatever a [skill package](#skills) contributes. The agent plans against the verbs instead of raw ROS 2 topics — and the manifest is shaped to double as an ACP / A2A agent card.
+
+### Mission chaining — `run_mission`
+
+One MCP tool, `run_mission`, executes a declarative step graph. Each step is `{ id, capability, inputs, on_fail }`. Outputs from any step flow into later steps via `{{stepId.outputs.field}}` template references — so a detection wires straight into the next motion command with no glue code:
+
+```json
+{
+  "steps": [
+    { "id": "find",     "capability": "find_object", "inputs": { "target": "chair" } },
+    { "id": "approach", "capability": "drive_base",
+      "inputs": {
+        "linear_x": 0.2,
+        "angular_z": "{{find.outputs.horizontal_offset}}"
+      }
+    }
+  ]
+}
+```
+
+### Natural-language goals
+
+`run_mission` also accepts a `goal` field — plain English. A rule-based, deterministic planner in `@agenticros/core` compiles it into a runnable mission against the robot's capability registry:
+
+- `"take a picture"` → `take_snapshot`
+- `"follow me"` → `follow_person`
+- `"drive forward at 0.3 m/s"` → `drive_base { linear_x: 0.3 }`
+- `"find a chair and drive toward it"` → the two-step compound plan above
+
+No LLM dependency (the planner is a few hundred lines of pattern matching, so the runtime doesn't require Ollama) and no fabricated calls (it only emits capabilities actually in the registry). Uncompilable goals return a clean error with the recognised-verb list so the agent can self-correct.
+
+### Multi-robot fleets
+
+`ros2_list_robots`, `ros2_discover_robots`, and `ros2_find_robots_for({ capability, kind?, online? })` let an agent ask *"give me an AMR that can `follow_person` and is currently online"* and get back a ranked list. The CLI keeps fleet metadata in sync without hand-editing JSON:
+
+```bash
+agenticros robots add my-amr \
+  --kind=amr --sensors=has_realsense,!has_arm \
+  --capabilities=drive_base,take_snapshot,follow_person
+```
+
+On the ROS side, every robot publishes a 1 Hz heartbeat on `<ns>/agenticros/robot_info` so the online filter reflects what's actually reachable. A single mission can route different steps to different robots — *"the AMR finds the box, the arm picks it up"* runs as one mission.
+
+### Cancel + shared transcripts
+
+`mission_cancel({ mission_id })` flips an in-process cancellation token; the runner stops at the next step boundary and marks remaining steps `cancelled`. When the [shared memory backend](#memory-optional) is on, every step is also written to `mission:<id>` in long-term memory, tagged with `step:<status>` and `capability:<id>`. A different agent — different process, different vendor — can `memory_recall` later and reconstruct exactly what happened, so two agents can collaborate on or hand off a mission.
+
+Full architecture + design trade-offs: **[docs/strategy-ai-agents-plus-ros.md](docs/strategy-ai-agents-plus-ros.md)**.
+
 ## Repository layout
 
 - `**packages/core**` — Transport, types, config (Zod). Used by all adapters.
@@ -107,6 +162,7 @@ agenticros up real              # real robot stack
 agenticros up sim-amr           # simulated AMR (Gazebo + RViz, headless on Jetson)
 agenticros up sim-arm           # simulated 6-DOF arm
 agenticros mode <real|sim>      # swap the active config profile (namespace, transport)
+agenticros robots               # list / add / remove robots in the fleet (kind, sensors, capabilities)
 agenticros skills               # list / add / remove AgenticROS skills (see below)
 agenticros doctor               # coloured health check
 agenticros down                 # stop everything we started
@@ -386,7 +442,7 @@ A skill is a Node package with `"agenticrosSkill": true` in `package.json` and a
 
 ## Strategy & vision
 
-Where AgenticROS is going next — the four-phase roadmap covering capability registry + skill chaining + multi-robot fleet discovery, the `skills.agenticros.com` marketplace with declarative auto-fetch, spatial memory, and cross-vendor agent collaboration via ACP / A2A: **[docs/strategy-ai-agents-plus-ros.md](docs/strategy-ai-agents-plus-ros.md)**.
+Where AgenticROS is going next — beyond the shared mission language above, the roadmap covers turning capability manifests into agent cards on the wire (WebRTC / A2A so a robot can register itself as an agent in a mesh), an LLM-backed planner behind the existing `compileGoalToMission` contract, the `skills.agenticros.com` marketplace with declarative auto-fetch and in-agent installs, spatial memory, and cross-vendor agent collaboration via ACP / A2A: **[docs/strategy-ai-agents-plus-ros.md](docs/strategy-ai-agents-plus-ros.md)**.
 
 ## License
 

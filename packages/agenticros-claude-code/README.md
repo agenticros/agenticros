@@ -1,6 +1,6 @@
 # AgenticROS Claude Code adapter
 
-MCP (Model Context Protocol) server that exposes AgenticROS ROS2 tools to **Claude Code CLI** and to the **Claude desktop app** on macOS (including **Claude Dispatch** on iPhone when paired to Claude on your Mac). Use natural language to control and query your ROS2 robot (e.g. "what do you see?", "move 1m forward").
+MCP (Model Context Protocol) server that exposes AgenticROS ROS2 tools to **Claude Code CLI** and to the **Claude desktop app** on macOS (including **Claude Dispatch** on iPhone when paired to Claude on your Mac). Use natural language to control and query your ROS2 robot (e.g. *"what do you see?"*, *"find a chair and drive toward it"*, *"list every robot that can follow a person"*).
 
 This adapter does **not** provide the config or teleop web UI; use the [OpenClaw plugin](../../packages/agenticros) for that, or run the gateway for the browser-based teleop page.
 
@@ -134,18 +134,29 @@ The server exposes the same ROS2 tools as the OpenClaw plugin:
 
 | Tool | Description |
 |------|-------------|
+| **Inspection** | |
 | `ros2_list_topics` | List topics and types |
-| `ros2_publish` | Publish to a topic (e.g. cmd_vel) |
+| `ros2_list_capabilities` | Typed verb manifest (built-in + skill-declared) — the planning surface for agents |
+| **Fleet** | |
+| `ros2_list_robots` | List configured robots — id, name, kind, capabilities, online status |
+| `ros2_discover_robots` | Online discovery: detect `/<ns>/cmd_vel` namespaces + classify reachability |
+| `ros2_find_robots_for` | Ranked filter by capability + kind + online — *"who can `follow_person` right now?"* |
+| **Missions** | |
+| `run_mission` | Execute a multi-step mission **or** compile a natural-language `goal` into one. Chains capabilities via `{{stepId.outputs.field}}` template refs; returns a `mission_id` |
+| `mission_cancel` | Cancel an in-flight mission by `mission_id` at the next step boundary (idempotent, safe on unknown ids) |
+| **Direct ROS** | |
+| `ros2_publish` | Publish to a topic (e.g. cmd_vel) — safety-clamped |
 | `ros2_subscribe_once` | Get next message from a topic |
 | `ros2_service_call` | Call a ROS2 service |
 | `ros2_action_goal` | Send goal to an action server |
 | `ros2_param_get` / `ros2_param_set` | Get/set node parameters |
-| `ros2_camera_snapshot` | "What do you see" — one frame from camera topic |
+| `ros2_camera_snapshot` | *"What do you see"* — one frame from camera topic |
 | `ros2_depth_distance` | Distance in meters from depth camera |
-| `memory_remember` *(when enabled)* | Store a durable fact for the robot — shared with OpenClaw, Claude Desktop, Gemini |
-| `memory_recall` *(when enabled)* | Semantic search across long-term memory |
-| `memory_forget` *(when enabled)* | Delete by id, query, or whole namespace |
-| `memory_status` *(when enabled)* | Health check + record count + embedder info |
+| **Memory** *(only when enabled)* | |
+| `memory_remember` | Store a durable fact for the robot — shared with OpenClaw, Claude Desktop, Gemini |
+| `memory_recall` | Semantic search across long-term memory (also reads `mission:<id>` step transcripts) |
+| `memory_forget` | Delete by id, query, or whole namespace |
+| `memory_status` | Health check + record count + embedder info |
 
 Safety limits (max linear/angular velocity) from config are applied before `ros2_publish`.
 
@@ -255,6 +266,6 @@ If `ros2_publish` runs but the robot doesn’t move:
 
    In the chat you can type `/mcp` to see MCP server status. If the transport isn’t running (e.g. no Zenoh router), tool calls will fail with connection errors until the ROS2 side is up.
 
-## "Follow me" and skills
+## Skills
 
-The OpenClaw plugin can load skills (e.g. **follow me** via `agenticros-skill-followme`). This MCP adapter does not load skills in v1; only the core tools above are available. For "follow me", use the OpenClaw plugin or a future version of this adapter that adds skill loading or a dedicated `follow_robot` tool.
+Skill packages (e.g. `agenticros-skill-followme`, `agenticros-skill-find`) extend the capability registry with new verbs like `follow_person` and `find_object`. The MCP server reads each skill's `package.json` (`agenticrosSkill: true` + `capabilities[]`) at startup and surfaces those verbs through `ros2_list_capabilities` and `run_mission` — no per-skill MCP tool needed. To register a skill for this adapter, add its path under `skillPaths[]` in `~/.agenticros/config.json` (or use the `agenticros skills add <path>` CLI). See [docs/skills.md](../../docs/skills.md) for the full skill contract.
