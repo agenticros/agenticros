@@ -384,6 +384,10 @@ Per-skill behaviour lives under `config.skills.<skillId>` (e.g. `config.skills.f
 
 A skill is a Node package with `"agenticrosSkill": true` in `package.json` and a `registerSkill(api, config, context)` export from `main`. See **[docs/skills.md](docs/skills.md)** for the full contract and **[agenticros-skill-followme](https://github.com/your-org/agenticros-skill-followme)** as a reference template.
 
+## Strategy & vision
+
+Where AgenticROS is going next — the four-phase roadmap covering capability registry + skill chaining + multi-robot fleet discovery, the `skills.agenticros.com` marketplace with declarative auto-fetch, spatial memory, and cross-vendor agent collaboration via ACP / A2A: **[docs/strategy-ai-agents-plus-ros.md](docs/strategy-ai-agents-plus-ros.md)**.
+
 ## License
 
 Apache-2.0

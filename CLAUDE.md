@@ -111,9 +111,12 @@ Shared camera snapshot encoding used by all adapters — handles both `sensor_ms
 pnpm install                                      # Install all workspace deps
 pnpm build                                        # Build all packages
 pnpm typecheck                                    # Type-check all packages
+pnpm test                                         # Run all unit + integration tests
 pnpm clean                                        # Remove dist/ and .tsbuildinfo files
 pnpm lint                                         # Lint all packages
 pnpm mcp:kill                                     # Kill a running MCP server process
+pnpm refresh:skills                               # Repair stale pnpm hardlinks in external skill repos
+pnpm deploy:plugin                                # Redeploy the OpenClaw plugin (auto-refreshes skills)
 
 # Per-package (filter syntax)
 pnpm --filter @agenticros/core build
@@ -123,6 +126,8 @@ pnpm --filter @agenticros/claude-code build       # Required after editing claud
 ```
 
 After editing `packages/agenticros-claude-code/src/`, always run `pnpm --filter @agenticros/claude-code build` before testing — the MCP server runs from `dist/index.js`.
+
+**External skill repos and the pnpm hardlink cascade**: Skills like `agenticros-skill-followme` and `agenticros-skill-find` consume `@agenticros/core` via `file:` deps. pnpm hardlinks them through a virtual store snapshot that is NOT auto-refreshed when `packages/core/dist/` gains new files. After adding new exports to `@agenticros/core`, run `pnpm refresh:skills` (or `pnpm deploy:plugin`, which includes it) to keep external skills in lockstep. `sync-skill-tools.mjs` will detect the cascade signature and preserve the previous manifest's skill tools instead of silently stripping them.
 
 ## Configuration system
 

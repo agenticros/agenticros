@@ -1,6 +1,11 @@
 import type { TransportConfig } from "@agenticros/core";
-import type { RosTransport } from "@agenticros/core";
-import { createTransport, getTransportConfig } from "@agenticros/core";
+import type { RosTransport, ResolvedRobot } from "@agenticros/core";
+import {
+  createTransport,
+  getTransportConfig,
+  getTransportConfigForRobot,
+  hasRobotTransportOverride,
+} from "@agenticros/core";
 import type { OpenClawPluginApi } from "./plugin-api.js";
 import type { PluginLogger } from "./plugin-api.js";
 import type { AgenticROSConfig } from "@agenticros/core";
@@ -238,6 +243,112 @@ async function ensureTransportConnected(
   await next;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 1.d-pool: per-robot transport override pool.
+//
+// The existing `transport` singleton above (with eager-retry / preflight /
+// poll-reconnect) stays the source of truth for every robot WITHOUT a
+// per-robot `transport` override in config. That's the common case and
+// the plugin's hard-won robustness lives in that singleton.
+//
+// For robots that DO declare an override we maintain a smaller, lazier
+// pool here. Override entries don't (yet) get the eager-connect /
+// preflight / polling treatment — they connect on first tool call, fail
+// loudly to the agent on connect timeout, and self-heal on the next
+// acquire. That's intentional: most fleets have one or two override
+// robots and the agent-facing error path is sufficient feedback.
+//
+// Pool key: `robot.id` (validated by `hasRobotTransportOverride`).
+// ─────────────────────────────────────────────────────────────────────────────
+
+const overrideTransports = new Map<string, RosTransport>();
+const overrideInFlight = new Map<string, Promise<RosTransport>>();
+const OVERRIDE_CONNECT_TIMEOUT_MS = 15_000;
+
+/**
+ * Return the right transport for `robot`. Per-robot tools call this
+ * INSTEAD of `getTransport()` so a robot with a custom transport gets
+ * its own connection. Robots without an override fall through to the
+ * service-managed singleton with all its retry / preflight machinery.
+ *
+ * Throws when the singleton is requested but the service hasn't
+ * connected yet — same contract as `getTransport()`.
+ *
+ * Throws (or surfaces as a tool error after the timeout) when an
+ * override entry can't connect — the agent sees a clean failure and
+ * can fall back to a different robot id.
+ */
+export async function getTransportForRobot(
+  config: AgenticROSConfig,
+  robot: ResolvedRobot,
+): Promise<RosTransport> {
+  if (!hasRobotTransportOverride(config, robot.id)) {
+    // Fast path: no override → reuse the service-managed singleton
+    // (with its retries and preflight). Same as the pre-pool behaviour.
+    return getTransport();
+  }
+  return acquireOverrideTransport(config, robot);
+}
+
+async function acquireOverrideTransport(
+  config: AgenticROSConfig,
+  robot: ResolvedRobot,
+): Promise<RosTransport> {
+  const cached = overrideTransports.get(robot.id);
+  if (cached && cached.getStatus() === "connected") return cached;
+
+  // Concurrent first-acquires share one connect promise so two near-
+  // simultaneous tool calls don't double-open the same Zenoh socket.
+  const flight = overrideInFlight.get(robot.id);
+  if (flight) return flight;
+
+  if (cached) {
+    // Stale entry — drop cleanly so a fresh build can proceed.
+    overrideTransports.delete(robot.id);
+    cached.disconnect().catch(() => {});
+  }
+
+  const connectFlight = (async (): Promise<RosTransport> => {
+    const transportCfg = buildTransportConfig(getTransportConfigForRobot(config, robot.id));
+    const t = await createTransport(transportCfg);
+    await connectWithTimeout(t, OVERRIDE_CONNECT_TIMEOUT_MS);
+    overrideTransports.set(robot.id, t);
+    return t;
+  })();
+  overrideInFlight.set(robot.id, connectFlight);
+  try {
+    return await connectFlight;
+  } finally {
+    overrideInFlight.delete(robot.id);
+  }
+}
+
+async function connectWithTimeout(t: RosTransport, timeoutMs: number): Promise<void> {
+  const timeout = new Promise<never>((_, reject) => {
+    setTimeout(
+      () =>
+        reject(
+          new Error(
+            `Per-robot transport connect timed out after ${timeoutMs / 1000}s. ` +
+              "Check the robot's transport override in config (router endpoint, mode).",
+          ),
+        ),
+      timeoutMs,
+    );
+  });
+  await Promise.race([t.connect(), timeout]);
+}
+
+async function drainOverridePool(): Promise<void> {
+  const pending: Promise<unknown>[] = [];
+  for (const t of overrideTransports.values()) {
+    pending.push(t.disconnect().catch(() => {}));
+  }
+  overrideTransports.clear();
+  overrideInFlight.clear();
+  await Promise.all(pending);
+}
+
 const RETRY_INTERVAL_MS = 10000;
 const DISCONNECTED_POLL_MS = 15000;
 
@@ -282,6 +393,13 @@ export function registerService(api: OpenClawPluginApi, config: AgenticROSConfig
         transport = null;
         currentMode = null;
         api.logger.info("ROS2 transport disconnected");
+      }
+      // Drain any per-robot override connections too — otherwise they'd
+      // leak open Zenoh sockets across plugin reloads.
+      const overrideCount = overrideTransports.size;
+      if (overrideCount > 0) {
+        await drainOverridePool();
+        api.logger.info(`Disconnected ${overrideCount} per-robot override transport(s)`);
       }
     },
   });

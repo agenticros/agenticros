@@ -2,7 +2,8 @@ import { Type } from "@sinclair/typebox";
 import type { OpenClawPluginApi } from "../plugin-api.js";
 import type { AgenticROSConfig } from "@agenticros/core";
 import { toNamespacedTopic } from "@agenticros/core";
-import { getTransport } from "../service.js";
+import { getTransportForRobot } from "../service.js";
+import { ROBOT_ID_SCHEMA, resolveRobotForTool } from "./_robot-helpers.js";
 
 /**
  * Register the ros2_action_goal tool with the AI agent.
@@ -14,22 +15,28 @@ export function registerActionTool(api: OpenClawPluginApi, config: AgenticROSCon
     label: "ROS2 Action Goal",
     description:
       "Send a goal to a ROS2 action server and stream feedback. " +
-      "Use this for long-running operations like navigation or arm movements.",
+      "Use this for long-running operations like navigation or arm movements. " +
+      "Pass robot_id (from ros2_list_robots) to target a specific robot.",
     parameters: Type.Object({
       action: Type.String({ description: "The ROS2 action server name (e.g., '/navigate_to_pose')" }),
       actionType: Type.String({ description: "The ROS2 action type (e.g., 'nav2_msgs/action/NavigateToPose')" }),
       goal: Type.Record(Type.String(), Type.Unknown(), {
         description: "The action goal parameters",
       }),
+      ...ROBOT_ID_SCHEMA,
     }),
 
     async execute(_toolCallId, params) {
+      const resolved = resolveRobotForTool(config, params);
+      if ("error" in resolved) return resolved.error;
+      const { robot } = resolved;
+
       const rawAction = params["action"] as string;
-      const action = toNamespacedTopic(config, rawAction);
+      const action = toNamespacedTopic(robot.namespace, rawAction);
       const actionType = params["actionType"] as string;
       const goal = params["goal"] as Record<string, unknown>;
 
-      const transport = getTransport();
+      const transport = await getTransportForRobot(config, robot);
       const actionResult = await transport.sendActionGoal({
         action,
         actionType,

@@ -5,7 +5,12 @@
  * This is the `mode: 'local'` alternative to the agenticros_follow_me ROS2 node.
  */
 
-import type { AgenticROSConfig, RosTransport, Subscription } from "@agenticros/core";
+import type {
+  AgenticROSConfig,
+  ResolvedRobot,
+  RosTransport,
+  Subscription,
+} from "@agenticros/core";
 import { resolveCameraSubscribeTopic, toNamespacedTopic } from "@agenticros/core";
 import {
   ROS_MSG_COMPRESSED_IMAGE,
@@ -75,9 +80,15 @@ export class FollowMeLocal {
   private tracking = false;
 
   constructor(
+    private readonly robot: ResolvedRobot,
     private readonly config: AgenticROSConfig,
     private readonly transport: RosTransport,
   ) {}
+
+  /** Stable id of the robot this loop is bound to. Used by the registry below. */
+  get robotId(): string {
+    return this.robot.id;
+  }
 
   async start(opts: StartOptions = {}): Promise<void> {
     if (this.enabled) return;
@@ -129,9 +140,9 @@ export class FollowMeLocal {
   }
 
   private subscribeFrames(): void {
-    const colorTopicRaw = (this.config.robot?.cameraTopic ?? "").trim() || DEFAULT_COLOR_TOPIC;
-    const colorTopic = resolveCameraSubscribeTopic(this.config, colorTopicRaw);
-    const depthTopic = resolveCameraSubscribeTopic(this.config, DEFAULT_DEPTH_TOPIC);
+    const colorTopicRaw = this.robot.cameraTopic.trim() || DEFAULT_COLOR_TOPIC;
+    const colorTopic = resolveCameraSubscribeTopic(this.robot.namespace, colorTopicRaw);
+    const depthTopic = resolveCameraSubscribeTopic(this.robot.namespace, DEFAULT_DEPTH_TOPIC);
     const isCompressed = colorTopic.includes("compressed");
 
     this.colorSub = this.transport.subscribe(
@@ -261,7 +272,7 @@ export class FollowMeLocal {
   }
 
   private async publishTwist(twist: Twist): Promise<void> {
-    const topic = resolveCmdVelTopic(this.config);
+    const topic = resolveCmdVelTopic(this.config, this.robot);
     const message = {
       linear: { x: twist.linearX, y: 0, z: 0 },
       angular: { x: 0, y: 0, z: twist.angularZ },
@@ -310,9 +321,9 @@ function sampleDepthRegion(d: LatestDepth, x0: number, y0: number, x1: number, y
   return out;
 }
 
-function resolveCmdVelTopic(config: AgenticROSConfig): string {
+function resolveCmdVelTopic(config: AgenticROSConfig, robot: ResolvedRobot): string {
   const raw = (config.teleop?.cmdVelTopic ?? "").trim() || "/cmd_vel";
-  const namespaced = toNamespacedTopic(config, raw);
+  const namespaced = toNamespacedTopic(robot.namespace, raw);
   // Apply same uuid → robot<uuid-no-dashes> rewrite as ros2_publish handler.
   const match = namespaced.match(/^\/([^/]+)\/cmd_vel$/i);
   const segment = match?.[1] ?? "";
@@ -322,9 +333,27 @@ function resolveCmdVelTopic(config: AgenticROSConfig): string {
   return namespaced;
 }
 
-let singleton: FollowMeLocal | null = null;
+/**
+ * Per-robot registry. Each robot gets its own `FollowMeLocal` instance (with
+ * its own YOLO detector + camera subs) the first time anyone asks for one.
+ * Multi-robot Phase 1.d-extend.
+ */
+const instances = new Map<string, FollowMeLocal>();
 
-export function getFollowMeLocal(config: AgenticROSConfig, transport: RosTransport): FollowMeLocal {
-  if (!singleton) singleton = new FollowMeLocal(config, transport);
-  return singleton;
+export function getFollowMeLocal(
+  robot: ResolvedRobot,
+  config: AgenticROSConfig,
+  transport: RosTransport,
+): FollowMeLocal {
+  let entry = instances.get(robot.id);
+  if (!entry) {
+    entry = new FollowMeLocal(robot, config, transport);
+    instances.set(robot.id, entry);
+  }
+  return entry;
+}
+
+/** Test-only: clear the registry so suites can run in isolation. */
+export function _resetFollowMeLocalRegistry(): void {
+  instances.clear();
 }

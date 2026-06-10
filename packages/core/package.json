@@ -15,7 +15,7 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "node --test \"dist/memory/__tests__/*.test.js\""
+    "test": "node --test \"dist/memory/__tests__/*.test.js\" \"dist/__tests__/*.test.js\""
   },
   "dependencies": {
     "@eclipse-zenoh/zenoh-ts": "^1.9.0",

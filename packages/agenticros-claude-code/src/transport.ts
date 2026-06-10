@@ -1,58 +1,58 @@
-import type { RosTransport } from "@agenticros/core";
-import { createTransport, getTransportConfig } from "@agenticros/core";
-import type { AgenticROSConfig } from "@agenticros/core";
-
-let transport: RosTransport | null = null;
-
 /**
- * Get the active transport. Throws if not connected.
+ * Transport lifecycle for the AgenticROS MCP server (Claude Code adapter).
+ *
+ * Thin wrapper around `@agenticros/core`'s shared `TransportPool`. The
+ * pool owns the per-robot routing logic — see its docstring for the
+ * full contract. This module just exposes a module-level singleton so
+ * the rest of the adapter doesn't need to thread a pool reference
+ * through every call site.
+ *
+ * Why a module-level singleton: the MCP server is one process. Two
+ * pools would mean two transports — exactly what the pool is designed
+ * to prevent. Tests inject their own pool via `_swapPoolForTests`.
  */
-export function getTransport(): RosTransport {
-  if (!transport) {
-    throw new Error("Transport not initialized. Ensure config is loaded and connect() has been called.");
-  }
-  return transport;
-}
 
-export function getTransportOrNull(): RosTransport | null {
-  return transport;
-}
+import type { AgenticROSConfig, ResolvedRobot, RosTransport } from "@agenticros/core";
+import { TransportPool } from "@agenticros/core";
 
-const CONNECT_TIMEOUT_MS = 15_000;
+let pool = new TransportPool();
 
 /**
- * Create and connect the transport. Idempotent.
- * Fails after CONNECT_TIMEOUT_MS if Zenoh/router is unreachable.
+ * Async per-robot transport accessor — the path every tool call takes
+ * once it has resolved a target robot. Lazy-connects on first use.
+ */
+export async function getTransportForRobot(
+  config: AgenticROSConfig,
+  robot: ResolvedRobot,
+): Promise<RosTransport> {
+  return pool.acquire(config, robot);
+}
+
+/**
+ * Pre-warm the active robot's transport at server start. Called from
+ * `index.ts` before the first tool dispatch — keeps the legacy
+ * "connect at startup" UX while routing through the pool internally.
  */
 export async function connect(config: AgenticROSConfig): Promise<void> {
-  if (transport && transport.getStatus() === "connected") {
-    return;
-  }
-  if (transport) {
-    await transport.disconnect();
-    transport = null;
-  }
-  const transportCfg = getTransportConfig(config);
-  const newTransport = await createTransport(transportCfg);
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(
-      () => reject(new Error(
-        `Transport connection timed out after ${CONNECT_TIMEOUT_MS / 1000}s. ` +
-        "Is zenohd running? (e.g. ws://localhost:10000). Check config and MCP log.",
-      )),
-      CONNECT_TIMEOUT_MS,
-    );
-  });
-  await Promise.race([newTransport.connect(), timeoutPromise]);
-  transport = newTransport;
+  await pool.connectActive(config);
 }
 
 /**
- * Disconnect and clear the transport. Call on process exit.
+ * Drain every connection. Called on SIGINT/SIGTERM.
  */
 export async function disconnect(): Promise<void> {
-  if (transport) {
-    await transport.disconnect();
-    transport = null;
-  }
+  await pool.disconnectAll();
+}
+
+/**
+ * For tests only — replace the module singleton with a custom pool
+ * (typically one constructed with a fake factory). Restores via the
+ * returned undo function.
+ */
+export function _swapPoolForTests(replacement: TransportPool): () => void {
+  const previous = pool;
+  pool = replacement;
+  return () => {
+    pool = previous;
+  };
 }

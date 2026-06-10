@@ -10,6 +10,7 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
+    "test": "node --test --test-force-exit \"dist/__tests__/*.test.js\"",
     "smoke-api": "node scripts/smoke-api.mjs",
     "chat": "node dist/index.js"
   },

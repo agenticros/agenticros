@@ -1,58 +1,55 @@
-import type { RosTransport } from "@agenticros/core";
-import { createTransport, getTransportConfig } from "@agenticros/core";
-import type { AgenticROSConfig } from "@agenticros/core";
-
-let transport: RosTransport | null = null;
-
 /**
- * Get the active transport. Throws if not connected.
+ * Transport lifecycle for the AgenticROS Gemini CLI.
+ *
+ * Thin wrapper around `@agenticros/core`'s shared `TransportPool` —
+ * same as the Claude Code adapter. The pool owns per-robot routing,
+ * lazy-connect, in-flight dedupe, and self-heal semantics; this
+ * module just owns a process-level singleton so the chat loop and
+ * tool dispatcher don't pass pool references around.
  */
-export function getTransport(): RosTransport {
-  if (!transport) {
-    throw new Error("Transport not initialized. Ensure config is loaded and connect() has been called.");
-  }
-  return transport;
-}
 
-export function getTransportOrNull(): RosTransport | null {
-  return transport;
-}
+import type { AgenticROSConfig, ResolvedRobot, RosTransport } from "@agenticros/core";
+import { TransportPool } from "@agenticros/core";
 
-const CONNECT_TIMEOUT_MS = 15_000;
+let pool = new TransportPool();
 
 /**
- * Create and connect the transport. Idempotent.
- * Fails after CONNECT_TIMEOUT_MS if Zenoh/router is unreachable.
+ * Async per-robot transport accessor — call from any tool that needs
+ * the ROS transport. When the resolved robot has no per-robot
+ * `transport` override in config, returns the shared `__global__`
+ * entry (legacy single-transport behaviour); when it DOES, returns a
+ * distinct per-robot transport, lazy-connecting on first use.
+ */
+export async function getTransportForRobot(
+  config: AgenticROSConfig,
+  robot: ResolvedRobot,
+): Promise<RosTransport> {
+  return pool.acquire(config, robot);
+}
+
+/**
+ * Pre-warm the active robot's transport at chat-loop start. Lets the
+ * first tool call skip the connect-latency tax.
  */
 export async function connect(config: AgenticROSConfig): Promise<void> {
-  if (transport && transport.getStatus() === "connected") {
-    return;
-  }
-  if (transport) {
-    await transport.disconnect();
-    transport = null;
-  }
-  const transportCfg = getTransportConfig(config);
-  const newTransport = await createTransport(transportCfg);
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(
-      () => reject(new Error(
-        `Transport connection timed out after ${CONNECT_TIMEOUT_MS / 1000}s. ` +
-        "Is zenohd running? (e.g. ws://localhost:10000). Check config and logs.",
-      )),
-      CONNECT_TIMEOUT_MS,
-    );
-  });
-  await Promise.race([newTransport.connect(), timeoutPromise]);
-  transport = newTransport;
+  await pool.connectActive(config);
 }
 
 /**
- * Disconnect and clear the transport. Call on process exit.
+ * Drain every connection. Call on process exit / Ctrl-C.
  */
 export async function disconnect(): Promise<void> {
-  if (transport) {
-    await transport.disconnect();
-    transport = null;
-  }
+  await pool.disconnectAll();
+}
+
+/**
+ * For tests only — replace the module singleton with a custom pool
+ * (constructed with a fake factory). Returns an undo function.
+ */
+export function _swapPoolForTests(replacement: TransportPool): () => void {
+  const previous = pool;
+  pool = replacement;
+  return () => {
+    pool = previous;
+  };
 }

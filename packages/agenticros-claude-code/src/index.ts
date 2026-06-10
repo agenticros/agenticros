@@ -15,7 +15,7 @@ import type { AgenticROSConfig } from "@agenticros/core";
 import { renderAgenticROSBanner } from "@agenticros/core";
 import { loadConfig } from "./config.js";
 import { connect, disconnect } from "./transport.js";
-import { TOOLS, handleToolCall, MEMORY_TOOL_NAMES } from "./tools.js";
+import { TOOLS, handleToolCall, MEMORY_TOOL_NAMES, NO_TRANSPORT_TOOL_NAMES } from "./tools.js";
 import { ensureMemory } from "./memory.js";
 
 let config: AgenticROSConfig | null = null;
@@ -81,10 +81,10 @@ function main(): void {
       process.stderr.write(
         `[AgenticROS] Config: robot.namespace=${ns ? `"${ns}"` : '""'} → ${ns ? `/${ns}/cmd_vel` : "/cmd_vel"}\n`,
       );
-      // Memory tools are self-contained — they don't talk to the robot, so
-      // don't force a Zenoh/ROS transport connection (and don't fail if zenohd
-      // isn't running). Every other tool needs the transport up.
-      if (!MEMORY_TOOL_NAMES.has(name)) {
+      // Tools that don't need the ROS transport (memory + capabilities) are
+      // self-contained — skip `ensureConnected()` so they work even when
+      // zenohd is down. Every other tool needs the transport up.
+      if (!NO_TRANSPORT_TOOL_NAMES.has(name)) {
         await ensureConnected();
       }
       const result = await handleToolCall(name, args ?? {}, config);

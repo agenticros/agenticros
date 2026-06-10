@@ -29,6 +29,12 @@
 #   --robot-namespace N ROS2 namespace for cmd_vel (e.g. robot3946b404c33e4aa39a8d16deb1c5c593)
 #   --camera-topic T    Camera topic for ros2_camera_snapshot / teleop
 #   --skip-build        Skip `pnpm build` (assume it's already done)
+#   --skip-refresh-skills
+#                       Skip the skill-hardlink refresh step. By default this
+#                       script runs scripts/refresh-skill-deps.mjs to keep
+#                       external skill repos in lockstep with packages/core
+#                       (prevents the pnpm cascade where new core exports
+#                       silently disappear from the chat agent's tool list).
 #   --no-systemd        Skip systemd service tweaks
 #   --no-restart        Don't restart the gateway at the end
 #   -h, --help          Show this help
@@ -43,6 +49,7 @@ ZENOH_ENDPOINT=""
 ROBOT_NAMESPACE=""
 CAMERA_TOPIC=""
 SKIP_BUILD=false
+SKIP_REFRESH_SKILLS=false
 NO_SYSTEMD=false
 NO_RESTART=false
 
@@ -58,9 +65,10 @@ while [[ $# -gt 0 ]]; do
     --robot-namespace)  ROBOT_NAMESPACE="$2"; shift 2 ;;
     --camera-topic)     CAMERA_TOPIC="$2"; shift 2 ;;
     --skip-build)       SKIP_BUILD=true; shift ;;
+    --skip-refresh-skills) SKIP_REFRESH_SKILLS=true; shift ;;
     --no-systemd)       NO_SYSTEMD=true; shift ;;
     --no-restart)       NO_RESTART=true; shift ;;
-    -h|--help)          sed -n '2,38p' "$0"; exit 0 ;;
+    -h|--help)          sed -n '2,45p' "$0"; exit 0 ;;
     *) echo "Unknown option: $1"; exit 1 ;;
   esac
 done
@@ -105,17 +113,36 @@ else
 fi
 echo ""
 
+# 2b. Refresh external skill repos so they pick up new @agenticros/core
+# exports. Skips itself when no skill paths are configured. See
+# scripts/refresh-skill-deps.mjs for the cascade this prevents.
+if [[ "$SKIP_REFRESH_SKILLS" != true ]]; then
+  echo "[2b/5] Refreshing external skill repos (use --skip-refresh-skills to opt out)..."
+  if ! node "$REPO_ROOT/scripts/refresh-skill-deps.mjs"; then
+    echo "WARN: skill refresh reported failures; continuing with deploy. Re-run \`pnpm refresh:skills\` manually to investigate." >&2
+  fi
+  echo ""
+fi
+
 # 3. Flatten the plugin into a deploy directory.
 # OpenClaw 2026.6+ rejects `node_modules/<dep>` symlinks that resolve outside
 # the plugin install root. `pnpm deploy --prod` materialises every dep inside
 # the deploy directory, so all symlinks are safely contained.
+#
+# --config.strict-peer-dependencies=false: mem0ai has unmet peer ranges for
+# pg / redis / @qdrant/js-client-rest that don't affect us (we only use the
+# in-memory + JSON local backends and ship our own pinned mem0ai). Without
+# this flag pnpm fails the deploy on what is effectively a non-issue.
 echo "[3/5] Building flat plugin deployment at $DEPLOY_DIR ..."
 mkdir -p "$(dirname "$DEPLOY_DIR")"
 rm -rf "$DEPLOY_DIR"
-(cd "$REPO_ROOT" && pnpm --filter ./packages/agenticros deploy --prod "$DEPLOY_DIR")
-# pnpm leaves one self-reference symlink (.pnpm/node_modules/agenticros → the
-# source path) that the safety scan will reject. It's not needed at runtime.
-rm -f "$DEPLOY_DIR/node_modules/.pnpm/node_modules/agenticros"
+(cd "$REPO_ROOT" && pnpm --config.strict-peer-dependencies=false --filter ./packages/agenticros deploy --prod "$DEPLOY_DIR")
+# pnpm leaves a self-reference symlink (.pnpm/node_modules/<pkg> → the source
+# path) that OpenClaw's safety scan will reject. The plugin's npm name is
+# `@agenticros/openclaw` (scoped), so the symlink lives under @agenticros/.
+# Older builds used the bare name `agenticros`; clear both to be tolerant.
+rm -rf "$DEPLOY_DIR/node_modules/.pnpm/node_modules/@agenticros/openclaw"
+rm -f  "$DEPLOY_DIR/node_modules/.pnpm/node_modules/agenticros"
 
 # `pnpm deploy --prod` skips lifecycle scripts, so rclnodejs's postinstall
 # (which runs `node scripts/generate_messages.js` to materialise ROS message

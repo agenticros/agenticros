@@ -19,6 +19,7 @@ import { statusCommand } from "./commands/status.js";
 import { logsCommand } from "./commands/logs.js";
 import { configCommand } from "./commands/config.js";
 import { skillsCommand } from "./commands/skills.js";
+import { robotsCommand } from "./commands/robots.js";
 import { runMenu } from "./menu.js";
 import { err } from "./util/logger.js";
 import { readFileSync } from "node:fs";
@@ -152,6 +153,51 @@ program
   )
   .action(async (action: string | undefined, arg: string | undefined) => {
     await skillsCommand({ action, arg });
+  });
+
+program
+  .command("robots [action] [arg]")
+  .description(
+    "Manage the multi-robot fleet (~/.agenticros/config.json). action = list | discover | add [id] | remove <id> | set-default <id> | set-transport <id> [shorthand] | clear-transport <id>.",
+  )
+  .option("--name <name>", "Display name for the robot (used by add)")
+  .option("--namespace <ns>", "ROS2 namespace for the robot (used by add)")
+  .option("--camera <topic>", "Default camera topic for the robot (used by add)")
+  .option("--default", "Mark this robot as the default (used by add)", false)
+  .option(
+    "--kind <kind>",
+    "Robot kind for fleet filtering (amr | arm | drone | rover). Used by ros2_find_robots_for. Defaults to 'amr' when unset.",
+  )
+  .option(
+    "--sensors <list>",
+    "Comma-separated sensor tags. Recognized: has_realsense, has_lidar, has_arm. Prefix with '!' to set false. Example: --sensors=has_realsense,has_lidar,!has_arm",
+  )
+  .option(
+    "--capabilities <list>",
+    "Comma-separated capability allowlist (e.g. drive_base,follow_person). Overrides the gateway-wide registry for ros2_find_robots_for on this robot. Pass an empty value (--capabilities='') to clear.",
+  )
+  .option(
+    "--transport <shorthand>",
+    "Per-robot transport override. Examples: zenoh, zenoh:ws://farm:10000, rosbridge:ws://10.0.0.5:9090, local:1, webrtc:wss://sig.example/signal",
+  )
+  .option(
+    "--transport-json <json>",
+    'Full per-robot transport override as JSON (for fields the shorthand doesn\'t cover). Example: \'{"mode":"webrtc","webrtc":{"signalingUrl":"wss://sig.example/signal"}}\'',
+  )
+  .action(async (action: string | undefined, arg: string | undefined, opts) => {
+    await robotsCommand({
+      action,
+      arg,
+      name: opts.name,
+      namespace: opts.namespace,
+      camera: opts.camera,
+      default: opts.default === true ? true : undefined,
+      kind: opts.kind,
+      sensors: opts.sensors,
+      capabilities: opts.capabilities,
+      transport: opts.transport,
+      transportJson: opts.transportJson,
+    });
   });
 
 async function main(): Promise<void> {

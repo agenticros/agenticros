@@ -20,7 +20,12 @@
  * person re-identification.
  */
 
-import type { AgenticROSConfig, RosTransport, Subscription } from "@agenticros/core";
+import type {
+  AgenticROSConfig,
+  ResolvedRobot,
+  RosTransport,
+  Subscription,
+} from "@agenticros/core";
 import { resolveCameraSubscribeTopic, toNamespacedTopic } from "@agenticros/core";
 import {
   ROS_MSG_IMAGE,
@@ -93,9 +98,15 @@ export class FollowMeDepth {
   private tracking = false;
 
   constructor(
+    private readonly robot: ResolvedRobot,
     private readonly config: AgenticROSConfig,
     private readonly transport: RosTransport,
   ) {}
+
+  /** Stable id of the robot this loop is bound to. Used by the registry below. */
+  get robotId(): string {
+    return this.robot.id;
+  }
 
   async start(opts: StartOptions = {}): Promise<void> {
     if (this.enabled) return;
@@ -145,7 +156,7 @@ export class FollowMeDepth {
   }
 
   private subscribeDepth(): void {
-    const depthTopic = resolveCameraSubscribeTopic(this.config, DEFAULT_DEPTH_TOPIC);
+    const depthTopic = resolveCameraSubscribeTopic(this.robot.namespace, DEFAULT_DEPTH_TOPIC);
     this.depthSub = this.transport.subscribe(
       { topic: depthTopic, type: ROS_MSG_IMAGE },
       (msg) => {
@@ -228,7 +239,7 @@ export class FollowMeDepth {
   }
 
   private async publishTwist(twist: Twist): Promise<void> {
-    const topic = resolveCmdVelTopic(this.config);
+    const topic = resolveCmdVelTopic(this.config, this.robot);
     const message = {
       linear: { x: twist.linearX, y: 0, z: 0 },
       angular: { x: 0, y: 0, z: twist.angularZ },
@@ -401,9 +412,9 @@ function sampleCellBand(
   return n;
 }
 
-function resolveCmdVelTopic(config: AgenticROSConfig): string {
+function resolveCmdVelTopic(config: AgenticROSConfig, robot: ResolvedRobot): string {
   const raw = (config.teleop?.cmdVelTopic ?? "").trim() || "/cmd_vel";
-  const namespaced = toNamespacedTopic(config, raw);
+  const namespaced = toNamespacedTopic(robot.namespace, raw);
   const match = namespaced.match(/^\/([^/]+)\/cmd_vel$/i);
   const segment = match?.[1] ?? "";
   if (match && !segment.toLowerCase().startsWith("robot")) {
@@ -412,9 +423,30 @@ function resolveCmdVelTopic(config: AgenticROSConfig): string {
   return namespaced;
 }
 
-let singleton: FollowMeDepth | null = null;
+/**
+ * Per-robot registry. Each robot gets its own `FollowMeDepth` instance the
+ * first time anyone asks for one — multi-robot Phase 1.d-extend.
+ *
+ * Keying by `robot.id` (not the namespace string) so two configs that resolve
+ * to the same id share the same loop, and a config swap that *changes* the id
+ * yields a fresh loop with fresh subscriptions.
+ */
+const instances = new Map<string, FollowMeDepth>();
 
-export function getFollowMeDepth(config: AgenticROSConfig, transport: RosTransport): FollowMeDepth {
-  if (!singleton) singleton = new FollowMeDepth(config, transport);
-  return singleton;
+export function getFollowMeDepth(
+  robot: ResolvedRobot,
+  config: AgenticROSConfig,
+  transport: RosTransport,
+): FollowMeDepth {
+  let entry = instances.get(robot.id);
+  if (!entry) {
+    entry = new FollowMeDepth(robot, config, transport);
+    instances.set(robot.id, entry);
+  }
+  return entry;
+}
+
+/** Test-only: clear the registry so suites can run in isolation. */
+export function _resetFollowMeDepthRegistry(): void {
+  instances.clear();
 }

@@ -56,6 +56,14 @@ const CORE_TOOLS = [
   "ros2_param_get",
   "ros2_param_set",
   "ros2_list_topics",
+  "ros2_list_capabilities",
+  "ros2_list_robots",
+  "ros2_discover_robots",
+  // Phase 1.e fleet-capability filter — `ros2_find_robots_for(capability, kind, online)`.
+  "ros2_find_robots_for",
+  "run_mission",
+  // Phase 1.f mission control — cancel a running mission by id.
+  "mission_cancel",
   "ros2_camera_snapshot",
   "ros2_depth_distance",
   // Memory tools (registered conditionally at runtime when memory.enabled=true).
@@ -206,14 +214,21 @@ async function discoverSkillTools(entryPath, packageName) {
   try {
     mod = await import(url);
   } catch (e) {
-    warn(`Failed to import ${packageName} (${entryPath}): ${e?.message ?? e}`);
-    return [];
+    const errMsg = e?.message ?? String(e);
+    warn(`Failed to import ${packageName} (${entryPath}): ${errMsg}`);
+    // Detect the classic pnpm-hardlink-cascade signature: an
+    // ERR_MODULE_NOT_FOUND for something inside @agenticros/core/dist/.
+    // When we see it, surface it as a structured failure so the caller can
+    // preserve the skill's previously-known tools instead of silently
+    // stripping them.
+    const isCoreCascade = /@agenticros\+?core.*dist\/.+\.js/i.test(errMsg);
+    return { tools: [], importFailed: true, cascadeSuspected: isCoreCascade };
   }
   const registerSkill =
     mod.registerSkill ?? mod.default?.registerSkill ?? mod.default;
   if (typeof registerSkill !== "function") {
     warn(`${packageName}: no registerSkill export — skipping discovery`);
-    return [];
+    return { tools: [], importFailed: false };
   }
   const { tools, api } = createSpyApi();
   const ctx = createStubContext();
@@ -235,7 +250,7 @@ async function discoverSkillTools(entryPath, packageName) {
       `${packageName} registerSkill threw during discovery — captured ${tools.length} tools before error: ${e?.message ?? e}`,
     );
   }
-  return tools;
+  return { tools, importFailed: false };
 }
 
 function uniqueOrdered(...lists) {
@@ -277,13 +292,18 @@ async function main() {
   log(`skillPackages: ${skillPackages.length === 0 ? "(none)" : skillPackages.join(", ")}`);
 
   const discovered = new Map(); // skillId/packageName -> tools[]
+  const importFailures = []; // [{ name, cascadeSuspected }]
 
   for (const pkg of skillPackages) {
     const entry = resolvePackageEntry(pkg);
     if (!entry) continue;
     vlog(`Resolving package "${pkg}" → ${entry}`);
-    const tools = await discoverSkillTools(entry, pkg);
-    if (tools.length > 0) discovered.set(pkg, tools);
+    const result = await discoverSkillTools(entry, pkg);
+    if (result.importFailed) {
+      importFailures.push({ name: pkg, cascadeSuspected: result.cascadeSuspected });
+      continue;
+    }
+    if (result.tools.length > 0) discovered.set(pkg, result.tools);
     else vlog(`  no tools discovered for ${pkg}`);
   }
 
@@ -292,8 +312,12 @@ async function main() {
     const resolved = findSkillEntryFromPath(absDir);
     if (!resolved) continue;
     vlog(`Resolving path "${absDir}" → ${resolved.entry} (${resolved.packageName})`);
-    const tools = await discoverSkillTools(resolved.entry, resolved.packageName);
-    if (tools.length > 0) discovered.set(resolved.packageName, tools);
+    const result = await discoverSkillTools(resolved.entry, resolved.packageName);
+    if (result.importFailed) {
+      importFailures.push({ name: resolved.packageName, cascadeSuspected: result.cascadeSuspected });
+      continue;
+    }
+    if (result.tools.length > 0) discovered.set(resolved.packageName, result.tools);
     else vlog(`  no tools discovered for ${resolved.packageName}`);
   }
 
@@ -305,11 +329,44 @@ async function main() {
     }
   }
 
-  const skillTools = [...discovered.values()].flat();
-  const merged = uniqueOrdered(CORE_TOOLS, skillTools);
   const previous = Array.isArray(manifest?.contracts?.tools)
     ? manifest.contracts.tools.slice()
     : [];
+
+  // If any skill failed to import, preserve its presumed entries from the
+  // previous manifest instead of silently stripping them. We can't tell
+  // exactly which tools belonged to that specific skill, but we know any
+  // tool in `previous` that's not in CORE_TOOLS and not in the freshly
+  // discovered set must have come from one of these skills — and dropping
+  // them silently was exactly the regression we hit on 2026-06-10.
+  const coreSet = new Set(CORE_TOOLS);
+  const freshSkillTools = [...discovered.values()].flat();
+  const freshSet = new Set(freshSkillTools);
+  let preservedTools = [];
+  if (importFailures.length > 0) {
+    preservedTools = previous.filter(
+      (t) => typeof t === "string" && !coreSet.has(t) && !freshSet.has(t),
+    );
+    const failedNames = importFailures.map((f) => f.name).join(", ");
+    warn(`Some skill(s) failed to import: ${failedNames}`);
+    if (preservedTools.length > 0) {
+      warn(
+        `Preserving ${preservedTools.length} previously-known tool(s) from contracts.tools so the chat agent does not silently lose them: ${preservedTools.join(", ")}`,
+      );
+    }
+    const cascade = importFailures.some((f) => f.cascadeSuspected);
+    if (cascade) {
+      warn(
+        "Cascade signature detected (ERR_MODULE_NOT_FOUND inside @agenticros/core/dist). " +
+          "Run `pnpm refresh:skills` to repair the stale pnpm hardlinks, then re-run this sync.",
+      );
+    } else {
+      warn("Re-run this sync after fixing the import error to refresh the manifest.");
+    }
+  }
+
+  const skillTools = [...freshSkillTools, ...preservedTools];
+  const merged = uniqueOrdered(CORE_TOOLS, skillTools);
 
   if (arraysEqual(previous, merged)) {
     log("Manifest is already up to date.");

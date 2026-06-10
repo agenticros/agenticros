@@ -9,9 +9,14 @@
     "clean": "pnpm -r exec rm -rf dist tsconfig.tsbuildinfo",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
+    "test": "pnpm test:scripts && pnpm -r --workspace-concurrency 1 --if-present test",
+    "test:scripts": "node --test scripts/__tests__/*.test.mjs",
     "mcp:kill": "pkill -f 'node packages/agenticros-claude-code/dist/index.js' || true",
     "sync-skill-tools": "node scripts/sync-skill-tools.mjs",
-    "sync-skill-tools:dry": "node scripts/sync-skill-tools.mjs --dry-run --verbose"
+    "sync-skill-tools:dry": "node scripts/sync-skill-tools.mjs --dry-run --verbose",
+    "refresh:skills": "node scripts/refresh-skill-deps.mjs",
+    "refresh:skills:dry": "node scripts/refresh-skill-deps.mjs --dry-run --verbose",
+    "deploy:plugin": "bash scripts/setup_gateway_plugin.sh --skip-build --no-systemd --no-restart"
   },
   "engines": {
     "node": ">=20.0.0",

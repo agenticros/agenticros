@@ -9,11 +9,12 @@ import {
   mimeTypeForSnapshotBase64,
   rosNumericField,
 } from "@agenticros/ros-camera";
-import { getTransport } from "../service.js";
+import { getTransportForRobot } from "../service.js";
 import { normalizePluginToolImageBase64 } from "../plugin-image-base64.js";
 import { trimJpegToLastEoi } from "../image-binary-trim.js";
 import { storeCameraSnapshot } from "../camera-snapshot-cache.js";
 import { describeImageBestEffort } from "../describer.js";
+import { ROBOT_ID_SCHEMA, resolveRobotForTool } from "./_robot-helpers.js";
 
 /** Known camera topic patterns for common setups (e.g. RealSense). */
 export const REALSENSE_CAMERA_TOPICS = {
@@ -64,20 +65,25 @@ export function registerCameraTool(api: OpenClawPluginApi, config: AgenticROSCon
         ),
       ),
       timeout: Type.Optional(Type.Number({ description: "Timeout in milliseconds (default: 10000)" })),
+      ...ROBOT_ID_SCHEMA,
     }),
 
     async execute(_toolCallId, params) {
+      const resolved = resolveRobotForTool(config, params);
+      if ("error" in resolved) return resolved.error;
+      const { robot } = resolved;
+
       const defaultTopic =
-        (config.robot?.cameraTopic ?? "").trim() || "/camera/camera/color/image_raw/compressed";
+        (robot.cameraTopic ?? "").trim() || "/camera/camera/color/image_raw/compressed";
       const rawTopic = (params["topic"] as string | undefined) ?? defaultTopic;
-      const topic = resolveCameraSubscribeTopic(config, rawTopic);
+      const topic = resolveCameraSubscribeTopic(robot.namespace, rawTopic);
       const rawMsgType = params["message_type"] as string | undefined;
       const messageType: "CompressedImage" | "Image" =
         rawMsgType === "Image" ? "Image" : "CompressedImage";
       const timeout = (params["timeout"] as number | undefined) ?? 10000;
 
       try {
-        const transport = getTransport();
+        const transport = await getTransportForRobot(config, robot);
         const typeSel = messageType === "Image" ? ROS_MSG_IMAGE : ROS_MSG_COMPRESSED_IMAGE;
 
         const result = await new Promise<{

@@ -3,7 +3,7 @@
  * camera feed, then stop. Used by the ros2_find_object MCP tool.
  */
 
-import type { AgenticROSConfig, RosTransport } from "@agenticros/core";
+import type { AgenticROSConfig, ResolvedRobot, RosTransport } from "@agenticros/core";
 import { resolveCameraSubscribeTopic, toNamespacedTopic } from "@agenticros/core";
 import {
   ROS_MSG_COMPRESSED_IMAGE,
@@ -48,6 +48,7 @@ export interface FindObjectResult {
 }
 
 export async function findObject(
+  robot: ResolvedRobot,
   config: AgenticROSConfig,
   transport: RosTransport,
   opts: FindObjectOptions,
@@ -78,10 +79,10 @@ export async function findObject(
   const detector = new PersonDetector({ scoreThreshold: minConfidence });
   await detector.load();
 
-  const cmdVelTopic = resolveCmdVelTopic(config);
+  const cmdVelTopic = resolveCmdVelTopic(config, robot);
   const colorTopic = resolveCameraSubscribeTopic(
-    config,
-    (config.robot?.cameraTopic ?? "").trim() || DEFAULT_COLOR_TOPIC,
+    robot.namespace,
+    robot.cameraTopic.trim() || DEFAULT_COLOR_TOPIC,
   );
 
   const startedAt = Date.now();
@@ -178,9 +179,9 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function resolveCmdVelTopic(config: AgenticROSConfig): string {
+function resolveCmdVelTopic(config: AgenticROSConfig, robot: ResolvedRobot): string {
   const raw = (config.teleop?.cmdVelTopic ?? "").trim() || "/cmd_vel";
-  const namespaced = toNamespacedTopic(config, raw);
+  const namespaced = toNamespacedTopic(robot.namespace, raw);
   const match = namespaced.match(/^\/([^/]+)\/cmd_vel$/i);
   const segment = match?.[1] ?? "";
   if (match && !segment.toLowerCase().startsWith("robot")) {

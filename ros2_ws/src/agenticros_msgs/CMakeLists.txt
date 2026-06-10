@@ -14,6 +14,7 @@ find_package(geometry_msgs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/CapabilityManifest.msg"
+  "msg/RobotInfo.msg"
   "srv/GetCapabilities.srv"
   "srv/FollowMeStart.srv"
   "srv/FollowMeStop.srv"

@@ -34,6 +34,7 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
+    "test": "node --test --test-force-exit \"dist/__tests__/*.test.js\"",
     "clean": "rm -rf dist runtime tsconfig.tsbuildinfo",
     "pack:runtime": "node ../../scripts/pack-runtime.mjs",
     "size:check": "node ../../scripts/check-cli-tarball-size.mjs",

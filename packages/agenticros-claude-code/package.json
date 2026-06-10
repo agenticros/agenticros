@@ -9,7 +9,8 @@
   },
   "scripts": {
     "build": "tsc",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --test-force-exit \"dist/__tests__/*.test.js\""
   },
   "dependencies": {
     "@agenticros/core": "workspace:*",

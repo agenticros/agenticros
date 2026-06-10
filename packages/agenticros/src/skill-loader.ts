@@ -129,12 +129,20 @@ function findSkillInPath(dirPath: string): { entry: string; packageName: string 
   if (!existsSync(dirPath)) return null;
   const pkgPath = join(dirPath, "package.json");
   if (!existsSync(pkgPath)) return null;
-  let pkg: { agenticrosSkill?: boolean; main?: string; name?: string };
+  let pkg: {
+    agenticrosSkill?: boolean | Record<string, unknown>;
+    main?: string;
+    name?: string;
+  };
   try {
     pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
   } catch {
     return null;
   }
+  // Accept either the legacy boolean (`"agenticrosSkill": true`) or the
+  // Phase-1 object form (`"agenticrosSkill": { capabilities: [...] }`).
+  // Anything truthy registers the package as a skill; the capability
+  // schema is read separately by @agenticros/core.
   if (!pkg.agenticrosSkill) return null;
   const main = pkg.main ?? "index.js";
   const entry = join(dirPath, main);
