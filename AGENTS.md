@@ -33,7 +33,7 @@ packages/
   core/                    # @agenticros/core — transport, types, Zod config (no platform deps)
   ros-camera/              # @agenticros/ros-camera — shared camera snapshot encoding (Image / CompressedImage)
   agenticros/              # @agenticros/agenticros — OpenClaw plugin
-  agenticros-Codex/  # @agenticros/Codex — MCP server (stdio)
+  agenticros-claude-code/  # @agenticros/claude-code — MCP server (stdio, used by Codex CLI + Claude Code / Desktop / Dispatch)
   agenticros-gemini/       # @agenticros/gemini — Gemini CLI
 ros2_ws/src/
   agenticros_msgs/         # Custom ROS2 messages & services
@@ -64,7 +64,7 @@ docker/                    # Docker Compose and Dockerfiles
 ### Camera package (`packages/ros-camera/src/`)
 Shared camera snapshot encoding used by all adapters — handles both `sensor_msgs/Image` and `sensor_msgs/CompressedImage`.
 
-### Codex MCP server (`packages/agenticros-Codex/src/`)
+### Codex MCP server (`packages/agenticros-claude-code/src/`)
 | File | Purpose |
 |------|---------|
 | `index.ts` | Entry point — `StdioServerTransport`, registers tool handlers |
@@ -101,7 +101,7 @@ Shared camera snapshot encoding used by all adapters — handles both `sensor_ms
 ## Adapters
 
 - **OpenClaw** (`packages/agenticros`): Plugin for the OpenClaw gateway — tools, config UI, teleop web page. See "Loading the OpenClaw plugin" below.
-- **Codex CLI** (`packages/agenticros-Codex`): MCP server over stdio for **Codex** (terminal) and the **Codex desktop app** on macOS (and **Codex Dispatch** on iPhone when paired to the Mac). Desktop MCP config: `~/Library/Application Support/Codex/claude_desktop_config.json` — use an absolute path to `dist/index.js`. Setup: [packages/agenticros-Codex/README.md](packages/agenticros-Codex/README.md).
+- **Codex CLI** (`packages/agenticros-claude-code`): MCP server over stdio. The same server registers with **Codex CLI** (`codex mcp add agenticros -- node <abs>/dist/index.js`) and with **Claude Code** / **Claude Desktop** / **Claude Dispatch** — every MCP-compliant client. Codex config: `~/.codex/config.toml` under `[mcp_servers.agenticros]` (use an absolute path to `dist/index.js`). Setup: [packages/agenticros-claude-code/README.md](packages/agenticros-claude-code/README.md).
 - **Gemini CLI** (`packages/agenticros-gemini`): Standalone CLI using Google Gemini and function calling to chat with the robot (no MCP). Setup: [packages/agenticros-gemini/README.md](packages/agenticros-gemini/README.md). Requires `GEMINI_API_KEY` or `GOOGLE_API_KEY`.
 
 ## Build & development commands
@@ -118,11 +118,11 @@ pnpm mcp:kill                                     # Kill a running MCP server pr
 # Per-package (filter syntax)
 pnpm --filter @agenticros/core build
 pnpm --filter @agenticros/ros-camera build
-pnpm --filter @agenticros/Codex typecheck
-pnpm --filter @agenticros/Codex build       # Required after editing Codex src
+pnpm --filter @agenticros/claude-code typecheck
+pnpm --filter @agenticros/claude-code build       # Required after editing Codex src
 ```
 
-After editing `packages/agenticros-Codex/src/`, always run `pnpm --filter @agenticros/Codex build` before testing — the MCP server runs from `dist/index.js`.
+After editing `packages/agenticros-claude-code/src/`, always run `pnpm --filter @agenticros/claude-code build` before testing — the MCP server runs from `dist/index.js`.
 
 ## Configuration system
 
@@ -157,14 +157,14 @@ Key config fields (all have defaults in `packages/core/src/config.ts`):
     "agenticros": {
       "type": "stdio",
       "command": "sh",
-      "args": ["-c", "node packages/agenticros-Codex/dist/index.js 2>>/tmp/agenticros-mcp.log"],
+      "args": ["-c", "node packages/agenticros-claude-code/dist/index.js 2>>/tmp/agenticros-mcp.log"],
       "env": { "AGENTICROS_ROBOT_NAMESPACE": "robot3946b404c33e4aa39a8d16deb1c5c593" }
     }
   }
 }
 ```
 
-**Desktop app**: `~/Library/Application Support/Codex/claude_desktop_config.json` — use absolute path to `dist/index.js`.
+**Codex CLI config**: `~/.codex/config.toml` under `[mcp_servers.agenticros]` — use an absolute path to `dist/index.js`. (For Claude Desktop, the config file is `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS — same server binary, different client config file.)
 
 MCP server logs: `/tmp/agenticros-mcp.log`
 
@@ -173,7 +173,7 @@ MCP server logs: `/tmp/agenticros-mcp.log`
 Tools are mirrored across three adapters. Add to all three:
 
 1. **Core** — no changes needed (transport handles arbitrary topics/services)
-2. **Codex** (`packages/agenticros-Codex/src/tools.ts`):
+2. **Codex** (`packages/agenticros-claude-code/src/tools.ts`):
    - Add tool definition to the `tools` array (name, description, inputSchema)
    - Add handler in the `switch` in `callTool`
 3. **OpenClaw** (`packages/agenticros/src/tools/`):
@@ -193,7 +193,7 @@ Tools are mirrored across three adapters. Add to all three:
 1. Create `packages/agenticros-<platform>/` with `package.json` depending on `@agenticros/core` (and `@agenticros/ros-camera` if you need `ros2_camera_snapshot`)
 2. Implement that platform's plugin/extension contract
 3. Use `createTransport(config)` from core
-4. Mirror the tool set from `packages/agenticros-Codex/src/tools.ts` as a reference
+4. Mirror the tool set from `packages/agenticros-claude-code/src/tools.ts` as a reference
 
 ## Loading the OpenClaw plugin
 
@@ -224,7 +224,7 @@ All velocity publishes go through a safety validator (both in Codex and OpenClaw
 - `maxLinearVelocity` (default 1.0 m/s)
 - `maxAngularVelocity` (default 1.5 rad/s)
 
-Clamps are enforced in `packages/agenticros-Codex/src/safety.ts` and `packages/agenticros/src/safety/validator.ts`.
+Clamps are enforced in `packages/agenticros-claude-code/src/safety.ts` and `packages/agenticros/src/safety/validator.ts`.
 
 ## Docs
 

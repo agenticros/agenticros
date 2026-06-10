@@ -94,6 +94,38 @@ claude
 
 Scope options: `--scope user` (default), `--scope project` (shared via `.mcp.json`).
 
+## Codex CLI (OpenAI)
+
+The same MCP server works unmodified with the **OpenAI Codex CLI** — Codex is a vanilla MCP client, and our server speaks the standard `2024-11-05` MCP protocol that every MCP-compatible client uses. Two ways to register it:
+
+**Option A — `codex mcp add` (recommended)**
+
+```bash
+cd /path/to/agenticros
+codex mcp add agenticros \
+  -- node "$(pwd)/packages/agenticros-claude-code/dist/index.js"
+```
+
+**Option B — direct edit of `~/.codex/config.toml`**
+
+```toml
+[mcp_servers.agenticros]
+command = "node"
+args = ["/ABSOLUTE/PATH/TO/agenticros/packages/agenticros-claude-code/dist/index.js"]
+enabled = true
+startup_timeout_sec = 30
+
+[mcp_servers.agenticros.env]
+AGENTICROS_ROBOT_NAMESPACE = "robotYOUR_NAMESPACE_NO_DASHES"
+```
+
+Then start a Codex session and run `/mcp` to verify — you should see `agenticros` connected with **15 tools** (more if you have skills like `agenticros-skill-followme` or `agenticros-skill-find` registered). Same tools, same tool names, same JSON shapes as in Claude Code; everything in the **Tools** section below applies identically.
+
+Two Codex-specific notes:
+
+- **Absolute path required.** Codex's working directory at server-spawn time is not the AgenticROS repo root, so `args = ["packages/agenticros-claude-code/dist/index.js"]` will fail. Use the full absolute path.
+- **Project-scoped config.** Codex also supports a `.codex/config.toml` in a project directory (and a `mcp.json` in cwd on recent builds) — handy for per-repo MCP setups when you don't want `agenticros` enabled globally. See OpenAI's [Codex config reference](https://developers.openai.com/codex/config-reference) for the precedence rules.
+
 ## Claude desktop app + Claude Dispatch (iOS)
 
 The Claude **desktop** app uses a different MCP config file than Claude Code:
