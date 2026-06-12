@@ -129,6 +129,12 @@ After editing `packages/agenticros-claude-code/src/`, always run `pnpm --filter 
 
 **External skill repos and the pnpm hardlink cascade**: Skills like `agenticros-skill-followme` and `agenticros-skill-find` consume `@agenticros/core` via `file:` deps. pnpm hardlinks them through a virtual store snapshot that is NOT auto-refreshed when `packages/core/dist/` gains new files. After adding new exports to `@agenticros/core`, run `pnpm refresh:skills` (or `pnpm deploy:plugin`, which includes it) to keep external skills in lockstep. `sync-skill-tools.mjs` will detect the cascade signature and preserve the previous manifest's skill tools instead of silently stripping them.
 
+The same hardlink-snapshot trap also bites `~/.agenticros/plugin-deploy/`, which is the flattened tree OpenClaw loads the plugin from. `pnpm deploy --prod` snapshots `@agenticros/core/dist/` into the virtual store at deploy time and is NOT refreshed afterward. Two situations leave it stale and silently break the plugin:
+- A new file is added to `packages/core/dist/` (e.g. a fresh `mission-registry.js`) and `index.js` starts importing it — the deployed snapshot still lacks the file → `Cannot find module './mission-registry.js'` → plugin fails to load → no `ros2_*` tools registered → agent falls back to bash/CLI for robot control with no safety clamps.
+- OpenClaw self-updates (e.g. `openclaw update`) and re-loads plugins from disk, re-exposing the stale snapshot. The update can fire at unpredictable times mid-session; the first symptom is usually MCP tools vanishing from the agent's tool list and `tools.profile (...) allowlist contains unknown entries (ros2_publish, ...)` warnings in `/tmp/openclaw/openclaw-*.log`.
+
+Always re-run `pnpm deploy:plugin` after either of: (a) any change to `@agenticros/core`'s exports, or (b) an OpenClaw self-update. Check plugin health with `rg -i "agenticros (failed|loaded successfully)" /tmp/openclaw/openclaw-*.log | tail -5`.
+
 ## Configuration system
 
 Config is loaded (in priority order):
