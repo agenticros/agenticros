@@ -133,7 +133,8 @@ async function startMcp(options: StartMcpOptions = {}): Promise<McpHarness> {
       {
         name: "agenticros-skill-fixture",
         version: "0.0.1",
-        agenticrosSkill: {
+        agenticros: {
+          id: "fixture",
           capabilities: [
             {
               id: "fixture_verb",

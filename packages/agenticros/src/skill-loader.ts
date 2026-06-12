@@ -20,8 +20,8 @@
 
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
-import { readFileSync, readdirSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync, existsSync } from "node:fs";
+import { dirname, join } from "node:path";
 import type { OpenClawPluginApi } from "./plugin-api.js";
 import type { AgenticROSConfig } from "@agenticros/core";
 import type { RegisterSkill, SkillContext } from "./skill-api.js";
@@ -41,12 +41,40 @@ export function getLoadedSkillIds(): string[] {
   return [...loadedSkillIds];
 }
 
-function deriveSkillId(packageName: string): string {
-  const lower = packageName.toLowerCase();
-  if (lower.startsWith("agenticros-skill-")) {
-    return lower.slice("agenticros-skill-".length);
+/**
+ * Read the `agenticros` block from a skill's package.json. The block is now
+ * the single source of truth for the skill id, display name, and capability
+ * manifest. The legacy `agenticrosSkill: true | { capabilities }` form is
+ * NOT supported — every skill must declare a fully-formed `agenticros` block.
+ */
+interface AgenticROSBlock {
+  id: string;
+  displayName?: string;
+  description?: string;
+  categories?: string[];
+  screenshots?: string[];
+  demoVideoUrl?: string;
+  capabilities?: unknown[];
+}
+
+interface SkillManifest {
+  name?: string;
+  main?: string;
+  agenticros?: AgenticROSBlock;
+}
+
+function readSkillManifest(pkgJsonPath: string): SkillManifest | null {
+  try {
+    return JSON.parse(readFileSync(pkgJsonPath, "utf-8")) as SkillManifest;
+  } catch {
+    return null;
   }
-  return lower.replace(/^@[^/]+\//, "").replace(/[^a-z0-9]/g, "");
+}
+
+function isValidBlock(block: unknown): block is AgenticROSBlock {
+  if (!block || typeof block !== "object") return false;
+  const b = block as { id?: unknown };
+  return typeof b.id === "string" && /^[a-z0-9][a-z0-9-]*$/.test(b.id);
 }
 
 /**
@@ -56,7 +84,7 @@ function deriveSkillId(packageName: string): string {
  * — including any `api.registerTool(...)` the skill makes — completes before
  * we return, and therefore before the OpenClaw host snapshots `captured.tools`.
  *
- * Returns the derived skill id on success, or `null` (with a logged warning /
+ * Returns the declared skill id on success, or `null` (with a logged warning /
  * error) on any failure mode: missing export, top-level await (which surfaces
  * as `ERR_REQUIRE_ASYNC_MODULE`), or thrown initialization error.
  */
@@ -66,8 +94,8 @@ function loadSkillModuleSync(
   context: SkillContext,
   entryPath: string,
   packageName: string,
+  skillId: string,
 ): string | null {
-  const skillId = deriveSkillId(packageName);
   let mod: unknown;
   try {
     mod = require(entryPath);
@@ -110,44 +138,80 @@ function loadSkillModuleSync(
   }
 }
 
-/**
- * Resolve a package name to its main entry path (Node resolution).
- */
-function resolvePackageEntry(packageName: string): string | null {
-  try {
-    const pkgPath = require.resolve(packageName, { paths: [process.cwd()] });
-    return pkgPath;
-  } catch {
-    return null;
-  }
+interface ResolvedSkill {
+  entry: string;
+  packageName: string;
+  skillId: string;
 }
 
 /**
- * Scan a directory for package.json with "agenticrosSkill": true and return entry path.
+ * Resolve an npm package name to a `ResolvedSkill` (entry + name + skill id).
+ * Reads the package's package.json to extract `pkg.agenticros.id`; refuses
+ * to register the skill if the block is missing or malformed.
  */
-function findSkillInPath(dirPath: string): { entry: string; packageName: string } | null {
+function resolveSkillByPackage(
+  api: OpenClawPluginApi,
+  packageName: string,
+): ResolvedSkill | null {
+  let entry: string;
+  try {
+    entry = require.resolve(packageName, { paths: [process.cwd()] });
+  } catch {
+    api.logger.warn(`Skill package not found: ${packageName}`);
+    return null;
+  }
+  // Walk up from the resolved entry to find the package.json.
+  const pkgJsonPath = findPackageJsonForEntry(entry);
+  if (!pkgJsonPath) {
+    api.logger.warn(`Skill ${packageName}: cannot locate package.json next to ${entry}`);
+    return null;
+  }
+  const manifest = readSkillManifest(pkgJsonPath);
+  if (!manifest || !isValidBlock(manifest.agenticros)) {
+    api.logger.warn(
+      `Skill ${packageName}: missing or invalid \`agenticros\` block in package.json. ` +
+        "Declare an `agenticros.id` (kebab-case) to register as a skill.",
+    );
+    return null;
+  }
+  return {
+    entry,
+    packageName: manifest.name ?? packageName,
+    skillId: manifest.agenticros!.id,
+  };
+}
+
+/** Walk up from `entry` (a file inside the package) to find its package.json. */
+function findPackageJsonForEntry(entry: string): string | null {
+  let dir = dirname(entry);
+  for (let i = 0; i < 6; i++) {
+    const candidate = join(dir, "package.json");
+    if (existsSync(candidate)) return candidate;
+    const parent = dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+  return null;
+}
+
+/**
+ * Scan a directory for a package.json with a valid `agenticros` block and
+ * return its entry path + declared id.
+ */
+function findSkillInPath(dirPath: string): ResolvedSkill | null {
   if (!existsSync(dirPath)) return null;
   const pkgPath = join(dirPath, "package.json");
   if (!existsSync(pkgPath)) return null;
-  let pkg: {
-    agenticrosSkill?: boolean | Record<string, unknown>;
-    main?: string;
-    name?: string;
-  };
-  try {
-    pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
-  } catch {
-    return null;
-  }
-  // Accept either the legacy boolean (`"agenticrosSkill": true`) or the
-  // Phase-1 object form (`"agenticrosSkill": { capabilities: [...] }`).
-  // Anything truthy registers the package as a skill; the capability
-  // schema is read separately by @agenticros/core.
-  if (!pkg.agenticrosSkill) return null;
+  const pkg = readSkillManifest(pkgPath);
+  if (!pkg || !isValidBlock(pkg.agenticros)) return null;
   const main = pkg.main ?? "index.js";
   const entry = join(dirPath, main);
   if (!existsSync(entry)) return null;
-  return { entry, packageName: pkg.name ?? "unknown" };
+  return {
+    entry,
+    packageName: pkg.name ?? "unknown",
+    skillId: pkg.agenticros!.id,
+  };
 }
 
 /**
@@ -174,19 +238,25 @@ export function loadSkills(
   loadedSkillIds.length = 0;
 
   for (const pkgName of packages) {
-    const entryPath = resolvePackageEntry(pkgName);
-    if (!entryPath) {
-      api.logger.warn(`Skill package not found: ${pkgName}`);
-      continue;
-    }
-    const skillId = loadSkillModuleSync(api, config, context, entryPath, pkgName);
+    const resolved = resolveSkillByPackage(api, pkgName);
+    if (!resolved) continue;
+    const skillId = loadSkillModuleSync(
+      api,
+      config,
+      context,
+      resolved.entry,
+      resolved.packageName,
+      resolved.skillId,
+    );
     if (skillId) loadedSkillIds.push(skillId);
   }
 
   for (const dir of paths) {
     const resolved = findSkillInPath(dir);
     if (!resolved) {
-      api.logger.warn(`No agenticros skill in path: ${dir}`);
+      api.logger.warn(
+        `No agenticros skill in path: ${dir} (missing \`agenticros\` block in package.json).`,
+      );
       continue;
     }
     const skillId = loadSkillModuleSync(
@@ -195,6 +265,7 @@ export function loadSkills(
       context,
       resolved.entry,
       resolved.packageName,
+      resolved.skillId,
     );
     if (skillId && !loadedSkillIds.includes(skillId)) loadedSkillIds.push(skillId);
   }

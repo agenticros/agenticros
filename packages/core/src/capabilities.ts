@@ -169,16 +169,6 @@ export const BUILTIN_CAPABILITIES: readonly Capability[] = [
   },
 ];
 
-const SKILL_PACKAGE_PREFIX = "agenticros-skill-";
-
-function deriveSkillId(packageName: string): string {
-  const lower = packageName.toLowerCase();
-  if (lower.startsWith(SKILL_PACKAGE_PREFIX)) {
-    return lower.slice(SKILL_PACKAGE_PREFIX.length);
-  }
-  return lower.replace(/^@[^/]+\//, "").replace(/[^a-z0-9]/g, "");
-}
-
 function isCapabilityLike(value: unknown): value is Partial<Capability> & { id: string } {
   if (!value || typeof value !== "object") return false;
   const v = value as Record<string, unknown>;
@@ -204,53 +194,39 @@ function normalizeCapability(
 }
 
 /**
- * Parse the `agenticrosSkill` field from a package.json + a sibling
- * `capabilities.json` (if present). Returns the raw capability array or `null`
- * if the package isn't an AgenticROS skill.
+ * Read the `agenticros.capabilities[]` array from a skill's package.json.
+ * Returns `null` if the package doesn't declare a valid `agenticros` block.
+ *
+ * The legacy `agenticrosSkill: true | { capabilities }` form is NOT supported
+ * — every skill must use the single `agenticros` block as its source of truth.
  */
 function readSkillManifestFromDir(
   packageDir: string,
-): { packageName: string; rawCaps: Array<Partial<Capability> & { id: string }> } | null {
+): { packageName: string; skillId: string; rawCaps: Array<Partial<Capability> & { id: string }> } | null {
   const pkgJsonPath = join(packageDir, "package.json");
   if (!existsSync(pkgJsonPath)) return null;
   let pkg: {
     name?: string;
-    agenticrosSkill?: boolean | { capabilities?: unknown };
+    agenticros?: { id?: unknown; capabilities?: unknown };
   };
   try {
     pkg = JSON.parse(readFileSync(pkgJsonPath, "utf-8"));
   } catch {
     return null;
   }
-  if (pkg.agenticrosSkill !== true && (typeof pkg.agenticrosSkill !== "object" || pkg.agenticrosSkill === null)) {
-    return null;
-  }
-  const packageName = pkg.name ?? "unknown";
+  if (!pkg.agenticros || typeof pkg.agenticros !== "object") return null;
+  if (typeof pkg.agenticros.id !== "string") return null;
 
+  const packageName = pkg.name ?? "unknown";
+  const skillId = pkg.agenticros.id;
   const rawCaps: Array<Partial<Capability> & { id: string }> = [];
 
-  if (typeof pkg.agenticrosSkill === "object" && pkg.agenticrosSkill !== null) {
-    const caps = (pkg.agenticrosSkill as { capabilities?: unknown }).capabilities;
-    if (Array.isArray(caps)) {
-      for (const c of caps) if (isCapabilityLike(c)) rawCaps.push(c);
-    }
+  const caps = pkg.agenticros.capabilities;
+  if (Array.isArray(caps)) {
+    for (const c of caps) if (isCapabilityLike(c)) rawCaps.push(c);
   }
 
-  const sidecarPath = join(packageDir, "capabilities.json");
-  if (existsSync(sidecarPath)) {
-    try {
-      const parsed = JSON.parse(readFileSync(sidecarPath, "utf-8"));
-      const arr = Array.isArray(parsed)
-        ? parsed
-        : Array.isArray((parsed as { capabilities?: unknown }).capabilities)
-        ? (parsed as { capabilities: unknown[] }).capabilities
-        : [];
-      for (const c of arr) if (isCapabilityLike(c)) rawCaps.push(c);
-    } catch {
-    }
-  }
-
-  return { packageName, rawCaps };
+  return { packageName, skillId, rawCaps };
 }
 
 function resolvePackageDir(packageName: string, searchPaths: string[]): string | null {
@@ -290,15 +266,14 @@ export function readSkillCapabilities(config: AgenticROSConfig): Capability[] {
     const absDir = resolvePath(dir);
     const manifest = readSkillManifestFromDir(absDir);
     if (!manifest) continue;
-    const skillId = deriveSkillId(manifest.packageName);
     for (const raw of manifest.rawCaps) {
-      const key = `${skillId}:${raw.id}`;
+      const key = `${manifest.skillId}:${raw.id}`;
       if (seen.has(key)) continue;
       seen.add(key);
       out.push(
         normalizeCapability(raw, {
           kind: "skill",
-          skillId,
+          skillId: manifest.skillId,
           package: manifest.packageName,
           path: absDir,
         }),
@@ -311,15 +286,14 @@ export function readSkillCapabilities(config: AgenticROSConfig): Capability[] {
     if (!packageDir) continue;
     const manifest = readSkillManifestFromDir(packageDir);
     if (!manifest) continue;
-    const skillId = deriveSkillId(manifest.packageName);
     for (const raw of manifest.rawCaps) {
-      const key = `${skillId}:${raw.id}`;
+      const key = `${manifest.skillId}:${raw.id}`;
       if (seen.has(key)) continue;
       seen.add(key);
       out.push(
         normalizeCapability(raw, {
           kind: "skill",
-          skillId,
+          skillId: manifest.skillId,
           package: manifest.packageName,
           path: packageDir,
         }),

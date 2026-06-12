@@ -413,7 +413,7 @@ export const AgenticROSConfigSchema = z.object({
   /** Per-skill config. Keys are skill ids (e.g. followme). Each skill validates its own slice. */
   skills: z.record(z.string(), z.unknown()).default({}),
 
-  /** Directories to scan for skill packages (package.json with "agenticrosSkill": true). Resolved at gateway start. */
+  /** Directories to scan for skill packages (package.json with an `agenticros` block). Resolved at gateway start. */
   skillPaths: z.array(z.string()).default([]),
 
   /** Npm (or local) package names to load as skills. Resolved via require.resolve from plugin context. */

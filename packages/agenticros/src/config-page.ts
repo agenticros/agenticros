@@ -125,7 +125,7 @@ export function getConfigPageHtml(): string {
       <div class="field">
         <label for="skillPaths">Skill paths (comma-separated)</label>
         <input type="text" id="skillPaths" name="skillPaths" placeholder="e.g. /path/to/skills" />
-        <div class="field-hint">Directories to scan for skill packages (package.json with agenticrosSkill: true).</div>
+        <div class="field-hint">Directories to scan for skill packages (package.json with an "agenticros" block).</div>
       </div>
     </section>
     <section>

@@ -149,7 +149,7 @@ program
 program
   .command("skills [action] [arg]")
   .description(
-    "Manage AgenticROS skills (OpenClaw plugin). action = list | discover | add <path|name> | remove <id|name> | sync.",
+    "Manage AgenticROS skills. action = list | search <q> | install <slug> | discover | add <path|name> | remove <id|name> | sync. `search`/`install` use the marketplace at https://skills.agenticros.com.",
   )
   .action(async (action: string | undefined, arg: string | undefined) => {
     await skillsCommand({ action, arg });

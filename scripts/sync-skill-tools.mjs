@@ -130,8 +130,8 @@ function findSkillEntryFromPath(dirPath) {
     warn(`Invalid package.json in ${dirPath}: ${e?.message ?? e}`);
     return null;
   }
-  if (!pkg.agenticrosSkill) {
-    warn(`Not an AgenticROS skill (missing agenticrosSkill flag): ${dirPath}`);
+  if (!pkg.agenticros || typeof pkg.agenticros !== "object" || typeof pkg.agenticros.id !== "string") {
+    warn(`Not an AgenticROS skill (missing "agenticros": { "id": "..." } block): ${dirPath}`);
     return null;
   }
   const main = pkg.main ?? "index.js";

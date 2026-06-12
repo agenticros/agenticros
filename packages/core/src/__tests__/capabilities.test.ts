@@ -11,12 +11,12 @@
  * The most upstream of those is "the reader produces what we promised";
  * everything else depends on that contract holding. So this file pins down:
  *   - BUILTIN_CAPABILITIES has the 6 intrinsic verbs we ship.
- *   - readSkillCapabilities() picks up package.json's agenticrosSkill object form.
- *   - It also reads sibling capabilities.json files.
+ *   - readSkillCapabilities() picks up the `agenticros` block from package.json.
+ *   - It uses `agenticros.id` (not the package name) as the skill id.
  *   - It tags every capability with a source so dispatchers can filter.
  *   - It deduplicates within a skill so a malformed manifest can't blow up.
  *   - listAllCapabilities() merges intrinsic + skill in that order.
- *   - It tolerates non-skill packages (no agenticrosSkill key) silently.
+ *   - It tolerates non-skill packages (no `agenticros` key) silently.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -40,12 +40,10 @@ async function makeSkillDir(
   root: string,
   name: string,
   pkg: Record<string, unknown>,
-  sidecar?: Record<string, unknown>,
 ): Promise<string> {
   const dir = path.join(root, name);
   await mkdir(dir, { recursive: true });
   await writeJson(path.join(dir, "package.json"), pkg);
-  if (sidecar) await writeJson(path.join(dir, "capabilities.json"), sidecar);
   return dir;
 }
 
@@ -66,14 +64,16 @@ test("BUILTIN_CAPABILITIES exposes the six intrinsic robot verbs", () => {
   }
 });
 
-test("readSkillCapabilities: reads package.json agenticrosSkill object form", async () => {
+test("readSkillCapabilities: reads capabilities from the `agenticros` block", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "agenticros-caps-"));
   try {
     const skillDir = await makeSkillDir(root, "skill-alpha", {
       name: "agenticros-skill-alpha",
       version: "0.0.1",
       main: "dist/index.js",
-      agenticrosSkill: {
+      agenticros: {
+        id: "alpha",
+        displayName: "Alpha",
         capabilities: [
           {
             id: "wave_hello",
@@ -114,30 +114,23 @@ test("readSkillCapabilities: reads package.json agenticrosSkill object form", as
   }
 });
 
-test("readSkillCapabilities: also reads sibling capabilities.json", async () => {
+test("readSkillCapabilities: uses agenticros.id (not the package name) for the skill id", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "agenticros-caps-"));
   try {
-    const skillDir = await makeSkillDir(
-      root,
-      "skill-beta",
-      {
-        name: "agenticros-skill-beta",
-        version: "0.0.1",
-        agenticrosSkill: true,
+    const skillDir = await makeSkillDir(root, "weird-named-repo", {
+      name: "@some-org/totally-different-name",
+      version: "0.0.1",
+      agenticros: {
+        id: "explicit-id",
+        capabilities: [{ id: "do_thing", verb: "do", description: "Do." }],
       },
-      {
-        capabilities: [
-          { id: "sidecar_only", verb: "demo", description: "From sibling." },
-        ],
-      },
-    );
-
+    });
     const caps = readSkillCapabilities(parseConfig({ skillPaths: [skillDir] }));
     assert.equal(caps.length, 1);
-    assert.equal(caps[0].id, "sidecar_only");
     assert.equal(caps[0].source?.kind, "skill");
     if (caps[0].source?.kind === "skill") {
-      assert.equal(caps[0].source.skillId, "beta");
+      assert.equal(caps[0].source.skillId, "explicit-id");
+      assert.equal(caps[0].source.package, "@some-org/totally-different-name");
     }
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -158,33 +151,26 @@ test("readSkillCapabilities: silently ignores non-skill packages", async () => {
   }
 });
 
-test("readSkillCapabilities: dedupes when an id appears in both package.json and sibling", async () => {
+test("readSkillCapabilities: dedupes within a skill when an id appears twice in the array", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "agenticros-caps-"));
   try {
-    const skillDir = await makeSkillDir(
-      root,
-      "skill-dupe",
-      {
-        name: "agenticros-skill-dupe",
-        version: "0.0.1",
-        agenticrosSkill: {
-          capabilities: [
-            { id: "shared_id", verb: "first", description: "From package.json." },
-          ],
-        },
-      },
-      {
+    const skillDir = await makeSkillDir(root, "skill-dupe", {
+      name: "agenticros-skill-dupe",
+      version: "0.0.1",
+      agenticros: {
+        id: "dupe",
         capabilities: [
-          { id: "shared_id", verb: "second", description: "From sidecar (ignored)." },
-          { id: "extra", verb: "demo", description: "Unique to sidecar." },
+          { id: "shared_id", verb: "first", description: "First." },
+          { id: "shared_id", verb: "second", description: "Duplicate (ignored)." },
+          { id: "extra", verb: "demo", description: "Unique." },
         ],
       },
-    );
+    });
     const caps = readSkillCapabilities(parseConfig({ skillPaths: [skillDir] }));
     const ids = caps.map((c) => c.id).sort();
     assert.deepEqual(ids, ["extra", "shared_id"]);
     const shared = caps.find((c) => c.id === "shared_id");
-    assert.equal(shared?.verb, "first", "package.json should win over sidecar");
+    assert.equal(shared?.verb, "first", "first entry should win on duplicate id");
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -196,7 +182,8 @@ test("readSkillCapabilities: drops entries without a valid id", async () => {
     const skillDir = await makeSkillDir(root, "skill-bad", {
       name: "agenticros-skill-bad",
       version: "0.0.1",
-      agenticrosSkill: {
+      agenticros: {
+        id: "bad",
         capabilities: [
           { verb: "noid", description: "Missing id." },
           { id: "", verb: "empty", description: "Empty id." },
@@ -214,13 +201,31 @@ test("readSkillCapabilities: drops entries without a valid id", async () => {
   }
 });
 
+test("readSkillCapabilities: skips packages with an `agenticros` block that lacks an `id`", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "agenticros-caps-"));
+  try {
+    const skillDir = await makeSkillDir(root, "skill-noid", {
+      name: "agenticros-skill-noid",
+      version: "0.0.1",
+      agenticros: {
+        capabilities: [{ id: "do_thing", verb: "do", description: "Do." }],
+      },
+    });
+    const caps = readSkillCapabilities(parseConfig({ skillPaths: [skillDir] }));
+    assert.equal(caps.length, 0);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("listAllCapabilities: built-ins first, then skill caps; counts add up", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "agenticros-caps-"));
   try {
     const skillDir = await makeSkillDir(root, "skill-extra", {
       name: "agenticros-skill-extra",
       version: "0.0.1",
-      agenticrosSkill: {
+      agenticros: {
+        id: "extra",
         capabilities: [
           { id: "extra_one", verb: "demo", description: "One." },
           { id: "extra_two", verb: "demo", description: "Two." },

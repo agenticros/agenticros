@@ -1,9 +1,9 @@
 /**
  * Skill discovery, validation, and config-file mutation primitives.
  *
- * An AgenticROS skill is a Node package whose `package.json` carries
- * `"agenticrosSkill": true` and exports a `registerSkill(api, config, context)`
- * function from its `main` entry. The OpenClaw AgenticROS plugin loads them
+ * An AgenticROS skill is a Node package whose `package.json` carries an
+ * `agenticros` block (with at least an `id`) and exports a
+ * `registerSkill(api, config, context)` function from its `main` entry. The OpenClaw AgenticROS plugin loads them
  * at gateway start by walking two arrays in its config:
  *
  *   - `skillPaths[]`     — absolute directories to scan (validate `package.json`)
@@ -64,8 +64,8 @@ export function deriveSkillId(packageName: string): string {
 /**
  * Inspect a directory and decide whether it's a valid AgenticROS skill clone.
  * Returns a partial `SkillRef` (no `registeredAs`) or `undefined` when the
- * directory is missing, lacks `package.json`, or doesn't opt in via the
- * `agenticrosSkill: true` flag.
+ * directory is missing, lacks `package.json`, or doesn't declare a valid
+ * `agenticros` block (with at least `id`).
  */
 export function inspectSkillDir(dir: string): Omit<SkillRef, "registeredAs"> | undefined {
   const absDir = isAbsolute(dir) ? dir : resolve(dir);
@@ -79,18 +79,27 @@ export function inspectSkillDir(dir: string): Omit<SkillRef, "registeredAs"> | u
   if (!stat.isDirectory()) return undefined;
   const pkgPath = join(absDir, "package.json");
   if (!existsSync(pkgPath)) return undefined;
-  let pkg: { name?: string; agenticrosSkill?: unknown };
+  let pkg: {
+    name?: string;
+    main?: string;
+    agenticros?: { id?: unknown };
+  };
   try {
     pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
   } catch {
     return undefined;
   }
-  if (pkg.agenticrosSkill !== true) return undefined;
+  const block = pkg.agenticros;
+  if (!block || typeof block !== "object" || typeof block.id !== "string") {
+    return undefined;
+  }
+  const id = block.id;
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(id)) return undefined;
   const packageName = (pkg.name ?? "unknown").toString();
   const mainRel = ((pkg as { main?: unknown }).main as string | undefined) ?? "index.js";
   const entry = join(absDir, mainRel);
   return {
-    id: deriveSkillId(packageName),
+    id,
     packageName,
     dir: absDir,
     entry,
@@ -252,14 +261,14 @@ export interface AddResult {
  * Add a skill to the OpenClaw plugin config by absolute directory path.
  * Idempotent: re-adding an existing entry is a no-op and returns `ok: true`
  * with an explanatory message. The directory must contain a valid
- * `package.json` with `agenticrosSkill: true`.
+ * `package.json` with an `agenticros` block (with at least `id`).
  */
 export function addSkillByPath(dir: string): AddResult {
   const info = inspectSkillDir(dir);
   if (!info) {
     return {
       ok: false,
-      message: `Not an AgenticROS skill directory: ${dir} (need package.json with "agenticrosSkill": true)`,
+      message: `Not an AgenticROS skill directory: ${dir} (need package.json with an "agenticros": { "id": "..." } block)`,
     };
   }
   if (!openclawConfigExists()) {

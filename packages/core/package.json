@@ -1,8 +1,24 @@
 {
   "name": "@agenticros/core",
-  "version": "0.0.1",
+  "version": "0.5.0",
   "type": "module",
-  "description": "AgenticROS core — platform-agnostic ROS2 transport, types, and config",
+  "description": "AgenticROS core — platform-agnostic ROS2 transport, types, and config (the dep every AgenticROS skill imports).",
+  "keywords": [
+    "agenticros",
+    "ros2",
+    "robotics",
+    "zenoh",
+    "rosbridge",
+    "webrtc",
+    "skill-sdk"
+  ],
+  "homepage": "https://github.com/agenticros/agenticros#readme",
+  "bugs": "https://github.com/agenticros/agenticros/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/agenticros/agenticros.git",
+    "directory": "packages/core"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -12,10 +28,27 @@
       "default": "./dist/index.js"
     }
   },
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "dist/**/*.js.map",
+    "dist/**/*.d.ts.map",
+    "!dist/**/__tests__/**",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "node --test \"dist/memory/__tests__/*.test.js\" \"dist/__tests__/*.test.js\""
+    "test": "node --test \"dist/memory/__tests__/*.test.js\" \"dist/__tests__/*.test.js\"",
+    "prepublishOnly": "npm run build",
+    "pack:dry": "npm pack --dry-run"
   },
   "dependencies": {
     "@eclipse-zenoh/zenoh-ts": "^1.9.0",

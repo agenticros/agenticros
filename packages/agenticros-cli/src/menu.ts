@@ -15,7 +15,7 @@
  *   robot".
  */
 
-import { select } from "@inquirer/prompts";
+import { input, select } from "@inquirer/prompts";
 
 import { upCommand } from "./commands/up.js";
 import { downCommand } from "./commands/down.js";
@@ -188,10 +188,12 @@ async function skillsSubmenu(): Promise<void> {
       message: "Skills:",
       choices: [
         { name: "List registered + available", value: "list" },
+        { name: "Search marketplace (skills.agenticros.com)", value: "search" },
+        { name: "Install from marketplace by slug", value: "install" },
         {
           name: hasAvailable
-            ? `Discover & register (${listing!.available.length} unregistered found)`
-            : "Discover & register (interactive picker)",
+            ? `Discover & register local clones (${listing!.available.length} found)`
+            : "Discover & register local clones",
           value: "discover",
         },
         { name: "Add a skill by path or package name", value: "add" },
@@ -199,9 +201,25 @@ async function skillsSubmenu(): Promise<void> {
         { name: "Sync OpenClaw contracts.tools allowlist", value: "sync" },
         { name: "Back to main menu", value: BACK },
       ],
-      default: hasRegistered ? "list" : "discover",
+      default: hasRegistered ? "list" : "search",
     });
     if (action === BACK) return;
+    if (action === "search") {
+      const q = await input({
+        message: "Search terms (empty = browse most popular):",
+        validate: () => true,
+      });
+      await skillsCommand({ action: "search", arg: q.trim() });
+      continue;
+    }
+    if (action === "install") {
+      const slug = await input({
+        message: "Skill slug to install (e.g. followme, find):",
+        validate: (v) => v.trim().length > 0 || "Required",
+      });
+      await skillsCommand({ action: "install", arg: slug.trim() });
+      continue;
+    }
     await skillsCommand({ action });
   }
 }

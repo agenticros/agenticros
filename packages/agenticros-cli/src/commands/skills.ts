@@ -32,6 +32,14 @@ import {
   removeSkill,
   scanForSkills,
 } from "../util/skills.js";
+import {
+  cloneAndBuild,
+  getInstallDescriptor,
+  getSkill,
+  MarketplaceError,
+  searchSkills,
+  type MarketplaceSkill,
+} from "../util/marketplace.js";
 import { getCliPaths } from "../util/paths.js";
 import { colors, dim, err, header, info, isTty, ok, warn } from "../util/logger.js";
 import {
@@ -64,9 +72,15 @@ export async function skillsCommand(opts: SkillsOptions): Promise<void> {
       return removeAction(opts.arg);
     case "sync":
       return syncManifest();
+    case "search":
+    case "find":
+      return searchAction(opts.arg);
+    case "install":
+    case "i":
+      return installAction(opts.arg);
     default:
       err(`Unknown skills action '${opts.action}'.`);
-      err("Use: list | discover | add <path|name> | remove <id|name> | sync");
+      err("Use: list | search <q> | install <slug> | discover | add <path|name> | remove <id|name> | sync");
       process.exit(2);
   }
 }
@@ -183,7 +197,7 @@ async function addAction(arg: string | undefined): Promise<void> {
     const info1 = inspectSkillDir(abs);
     if (!info1) {
       err(`Not a valid AgenticROS skill directory: ${abs}`);
-      err("Expected a package.json with \"agenticrosSkill\": true.");
+      err('Expected a package.json with "agenticros": { "id": "..." }.');
       process.exit(1);
     }
     const result = addSkillByPath(abs);
@@ -416,4 +430,129 @@ function warnIfNotBuilt(dir: string, entry?: string): void {
     warn(`    cd ${dir} && pnpm install && pnpm build`);
     warn(`(or: cd ${dir} && npx tsc  -- if pnpm install is failing locally.)`);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Marketplace actions: search + install
+// ---------------------------------------------------------------------------
+
+/**
+ * `agenticros skills search <query>` — look up skills on
+ * https://skills.agenticros.com and print a ranked, copy-paste-ready table.
+ */
+async function searchAction(rawQuery: string | undefined): Promise<void> {
+  const q = (rawQuery ?? "").trim();
+  header(q ? `Searching the marketplace for "${q}"…` : "Browsing the marketplace…");
+  let results: MarketplaceSkill[];
+  try {
+    results = await searchSkills(q, { limit: 25, sort: q ? "recent" : "popular" });
+  } catch (e) {
+    err(formatMarketplaceError(e));
+    process.exit(1);
+  }
+  if (results.length === 0) {
+    info("No skills match. Try a different keyword, or open the marketplace:");
+    info("    https://skills.agenticros.com");
+    return;
+  }
+  for (const s of results) {
+    process.stdout.write(
+      `  ${colors.green("●")} ${colors.bold(s.displayName || s.name)}  ${colors.dim(`@ ${s.maintainerLogin}  ★${s.starCount}`)}\n`,
+    );
+    process.stdout.write(`      ${colors.dim(s.description)}\n`);
+    process.stdout.write(
+      `      Install:  ${colors.bold(`agenticros skills install ${s.slug}`)}\n`,
+    );
+  }
+  process.stdout.write("\n");
+  dim(`Browse the full catalog at https://skills.agenticros.com`);
+}
+
+/**
+ * `agenticros skills install <slug>` — pull install metadata from the
+ * marketplace, clone+build the skill repo, and register it locally.
+ */
+async function installAction(rawSlug: string | undefined): Promise<void> {
+  const slug = (rawSlug ?? "").trim().toLowerCase();
+  if (!slug) {
+    err("Usage: agenticros skills install <slug>");
+    err("Find a slug at https://skills.agenticros.com or via `agenticros skills search`.");
+    process.exit(2);
+  }
+  header(`Installing skill '${slug}' from the marketplace…`);
+
+  // 1) Resolve metadata + install descriptor.
+  let descriptor;
+  let meta;
+  try {
+    [descriptor, meta] = await Promise.all([
+      getInstallDescriptor(slug),
+      getSkill(slug).catch(() => undefined),
+    ]);
+  } catch (e) {
+    err(formatMarketplaceError(e));
+    process.exit(1);
+  }
+  if (meta) {
+    info(`Skill:    ${colors.bold(meta.displayName || meta.name)}`);
+    info(`Package:  ${meta.packageName}`);
+    info(`Repo:     ${meta.githubUrl}`);
+    info(`Author:   @${meta.maintainerLogin}`);
+  } else {
+    info(`Repo:     ${descriptor.githubUrl}`);
+  }
+
+  if (isTty) {
+    const yes = await confirm({
+      message: `Clone, build, and register this skill locally?`,
+      default: true,
+    });
+    if (!yes) {
+      info("Cancelled.");
+      return;
+    }
+  }
+
+  // 2) Clone + build.
+  let result;
+  try {
+    result = await cloneAndBuild(descriptor, {
+      onLog: (msg) => info(msg),
+    });
+  } catch (e) {
+    err(`Clone/build failed: ${e instanceof Error ? e.message : String(e)}`);
+    err(`Inspect the partial clone (if any), fix the build, then run:`);
+    err(`    agenticros skills add <path>`);
+    process.exit(1);
+  }
+  ok(
+    result.alreadyExisted
+      ? `Updated existing clone at ${result.cloneDir}.`
+      : `Cloned and built at ${result.cloneDir}.`,
+  );
+
+  // 3) Confirm the clone is a real skill and register it.
+  const info1 = inspectSkillDir(result.cloneDir);
+  if (!info1) {
+    err(`The clone at ${result.cloneDir} doesn't expose an AgenticROS skill manifest.`);
+    err('(Expected package.json with "agenticros": { "id": "..." }.)');
+    err("Report this on the skill's GitHub repo — the marketplace listing is stale.");
+    process.exit(1);
+  }
+  const reg = addSkillByPath(result.cloneDir);
+  if (!reg.ok) {
+    err(reg.message);
+    process.exit(1);
+  }
+  ok(reg.message);
+  warnIfNotBuilt(result.cloneDir, info1.entry);
+
+  // 4) Sync the OpenClaw contracts.tools allowlist + remind to restart.
+  await postChangeFollowup({ ranSync: false });
+}
+
+function formatMarketplaceError(e: unknown): string {
+  if (e instanceof MarketplaceError) return `Marketplace error: ${e.message}`;
+  if (e instanceof Error) return `Marketplace error: ${e.message}`;
+  return `Marketplace error: ${String(e)}`;
 }

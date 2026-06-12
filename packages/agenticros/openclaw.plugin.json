@@ -373,7 +373,7 @@
       },
       "skillPaths": {
         "type": "array",
-        "description": "Directories to scan for skill packages (package.json with agenticrosSkill: true).",
+        "description": "Directories to scan for skill packages (package.json with an `agenticros` block).",
         "items": {
           "type": "string"
         },

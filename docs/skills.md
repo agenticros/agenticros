@@ -1,109 +1,182 @@
 # AgenticROS Skills
 
-Skills are optional packages that add tools and behaviors to the AgenticROS plugin. They are loaded at gateway start from **skillPackages** (npm package names) and **skillPaths** (directories to scan). Each skill reads its config from **config.skills.\<skillId\>** and registers tools (and optionally commands) with the plugin.
+Skills are optional packages that add tools and behaviors to the AgenticROS plugin. They're loaded at gateway start from **`skillPackages`** (npm package names) and **`skillPaths`** (directories). Each skill reads its config from **`config.skills.<skillId>`** and registers tools with the plugin.
+
+A central marketplace at **[skills.agenticros.com](https://skills.agenticros.com)** lists every published skill and supplies the install descriptors the CLI uses. The marketplace stores **metadata only** — every skill's source code lives in its own GitHub repository.
+
+## Quick install — from the marketplace
+
+```bash
+# Search the marketplace.
+npx agenticros skills search follow
+
+# One-step install: clones the GitHub repo into a sibling of your
+# agenticros checkout, runs `pnpm install && pnpm build`, registers it
+# with your OpenClaw config, and syncs the contracts.tools allowlist.
+npx agenticros skills install followme
+
+# Restart your gateway to load the new skill.
+systemctl --user restart openclaw-gateway.service
+```
+
+Run `agenticros skills` for the full subcommand list (search/install/list/discover/add/remove/sync).
 
 ## Skill contract
 
-- **Package**: `package.json` must have **`"agenticrosSkill": true`** and a **`main`** entry (e.g. `dist/index.js`) that exports **`registerSkill(api, config, context)`**.
-- **Config**: Skill-specific options live under **`config.skills.<skillId>`** (e.g. `config.skills.followme`). The skill validates and defaults its own slice.
-- **Context**: The plugin passes a **context** object with:
-  - **`context.getTransport()`** — Active ROS2 transport (throws if not connected).
-  - **`context.getDepthDistance(transport, topic, timeoutMs?)`** — Sample a depth topic and return median distance (meters). Optional; use when the skill needs depth.
-  - **`context.getDepthSectors(transport, topic, timeoutMs?)`** — Sample left/center/right thirds of a depth image; returns `{ left_m, center_m, right_m, valid }` for turn direction (e.g. Follow Me).
-  - **`context.logger`** — Plugin logger (info, warn, error).
-- **Registration**: Inside `registerSkill`, call **`api.registerTool(tool)`** (and optionally commands). The plugin provides the same **api** it uses for its own tools.
+Every skill is an npm package whose `package.json` declares a single `agenticros` block:
 
-Types for **SkillContext**, **RegisterSkill**, and **DepthSampleResult** are exported from the AgenticROS OpenClaw plugin (`@agenticros/agenticros`) for use by skill packages.
+```jsonc
+{
+  "name": "agenticros-skill-followme",
+  "version": "0.2.0",
+  "main": "dist/index.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/agenticros/agenticros-skill-followme.git"
+  },
+  "homepage": "https://github.com/agenticros/agenticros-skill-followme#readme",
+  "bugs": "https://github.com/agenticros/agenticros-skill-followme/issues",
+  "keywords": ["agenticros", "follow", "vision"],
+  "agenticros": {
+    "id": "followme",
+    "displayName": "Follow Me",
+    "description": "Depth-based person following with optional Ollama / VLM, turn-to-follow, and search-when-lost behaviors.",
+    "categories": ["navigation", "human-interaction"],
+    "screenshots": ["docs/screenshot.png"],
+    "demoVideoUrl": "https://youtu.be/...",
+    "capabilities": [
+      {
+        "id": "follow_person",
+        "verb": "follow",
+        "description": "Follow a person walking in front of the robot.",
+        "interruptible": true,
+        "blocks_base": true
+      }
+    ]
+  },
+  "dependencies": {
+    "@agenticros/core": "^0.5.0"
+  }
+}
+```
 
-## Installing skills
+### `agenticros` block fields
 
-1. **Via package name**  
-   In the OpenClaw config file (e.g. `~/.openclaw/openclaw.json`), under **`plugins.entries.agenticros.config`**, set:
-   - **`skillPackages`**: `["agenticros-skill-followme", ...]`
-   Install the package in the same environment as the gateway (e.g. `pnpm add agenticros-skill-followme` in the gateway app, or ensure the package is on Node’s resolution path).
+| Field | Required | Description |
+|---|---|---|
+| `id` | yes | Kebab-case slug (e.g. `followme`, `find-object`). The source of truth for the skill id — used by the loader, the CLI, the marketplace, and `config.skills.<id>`. |
+| `displayName` | recommended | Human-readable title shown in the marketplace and CLI listings. |
+| `description` | recommended | One-sentence summary (also surfaces in marketplace cards). |
+| `categories` | optional | List of marketplace facets (e.g. `navigation`, `vision`, `manipulation`, `human-interaction`, `search`, `audio`, `communication`, `telemetry`). |
+| `screenshots` | recommended | Array of repo-relative paths to PNG/JPG previews shown on the marketplace listing. |
+| `demoVideoUrl` | optional | Link to a hosted demo video. |
+| `capabilities` | recommended | Capability registry entries used by the planner. See *Capabilities* below. |
 
-2. **Via directory**  
-   Install or clone the skill into a directory, then set:
-   - **`skillPaths`**: `["/path/to/skills"]`
-   The plugin scans each path for a `package.json` with **`"agenticrosSkill": true`** and loads the **main** entry. Run `pnpm install` and `pnpm build` in that directory so the entry exists.
+### Code
 
-3. **Sync the manifest allowlist** by running, from the AgenticROS repo root:
+The skill's `main` entry must export `registerSkill(api, config, context)`:
 
-   ```bash
-   pnpm sync-skill-tools
-   # or: node scripts/sync-skill-tools.mjs
-   ```
+```ts
+import type { RegisterSkill, SkillContext } from "@agenticros/agenticros";
 
-   OpenClaw 2026+ enforces `contracts.tools` in `openclaw.plugin.json` as a **strict allowlist** — any tool a plugin tries to register at runtime that is not declared in the manifest is rejected with `plugin must declare contracts.tools for: <name>` and silently dropped. The script imports each skill configured in `skillPaths` / `skillPackages` with a `registerTool` spy, collects the tool names that the skill registers, and merges them into the agenticros plugin's manifest. Run it whenever you add, remove, or rebuild a skill.
+export const registerSkill: RegisterSkill = (api, config, context) => {
+  const opts = (config.skills?.followme as { speed?: number }) ?? {};
 
-   Useful flags:
+  api.registerTool({
+    name: "follow_person",
+    label: "Follow person",
+    description: "Follow a person walking in front of the robot.",
+    parameters: /* @sinclair/typebox schema */,
+    async execute(_callId, _params) {
+      const t = context.getTransport();
+      // ... use t.publish(...), context.getDepthSectors(...), etc.
+      return { ok: true };
+    },
+  });
+};
+```
 
-   ```bash
-   pnpm sync-skill-tools:dry      # show what would change, do not write
-   ```
+The plugin passes:
 
-4. **Refresh the plugin registry and restart the gateway** so OpenClaw re-reads the updated `contracts.tools`:
+- **`api`** — the OpenClaw plugin API (same one the plugin's own tools use).
+- **`config`** — the parsed `AgenticROSConfig`. Skill-specific options live under `config.skills.<id>`.
+- **`context`**:
+  - **`context.getTransport()`** — active ROS2 transport (throws if not connected).
+  - **`context.getDepthDistance(transport, topic, timeoutMs?)`** — median depth at the image center.
+  - **`context.getDepthSectors(transport, topic, timeoutMs?)`** — left/center/right depth thirds.
+  - **`context.logger`** — plugin logger.
 
-   ```bash
-   openclaw plugins registry --refresh
-   # then restart the gateway (or send it SIGTERM and let your supervisor restart it)
-   ```
+Types for `SkillContext`, `RegisterSkill`, and `DepthSampleResult` are exported from `@agenticros/agenticros` for use by skill packages.
 
-5. **Configure the skill** under **`config.skills.<skillId>`** (e.g. `config.skills.followme`). See the skill’s README for its options.
+### Capabilities
 
-## Testing skills (e.g. Follow Me)
+The `agenticros.capabilities[]` array tells the **planner** what verbs the skill exposes — independent of how those verbs map to MCP tool names. Each entry:
 
-The core repo does not install or bundle any skills. To test a skill like **agenticros-skill-followme** without adding it to the core repo:
+```jsonc
+{
+  "id": "follow_person",           // unique within the skill
+  "verb": "follow",                // verb the planner reasons about
+  "description": "Follow a person walking in front of the robot.",
+  "inputs": { "target": "string" },
+  "outputs": { "ok": "boolean" },
+  "interruptible": true,           // can be stopped mid-execution
+  "blocks_base": true              // takes exclusive control of cmd_vel
+}
+```
 
-1. **Use a directory outside this repo**  
-   Clone or build the skill in a separate directory (e.g. a sibling `../agenticros-skill-followme` or a dedicated `~/agenticros-skills/`). In OpenClaw config, set **skillPaths** to that directory (e.g. `["/path/to/agenticros-skill-followme"]`). The core repo's `.gitignore` ignores `skills/` and `/agenticros-skill-*/` so that any local skill folder you add inside the repo is not committed.
+`@agenticros/core`'s `listAllCapabilities(config)` merges the 6 built-in robot verbs (`drive_base`, `take_snapshot`, …) with every skill's declared capabilities, tagging each with its source.
 
-2. **Smoke test (no robot)**  
-   - Build the skill (`pnpm install && pnpm build` in the skill repo).  
-   - Point **skillPaths** at the skill directory, set transport to a dummy mode if needed.  
-   - From the AgenticROS repo root, run **`pnpm sync-skill-tools`** so the skill's tools are added to the plugin manifest's `contracts.tools` allowlist.  
-   - **`openclaw plugins registry --refresh`** then restart the gateway.  
-   - Check gateway logs for `AgenticROS: loaded skills: followme` and confirm there are **no** `plugin must declare contracts.tools for: …` errors.  
-   - In the web chat, confirm the agent knows about the skill (e.g. "what follow me tools do you have?") and that **follow_robot** (e.g. status) and **ollama_status** are callable.
+## How loading works
 
-3. **With ROS2 + Zenoh**  
-   - Start the Zenoh router and connect the plugin (transport.mode **zenoh**, zenoh.routerEndpoint set).  
-   - Ensure the robot's depth and cmd_vel topics are configured in **config.skills.followme** (and teleop/robot namespace).  
-   - From chat: "follow me" / "start following", then "stop following".  
-   - Verify cmd_vel is published while following and that the robot responds (or that you see expected tool calls in logs).
+1. The OpenClaw config file (e.g. `~/.openclaw/openclaw.json`) sets `plugins.entries.agenticros.config.skillPackages` and / or `skillPaths`.
+2. At gateway start, the plugin's `register(api)` runs synchronously:
+   - For each `skillPackages` entry, it resolves the npm name, reads the package's `package.json` to find `agenticros.id`, and `require()`s the `main` entry inline.
+   - For each `skillPaths` directory, it does the same starting from `<dir>/package.json`.
+   - Any skill whose `package.json` doesn't declare a valid `agenticros` block is rejected with a warning.
+3. The skill's `registerSkill(api, config, context)` runs inline, registering its tools before OpenClaw snapshots the plugin's tool list.
+4. `sync-skill-tools.mjs` (run by the CLI on every add/install/remove) merges the registered tool names into the plugin manifest's `contracts.tools` allowlist so OpenClaw 2026+ will actually expose them to the chat agent.
 
-4. **With Ollama (optional)**  
-   - If using VLM: run Ollama, pull the configured model, set **config.skills.followme.useOllama** and related options.  
-   - Use **follow_me_see** (or ask the agent "what do you see for follow me?") to confirm the skill gets camera frames and Ollama responses.
+> **No back-compat with the old `agenticrosSkill: true` boolean.** The single `agenticros` block is now the only manifest form the loader recognizes.
 
-## Reference skill: agenticros-skill-followme
+## Manual install (without the marketplace)
 
-The **Follow Me** behavior is implemented as a standalone skill: [agenticros-skill-followme](https://github.com/your-org/agenticros-skill-followme) (replace with your repo URL).
+If your skill isn't published, you can still register a local clone with the CLI:
 
-- **What it does**: Depth-based (and optional Ollama/VLM) person following; publishes `cmd_vel` to keep the user at a target distance. Tools: **follow_robot** (start/stop/status), **follow_me_see** (what the tracker sees when Ollama is on), **ollama_status**.
-- **Install**: Add **`agenticros-skill-followme`** to **skillPackages** (or install into a path in **skillPaths**), set **config.skills.followme** as needed, restart the gateway.
-- **Run from chat**: User says “follow me”, “start following”, “stop following”; the agent uses **follow_robot** with the appropriate action.
-- **Template**: The skill’s README explains project structure and how to use the repo as a template for new skills.
+```bash
+# Clone and build the skill anywhere on disk (a sibling of the agenticros
+# repo is the conventional location).
+git clone https://github.com/you/agenticros-skill-yours ../agenticros-skill-yours
+cd ../agenticros-skill-yours && pnpm install && pnpm build && cd -
 
-## Creating a third-party skill
+# Register it (resolves bare ids against discovered clones).
+agenticros skills add yours
+agenticros skills sync
+systemctl --user restart openclaw-gateway.service
+```
 
-1. **Package layout**  
-   - `package.json`: **`"agenticrosSkill": true`**, **`main`** pointing to your built entry (e.g. `dist/index.js`).  
-   - Entry module exports **`registerSkill(api, config, context)`**.
+Or paste the OpenClaw config by hand:
 
-2. **Config**  
-   - Read options from **`config.skills.<skillId>`** (e.g. `config.skills.myskill`). Validate and default in your code (e.g. with a small helper or Zod).
+```jsonc
+{
+  "plugins": {
+    "entries": {
+      "agenticros": {
+        "config": {
+          "skillPaths": ["/abs/path/to/agenticros-skill-yours"],
+          "skills": {
+            "yours": { "speed": 0.3 }
+          }
+        }
+      }
+    }
+  }
+}
+```
 
-3. **Context**  
-   - Use **`context.getTransport()`** for ROS2 (subscribe/publish).  
-   - Use **`context.getDepthDistance(transport, topic, timeoutMs?)`** when you need depth (e.g. RealSense).  
-   - Use **`context.logger`** for logging.
+## Publish a skill to the marketplace
 
-4. **Registration**  
-   - Call **`api.registerTool({ name, label, description, parameters, execute })`** for each tool. Optionally register commands or use hooks if the plugin exposes them.
+1. Sign in at **[skills.agenticros.com/login](https://skills.agenticros.com/login)** with GitHub (`read:user` + `public_repo` scopes only).
+2. Open **Submit a skill** and paste your repo URL.
+3. We pull `package.json` + `README.md` from GitHub, validate the `agenticros` block, verify you have push access on the repo, then publish your listing. Updates push automatically when you re-trigger Resync from your skill's detail page.
 
-5. **Build and distribute**  
-   - Run `pnpm build` (or equivalent) so the **main** file exists.  
-   - Publish to npm or distribute the package so users can add it to **skillPackages** or **skillPaths**.
-
-For a full reference implementation and README template, see **[agenticros-skill-followme](https://github.com/your-org/agenticros-skill-followme)**.
+See [`agenticros-skill-followme`](https://github.com/agenticros/agenticros-skill-followme) as a working reference.

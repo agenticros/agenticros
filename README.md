@@ -439,7 +439,7 @@ Per-skill behaviour lives under `config.skills.<skillId>` (e.g. `config.skills.f
 
 ### Contract & writing your own skill
 
-A skill is a Node package with `"agenticrosSkill": true` in `package.json` and a `registerSkill(api, config, context)` export from `main`. See **[docs/skills.md](docs/skills.md)** for the full contract and **[agenticros-skill-followme](https://github.com/your-org/agenticros-skill-followme)** as a reference template.
+A skill is a Node package with an `"agenticros": { "id": "..." }` block in `package.json` and a `registerSkill(api, config, context)` export from `main`. Publish it to **[skills.agenticros.com](https://skills.agenticros.com)** so others can install it with `npx agenticros skills install <slug>`. See **[docs/skills.md](docs/skills.md)** for the full contract and **[agenticros-skill-followme](https://github.com/agenticros/agenticros-skill-followme)** as a reference template.
 
 ## Strategy & vision
 
