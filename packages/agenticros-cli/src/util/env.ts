@@ -51,6 +51,8 @@ export function hasGazeboHarmonic(): boolean {
 }
 
 export const isLinux = process.platform === "linux";
+export const isWindows = process.platform === "win32";
+export const isMac = process.platform === "darwin";
 
 /** Whether we appear to be running on a Jetson (Tegra kernel). */
 export function isJetson(): boolean {

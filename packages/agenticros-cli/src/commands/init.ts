@@ -14,7 +14,7 @@
  * Reuses the existing shell scripts as subprocesses (no logic duplication).
  */
 
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -22,6 +22,7 @@ import { confirm, input, password, select } from "@inquirer/prompts";
 import { execa } from "execa";
 
 import { runDoctorChecks } from "./doctor.js";
+import { isWindows } from "../util/env.js";
 import { getCliPaths, resetPathsCache } from "../util/paths.js";
 import { header, info, ok, warn, err, dim, withSpinner } from "../util/logger.js";
 import {
@@ -153,8 +154,19 @@ export async function initCommand(opts: InitOptions): Promise<void> {
   // stale install dir (e.g. 0.1.10 added sim_arm.launch.py but
   // colconBuilt() saw install/setup.bash from 0.1.9 and skipped the
   // rebuild).
+  //
+  // The colcon step is Linux-only: it sources /opt/ros/<distro>/setup.bash
+  // which doesn't exist on macOS or Windows. macOS users typically run a
+  // robotics stack remotely; Windows users need WSL 2. In both cases we
+  // skip the step with a friendly note instead of failing the whole wizard.
   const ros2WsRoot = join(repoRoot, "ros2_ws");
-  if (opts.force || !colconBuiltForCurrentCli(ros2WsRoot)) {
+  if (isWindows) {
+    warn(
+      "Skipping ROS 2 colcon build: not supported on native Windows. " +
+        "Use WSL 2 (Ubuntu) for a full robot-side install, or keep " +
+        "running this CLI on Windows for config / sim-client tasks only.",
+    );
+  } else if (opts.force || !colconBuiltForCurrentCli(ros2WsRoot)) {
     await runStep("Building ROS 2 workspace (colcon)", async () => {
       await runShell(
         `mkdir -p "${ros2WsRoot}" && cd "${ros2WsRoot}" && \
@@ -168,7 +180,16 @@ export async function initCommand(opts: InitOptions): Promise<void> {
   }
 
   // Step: OpenClaw plugin install.
-  if (opts.force || !openclawPluginInstalled()) {
+  // The installer is a bash script (`setup_gateway_plugin.sh`) and uses
+  // OpenClaw's CLI which itself is shipped for Linux/macOS today. Skip
+  // gracefully on Windows so the rest of the wizard (robot config,
+  // OpenAI key) can still complete.
+  if (isWindows) {
+    warn(
+      "Skipping OpenClaw plugin install: setup_gateway_plugin.sh requires " +
+        "bash + OpenClaw CLI. Run it from WSL 2 or a Linux/macOS host.",
+    );
+  } else if (opts.force || !openclawPluginInstalled()) {
     const wantPlugin = await confirm({
       message: "Install the OpenClaw plugin now? (recommended)",
       default: true,
@@ -213,7 +234,24 @@ export async function initCommand(opts: InitOptions): Promise<void> {
   info("Running doctor for a final health summary…");
   const after = await runDoctorChecks();
   const red = after.checks.filter((c) => c.severity === "red");
-  if (red.length === 0) {
+  if (isWindows) {
+    // Windows is "config + remote client" only: colcon, the OpenClaw plugin
+    // install, and `agenticros up real|sim-amr` all need bash + ROS 2 +
+    // OpenClaw, none of which exist on native Win32. Point users at WSL for
+    // the heavy lifting and skip the "Try `agenticros up ...`" suggestion
+    // that would just fail.
+    info(
+      "Setup partially complete on Windows. The config + MCP server are " +
+        "ready, but ROS 2, colcon, and the OpenClaw plugin require WSL 2 " +
+        "(Ubuntu). See docs/robot-setup.md for the WSL path.",
+    );
+    if (red.length > 0) {
+      warn(
+        `${red.length} doctor check(s) red — many are expected on Windows ` +
+          "(ROS 2, colcon, OpenClaw). Inspect with: agenticros doctor",
+      );
+    }
+  } else if (red.length === 0) {
     ok("Setup complete. Try `agenticros up real` (or `agenticros up sim-amr`).");
   } else {
     warn(`${red.length} check(s) still red. Inspect with: agenticros doctor`);
@@ -340,9 +378,23 @@ function userConfigExists(): boolean {
 function openAiKeyConfigured(_before: { checks: { id: string; severity: string }[] }): boolean {
   // Simple heuristic: env var set OR auth-profiles file present + non-empty.
   if ((process.env["OPENAI_API_KEY"] ?? "").length > 0) return true;
-  const home = process.env["HOME"] ?? "";
+  // On Windows, $HOME is usually unset; fall back to $USERPROFILE so this
+  // check doesn't incorrectly conclude "no key" and re-prompt forever.
+  const home = process.env["HOME"] ?? process.env["USERPROFILE"] ?? "";
   const authFile = join(home, ".openclaw", "agents", "main", "agent", "auth-profiles.json");
-  return existsSync(authFile);
+  if (existsSync(authFile)) return true;
+  // Windows-only: we persist the key into ~/.agenticros/config.json under
+  // openai.apiKey since there's no OpenClaw auth-profiles file to write to.
+  try {
+    const cfgPath = join(getCliPaths().userDataDir, "config.json");
+    if (!existsSync(cfgPath)) return false;
+    const cfg = JSON.parse(readFileSync(cfgPath, "utf8")) as {
+      openai?: { apiKey?: string };
+    };
+    return typeof cfg.openai?.apiKey === "string" && cfg.openai.apiKey.length > 0;
+  } catch {
+    return false;
+  }
 }
 
 async function promptAndWriteRobotConfig(): Promise<void> {
@@ -405,6 +457,28 @@ async function promptAndConfigureOpenAi(): Promise<void> {
   const key = await password({ message: "Paste your OpenAI API key (input hidden)" });
   if (!key || !key.startsWith("sk-")) {
     warn("That doesn't look like a key. Skipping (config can be set later).");
+    return;
+  }
+  // On Windows there's no system bash, and configure_agenticros.sh shells out
+  // to `jq` to merge into the OpenClaw config — which doesn't exist on
+  // Windows anyway since the OpenClaw plugin step was skipped. Just record
+  // the key into the AgenticROS user config so other tools (and a future
+  // `agenticros config set openai.apiKey=...`) can find it.
+  if (isWindows) {
+    const userData = getCliPaths().userDataDir;
+    mkdirSync(userData, { recursive: true });
+    const cfgPath = join(userData, "config.json");
+    let cfg: Record<string, unknown> = {};
+    try {
+      if (existsSync(cfgPath)) {
+        cfg = JSON.parse(readFileSync(cfgPath, "utf8")) as Record<string, unknown>;
+      }
+    } catch {
+      // ignore malformed file — we'll rewrite it below
+    }
+    cfg["openai"] = { apiKey: key };
+    writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+    ok(`Stored OpenAI API key in ${cfgPath} (openai.apiKey).`);
     return;
   }
   const script = join(getCliPaths().scriptsDir, "configure_agenticros.sh");
@@ -494,6 +568,38 @@ function writeInitNpmrcInline(installDir: string): void {
 }
 
 /**
+ * Recursively copy `src` into `dst` using Node's native `fs.cpSync`.
+ *
+ * Cross-platform replacement for the historic `cp -a SRC DST` invocations.
+ * Behaviour:
+ *   * Recursive directory copy (mirrors `cp -a`).
+ *   * `overwrite=false` -> skip existing files (mirrors `cp -an`).
+ *   * Symlinks copied verbatim (never dereferenced).
+ *   * Errors when destination already exists are silenced when
+ *     `overwrite=false` so additive heals don't crash on the first pre-existing
+ *     file.
+ *
+ * Why we no longer shell out to `cp`: on Windows there is no `cp` binary
+ * (PowerShell uses `Copy-Item`), so `execa("cp", ...)` would fail with
+ * "'cp' is not recognized as an internal or external command" the moment
+ * `npx agenticros init` tried to copy the bundle.
+ */
+function copyTree(
+  src: string,
+  dst: string,
+  opts: { overwrite?: boolean } = {},
+): void {
+  const overwrite = opts.overwrite !== false;
+  cpSync(src, dst, {
+    recursive: true,
+    dereference: false,
+    force: overwrite,
+    errorOnExist: false,
+    preserveTimestamps: true,
+  });
+}
+
+/**
  * Refresh paths in ALWAYS_REFRESH_FROM_BUNDLE from the bundled runtime/.
  *
  * Overlay copy semantics:
@@ -502,8 +608,7 @@ function writeInitNpmrcInline(installDir: string): void {
  *     node_modules symlinks inside packages/<pkg>/ survive a refresh)
  *   * Files in bundle but NOT in install -> ADDED
  *
- * Uses `cp -a SRC/. DST/` per path so symlinks, perms, and mtimes are
- * preserved. We deliberately do NOT `rm -rf` the destination first: doing so
+ * We deliberately do NOT remove the destination directory first: doing so
  * destroys pnpm's per-package node_modules/.bin symlinks and breaks subsequent
  * builds even though root node_modules looks healthy.
  */
@@ -522,20 +627,13 @@ async function refreshShippedCode(installDir: string): Promise<void> {
       mkdirSync(dirname(dst), { recursive: true });
 
       const srcIsDir = statSync(src).isDirectory();
-      if (srcIsDir && existsSync(dst)) {
-        // Directory overlay: copy contents of SRC into DST, overwriting same-
-        // named files but leaving everything else alone (preserves pnpm's
-        // per-package node_modules symlinks).
-        await execa("cp", ["-a", `${src}/.`, `${dst}/`]);
-      } else {
-        // File, OR directory that doesn't exist at dest yet: plain `cp -a`.
+      if (!srcIsDir && existsSync(dst)) {
         // Strip a stale dst first only when it's a non-dir leaf file we
-        // need to overwrite (e.g. tsconfig.base.json).
-        if (existsSync(dst) && !srcIsDir) {
-          await execa("rm", ["-f", dst]);
-        }
-        await execa("cp", ["-a", src, dst]);
+        // need to overwrite (e.g. tsconfig.base.json). Avoids any chance
+        // of fs.cpSync refusing to clobber the existing file on Windows.
+        rmSync(dst, { force: true });
       }
+      copyTree(src, dst, { overwrite: true });
     }
   });
 }
@@ -547,8 +645,8 @@ async function refreshShippedCode(installDir: string): Promise<void> {
  *
  * Modes:
  *   - default            ->  no-op if targetDir exists
- *   - overwrite=true     ->  cp -a SRC/. DEST   (clobbers)
- *   - additive=true      ->  cp -an SRC/. DEST  (fills in missing files; never clobbers)
+ *   - overwrite=true     ->  recursive copy, clobbering existing files
+ *   - additive=true      ->  recursive copy, never clobbering existing files
  */
 async function syncBundleToInstallDir(
   targetDir: string,
@@ -573,16 +671,11 @@ async function syncBundleToInstallDir(
     : `Copying bundled snapshot to ${targetDir}`;
   await withSpinner(label, async () => {
     mkdirSync(targetDir, { recursive: true });
-    // `cp -a SRC/. DEST`   copies contents preserving attrs (clobbering).
-    // `cp -an SRC/. DEST`  same, but `-n` = never overwrite existing files.
-    const cpArgs = opts.additive ? ["-an", `${source}/.`, targetDir] : ["-a", `${source}/.`, targetDir];
-    // `cp -n` reports "would not overwrite" as exit 0 on GNU coreutils, which
-    // is the behaviour we want. macOS / BSD cp may exit 1 - tolerate it.
     try {
-      await execa("cp", cpArgs);
+      copyTree(source, targetDir, { overwrite: !opts.additive });
     } catch (e) {
       if (!opts.additive) throw e;
-      dim(`(cp -an returned non-zero; this is OK if some targets pre-existed)`);
+      dim(`(copy returned non-zero; this is OK if some targets pre-existed)`);
     }
   });
 }

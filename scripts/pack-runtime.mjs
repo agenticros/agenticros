@@ -38,7 +38,7 @@
 
 import { execSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep as pathSep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -117,8 +117,14 @@ function copyTree(src, dest, opts = {}) {
     errorOnExist: false,
     force: true,
     filter: (s, _d) => {
-      const rel = s.startsWith(src + "/") ? s.slice(src.length + 1) : "";
-      const parts = rel.split("/");
+      // On Windows, fs.cpSync hands the filter back paths with `\` separators
+      // while `src` was built with `path.join` (also `\`), so split on the
+      // OS separator. Splitting on `/` here used to silently fail on Windows
+      // and let node_modules through, which then EPERM'd on the first
+      // symlink inside `.pnpm/...` because Win32 needs elevated rights to
+      // create symlinks.
+      const rel = s.startsWith(src + pathSep) ? s.slice(src.length + 1) : "";
+      const parts = rel.split(pathSep);
       for (const p of parts) {
         if (EXCLUDED_DIR_NAMES.has(p)) return false;
       }
