@@ -62,8 +62,14 @@ export interface CliPaths {
 /**
  * True when `dir` looks like an AgenticROS monorepo root (live or installed
  * snapshot): its package.json is `agenticros-monorepo`.
+ *
+ * Exported so `agenticros init` can use the same predicate `getCliPaths()`
+ * does when deciding whether an existing install dir is complete enough to
+ * skip a re-copy. Keeping the two checks in sync avoids "skipped copy but
+ * still detected as bundle mode -> CLI bug" loops after a crashed previous
+ * install left a half-empty target dir behind.
  */
-function isAgenticrosMonorepo(dir: string): boolean {
+export function isAgenticrosMonorepo(dir: string): boolean {
   const pkgPath = join(dir, "package.json");
   if (!existsSync(pkgPath)) return false;
   try {

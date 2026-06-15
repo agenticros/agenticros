@@ -23,7 +23,7 @@ import { execa } from "execa";
 
 import { runDoctorChecks } from "./doctor.js";
 import { isWindows } from "../util/env.js";
-import { getCliPaths, resetPathsCache } from "../util/paths.js";
+import { getCliPaths, isAgenticrosMonorepo, resetPathsCache } from "../util/paths.js";
 import { header, info, ok, warn, err, dim, withSpinner } from "../util/logger.js";
 import {
   ensureToolsAlsoAllow,
@@ -662,9 +662,25 @@ async function syncBundleToInstallDir(
     );
     process.exit(1);
   }
+  // Only skip when the destination is BOTH present AND looks like a real
+  // agenticros-monorepo install. The bare `existsSync(targetDir)` check used
+  // to be enough, but a previous CLI version that crashed mid-copy (e.g. the
+  // pre-0.2.1 Windows `cp` bug) could leave behind a half-empty target dir.
+  // On the next run the wizard would happily "skip" the copy, then immediately
+  // fail with "snapshot copied but path detection still reports bundle mode -
+  // this is a CLI bug" because `isAgenticrosMonorepo(installDir)` returned
+  // false. Heal that case by treating an incomplete dir the same as a missing
+  // dir and copying into it.
   if (existsSync(targetDir) && !opts.overwrite && !opts.additive) {
-    ok(`Install directory ${targetDir} already exists (skipping copy).`);
-    return;
+    if (isAgenticrosMonorepo(targetDir)) {
+      ok(`Install directory ${targetDir} already exists (skipping copy).`);
+      return;
+    }
+    warn(
+      `Install directory ${targetDir} exists but is incomplete (no ` +
+        "agenticros-monorepo package.json). Treating as a partial install " +
+        "and re-copying the bundle on top.",
+    );
   }
   const label = opts.additive
     ? `Healing install at ${targetDir} (adding missing files only)`
