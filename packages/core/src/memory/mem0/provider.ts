@@ -196,9 +196,12 @@ export async function createMem0Provider(args: {
   const { config } = args;
   let MemoryCtor: any;
   try {
-    // mem0ai is an optional peer dependency — resolved at runtime, never
-    // installed unless the user opts into backend: "mem0".
-    // @ts-ignore: optional peer dep not declared in this package's deps
+    // mem0ai is an optional runtime dependency — NOT listed in @agenticros/core's
+    // package.json (neither as a regular dep nor as a peer dep) because it pulls
+    // in a long native-build chain (better-sqlite3, etc.) that breaks installs in
+    // restricted sandboxes (NemoClaw, Docker without build tools, etc.). Users who
+    // opt into `backend: "mem0"` install it themselves — see docs/memory.md.
+    // @ts-ignore: intentionally not declared in this package's deps
     const mod: any = await import("mem0ai/oss");
     MemoryCtor = mod.Memory ?? mod.default?.Memory;
   } catch {
