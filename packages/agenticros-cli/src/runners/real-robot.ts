@@ -2,9 +2,8 @@
  * Runner: `agenticros up real`.
  *
  * Spawns scripts/start_demo.sh as a child process and streams its output.
- * Future: fold the start_demo.sh logic into TS so we can drive the camera /
- * MCP / motors as discrete spinner steps; for phase 1 we keep the script as
- * the canonical implementation.
+ * start_demo.sh always tries the RealSense camera (unless --no-camera) and
+ * only starts the robotics motor controller when that CLI is installed.
  */
 
 import { existsSync } from "node:fs";

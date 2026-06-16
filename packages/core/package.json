@@ -55,11 +55,11 @@
     "@foxglove/cdr": "^3.5.0",
     "@foxglove/rosmsg": "^4.2.2",
     "@foxglove/rosmsg2-serialization": "^3.1.0",
-    "node-datachannel": "^0.12.0",
     "ws": "^8.18.0",
     "zod": "^3.24.0"
   },
   "optionalDependencies": {
+    "node-datachannel": "^0.12.0",
     "rclnodejs": "^1.8.1"
   },
   "devDependencies": {

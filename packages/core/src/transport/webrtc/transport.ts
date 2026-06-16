@@ -1,4 +1,3 @@
-import { PeerConnection, DescriptionType, type DataChannel, type RtcConfig } from "node-datachannel";
 import type { RosTransport } from "../transport.js";
 import type {
   ConnectionStatus,
@@ -17,6 +16,7 @@ import type {
   RTCIceServerConfig,
 } from "../types.js";
 import { SignalingClient } from "./signaling-client.js";
+import { loadNodeDataChannel } from "./node-datachannel-loader.js";
 import type {
   SignalingMessage,
   OfferMessage,
@@ -58,8 +58,10 @@ interface PendingRequest {
 export class WebRTCTransport implements RosTransport {
   private options: WebRTCTransportOptions;
   private signaling: SignalingClient;
-  private pc: PeerConnection | null = null;
-  private dataChannel: DataChannel | null = null;
+  // node-datachannel types are loaded at runtime (optional native dep).
+  private ndc: any = null;
+  private pc: any = null;
+  private dataChannel: any = null;
   private status: ConnectionStatus = "disconnected";
   private connectionHandlers = new Set<ConnectionHandler>();
   private topicHandlers = new Map<string, Set<MessageHandler>>();
@@ -80,6 +82,8 @@ export class WebRTCTransport implements RosTransport {
     this.setStatus("connecting");
 
     try {
+      this.ndc = await loadNodeDataChannel();
+
       // Step 1: Request connection via REST API
       const userId = `frontend_${Date.now()}`;
       const connectRes = await this.signaling.requestConnection(this.options.robotId, {
@@ -444,16 +448,17 @@ export class WebRTCTransport implements RosTransport {
       return urls[0]; // node-datachannel takes individual server strings
     });
 
-    const rtcConfig: RtcConfig = { iceServers: iceServerStrs };
+    const rtcConfig = { iceServers: iceServerStrs };
+    const { PeerConnection, DescriptionType } = this.ndc;
     this.pc = new PeerConnection("agenticros-frontend", rtcConfig);
 
     // Handle ICE candidates from our side → send to robot
-    this.pc.onLocalCandidate((candidate, mid) => {
+    this.pc.onLocalCandidate((candidate: string, mid: string) => {
       this.signaling.sendIceCandidate(candidate, mid, null, this.robotPeerId ?? undefined);
     });
 
     // Handle state changes
-    this.pc.onStateChange((state) => {
+    this.pc.onStateChange((state: string) => {
       if (state === "failed" || state === "closed") {
         this.setStatus("disconnected");
         this.rejectAllPending(new Error("Peer connection closed"));
@@ -461,7 +466,7 @@ export class WebRTCTransport implements RosTransport {
     });
 
     // Handle incoming data channel
-    this.pc.onDataChannel((dc) => {
+    this.pc.onDataChannel((dc: any) => {
       this.dataChannel = dc;
 
       dc.onOpen(() => {

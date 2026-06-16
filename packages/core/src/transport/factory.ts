@@ -30,8 +30,18 @@ export async function createTransport(config: TransportConfig): Promise<RosTrans
     }
 
     case "webrtc": {
-      const { WebRTCTransport } = await import("./webrtc/transport.js");
-      return new WebRTCTransport(config.webrtc);
+      try {
+        const { WebRTCTransport } = await import("./webrtc/transport.js");
+        return new WebRTCTransport(config.webrtc);
+      } catch (e: any) {
+        if (e?.code === "ERR_MODULE_NOT_FOUND" || e?.code === "MODULE_NOT_FOUND") {
+          throw new Error(
+            'Mode C (webrtc) requires the "node-datachannel" package. ' +
+              "Install it with: pnpm add node-datachannel (requires native build tools or a prebuilt binary)",
+          );
+        }
+        throw e;
+      }
     }
 
     case "zenoh": {

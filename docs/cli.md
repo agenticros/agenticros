@@ -37,7 +37,7 @@ Bring up a robot stack. Targets:
 
 | Target    | What it does |
 |-----------|-----|
-| `real`    | Runs `scripts/start_demo.sh`: RealSense camera, motor controller, MCP server. |
+| `real`    | Runs `scripts/start_demo.sh`: RealSense camera (unless `--no-camera`), MCP build, and motor controller only when the `robotics` CLI is installed (or unless `--no-motors`). |
 | `sim-amr` | Launches the simulated 2-wheel AMR (Phase 2 - WIP). |
 | `sim-arm` | Launches the simulated UR5e arm + MoveIt2 (Phase 3 - WIP). |
 

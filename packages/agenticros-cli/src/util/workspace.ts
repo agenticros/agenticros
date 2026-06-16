@@ -56,13 +56,28 @@ export function isWorkspaceBuilt(repoRoot: string): boolean {
   return existsSync(join(repoRoot, "packages", "core", "dist", "index.js"));
 }
 
+const PNPM_INSTALL_BASE_ARGS = [
+  "install",
+  "--no-strict-peer-dependencies",
+  "--config.auto-install-peers=true",
+] as const;
+
+function pnpmInstallEnv(): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    npm_config_strict_peer_dependencies: "false",
+    npm_config_auto_install_peers: "true",
+  };
+}
+
 /** Write the same .npmrc init.ts writes inline (so pnpm install doesn't bail). */
 function writeInstallNpmrc(repoRoot: string): void {
   writeFileSync(
     join(repoRoot, ".npmrc"),
     [
       "# Auto-written by AgenticROS CLI - keeps pnpm install from failing on",
-      "# upstream peer-dep mismatches (mem0ai @ qdrant/pg/redis).",
+      "# upstream peer-dep mismatches and optional native robotics deps",
+      "# (node-datachannel, rclnodejs) that may not build in sandboxes.",
       "shamefully-hoist=false",
       "strict-peer-dependencies=false",
       "auto-install-peers=true",
@@ -71,28 +86,34 @@ function writeInstallNpmrc(repoRoot: string): void {
   );
 }
 
+async function execPnpmInstall(repoRoot: string, extraArgs: string[] = []): Promise<void> {
+  await execa("pnpm", [...PNPM_INSTALL_BASE_ARGS, ...extraArgs], {
+    cwd: repoRoot,
+    stdio: "inherit",
+    env: pnpmInstallEnv(),
+  });
+}
+
 /**
  * Run `pnpm install` with the same flags init.ts uses.
+ *
+ * Native robotics packages (`node-datachannel`, `rclnodejs`) are optional
+ * deps of @agenticros/core. If their install scripts fail (common in
+ * NemoClaw / minimal containers), retry with `--no-optional` so zenoh and
+ * rosbridge transports still work.
  */
-async function runPnpmInstall(repoRoot: string): Promise<void> {
+export async function runPnpmInstall(repoRoot: string): Promise<void> {
   writeInstallNpmrc(repoRoot);
-  await execa(
-    "pnpm",
-    [
-      "install",
-      "--no-strict-peer-dependencies",
-      "--config.auto-install-peers=true",
-    ],
-    {
-      cwd: repoRoot,
-      stdio: "inherit",
-      env: {
-        ...process.env,
-        npm_config_strict_peer_dependencies: "false",
-        npm_config_auto_install_peers: "true",
-      },
-    },
-  );
+  try {
+    await execPnpmInstall(repoRoot);
+  } catch {
+    warn(
+      "pnpm install failed — often optional native robotics deps " +
+        "(node-datachannel, rclnodejs). Retrying with --no-optional so " +
+        "zenoh/rosbridge transports still work.",
+    );
+    await execPnpmInstall(repoRoot, ["--no-optional"]);
+  }
 }
 
 /** Run `pnpm -r build` in repoRoot. */
