@@ -12,6 +12,8 @@
 
 **Physical AI Agents for ROS Robots**
 
+![AgenticROS works diagram](docs/images/works.png)
+
 [![Watch the AgenticROS intro on YouTube](https://img.youtube.com/vi/_fbWhYcPj0M/maxresdefault.jpg)](https://www.youtube.com/watch?v=_fbWhYcPj0M)
 
 > ▶ [Watch the AgenticROS intro on YouTube](https://www.youtube.com/watch?v=_fbWhYcPj0M)
