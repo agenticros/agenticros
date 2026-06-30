@@ -124,6 +124,18 @@ Read or edit `~/.agenticros/config.json`. Actions:
 | `AGENTICROS_CONFIG_PATH` | (auto) | Override the path to `~/.agenticros/config.json`. |
 | `AGENTICROS_ROBOT_NAMESPACE` | (from config) | Force a robot namespace at runtime. |
 | `OPENAI_API_KEY` | (none) | If set, doctor reports green without requiring OpenClaw profile config. |
+| `AGENTICROS_SKILLS_API` | `https://skills.agenticros.com/api` | Override marketplace API base URL. |
+| `GH_TOKEN` / `GITHUB_TOKEN` | (none) | GitHub PAT for `agenticros publish`. |
+
+### Skill authoring
+
+| Command | Purpose |
+|---|---|
+| `agenticros create-skill <slug> [--template hello\|robot\|camera\|depth]` | Scaffold `./agenticros-skill-<slug>/` in cwd. |
+| `agenticros skills dev [--invoke <tool>] [--live]` | Load the skill locally without OpenClaw. |
+| `agenticros publish [--graduate]` | Validate, push to GitHub, submit to skills.agenticros.com. |
+| `agenticros skills install <owner/skill>` | Install from marketplace (e.g. `agenticros/followme`). |
+| `agenticros skills search <q>` | Search the marketplace. |
 
 ## Troubleshooting
 

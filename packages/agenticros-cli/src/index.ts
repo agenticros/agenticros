@@ -19,6 +19,9 @@ import { statusCommand } from "./commands/status.js";
 import { logsCommand } from "./commands/logs.js";
 import { configCommand } from "./commands/config.js";
 import { skillsCommand } from "./commands/skills.js";
+import { createSkillCommand } from "./commands/create-skill.js";
+import { publishSkillCommand } from "./commands/publish-skill.js";
+import { skillsDevCommand } from "./commands/skills-dev.js";
 import { robotsCommand } from "./commands/robots.js";
 import { runMenu } from "./menu.js";
 import { err } from "./util/logger.js";
@@ -147,11 +150,45 @@ program
   });
 
 program
+  .command("create-skill <slug>")
+  .description("Scaffold a new AgenticROS skill in ./agenticros-skill-<slug>/")
+  .option("--template <name>", "Template: hello | robot | camera | depth (default: hello)")
+  .action(async (slug: string, opts: { template?: string }) => {
+    await createSkillCommand({ slug, template: opts.template });
+  });
+
+program
+  .command("publish")
+  .description("Validate, push, and publish the skill in the current directory to skills.agenticros.com")
+  .option("--graduate", "Publish a customized tutorial skill to the public catalog", false)
+  .option("-y, --yes", "Skip interactive prompts", false)
+  .action(async (opts: { graduate?: boolean; yes?: boolean }) => {
+    await publishSkillCommand({ graduate: opts.graduate, yes: opts.yes });
+  });
+
+program
   .command("skills [action] [arg]")
   .description(
-    "Manage AgenticROS skills. action = list | search <q> | install <slug> | discover | add <path|name> | remove <id|name> | sync. `search`/`install` use the marketplace at https://skills.agenticros.com.",
+    "Manage AgenticROS skills. create | dev | publish | search | install <owner/skill> | list | discover | add | remove | sync.",
   )
-  .action(async (action: string | undefined, arg: string | undefined) => {
+  .option("--template <name>", "With `skills create`: hello | robot | camera | depth")
+  .option("--graduate", "With `skills publish`: graduate a tutorial skill", false)
+  .option("--invoke <tool>", "With `skills dev`: run a tool handler")
+  .option("--live", "With `skills dev`: allow live transport", false)
+  .action(async (action: string | undefined, arg: string | undefined, opts) => {
+    const act = (action ?? "list").toLowerCase();
+    if (act === "create") {
+      await createSkillCommand({ slug: arg ?? "", template: opts.template });
+      return;
+    }
+    if (act === "dev") {
+      await skillsDevCommand({ invoke: opts.invoke, live: opts.live });
+      return;
+    }
+    if (act === "publish") {
+      await publishSkillCommand({ graduate: opts.graduate, yes: false });
+      return;
+    }
     await skillsCommand({ action, arg });
   });
 

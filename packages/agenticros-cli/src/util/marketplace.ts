@@ -22,6 +22,9 @@ export function apiBase(): string {
 
 export interface MarketplaceSkill {
   slug: string;
+  marketplaceRef?: string;
+  ownerLogin?: string;
+  skillSlug?: string;
   name: string;
   displayName: string;
   description: string;
@@ -34,15 +37,31 @@ export interface MarketplaceSkill {
   maintainerLogin: string;
   starCount: number;
   viewCount: number;
+  visibility?: string;
 }
 
 export interface InstallDescriptor {
   slug: string;
+  marketplaceRef?: string;
   skillId: string;
   packageName: string;
   githubUrl: string;
   ref: string;
   buildCmd: string;
+}
+
+export function skillApiPath(ref: string): string {
+  const trimmed = ref.trim();
+  if (trimmed.includes("/")) {
+    const [owner, ...rest] = trimmed.split("/");
+    const skill = rest.join("/");
+    return `${apiBase()}/skills/${encodeURIComponent(owner)}/${encodeURIComponent(skill)}`;
+  }
+  return `${apiBase()}/skills/${encodeURIComponent(trimmed)}`;
+}
+
+export function displayRef(skill: MarketplaceSkill | InstallDescriptor): string {
+  return skill.marketplaceRef ?? skill.slug;
 }
 
 async function getJson<T>(url: string): Promise<T> {
@@ -76,14 +95,73 @@ export async function searchSkills(
   return body.skills;
 }
 
-export async function getSkill(slug: string): Promise<MarketplaceSkill> {
-  return getJson<MarketplaceSkill>(`${apiBase()}/skills/${encodeURIComponent(slug)}`);
+export async function getSkill(ref: string): Promise<MarketplaceSkill> {
+  const skill = await getJson<MarketplaceSkill>(skillApiPath(ref));
+  if (!skill.marketplaceRef && ref.includes("/")) {
+    skill.marketplaceRef = ref;
+  }
+  return skill;
 }
 
-export async function getInstallDescriptor(slug: string): Promise<InstallDescriptor> {
-  return getJson<InstallDescriptor>(
-    `${apiBase()}/skills/${encodeURIComponent(slug)}/install`,
-  );
+export async function getInstallDescriptor(ref: string): Promise<InstallDescriptor> {
+  const desc = await getJson<InstallDescriptor>(`${skillApiPath(ref)}/install`);
+  if (!desc.marketplaceRef && ref.includes("/")) {
+    desc.marketplaceRef = ref;
+  }
+  return desc;
+}
+
+export interface ValidateResult {
+  ok: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
+export async function validateSkillOnMarketplace(
+  manifest: unknown,
+): Promise<ValidateResult> {
+  const res = await fetch(`${apiBase()}/skills/validate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ manifest }),
+  });
+  const body = (await res.json()) as ValidateResult & { error?: string };
+  if (!res.ok) {
+    return {
+      ok: false,
+      errors: body.errors ?? [body.error ?? `Validation failed (${res.status})`],
+      warnings: body.warnings ?? [],
+    };
+  }
+  return body;
+}
+
+export interface SubmitResult {
+  marketplaceRef: string;
+  ownerLogin: string;
+  skillSlug: string;
+  visibility: string;
+  warnings?: string[];
+}
+
+export async function submitSkillToMarketplace(opts: {
+  githubUrl: string;
+  githubAccessToken: string;
+}): Promise<SubmitResult> {
+  const res = await fetch(`${apiBase()}/skills/submit`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Authorization: `Bearer ${opts.githubAccessToken}`,
+    },
+    body: JSON.stringify({ githubUrl: opts.githubUrl }),
+  });
+  const body = (await res.json()) as SubmitResult & { error?: string };
+  if (!res.ok) {
+    throw new MarketplaceError(body.error ?? `Submit failed (${res.status})`);
+  }
+  return body;
 }
 
 // ---------------------------------------------------------------------------

@@ -34,12 +34,16 @@ import {
 } from "../util/skills.js";
 import {
   cloneAndBuild,
+  displayRef,
   getInstallDescriptor,
   getSkill,
   MarketplaceError,
   searchSkills,
   type MarketplaceSkill,
 } from "../util/marketplace.js";
+import { createSkillCommand } from "./create-skill.js";
+import { publishSkillCommand } from "./publish-skill.js";
+import { skillsDevCommand } from "./skills-dev.js";
 import { getCliPaths } from "../util/paths.js";
 import { colors, dim, err, header, info, isTty, ok, warn } from "../util/logger.js";
 import {
@@ -78,9 +82,17 @@ export async function skillsCommand(opts: SkillsOptions): Promise<void> {
     case "install":
     case "i":
       return installAction(opts.arg);
+    case "create":
+      return createSkillCommand({ slug: opts.arg ?? "", template: undefined });
+    case "dev":
+      return skillsDevCommand({});
+    case "publish":
+      return publishSkillCommand({});
     default:
       err(`Unknown skills action '${opts.action}'.`);
-      err("Use: list | search <q> | install <slug> | discover | add <path|name> | remove <id|name> | sync");
+      err(
+        "Use: list | search <q> | install <owner/skill> | create <slug> | dev | publish | discover | add | remove | sync",
+      );
       process.exit(2);
   }
 }
@@ -461,7 +473,7 @@ async function searchAction(rawQuery: string | undefined): Promise<void> {
     );
     process.stdout.write(`      ${colors.dim(s.description)}\n`);
     process.stdout.write(
-      `      Install:  ${colors.bold(`agenticros skills install ${s.slug}`)}\n`,
+      `      Install:  ${colors.bold(`agenticros skills install ${displayRef(s)}`)}\n`,
     );
   }
   process.stdout.write("\n");
@@ -472,22 +484,23 @@ async function searchAction(rawQuery: string | undefined): Promise<void> {
  * `agenticros skills install <slug>` — pull install metadata from the
  * marketplace, clone+build the skill repo, and register it locally.
  */
-async function installAction(rawSlug: string | undefined): Promise<void> {
-  const slug = (rawSlug ?? "").trim().toLowerCase();
-  if (!slug) {
-    err("Usage: agenticros skills install <slug>");
-    err("Find a slug at https://skills.agenticros.com or via `agenticros skills search`.");
+async function installAction(rawRef: string | undefined): Promise<void> {
+  const ref = (rawRef ?? "").trim().toLowerCase();
+  if (!ref) {
+    err("Usage: agenticros skills install <owner/skill>");
+    err("Example: agenticros skills install agenticros/followme");
+    err("Find skills at https://skills.agenticros.com or via `agenticros skills search`.");
     process.exit(2);
   }
-  header(`Installing skill '${slug}' from the marketplace…`);
+  header(`Installing skill '${ref}' from the marketplace…`);
 
   // 1) Resolve metadata + install descriptor.
   let descriptor;
   let meta;
   try {
     [descriptor, meta] = await Promise.all([
-      getInstallDescriptor(slug),
-      getSkill(slug).catch(() => undefined),
+      getInstallDescriptor(ref),
+      getSkill(ref).catch(() => undefined),
     ]);
   } catch (e) {
     err(formatMarketplaceError(e));

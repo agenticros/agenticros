@@ -1,0 +1,37 @@
+{
+  "name": "agenticros-skill-{{slug}}",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "{{description}}",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "dev": "npx agenticros skills dev"
+  },
+  "agenticros": {
+    "id": "{{slug}}",
+    "displayName": "{{displayName}}",
+    "description": "{{description}}",
+    "tutorial": true,
+    "categories": ["communication"],
+    "screenshots": ["docs/icon.png"],
+    "capabilities": [
+      {
+        "id": "{{toolName}}",
+        "verb": "run",
+        "description": "{{description}}"
+      }
+    ]
+  },
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "typescript": "^5.7.0"
+  },
+  "keywords": ["agenticros", "tutorial", "getting-started"],
+  "license": "Apache-2.0"
+}

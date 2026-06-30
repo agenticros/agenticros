@@ -24,6 +24,8 @@ import { doctorCommand, hasRedChecks } from "./commands/doctor.js";
 import { statusCommand } from "./commands/status.js";
 import { logsCommand } from "./commands/logs.js";
 import { configCommand } from "./commands/config.js";
+import { createSkillCommand } from "./commands/create-skill.js";
+import { publishSkillCommand } from "./commands/publish-skill.js";
 import { skillsCommand } from "./commands/skills.js";
 import { header, info, isTty, dim } from "./util/logger.js";
 import { readState, formatAge } from "./util/state.js";
@@ -187,9 +189,11 @@ async function skillsSubmenu(): Promise<void> {
     const action = await select<string>({
       message: "Skills:",
       choices: [
+        { name: "Create a new skill", value: "create" },
+        { name: "Publish skill (from skill directory)", value: "publish" },
         { name: "List registered + available", value: "list" },
         { name: "Search marketplace (skills.agenticros.com)", value: "search" },
-        { name: "Install from marketplace by slug", value: "install" },
+        { name: "Install from marketplace (owner/skill)", value: "install" },
         {
           name: hasAvailable
             ? `Discover & register local clones (${listing!.available.length} found)`
@@ -212,9 +216,31 @@ async function skillsSubmenu(): Promise<void> {
       await skillsCommand({ action: "search", arg: q.trim() });
       continue;
     }
+    if (action === "create") {
+      const slug = await input({
+        message: "Skill slug (e.g. hello-world, follow-me):",
+        validate: (v) => v.trim().length > 0 || "Required",
+      });
+      const template = await select<string>({
+        message: "Template:",
+        choices: [
+          { name: "Hello World (tutorial, local dev)", value: "hello" },
+          { name: "Robot action (cmd_vel wave)", value: "robot" },
+          { name: "Camera capture", value: "camera" },
+          { name: "Depth / RealSense", value: "depth" },
+        ],
+        default: "hello",
+      });
+      await createSkillCommand({ slug: slug.trim(), template });
+      continue;
+    }
+    if (action === "publish") {
+      await publishSkillCommand({});
+      continue;
+    }
     if (action === "install") {
       const slug = await input({
-        message: "Skill slug to install (e.g. followme, find):",
+        message: "Marketplace ref to install (e.g. agenticros/followme):",
         validate: (v) => v.trim().length > 0 || "Required",
       });
       await skillsCommand({ action: "install", arg: slug.trim() });

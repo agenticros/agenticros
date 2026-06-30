@@ -173,10 +173,48 @@ Or paste the OpenClaw config by hand:
 }
 ```
 
-## Publish a skill to the marketplace
+## Create and publish a skill (CLI)
 
-1. Sign in at **[skills.agenticros.com/login](https://skills.agenticros.com/login)** with GitHub (`read:user` + `public_repo` scopes only).
+### Quick start (hello world)
+
+```bash
+npx agenticros create-skill my-first-skill
+cd agenticros-skill-my-first-skill
+npm install
+npm run dev          # → Skill loaded: my-first-skill
+```
+
+The default `hello` template is for **local learning** (`agenticros.tutorial: true`). It stays off the public browse catalog unless you customize and publish with `--graduate`.
+
+### Progressive templates
+
+```bash
+npx agenticros create-skill wave-hand --template robot
+npx agenticros create-skill describe-scene --template camera
+npx agenticros create-skill measure-distance --template depth
+```
+
+### Publish to the marketplace
+
+```bash
+cd agenticros-skill-wave-hand
+npx agenticros publish
+```
+
+Requires `gh auth login -s public_repo` (or `GH_TOKEN`). The CLI validates `package.json`, builds, pushes to GitHub, and submits to [skills.agenticros.com](https://skills.agenticros.com).
+
+Published skills use **namespaced URLs**: `https://skills.agenticros.com/<github-handle>/<skill-id>` (e.g. `chrismatthieu/wave-hand`). Install with:
+
+```bash
+npx agenticros skills install chrismatthieu/wave-hand
+```
+
+Maintainer profile: `https://skills.agenticros.com/chrismatthieu`
+
+### Web submit (alternative)
+
+1. Sign in at **[skills.agenticros.com/login](https://skills.agenticros.com/login)** with GitHub.
 2. Open **Submit a skill** and paste your repo URL.
-3. We pull `package.json` + `README.md` from GitHub, validate the `agenticros` block, verify you have push access on the repo, then publish your listing. Updates push automatically when you re-trigger Resync from your skill's detail page.
+3. Re-sync from the skill edit page after pushing updates.
 
 See [`agenticros-skill-followme`](https://github.com/agenticros/agenticros-skill-followme) as a working reference.
