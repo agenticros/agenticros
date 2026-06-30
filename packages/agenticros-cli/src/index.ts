@@ -23,6 +23,7 @@ import { createSkillCommand } from "./commands/create-skill.js";
 import { publishSkillCommand } from "./commands/publish-skill.js";
 import { skillsDevCommand } from "./commands/skills-dev.js";
 import { robotsCommand } from "./commands/robots.js";
+import { codexDoctorCommand, codexSetupCommand } from "./commands/codex.js";
 import { runMenu } from "./menu.js";
 import { err } from "./util/logger.js";
 import { readFileSync } from "node:fs";
@@ -190,6 +191,27 @@ program
       return;
     }
     await skillsCommand({ action, arg });
+  });
+
+const codexCmd = program
+  .command("codex")
+  .description("Configure OpenAI Codex CLI to use the AgenticROS MCP server.");
+
+codexCmd
+  .command("setup")
+  .description("Register agenticros MCP in ~/.codex/config.toml (or project .codex/config.toml).")
+  .option("--project", "Write .codex/config.toml in the current repo root instead of global config", false)
+  .action(async (opts: { project?: boolean }) => {
+    await codexSetupCommand({ scope: opts.project ? "project" : "global" });
+  });
+
+codexCmd
+  .command("doctor")
+  .description("Validate Codex MCP config (path, namespace policy, MCP binary).")
+  .option("--json", "Emit JSON instead of a table", false)
+  .action(async (opts: { json?: boolean }) => {
+    const exitCode = await codexDoctorCommand(opts);
+    if (exitCode !== 0) process.exit(exitCode);
   });
 
 program

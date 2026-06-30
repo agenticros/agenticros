@@ -27,7 +27,7 @@ With AgenticROS, your robot can describe what it sees, follow intent ("go check 
 - **[OpenClaw](https://openclaw.ai)** — Native gateway plugin with ROS 2 tools, commands, a config UI, a teleop web app, and a skill loader. The flagship integration.
 - **[NVIDIA NemoClaw](https://github.com/NVIDIA/NemoClaw)** — Run AgenticROS inside NemoClaw's OpenShell sandbox with policy-enforced egress and managed NVIDIA inference; ROS 2, RealSense, and rosbridge stay on the host while the plugin runs sandboxed.
 - **[Anthropic Claude](https://www.anthropic.com/claude)** — A single MCP server powers **Claude Code** (terminal), **Claude Desktop** (macOS / Windows), and **Claude Dispatch** (iOS, paired to your Mac). Ask Claude what your robot sees, and it answers with a live camera snapshot and depth reading.
-- **[OpenAI Codex CLI](https://developers.openai.com/codex/)** — The same MCP server registers cleanly via `codex mcp add agenticros — node …/packages/agenticros-claude-code/dist/index.js`, or via a `[mcp_servers.agenticros]` entry in `~/.codex/config.toml`. Same 15 tools, same JSON shapes. Setup: [packages/agenticros-claude-code/README.md#codex-cli-openai](packages/agenticros-claude-code/README.md#codex-cli-openai).
+- **[OpenAI Codex CLI](https://developers.openai.com/codex/)** — Same MCP server as Claude Code. One command registers Codex: `agenticros codex setup` (writes `~/.codex/config.toml` with an absolute path to the MCP binary). Full tool surface: missions, follow-me, find-object, memory. Setup guide: [docs/codex-setup.md](docs/codex-setup.md).
 - **[Google Gemini](https://ai.google.dev/)** — Standalone CLI that uses Gemini function calling against the same ROS 2 tools (no MCP required) — ideal for scripting and headless agents.
 
 AgenticROS is built so that new adapters (LangGraph, OpenAI, local models, voice stacks, etc.) can be added without touching the ROS 2 layer. The core transport and tool contract are platform-agnostic; adapters are thin shims that surface those tools to each agent runtime.
@@ -38,12 +38,13 @@ AgenticROS is built so that new adapters (LangGraph, OpenAI, local models, voice
 
 - **Core** (`packages/core`): Platform-agnostic ROS2 transport (rosbridge, Zenoh, local, WebRTC), config schema, and shared types. No dependency on any specific AI platform.
 - **Adapters** (`packages/agenticros`, and later others): Implement the contract for each AI platform. The OpenClaw adapter registers tools, commands, and HTTP routes with the OpenClaw gateway and uses the core for all ROS2 communication.
-- `**packages/agenticros-claude-code`** — MCP server for **Claude Code** (terminal), **Claude desktop** (macOS), and **Dispatch** (iOS paired to Mac). See [packages/agenticros-claude-code/README.md](packages/agenticros-claude-code/README.md).
+- `**packages/agenticros-claude-code`** — MCP server for **Claude Code**, **Claude desktop**, **Dispatch**, and **OpenAI Codex CLI**. See [packages/agenticros-claude-code/README.md](packages/agenticros-claude-code/README.md) and [docs/codex-setup.md](docs/codex-setup.md).
 - `**packages/agenticros-gemini`** — **Gemini CLI**: use Google Gemini to chat with your robot from the terminal (same ROS2 tools, no MCP). See [packages/agenticros-gemini/README.md](packages/agenticros-gemini/README.md).
 
 ```
 User (messaging app) → OpenClaw Gateway → AgenticROS OpenClaw plugin → Core → ROS2 robots
 Claude (Code / desktop / Dispatch) → agenticros MCP server → Core → ROS2 robots (Zenoh/rosbridge)
+Codex CLI → agenticros MCP server → Core → ROS2 robots (Zenoh/rosbridge)
 Gemini CLI → @agenticros/gemini (function calling) → Core → ROS2 robots
 ```
 

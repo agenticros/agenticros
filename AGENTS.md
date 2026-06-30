@@ -101,7 +101,7 @@ Shared camera snapshot encoding used by all adapters — handles both `sensor_ms
 ## Adapters
 
 - **OpenClaw** (`packages/agenticros`): Plugin for the OpenClaw gateway — tools, config UI, teleop web page. See "Loading the OpenClaw plugin" below.
-- **Codex CLI** (`packages/agenticros-claude-code`): MCP server over stdio. The same server registers with **Codex CLI** (`codex mcp add agenticros -- node <abs>/dist/index.js`) and with **Claude Code** / **Claude Desktop** / **Claude Dispatch** — every MCP-compliant client. Codex config: `~/.codex/config.toml` under `[mcp_servers.agenticros]` (use an absolute path to `dist/index.js`). Setup: [packages/agenticros-claude-code/README.md](packages/agenticros-claude-code/README.md).
+- **Codex CLI** (`packages/agenticros-claude-code`): MCP server over stdio. The same server registers with **Codex CLI** and **Claude Code** / **Claude Desktop** / **Claude Dispatch**. Setup: `agenticros codex setup` (writes `~/.codex/config.toml` with an absolute path to `dist/index.js`). Docs: [docs/codex-setup.md](docs/codex-setup.md), [packages/agenticros-claude-code/README.md](packages/agenticros-claude-code/README.md).
 - **Gemini CLI** (`packages/agenticros-gemini`): Standalone CLI using Google Gemini and function calling to chat with the robot (no MCP). Setup: [packages/agenticros-gemini/README.md](packages/agenticros-gemini/README.md). Requires `GEMINI_API_KEY` or `GOOGLE_API_KEY`.
 
 ## Build & development commands
@@ -172,7 +172,7 @@ Key config fields (all have defaults in `packages/core/src/config.ts`):
 }
 ```
 
-**Codex CLI config**: `~/.codex/config.toml` under `[mcp_servers.agenticros]` — use an absolute path to `dist/index.js`. (For Claude Desktop, the config file is `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS — same server binary, different client config file.)
+**Codex CLI config**: `~/.codex/config.toml` under `[mcp_servers.agenticros]` — use an absolute path to `dist/index.js`. Run `agenticros codex setup` to generate it. (For Claude Desktop, the config file is `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS — same server binary, different client config file.)
 
 MCP server logs: `/tmp/agenticros-mcp.log`
 
@@ -243,4 +243,5 @@ Clamps are enforced in `packages/agenticros-claude-code/src/safety.ts` and `pack
 | `docs/robot-setup.md` | Hardware/software setup |
 | `docs/zenoh-agenticros.md` | Zenoh integration |
 | `docs/cameras.md` | Camera configuration |
+| `docs/codex-setup.md` | OpenAI Codex CLI setup (`agenticros codex setup`) |
 | `docs/teleop.md` | Teleop web app setup |

@@ -96,9 +96,19 @@ Scope options: `--scope user` (default), `--scope project` (shared via `.mcp.jso
 
 ## Codex CLI (OpenAI)
 
-The same MCP server works unmodified with the **OpenAI Codex CLI** — Codex is a vanilla MCP client, and our server speaks the standard `2024-11-05` MCP protocol that every MCP-compatible client uses. Two ways to register it:
+The same MCP server works unmodified with the **OpenAI Codex CLI** — Codex is a vanilla MCP client, and our server speaks the standard MCP protocol.
 
-**Option A — `codex mcp add` (recommended)**
+**Option A — `agenticros codex setup` (recommended)**
+
+```bash
+agenticros codex setup              # ~/.codex/config.toml
+agenticros codex setup --project    # .codex/config.toml in repo root
+agenticros codex doctor
+```
+
+Then start Codex and run `/mcp` — you should see `agenticros` connected. See [docs/codex-setup.md](../../docs/codex-setup.md) for the full guide.
+
+**Option B — `codex mcp add`**
 
 ```bash
 cd /path/to/agenticros
@@ -106,20 +116,20 @@ codex mcp add agenticros \
   -- node "$(pwd)/packages/agenticros-claude-code/dist/index.js"
 ```
 
-**Option B — direct edit of `~/.codex/config.toml`**
+**Option C — direct edit of `~/.codex/config.toml`**
 
 ```toml
 [mcp_servers.agenticros]
-command = "node"
-args = ["/ABSOLUTE/PATH/TO/agenticros/packages/agenticros-claude-code/dist/index.js"]
+command = "sh"
+args = ["-c", "node /ABSOLUTE/PATH/TO/agenticros/packages/agenticros-claude-code/dist/index.js 2>>/tmp/agenticros-mcp.log"]
 enabled = true
 startup_timeout_sec = 30
 
 [mcp_servers.agenticros.env]
-AGENTICROS_ROBOT_NAMESPACE = "robotYOUR_NAMESPACE_NO_DASHES"
+AGENTICROS_ROBOT_NAMESPACE = ""
 ```
 
-Then start a Codex session and run `/mcp` to verify — you should see `agenticros` connected with **15 tools** (more if you have skills like `agenticros-skill-followme` or `agenticros-skill-find` registered). Same tools, same tool names, same JSON shapes as in Claude Code; everything in the **Tools** section below applies identically.
+Same tools, same tool names, same JSON shapes as in Claude Code; everything in the **Tools** section below applies identically.
 
 Two Codex-specific notes:
 

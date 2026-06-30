@@ -1,9 +1,11 @@
 [mcp_servers.agenticros]
-args = [
-    "-c",
-    "node packages/agenticros-claude-code/dist/index.js 2>>/tmp/agenticros-mcp.log",
-]
 command = "sh"
+args = ["-c", "node /Users/chrismatthieu/Projects/agenticros/packages/agenticros-claude-code/dist/index.js 2>>/tmp/agenticros-mcp.log"]
+enabled = true
+startup_timeout_sec = 30
 
 [mcp_servers.agenticros.env]
-AGENTICROS_ROBOT_NAMESPACE = "robot3946b404c33e4aa39a8d16deb1c5c593"
+AGENTICROS_ROBOT_NAMESPACE = ""
+
+[mcp_servers.agenticros.tools.ros2_list_topics]
+approval_mode = "approve"

@@ -23,6 +23,8 @@ import {
   readOpenclawConfig,
 } from "../util/openclaw-config.js";
 import { listSkills } from "../util/skills.js";
+import { buildCodexDoctorChecks } from "../util/codex-config.js";
+import { findMcpEntry } from "../util/mcp-discovery.js";
 
 export type Severity = "green" | "yellow" | "red";
 
@@ -238,8 +240,32 @@ export async function runDoctorChecks(): Promise<DoctorReport> {
         : `AGENTICROS_ROBOT_NAMESPACE env overrides config (set to '${envNs}')`,
       severity: shadowsSim ? "red" : "yellow",
       hint: shadowsSim
-        ? "Unset that env var (or set it to \"\" in .mcp.json / claude_desktop_config.json) so the active mode profile drives the namespace."
+        ? "Unset that env var (or set it to \"\" in .mcp.json / ~/.codex/config.toml / claude_desktop_config.json) so the active mode profile drives the namespace."
         : "Fine for real-robot mode if the value matches your robot's namespace.",
+    });
+  }
+
+  // Codex CLI MCP config.
+  const mcpEntry = findMcpEntry();
+  checks.push(...buildCodexDoctorChecks(mcpEntry, paths.repoRoot));
+
+  try {
+    const { exitCode } = await execa("codex", ["--version"], { reject: false });
+    checks.push({
+      id: "codex-cli",
+      label: exitCode === 0 ? "Codex CLI installed" : "Codex CLI not detected",
+      severity: exitCode === 0 ? "green" : "yellow",
+      hint:
+        exitCode === 0
+          ? undefined
+          : "Install from https://developers.openai.com/codex/ then run `agenticros codex setup`.",
+    });
+  } catch {
+    checks.push({
+      id: "codex-cli",
+      label: "Codex CLI not detected",
+      severity: "yellow",
+      hint: "Install from https://developers.openai.com/codex/ then run `agenticros codex setup`.",
     });
   }
 

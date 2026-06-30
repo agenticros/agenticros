@@ -2,7 +2,17 @@
   "name": "@agenticros/claude-code",
   "version": "0.0.1",
   "type": "module",
-  "description": "AgenticROS MCP server for Claude Code CLI — chat with your ROS2 robot from the terminal",
+  "description": "AgenticROS MCP server for Claude Code, Claude Desktop, Dispatch, and OpenAI Codex CLI — chat with your ROS2 robot from the terminal",
+  "keywords": [
+    "agenticros",
+    "ros2",
+    "robotics",
+    "mcp",
+    "claude",
+    "codex",
+    "openai",
+    "model-context-protocol"
+  ],
   "main": "./dist/index.js",
   "bin": {
     "agenticros-mcp": "./dist/index.js"
