@@ -47,6 +47,9 @@ docker/.env
 *.log
 npm-debug.log*
 
+# npm pack artifacts (local publish smoke tests)
+packages/agenticros-cli/*.tgz
+
 # Local skill installs (skills are separate repos; do not commit into core repo)
 skills/
 /agenticros-skill-*/
