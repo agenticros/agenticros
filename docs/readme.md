@@ -7,7 +7,7 @@ AgenticROS connects AI agent platforms to ROS2 robots through a shared core, tra
 - [Architecture](architecture.md) - system layers, deployment modes, transport abstraction, and data flow.
 - [Robot setup](robot-setup.md) - robot-side prerequisites, launch steps, OpenClaw plugin setup, and quick checks.
 - [Codex CLI setup](codex-setup.md) - register the AgenticROS MCP server for OpenAI Codex (`agenticros codex setup`).
-- [CLI reference](cli.md) - `agenticros` commands, state locations, environment variables, and troubleshooting.
+- [CLI reference](cli.md) - `agenticros` commands (including `codex setup` / `codex doctor`), state locations, environment variables, and troubleshooting.
 - [Simulation](simulation.md) - local simulation workflow, available simulated tools, sensor formats, and CI notes.
 
 ## Core features

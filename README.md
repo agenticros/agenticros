@@ -136,7 +136,7 @@ The first run launches the interactive menu:
 ? What would you like to do?
   Launch with real robot
 ❯ Launch with simulation
-  First-time setup (workspace + OpenClaw plugin + API key)
+  First-time setup (workspace + OpenClaw plugin + Codex MCP + API key)
   Manage skills (2 registered, 0 available, 0 broken)
   Stop everything
   Doctor (health check)
@@ -144,7 +144,7 @@ The first run launches the interactive menu:
   Tail logs
 ```
 
-Pick **First-time setup** once (workspace + OpenClaw plugin + API key, all
+Pick **First-time setup** once (workspace + OpenClaw plugin + optional Codex MCP + API key, all
 idempotent), then choose how you want to run:
 
 | You want to … | Pick |
@@ -154,14 +154,16 @@ idempotent), then choose how you want to run:
 | Demo a **simulated 6-DOF arm** (UR5e-shaped, per-joint position control) | **Launch with simulation → 6-DOF arm** |
 
 Once a stack is up, point any of the supported agents — OpenClaw, Claude Code,
-Claude Desktop / Dispatch, or Gemini CLI — at the same robot and start talking
+OpenAI Codex, Claude Desktop / Dispatch, or Gemini CLI — at the same robot and start talking
 to it. The CLI tracks what it spawned (pidfiles + logs under `/tmp/agenticros-*`),
 so **Stop everything** cleanly tears the demo down.
 
 Prefer scripted invocations? Every menu item maps to a direct command:
 
 ```bash
-npx agenticros init             # one-time workspace + plugin + API key
+npx agenticros init             # one-time workspace + plugin + Codex MCP + API key
+agenticros codex setup          # register AgenticROS MCP for OpenAI Codex CLI
+agenticros codex doctor         # validate ~/.codex/config.toml
 agenticros up real              # real robot stack
 agenticros up sim-amr           # simulated AMR (Gazebo + RViz, headless on Jetson)
 agenticros up sim-arm           # simulated 6-DOF arm
@@ -296,15 +298,15 @@ Full walkthrough, troubleshooting, and a "full-embed" alternative (ROS / RealSen
 
 ## Claude + AgenticROS (MCP)
 
-The same **AgenticROS MCP server** (`@agenticros/claude-code`) can drive the robot from **Claude Code** (terminal) or from the **Claude desktop app** on macOS (including **Claude Dispatch** on iPhone when paired to Claude on your Mac). Both use MCP; they use **different config files**.
+The **AgenticROS MCP server** (`@agenticros/claude-code`) drives the robot from **Claude Code** (terminal) or from the **Claude desktop app** on macOS (including **Claude Dispatch** on iPhone when paired to Claude on your Mac). **OpenAI Codex CLI** uses the same server — see **[Codex + AgenticROS](#codex--agenticros-mcp)** below. Claude clients use **different config files** than Codex (`.mcp.json` / `claude_desktop_config.json` vs `.codex/config.toml`).
 
-Shared setup:
+Shared MCP setup (Claude and Codex):
 
 1. **Build** (from repo root): `pnpm install && pnpm build`
 2. **AgenticROS config**: `~/.agenticros/config.json` — set `zenoh.routerEndpoint`, `robot.namespace`, `robot.cameraTopic`, etc. (see [packages/agenticros-claude-code/README.md](packages/agenticros-claude-code/README.md)).
 3. **Zenoh**: Run `zenohd` with the remote-api plugin (e.g. port 10000) — see `scripts/zenohd-agenticros.json5` or [docs/zenoh-agenticros.md](docs/zenoh-agenticros.md).
 
-Optional: override `robot.namespace` per MCP launch with env `**AGENTICROS_ROBOT_NAMESPACE`** (must match the robot’s topic namespace exactly; many setups use **no dashes** in the UUID segment).
+Optional: override `robot.namespace` per MCP launch with env `**AGENTICROS_ROBOT_NAMESPACE`**. Prefer leaving it empty in MCP/Codex config so `agenticros mode real|sim` drives the active profile (see [docs/codex-setup.md](docs/codex-setup.md)).
 
 ### Claude Code CLI (terminal)
 
@@ -347,6 +349,48 @@ Example `mcpServers` entry (adjust the path and namespace to your machine):
 
 Full steps, permissions (`mcp__agenticros`), and troubleshooting are in **[packages/agenticros-claude-code/README.md](packages/agenticros-claude-code/README.md)**.
 
+## Codex + AgenticROS (MCP)
+
+**OpenAI Codex CLI** is a standard MCP client — it uses the same `@agenticros/claude-code` server as Claude Code (missions, follow-me, find-object, memory, full ROS tool surface). No separate adapter package.
+
+### Quick setup
+
+```bash
+pnpm install && pnpm build          # or: npx agenticros init
+agenticros codex setup              # ~/.codex/config.toml (global)
+agenticros codex setup --project    # .codex/config.toml in repo root
+agenticros codex doctor             # validate absolute MCP path + namespace policy
+```
+
+Start Codex in your project directory, run `/mcp` — you should see **agenticros** connected with the full tool list. Then ask e.g. “List ROS2 topics” or “What do you see?”
+
+### Config files
+
+| File | Scope |
+|------|--------|
+| `~/.codex/config.toml` | Global — all Codex sessions |
+| `<project>/.codex/config.toml` | Project — when Codex runs in that directory |
+
+`agenticros codex setup` writes an **absolute path** to `packages/agenticros-claude-code/dist/index.js` (or the bundled MCP path after `npx agenticros init`). Relative paths fail because Codex does not spawn MCP servers from the repo root.
+
+Leave `AGENTICROS_ROBOT_NAMESPACE = ""` in the Codex env block so `~/.agenticros/config.json` and `agenticros mode real|sim` drive the active robot (same policy as `.mcp.json`).
+
+### Manual registration
+
+```bash
+codex mcp add agenticros -- node "$(pwd)/packages/agenticros-claude-code/dist/index.js"
+```
+
+Use an absolute path if not run from the repo root.
+
+### Troubleshooting
+
+- **`/mcp` does not list agenticros** → run `agenticros codex setup`; check `agenticros codex doctor`
+- **Transport timeout** → bring up Zenoh/rosbridge or run `agenticros up sim-amr` / `agenticros up real`
+- **Logs** → `/tmp/agenticros-mcp.log`
+
+Full guide: **[docs/codex-setup.md](docs/codex-setup.md)**.
+
 ## Gemini CLI
 
 Use **Google Gemini** to chat with your robot from the terminal (same ROS2 tools as Claude Code, no MCP).
@@ -362,7 +406,7 @@ See **[packages/agenticros-gemini/README.md](packages/agenticros-gemini/README.m
 
 ## Memory (optional)
 
-AgenticROS can give every adapter a **shared, persistent, cross-process** long-term memory so facts you teach the robot from one agent are immediately available in the others — Claude Desktop, Claude Code, Gemini CLI, OpenClaw chat. Off by default. Two backends:
+AgenticROS can give every adapter a **shared, persistent, cross-process** long-term memory so facts you teach the robot from one agent are immediately available in the others — Claude Desktop, Claude Code, OpenAI Codex, Gemini CLI, OpenClaw chat. Off by default. Two backends:
 
 - **`local`** — zero deps, JSON-on-disk at `~/.agenticros/memory.json`, keyword + recency search. Enable with one config flag.
 - **`mem0`** — semantic search via the pure-Node [`mem0ai`](https://www.npmjs.com/package/mem0ai) package (`pnpm add mem0ai`); file-backed vector store at `~/.mem0/vector_store.db` (shared across all processes on the host, no server to run); embedder auto-detects Ollama (`http://localhost:11434`) → `OPENAI_API_KEY` → clear error.
@@ -378,7 +422,7 @@ pnpm add mem0ai
 ollama pull nomic-embed-text   # ~270 MB embedder model
 ```
 
-Add `{ "memory": { "enabled": true, "backend": "mem0" } }` to `~/.agenticros/config.json` (or the OpenClaw config UI). Restart the gateway / MCP client. Then ask Claude Desktop *"remember that I have a RealSense D435i for eyes"* and ask OpenClaw *"what do I have for eyes?"* — same fact, both agents.
+Add `{ "memory": { "enabled": true, "backend": "mem0" } }` to `~/.agenticros/config.json` (or the OpenClaw config UI). Restart the gateway / MCP client. Then ask Claude Desktop *"remember that I have a RealSense D435i for eyes"* and ask Codex or OpenClaw *"what do I have for eyes?"* — same fact, every agent.
 
 ## Skills
 

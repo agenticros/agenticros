@@ -5,7 +5,7 @@
 AgenticROS is a ROS2 integration for AI agent platforms. It provides a **core** (transport, types, config) and **adapters** per platform.
 
 - **OpenClaw adapter**: OpenClaw gateway plugin (tools, config UI, teleop HTTP routes)
-- **Claude Code adapter**: MCP server over stdio (this environment)
+- **Claude Code adapter**: MCP server over stdio (Claude Code, Claude Desktop, Dispatch, and OpenAI Codex CLI)
 - **Gemini adapter**: Standalone CLI using Gemini function calling
 
 ## IMPORTANT: Controlling the robot from Claude Code
@@ -21,7 +21,7 @@ Available MCP tools:
 - `ros2_param_get` / `ros2_param_set` — get/set node parameters
 - `ros2_camera_snapshot` — capture a camera image
 - `ros2_depth_distance` — sample depth at the center of the depth image
-- `memory_remember` / `memory_recall` / `memory_forget` / `memory_status` — cross-adapter long-term memory (only when `config.memory.enabled` is true). Shared with OpenClaw, Claude Desktop, and Gemini for the same robot via `~/.mem0/vector_store.db` (mem0 backend) or `~/.agenticros/memory.json` (local backend). See `docs/memory.md`.
+- `memory_remember` / `memory_recall` / `memory_forget` / `memory_status` — cross-adapter long-term memory (only when `config.memory.enabled` is true). Shared with OpenClaw, Claude Desktop, Codex CLI, and Gemini for the same robot via `~/.mem0/vector_store.db` (mem0 backend) or `~/.agenticros/memory.json` (local backend). See `docs/memory.md`.
 
 **Robot namespace**: `3946b404-c33e-4aa3-9a8d-16deb1c5c593`
 **cmd_vel topic**: `/3946b404-c33e-4aa3-9a8d-16deb1c5c593/cmd_vel`
@@ -33,7 +33,7 @@ packages/
   core/                    # @agenticros/core — transport, types, Zod config (no platform deps)
   ros-camera/              # @agenticros/ros-camera — shared camera snapshot encoding (Image / CompressedImage)
   agenticros/              # @agenticros/agenticros — OpenClaw plugin
-  agenticros-claude-code/  # @agenticros/claude-code — MCP server (stdio)
+  agenticros-claude-code/  # @agenticros/claude-code — MCP server (stdio; Claude Code, Desktop, Dispatch, Codex CLI)
   agenticros-gemini/       # @agenticros/gemini — Gemini CLI
 ros2_ws/src/
   agenticros_msgs/         # Custom ROS2 messages & services
@@ -101,7 +101,7 @@ Shared camera snapshot encoding used by all adapters — handles both `sensor_ms
 ## Adapters
 
 - **OpenClaw** (`packages/agenticros`): Plugin for the OpenClaw gateway — tools, config UI, teleop web page. See "Loading the OpenClaw plugin" below.
-- **Claude Code CLI** (`packages/agenticros-claude-code`): MCP server over stdio for **Claude Code** (terminal) and the **Claude desktop app** on macOS (and **Claude Dispatch** on iPhone when paired to the Mac). Desktop MCP config: `~/Library/Application Support/Claude/claude_desktop_config.json` — use an absolute path to `dist/index.js`. Setup: [packages/agenticros-claude-code/README.md](packages/agenticros-claude-code/README.md).
+- **Claude Code CLI** (`packages/agenticros-claude-code`): MCP server over stdio for **Claude Code** (terminal), **Claude Desktop** / **Dispatch**, and **OpenAI Codex CLI**. Claude: `.mcp.json` or `~/Library/Application Support/Claude/claude_desktop_config.json`. Codex: `agenticros codex setup` → `~/.codex/config.toml`. Setup: [packages/agenticros-claude-code/README.md](packages/agenticros-claude-code/README.md), [docs/codex-setup.md](docs/codex-setup.md).
 - **Gemini CLI** (`packages/agenticros-gemini`): Standalone CLI using Google Gemini and function calling to chat with the robot (no MCP). Setup: [packages/agenticros-gemini/README.md](packages/agenticros-gemini/README.md). Requires `GEMINI_API_KEY` or `GOOGLE_API_KEY`.
 
 ## Build & development commands
@@ -177,6 +177,8 @@ Key config fields (all have defaults in `packages/core/src/config.ts`):
 
 **Desktop app**: `~/Library/Application Support/Claude/claude_desktop_config.json` — use absolute path to `dist/index.js`.
 
+**Codex CLI**: `~/.codex/config.toml` or project `.codex/config.toml` — run `agenticros codex setup` (absolute path required). See [docs/codex-setup.md](docs/codex-setup.md).
+
 MCP server logs: `/tmp/agenticros-mcp.log`
 
 ## Adding a new ROS2 tool
@@ -242,6 +244,8 @@ Clamps are enforced in `packages/agenticros-claude-code/src/safety.ts` and `pack
 | File | Contents |
 |------|---------|
 | `docs/architecture.md` | Full system architecture |
+| `docs/codex-setup.md` | OpenAI Codex CLI setup (`agenticros codex setup`) |
+| `docs/cli.md` | `agenticros` CLI reference (includes `codex setup` / `codex doctor`) |
 | `docs/skills.md` | Skill development guide |
 | `docs/robot-setup.md` | Hardware/software setup |
 | `docs/zenoh-agenticros.md` | Zenoh integration |
