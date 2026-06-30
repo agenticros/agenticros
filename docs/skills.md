@@ -2,7 +2,7 @@
 
 Skills are optional packages that add tools and behaviors to the AgenticROS plugin. They're loaded at gateway start from **`skillPackages`** (npm package names) and **`skillPaths`** (directories). Each skill reads its config from **`config.skills.<skillId>`** and registers tools with the plugin.
 
-A central marketplace at **[skills.agenticros.com](https://skills.agenticros.com)** lists every published skill and supplies the install descriptors the CLI uses. The marketplace stores **metadata only** — every skill's source code lives in its own GitHub repository.
+A central marketplace at **[skills.agenticros.com](https://skills.agenticros.com)** lists every published skill and supplies the install descriptors the CLI uses. Each skill has a **namespaced ref** `owner/skill-id` (your GitHub login + `agenticros.id`), e.g. `chrismatthieu/followme`. Legacy flat slugs still resolve for older listings. The marketplace stores **metadata only** — every skill's source code lives in its own GitHub repository.
 
 ## Quick install — from the marketplace
 
@@ -13,13 +13,59 @@ npx agenticros skills search follow
 # One-step install: clones the GitHub repo into a sibling of your
 # agenticros checkout, runs `pnpm install && pnpm build`, registers it
 # with your OpenClaw config, and syncs the contracts.tools allowlist.
-npx agenticros skills install followme
+npx agenticros skills install chrismatthieu/followme
 
 # Restart your gateway to load the new skill.
 systemctl --user restart openclaw-gateway.service
 ```
 
-Run `agenticros skills` for the full subcommand list (search/install/list/discover/add/remove/sync).
+Run `agenticros skills` for the full subcommand list (create · dev · publish · search · install · list · discover · add · remove · sync).
+
+## Create and publish a skill (CLI)
+
+### Quick start (hello world)
+
+```bash
+npx agenticros create-skill my-first-skill
+cd agenticros-skill-my-first-skill
+npm install
+npm run dev          # → Skill loaded: my-first-skill
+```
+
+The default `hello` template is for **local learning** (`agenticros.tutorial: true`). It stays off the public browse catalog unless you customize and publish with `--graduate`.
+
+### Progressive templates
+
+```bash
+npx agenticros create-skill wave-hand --template robot
+npx agenticros create-skill describe-scene --template camera
+npx agenticros create-skill measure-distance --template depth
+```
+
+### Publish to the marketplace
+
+```bash
+cd agenticros-skill-wave-hand
+npx agenticros publish
+```
+
+Requires `gh auth login -s public_repo` (or `GH_TOKEN`). The CLI validates `package.json`, builds, pushes to GitHub, and submits to [skills.agenticros.com](https://skills.agenticros.com).
+
+Published skills use **namespaced URLs**: `https://skills.agenticros.com/<github-handle>/<skill-id>` (e.g. `chrismatthieu/wave-hand`). Install with:
+
+```bash
+npx agenticros skills install chrismatthieu/wave-hand
+```
+
+Maintainer profile: `https://skills.agenticros.com/chrismatthieu`
+
+### Web submit (alternative)
+
+1. Sign in at **[skills.agenticros.com/login](https://skills.agenticros.com/login)** with GitHub.
+2. Open **Submit a skill** and paste your repo URL.
+3. Re-sync from the skill edit page after pushing updates.
+
+See [`agenticros-skill-followme`](https://github.com/agenticros/agenticros-skill-followme) on the marketplace at [chrismatthieu/followme](https://skills.agenticros.com/chrismatthieu/followme) as a working reference.
 
 ## Skill contract
 
@@ -70,6 +116,7 @@ Every skill is an npm package whose `package.json` declares a single `agenticros
 | `categories` | optional | List of marketplace facets (e.g. `navigation`, `vision`, `manipulation`, `human-interaction`, `search`, `audio`, `communication`, `telemetry`). |
 | `screenshots` | recommended | Array of repo-relative paths to PNG/JPG previews shown on the marketplace listing. |
 | `demoVideoUrl` | optional | Link to a hosted demo video. |
+| `tutorial` | optional | When `true`, the skill is a learning scaffold. Tutorial listings stay **unlisted** on the public browse catalog unless the author publishes with `agenticros publish --graduate` after customizing the source. |
 | `capabilities` | recommended | Capability registry entries used by the planner. See *Capabilities* below. |
 
 ### Code
@@ -172,49 +219,3 @@ Or paste the OpenClaw config by hand:
   }
 }
 ```
-
-## Create and publish a skill (CLI)
-
-### Quick start (hello world)
-
-```bash
-npx agenticros create-skill my-first-skill
-cd agenticros-skill-my-first-skill
-npm install
-npm run dev          # → Skill loaded: my-first-skill
-```
-
-The default `hello` template is for **local learning** (`agenticros.tutorial: true`). It stays off the public browse catalog unless you customize and publish with `--graduate`.
-
-### Progressive templates
-
-```bash
-npx agenticros create-skill wave-hand --template robot
-npx agenticros create-skill describe-scene --template camera
-npx agenticros create-skill measure-distance --template depth
-```
-
-### Publish to the marketplace
-
-```bash
-cd agenticros-skill-wave-hand
-npx agenticros publish
-```
-
-Requires `gh auth login -s public_repo` (or `GH_TOKEN`). The CLI validates `package.json`, builds, pushes to GitHub, and submits to [skills.agenticros.com](https://skills.agenticros.com).
-
-Published skills use **namespaced URLs**: `https://skills.agenticros.com/<github-handle>/<skill-id>` (e.g. `chrismatthieu/wave-hand`). Install with:
-
-```bash
-npx agenticros skills install chrismatthieu/wave-hand
-```
-
-Maintainer profile: `https://skills.agenticros.com/chrismatthieu`
-
-### Web submit (alternative)
-
-1. Sign in at **[skills.agenticros.com/login](https://skills.agenticros.com/login)** with GitHub.
-2. Open **Submit a skill** and paste your repo URL.
-3. Re-sync from the skill edit page after pushing updates.
-
-See [`agenticros-skill-followme`](https://github.com/agenticros/agenticros-skill-followme) as a working reference.

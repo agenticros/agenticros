@@ -381,13 +381,17 @@ Add `{ "memory": { "enabled": true, "backend": "mem0" } }` to `~/.agenticros/con
 
 ## Skills
 
-AgenticROS **skills** are optional packages that add tools and behaviors to the plugin (e.g. `follow_robot`, `find_object`). They are loaded at OpenClaw gateway start. **[AgenticROS Skills](https://github.com/agenticros/agenticros-skills)** is a curated list — use it to discover skills for your robot and to submit your own.
+AgenticROS **skills** are optional packages that add tools and behaviors to the plugin (e.g. `follow_person`, `find_object`). They are loaded at OpenClaw gateway start. Browse and install from **[skills.agenticros.com](https://skills.agenticros.com)**, or scaffold and publish your own with the CLI.
 
 ### Managing skills with the CLI
 
 The `agenticros skills` command (and the **Manage skills** menu entry) does everything for you: it scans the usual locations for clones, edits `~/.openclaw/openclaw.json`, refreshes the plugin manifest's `contracts.tools` allowlist, and reminds you to bounce the gateway.
 
 ```bash
+# Install from the marketplace (owner/skill-id ref)
+npx agenticros skills search follow
+npx agenticros skills install chrismatthieu/followme
+
 agenticros skills                       # list registered + cloned-but-unregistered
 agenticros skills discover              # interactive picker over candidates on disk
 agenticros skills add <path-or-name>    # register a clone (path) or npm package
@@ -395,7 +399,15 @@ agenticros skills remove <id-or-name>   # unregister
 agenticros skills sync                  # refresh OpenClaw contracts.tools allowlist
 ```
 
-A typical first-run looks like:
+**Create and publish** a new skill:
+
+```bash
+npx agenticros create-skill my-skill --template robot
+cd agenticros-skill-my-skill && npm install && npm run dev
+npx agenticros publish
+```
+
+A typical manual install (without the marketplace) looks like:
 
 ```bash
 # clone whichever skills you want, anywhere near the repo
@@ -441,7 +453,7 @@ Per-skill behaviour lives under `config.skills.<skillId>` (e.g. `config.skills.f
 
 ### Contract & writing your own skill
 
-A skill is a Node package with an `"agenticros": { "id": "..." }` block in `package.json` and a `registerSkill(api, config, context)` export from `main`. Publish it to **[skills.agenticros.com](https://skills.agenticros.com)** so others can install it with `npx agenticros skills install <slug>`. See **[docs/skills.md](docs/skills.md)** for the full contract and **[agenticros-skill-followme](https://github.com/agenticros/agenticros-skill-followme)** as a reference template.
+A skill is a Node package with an `"agenticros": { "id": "..." }` block in `package.json` and a `registerSkill(api, config, context)` export from `main`. Scaffold with `npx agenticros create-skill`, publish to **[skills.agenticros.com](https://skills.agenticros.com)** with `npx agenticros publish`, and install with `npx agenticros skills install <owner/skill-id>` (e.g. `chrismatthieu/followme`). See **[docs/skills.md](docs/skills.md)** for the full contract and **[agenticros-skill-followme](https://github.com/agenticros/agenticros-skill-followme)** ([marketplace listing](https://skills.agenticros.com/chrismatthieu/followme)) as a reference template.
 
 ## Strategy & vision
 

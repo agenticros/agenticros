@@ -481,14 +481,14 @@ async function searchAction(rawQuery: string | undefined): Promise<void> {
 }
 
 /**
- * `agenticros skills install <slug>` — pull install metadata from the
+ * `agenticros skills install <owner/skill>` — pull install metadata from the
  * marketplace, clone+build the skill repo, and register it locally.
  */
 async function installAction(rawRef: string | undefined): Promise<void> {
   const ref = (rawRef ?? "").trim().toLowerCase();
   if (!ref) {
     err("Usage: agenticros skills install <owner/skill>");
-    err("Example: agenticros skills install agenticros/followme");
+    err("Example: agenticros skills install chrismatthieu/followme");
     err("Find skills at https://skills.agenticros.com or via `agenticros skills search`.");
     process.exit(2);
   }

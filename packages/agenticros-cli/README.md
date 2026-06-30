@@ -59,7 +59,7 @@ Three ways, listed easiest first:
 | `agenticros create-skill <slug>` | Scaffold a new skill package in cwd. |
 | `agenticros publish` | Publish skill in cwd to skills.agenticros.com. |
 | `agenticros skills dev` | Local skill dev harness (`npm run dev` in skill repos). |
-| `agenticros skills install <owner/skill>` | Install from the marketplace. |
+| `agenticros skills install <owner/skill>` | Install from the marketplace (e.g. `chrismatthieu/followme`). |
 | `agenticros --help` | Full help text. |
 
 ## How `init` works

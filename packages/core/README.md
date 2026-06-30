@@ -21,6 +21,16 @@ You don't normally use it directly — you use one of the adapters that depends 
 
 A skill is an npm package that registers tools the AI agent can call on your robot.
 
+**Quick start** — scaffold, dev locally, publish:
+
+```bash
+npx agenticros create-skill my-skill
+cd agenticros-skill-my-skill && npm install && npm run dev
+npx agenticros publish
+```
+
+Or start from scratch with `@agenticros/core`:
+
 ```bash
 npm install --save @agenticros/core
 ```
@@ -75,10 +85,10 @@ export const registerSkill: RegisterSkill = (api, _config, _context) => {
 };
 ```
 
-Submit your skill to the marketplace at **[skills.agenticros.com/submit](https://skills.agenticros.com/submit)** — sign in with GitHub, paste your repo URL, and your skill becomes installable with:
+Publish to the marketplace with `npx agenticros publish`, or submit via **[skills.agenticros.com/submit](https://skills.agenticros.com/submit)**. Published skills use namespaced refs `owner/skill-id` (your GitHub login + `agenticros.id`):
 
 ```bash
-npx agenticros skills install myskill
+npx agenticros skills install your-handle/myskill
 ```
 
 See the [skills contract & guide](https://github.com/agenticros/agenticros/blob/main/docs/skills.md) for the full reference.

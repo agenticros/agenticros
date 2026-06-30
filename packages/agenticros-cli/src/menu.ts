@@ -240,7 +240,7 @@ async function skillsSubmenu(): Promise<void> {
     }
     if (action === "install") {
       const slug = await input({
-        message: "Marketplace ref to install (e.g. agenticros/followme):",
+        message: "Marketplace ref to install (e.g. chrismatthieu/followme):",
         validate: (v) => v.trim().length > 0 || "Required",
       });
       await skillsCommand({ action: "install", arg: slug.trim() });
