@@ -121,16 +121,15 @@ See [packages/agenticros-claude-code/README.md](../packages/agenticros-claude-co
 | Transport timeout | Ensure Zenoh/rosbridge is up; see `agenticros doctor` |
 | Logs | `/tmp/agenticros-mcp.log` |
 
-## Codex vs OpenClaw vs Gemini
+## Codex vs OpenClaw vs Gemini vs Hermes
 
-| | Codex | Claude Code | OpenClaw | Gemini CLI |
-|--|-------|-------------|----------|------------|
-| Protocol | MCP | MCP | OpenClaw plugin | Function calling |
-| Messaging / teleop | No | No | Yes | No |
-| External skills | Built-in missions only | Built-in missions only | Dynamic skill loader | Subset of tools |
-| Setup | `agenticros codex setup` | `.mcp.json` | `agenticros init` plugin step | `agenticros-gemini` |
+| | Codex | Claude Code | OpenClaw | Gemini CLI | Hermes |
+|--|-------|-------------|----------|------------|--------|
+| Protocol | MCP | MCP | OpenClaw plugin | Function calling | MCP |
+| Messaging / teleop | No | No | Yes | No | Yes |
+| Setup | `agenticros codex setup` | `.mcp.json` | `agenticros init` plugin step | `agenticros-gemini` | `agenticros hermes setup` |
 
-For WhatsApp/Telegram/teleop, use OpenClaw (which can run OpenAI models). For terminal coding agents, Codex and Claude Code share the same MCP server.
+For WhatsApp/Telegram/teleop, use OpenClaw (which can run OpenAI models). For terminal coding agents, Codex and Claude Code share the same MCP server. For a model-agnostic messaging gateway, use Hermes + MCP.
 
 ## Future: headless OpenAI CLI
 

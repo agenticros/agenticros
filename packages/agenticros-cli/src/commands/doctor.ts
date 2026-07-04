@@ -24,7 +24,9 @@ import {
 } from "../util/openclaw-config.js";
 import { listSkills } from "../util/skills.js";
 import { buildCodexDoctorChecks } from "../util/codex-config.js";
+import { buildHermesDoctorChecks } from "../util/hermes-config.js";
 import { findMcpEntry } from "../util/mcp-discovery.js";
+import { hermesOnPath } from "./hermes.js";
 
 export type Severity = "green" | "yellow" | "red";
 
@@ -268,6 +270,19 @@ export async function runDoctorChecks(): Promise<DoctorReport> {
       hint: "Install from https://developers.openai.com/codex/ then run `agenticros codex setup`.",
     });
   }
+
+  // Hermes Agent MCP config.
+  checks.push(...buildHermesDoctorChecks(mcpEntry));
+
+  const hasHermes = await hermesOnPath();
+  checks.push({
+    id: "hermes-cli",
+    label: hasHermes ? "Hermes CLI installed" : "Hermes CLI not detected",
+    severity: hasHermes ? "green" : "yellow",
+    hint: hasHermes
+      ? undefined
+      : "Install from https://github.com/NousResearch/hermes-agent then run `agenticros hermes setup`.",
+  });
 
   // OpenAI key.
   const home = process.env["HOME"] ?? "";

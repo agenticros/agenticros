@@ -3,14 +3,15 @@
 > agentic AI for ROS-powered robots
 
 `agenticros` is the unified command-line tool for AgenticROS — bring up a real
-robot or a simulated one, drive it from Claude Code, OpenAI Codex, or OpenClaw,
+robot or a simulated one, drive it from Claude Code, OpenAI Codex, Hermes Agent, or OpenClaw,
 and keep your workspace healthy from a single binary.
 
 ```bash
 # Brand new machine: one command end-to-end
-npx agenticros init     # workspace + plugin + Codex MCP + API key + doctor
+npx agenticros init     # workspace + plugin + Codex/Hermes MCP + API key + doctor
 agenticros              # interactive menu
 agenticros codex setup  # register AgenticROS MCP for OpenAI Codex CLI
+agenticros hermes setup # register AgenticROS MCP for Hermes Agent
 agenticros up real      # bring up the real-robot stack
 agenticros up sim-amr   # bring up a simulated 2-wheel AMR
 agenticros up sim-arm   # bring up a simulated 6-DOF arm
@@ -56,6 +57,8 @@ Three ways, listed easiest first:
 | `agenticros doctor` | Coloured health-check table; `--json` for CI. |
 | `agenticros codex setup` | Register AgenticROS MCP in `~/.codex/config.toml` (or `--project`). |
 | `agenticros codex doctor` | Validate Codex MCP config paths and namespace policy. |
+| `agenticros hermes setup` | Register AgenticROS MCP in `~/.hermes/config.yaml`. |
+| `agenticros hermes doctor` | Validate Hermes MCP config paths and namespace policy. |
 | `agenticros status` | Snapshot of running components + last mode. |
 | `agenticros logs [target]` | Tail `camera` / `mcp` / `sim` / `rosbridge` / `gateway`. |
 | `agenticros config [show\|set\|edit\|reset]` | Read or edit `~/.agenticros/config.json`. |
@@ -77,7 +80,8 @@ walks through:
 5. Robot config (namespace, transport mode, sample `~/.agenticros/config.json`)
 6. OpenAI API key (paste once → `scripts/configure_agenticros.sh`)
 7. Codex MCP config (optional — `~/.codex/config.toml` and project `.codex/config.toml`)
-8. Final `agenticros doctor` summary
+8. Hermes MCP config (optional — `~/.hermes/config.yaml`)
+9. Final `agenticros doctor` summary
 
 Every step is **idempotent**: it checks doctor first and skips the work if
 nothing is missing. Use `agenticros init --force` to redo everything.
@@ -87,6 +91,7 @@ nothing is missing. Use `agenticros init --force` to redo everything.
 - `~/.agenticros/config.json` — AgenticROS runtime config (transport mode,
   robot namespace, safety limits, teleop defaults). Edited via `agenticros config`.
 - `~/.codex/config.toml` — OpenAI Codex CLI MCP servers (written by `agenticros codex setup`).
+- `~/.hermes/config.yaml` — Hermes Agent MCP servers (written by `agenticros hermes setup`).
 - `~/.agenticros/cli-state.json` — CLI's own state (last mode, last namespace,
   for the menu's "(yesterday)" hint).
 - `~/agenticros/` — the install dir when invoked via `npx`. Contains a copy of

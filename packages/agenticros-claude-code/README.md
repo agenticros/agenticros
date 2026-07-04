@@ -136,6 +136,41 @@ Two Codex-specific notes:
 - **Absolute path required.** Codex's working directory at server-spawn time is not the AgenticROS repo root, so `args = ["packages/agenticros-claude-code/dist/index.js"]` will fail. Use the full absolute path.
 - **Project-scoped config.** Codex also supports a `.codex/config.toml` in a project directory (and a `mcp.json` in cwd on recent builds) — handy for per-repo MCP setups when you don't want `agenticros` enabled globally. See OpenAI's [Codex config reference](https://developers.openai.com/codex/config-reference) for the precedence rules.
 
+## Hermes Agent
+
+The same MCP server works unmodified with **[Hermes Agent](https://github.com/NousResearch/hermes-agent)** — Hermes is a model-agnostic MCP client (OpenRouter, Ollama, Anthropic, OpenAI, 200+ providers).
+
+**Option A — `agenticros hermes setup` (recommended)**
+
+```bash
+agenticros hermes setup
+agenticros hermes doctor
+```
+
+**Option B — edit YAML directly**
+
+```yaml
+# ~/.hermes/config.yaml
+mcp_servers:
+  agenticros:
+    command: "node"
+    args: ["/ABSOLUTE/PATH/TO/agenticros/packages/agenticros-claude-code/dist/index.js"]
+    env:
+      AGENTICROS_ROBOT_NAMESPACE: ""
+    connect_timeout: 60
+    timeout: 120
+```
+
+Then `/reload-mcp` in Hermes or restart the agent. Verify with `hermes mcp test agenticros`.
+
+Hermes-specific notes:
+
+- **Absolute path required.** Same as Codex — Hermes does not spawn MCP servers from the repo root.
+- **Empty namespace.** Leave `AGENTICROS_ROBOT_NAMESPACE: ""` so `agenticros mode real|sim` drives the active robot (same policy as Codex).
+- **Model choice is independent.** OpenRouter, Ollama, or any other Hermes LLM provider does not change AgenticROS MCP setup.
+
+Full guide: [docs/hermes-setup.md](../../docs/hermes-setup.md).
+
 ## Claude desktop app + Claude Dispatch (iOS)
 
 The Claude **desktop** app uses a different MCP config file than Claude Code:

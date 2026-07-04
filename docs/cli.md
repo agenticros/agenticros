@@ -66,7 +66,8 @@ skipped (with a checkmark) when already done:
 5. Robot config (writes `~/.agenticros/config.json`)
 6. OpenAI API key (paste once → `scripts/configure_agenticros.sh`)
 7. Codex MCP config (optional — `agenticros codex setup` for `~/.codex/config.toml` and project `.codex/config.toml`)
-8. Final `agenticros doctor` summary
+8. Hermes MCP config (optional — `agenticros hermes setup` for `~/.hermes/config.yaml`)
+9. Final `agenticros doctor` summary
 
 Pass `--force` to re-run every step regardless of state.
 
@@ -85,7 +86,8 @@ same report as a structured object for CI / scripting:
 Exits non-zero if any check is red.
 
 Checks include MCP server build status, OpenClaw plugin health, **Codex MCP config**
-(`~/.codex/config.toml` path and namespace policy), and Codex CLI presence on `PATH`.
+(`~/.codex/config.toml` path and namespace policy), **Hermes MCP config**
+(`~/.hermes/config.yaml`), and Codex / Hermes CLI presence on `PATH`.
 
 ### `agenticros codex setup [--project]`
 
@@ -105,6 +107,20 @@ Also offered as an optional step during `agenticros init`.
 Validate Codex MCP configuration: global and (when in a workspace) project `.codex/config.toml`, MCP binary path, and namespace policy. Exits non-zero on red checks. With `--json`, emits structured output for scripting.
 
 See **[docs/codex-setup.md](codex-setup.md)** for the full Codex onboarding guide.
+
+### `agenticros hermes setup`
+
+Register the AgenticROS MCP server for **[Hermes Agent](https://github.com/NousResearch/hermes-agent)**:
+
+Writes `mcp_servers.agenticros` to `~/.hermes/config.yaml` with an **absolute path** to the MCP server binary and `AGENTICROS_ROBOT_NAMESPACE: ""` so `agenticros mode real|sim` drives the active robot namespace.
+
+Also offered as an optional step during `agenticros init`. After setup, run `/reload-mcp` in Hermes or `hermes mcp test agenticros`.
+
+### `agenticros hermes doctor [--json]`
+
+Validate Hermes MCP configuration: `~/.hermes/config.yaml`, MCP binary path, and namespace policy. Exits non-zero on red checks. With `--json`, emits structured output for scripting.
+
+See **[docs/hermes-setup.md](hermes-setup.md)** for the full Hermes onboarding guide.
 
 ### `agenticros status [--json]`
 
@@ -134,6 +150,7 @@ Read or edit `~/.agenticros/config.json`. Actions:
 |---|---|---|
 | `~/.agenticros/config.json` | User | AgenticROS runtime config (transport mode, namespace, safety limits). |
 | `~/.agenticros/cli-state.json` | CLI | Last-used mode/namespace for the menu's "(yesterday)" hint. |
+| `~/.hermes/config.yaml` | Hermes Agent | MCP server registrations (written by `agenticros hermes setup`). |
 | `~/.codex/config.toml` | Codex CLI | MCP server registrations (written by `agenticros codex setup`). |
 | `.codex/config.toml` | Codex CLI | Project-scoped MCP config (written by `agenticros codex setup --project`). |
 | `~/agenticros/` | CLI (npm-install mode) | Copy of the monorepo, with built dist + colcon install. |
@@ -166,9 +183,11 @@ Read or edit `~/.agenticros/config.json`. Actions:
 
 - **`doctor` shows red checks** → run `agenticros init` to walk through every
   step. Re-run `doctor` afterward. For Codex-specific issues, run
-  `agenticros codex doctor`.
+  `agenticros codex doctor`. For Hermes, run `agenticros hermes doctor`.
 - **Codex `/mcp` does not list agenticros** → run `agenticros codex setup`
   (absolute MCP path required). See [codex-setup.md](codex-setup.md).
+- **Hermes MCP tools missing** → run `agenticros hermes setup`, then `/reload-mcp`
+  in Hermes. See [hermes-setup.md](hermes-setup.md).
 - **`up` exits immediately** → `agenticros logs <component>` (the CLI now
   records where every child wrote its output) and read the error in context.
 - **`up sim-amr` warns "scripts/sim/run_sim.sh not found"** → simulation

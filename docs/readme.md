@@ -7,7 +7,8 @@ AgenticROS connects AI agent platforms to ROS2 robots through a shared core, tra
 - [Architecture](architecture.md) - system layers, deployment modes, transport abstraction, and data flow.
 - [Robot setup](robot-setup.md) - robot-side prerequisites, launch steps, OpenClaw plugin setup, and quick checks.
 - [Codex CLI setup](codex-setup.md) - register the AgenticROS MCP server for OpenAI Codex (`agenticros codex setup`).
-- [CLI reference](cli.md) - `agenticros` commands (including `codex setup` / `codex doctor`), state locations, environment variables, and troubleshooting.
+- [Hermes Agent setup](hermes-setup.md) - register the AgenticROS MCP server for Hermes (`agenticros hermes setup`).
+- [CLI reference](cli.md) - `agenticros` commands (including `codex setup` / `codex doctor` and `hermes setup` / `hermes doctor`), state locations, environment variables, and troubleshooting.
 - [Simulation](simulation.md) - local simulation workflow, available simulated tools, sensor formats, and CI notes.
 
 ## Core features
@@ -47,7 +48,7 @@ The main packages are organized as:
 - `packages/core` - transport interfaces, config schema, shared types, and transport factories.
 - `packages/ros-camera` - shared camera snapshot encoding.
 - `packages/agenticros` - OpenClaw plugin, config UI, tools, routes, and teleop.
-- `packages/agenticros-claude-code` - MCP server used by Codex and other MCP clients.
+- `packages/agenticros-claude-code` - MCP server used by Codex, Hermes, and other MCP clients.
 - `packages/agenticros-gemini` - Gemini CLI adapter.
 - `ros2_ws/src` - ROS2 messages, discovery, WebRTC agent, and robot-side mission nodes.
 

@@ -24,6 +24,7 @@ import { publishSkillCommand } from "./commands/publish-skill.js";
 import { skillsDevCommand } from "./commands/skills-dev.js";
 import { robotsCommand } from "./commands/robots.js";
 import { codexDoctorCommand, codexSetupCommand } from "./commands/codex.js";
+import { hermesDoctorCommand, hermesSetupCommand } from "./commands/hermes.js";
 import { runMenu } from "./menu.js";
 import { err } from "./util/logger.js";
 import { readFileSync } from "node:fs";
@@ -211,6 +212,26 @@ codexCmd
   .option("--json", "Emit JSON instead of a table", false)
   .action(async (opts: { json?: boolean }) => {
     const exitCode = await codexDoctorCommand(opts);
+    if (exitCode !== 0) process.exit(exitCode);
+  });
+
+const hermesCmd = program
+  .command("hermes")
+  .description("Configure Hermes Agent to use the AgenticROS MCP server.");
+
+hermesCmd
+  .command("setup")
+  .description("Register agenticros MCP in ~/.hermes/config.yaml.")
+  .action(async () => {
+    await hermesSetupCommand();
+  });
+
+hermesCmd
+  .command("doctor")
+  .description("Validate Hermes MCP config (path, namespace policy, MCP binary).")
+  .option("--json", "Emit JSON instead of a table", false)
+  .action(async (opts: { json?: boolean }) => {
+    const exitCode = await hermesDoctorCommand(opts);
     if (exitCode !== 0) process.exit(exitCode);
   });
 

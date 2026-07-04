@@ -10,7 +10,8 @@
  *   5. Robot config      -> prompt namespace + transport, write ~/.agenticros/config.json
  *   6. OpenAI key        -> prompt + scripts/configure_agenticros.sh
  *   7. Codex MCP         -> agenticros codex setup (optional)
- *   8. Doctor summary
+ *   8. Hermes MCP        -> agenticros hermes setup (optional)
+ *   9. Doctor summary
  *
  * Reuses the existing shell scripts as subprocesses (no logic duplication).
  */
@@ -24,6 +25,7 @@ import { execa } from "execa";
 
 import { runDoctorChecks } from "./doctor.js";
 import { codexOnPath, codexSetupCommand } from "./codex.js";
+import { hermesOnPath, hermesSetupCommand } from "./hermes.js";
 import { isWindows } from "../util/env.js";
 import { getCliPaths, isAgenticrosMonorepo, resetPathsCache } from "../util/paths.js";
 import { header, info, ok, warn, err, dim, withSpinner } from "../util/logger.js";
@@ -231,6 +233,24 @@ export async function initCommand(opts: InitOptions): Promise<void> {
     }
   } else {
     dim("Codex CLI not on PATH — skip MCP setup. Run `agenticros codex setup` later.");
+  }
+
+  // Step: Hermes MCP (optional — same MCP server as Claude Code / Codex).
+  const hasHermesCli = await hermesOnPath();
+  if (hasHermesCli || opts.force) {
+    const wantHermes = await confirm({
+      message: hasHermesCli
+        ? "Configure Hermes Agent to use the AgenticROS MCP server?"
+        : "Configure Hermes MCP in ~/.hermes/config.yaml? (Hermes CLI not on PATH yet)",
+      default: hasHermesCli,
+    });
+    if (wantHermes) {
+      await runStep("Configuring Hermes MCP", async () => {
+        await hermesSetupCommand({ quiet: true });
+      });
+    }
+  } else {
+    dim("Hermes CLI not on PATH — skip MCP setup. Run `agenticros hermes setup` later.");
   }
 
   // Step: doctor summary.
