@@ -9,3 +9,9 @@ AGENTICROS_ROBOT_NAMESPACE = ""
 
 [mcp_servers.agenticros.tools.ros2_list_topics]
 approval_mode = "approve"
+
+[mcp_servers.agenticros.tools.ros2_camera_snapshot]
+approval_mode = "approve"
+
+[mcp_servers.agenticros.tools.ros2_depth_distance]
+approval_mode = "approve"
