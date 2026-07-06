@@ -178,6 +178,147 @@
           }
         }
       },
+      "robots": {
+        "type": "array",
+        "description": "Multi-robot fleet list. When non-empty, used by ros2_list_robots and per-tool robot_id. When empty, the legacy config.robot entry is used. Manage via `agenticros robots` CLI.",
+        "default": [],
+        "items": {
+          "type": "object",
+          "required": ["id"],
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "Stable identifier referenced by robot_id tool arguments"
+            },
+            "name": {
+              "type": "string",
+              "default": "Robot"
+            },
+            "namespace": {
+              "type": "string",
+              "default": ""
+            },
+            "cameraTopic": {
+              "type": "string",
+              "default": ""
+            },
+            "default": {
+              "type": "boolean",
+              "description": "When true, this robot is active even if not first in the list"
+            },
+            "kind": {
+              "type": "string",
+              "description": "Robot kind for ros2_find_robots_for (e.g. amr, arm, drone, rover)",
+              "default": "amr"
+            },
+            "sensors": {
+              "type": "object",
+              "properties": {
+                "has_realsense": {
+                  "type": "boolean",
+                  "default": false
+                },
+                "has_lidar": {
+                  "type": "boolean",
+                  "default": false
+                },
+                "has_arm": {
+                  "type": "boolean",
+                  "default": false
+                }
+              }
+            },
+            "capabilities": {
+              "type": "array",
+              "description": "Optional per-robot capability allowlist for ros2_find_robots_for",
+              "items": {
+                "type": "string"
+              }
+            },
+            "transport": {
+              "type": "object",
+              "description": "Per-robot transport override (inherits global transport when omitted)",
+              "properties": {
+                "mode": {
+                  "type": "string",
+                  "enum": [
+                    "rosbridge",
+                    "local",
+                    "webrtc",
+                    "zenoh"
+                  ]
+                },
+                "zenoh": {
+                  "type": "object",
+                  "properties": {
+                    "routerEndpoint": {
+                      "type": "string"
+                    },
+                    "domainId": {
+                      "type": "number"
+                    },
+                    "keyFormat": {
+                      "type": "string",
+                      "enum": [
+                        "ros2dds",
+                        "rmw_zenoh"
+                      ]
+                    },
+                    "bridgeNamespace": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "rosbridge": {
+                  "type": "object",
+                  "properties": {
+                    "url": {
+                      "type": "string"
+                    },
+                    "reconnect": {
+                      "type": "boolean"
+                    },
+                    "reconnectInterval": {
+                      "type": "number"
+                    }
+                  }
+                },
+                "local": {
+                  "type": "object",
+                  "properties": {
+                    "domainId": {
+                      "type": "number"
+                    }
+                  }
+                },
+                "webrtc": {
+                  "type": "object",
+                  "properties": {
+                    "signalingUrl": {
+                      "type": "string"
+                    },
+                    "apiUrl": {
+                      "type": "string"
+                    },
+                    "robotId": {
+                      "type": "string"
+                    },
+                    "robotKey": {
+                      "type": "string"
+                    },
+                    "iceServers": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
       "teleop": {
         "type": "object",
         "description": "Teleop web app: camera and twist controls",

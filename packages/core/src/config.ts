@@ -442,6 +442,26 @@ export function parseConfig(raw: Record<string, unknown>): AgenticROSConfig {
 }
 
 /**
+ * Strip Zod defaults that were never present in the raw config before parse.
+ * The config page validates via parseConfig() but should not inject keys the
+ * user never set — e.g. `robots: []` from the schema default breaks OpenClaw's
+ * strict plugin configSchema when that field isn't declared yet.
+ */
+export function prepareConfigForPersistence(
+  parsed: AgenticROSConfig,
+  raw: Record<string, unknown>,
+): Record<string, unknown> {
+  const out = JSON.parse(JSON.stringify(parsed)) as Record<string, unknown>;
+  if (!Object.prototype.hasOwnProperty.call(raw, "robots")) {
+    const robots = out.robots;
+    if (Array.isArray(robots) && robots.length === 0) {
+      delete out.robots;
+    }
+  }
+  return out;
+}
+
+/**
  * Build TransportConfig from full config for createTransport().
  */
 export function getTransportConfig(config: AgenticROSConfig): TransportConfig {

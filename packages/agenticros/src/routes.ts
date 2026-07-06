@@ -1,6 +1,6 @@
 import type { OpenClawPluginApi, HttpRouteHandler, HttpRouteResponse } from "./plugin-api.js";
 import type { AgenticROSConfig } from "@agenticros/core";
-import { parseConfig } from "@agenticros/core";
+import { parseConfig, prepareConfigForPersistence } from "@agenticros/core";
 import {
   readOpenClawConfig,
   writeAgenticROSConfig,
@@ -172,8 +172,9 @@ export function registerRoutes(api: OpenClawPluginApi, config: AgenticROSConfig)
         api.logger.warn("AgenticROS config read failed: " + readMsg);
         return { success: false, error: readMsg, statusCode: 500 };
       }
+      let combined: Record<string, unknown>;
       try {
-        const combined =
+        combined =
           existingAgenticROS && typeof existingAgenticROS === "object"
             ? mergeIncomingAgenticROSConfig(existingAgenticROS, body)
             : body;
@@ -192,7 +193,7 @@ export function registerRoutes(api: OpenClawPluginApi, config: AgenticROSConfig)
         merged.webrtc.robotKey = existingKey;
       }
       try {
-        writeAgenticROSConfig(merged as unknown as Record<string, unknown>);
+        writeAgenticROSConfig(prepareConfigForPersistence(merged, combined));
       } catch (err) {
         const msg = err instanceof ConfigFileError ? err.message : (err instanceof Error ? err.message : "Failed to write config");
         api.logger.warn("AgenticROS config write failed: " + msg);

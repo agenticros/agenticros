@@ -6,6 +6,7 @@ export type { AgenticROSConfig, RobotTransportOverride } from "./config.js";
 export {
   AgenticROSConfigSchema,
   parseConfig,
+  prepareConfigForPersistence,
   getTransportConfig,
 } from "./config.js";
 
