@@ -65,9 +65,8 @@ skipped (with a checkmark) when already done:
 4. OpenClaw plugin install (via `scripts/setup_gateway_plugin.sh`)
 5. Robot config (writes `~/.agenticros/config.json`)
 6. OpenAI API key (paste once → `scripts/configure_agenticros.sh`)
-7. Codex MCP config (optional — `agenticros codex setup` for `~/.codex/config.toml` and project `.codex/config.toml`)
-8. Hermes MCP config (optional — `agenticros hermes setup` for `~/.hermes/config.yaml`)
-9. Final `agenticros doctor` summary
+7. MCP client config (optional — `agenticros mcp setup` for Codex, Hermes, and Claude)
+8. Final `agenticros doctor` summary
 
 Pass `--force` to re-run every step regardless of state.
 
@@ -85,9 +84,31 @@ same report as a structured object for CI / scripting:
 
 Exits non-zero if any check is red.
 
-Checks include MCP server build status, OpenClaw plugin health, **Codex MCP config**
-(`~/.codex/config.toml` path and namespace policy), **Hermes MCP config**
-(`~/.hermes/config.yaml`), and Codex / Hermes CLI presence on `PATH`.
+Checks include MCP server build status, OpenClaw plugin health, **MCP client configs**
+(Codex, Hermes, Claude — path and namespace policy), and CLI presence on `PATH`.
+
+### `agenticros mcp setup [--codex] [--hermes] [--claude] [--project] [--desktop]`
+
+**Primary command** — register the AgenticROS MCP server for all MCP clients at once:
+
+| Flag | Effect |
+|---|---|
+| (default) | Codex (`~/.codex/config.toml` + project `.codex/config.toml`), Hermes (`~/.hermes/config.yaml`), Claude Desktop + project `.mcp.json` |
+| `--codex` | Codex global config only |
+| `--hermes` | Hermes global config only |
+| `--claude` | Claude Desktop + project `.mcp.json` |
+| `--project` | Also write project-scoped Codex / Claude configs |
+| `--desktop` | With `--claude`, Claude Desktop config only |
+
+Uses an **absolute path** to the MCP server binary. Sets `AGENTICROS_ROBOT_NAMESPACE` empty so `agenticros mode real|sim` drives the active robot namespace.
+
+Also offered as an optional step during `agenticros init`.
+
+See **[docs/mcp-setup.md](mcp-setup.md)** for the unified onboarding guide.
+
+### `agenticros mcp doctor [--json] [--codex] [--hermes] [--claude]`
+
+Validate MCP configuration for Codex, Hermes, and Claude. Exits non-zero on red checks.
 
 ### `agenticros codex setup [--project]`
 
@@ -122,6 +143,22 @@ Validate Hermes MCP configuration: `~/.hermes/config.yaml`, MCP binary path, and
 
 See **[docs/hermes-setup.md](hermes-setup.md)** for the full Hermes onboarding guide.
 
+### `agenticros claude setup [--desktop] [--project]`
+
+Register the AgenticROS MCP server for **Claude Code** and **Claude Desktop**:
+
+| Flag | Effect |
+|---|---|
+| (default) | Claude Desktop config + project `.mcp.json` (when in a repo) |
+| `--desktop` | `claude_desktop_config.json` only |
+| `--project` | `.mcp.json` in repo root only |
+
+Alias for `agenticros mcp setup --claude`. Restart Claude Desktop fully after desktop config changes.
+
+### `agenticros claude doctor [--json]`
+
+Validate Claude MCP configuration (desktop + project `.mcp.json`). Exits non-zero on red checks.
+
 ### `agenticros status [--json]`
 
 Shows running components (camera / sim / mcp / rosbridge / openclaw-gateway)
@@ -150,9 +187,11 @@ Read or edit `~/.agenticros/config.json`. Actions:
 |---|---|---|
 | `~/.agenticros/config.json` | User | AgenticROS runtime config (transport mode, namespace, safety limits). |
 | `~/.agenticros/cli-state.json` | CLI | Last-used mode/namespace for the menu's "(yesterday)" hint. |
-| `~/.hermes/config.yaml` | Hermes Agent | MCP server registrations (written by `agenticros hermes setup`). |
-| `~/.codex/config.toml` | Codex CLI | MCP server registrations (written by `agenticros codex setup`). |
-| `.codex/config.toml` | Codex CLI | Project-scoped MCP config (written by `agenticros codex setup --project`). |
+| `~/.hermes/config.yaml` | Hermes Agent | MCP server registrations (written by `agenticros mcp setup` or `agenticros hermes setup`). |
+| `~/.codex/config.toml` | Codex CLI | MCP server registrations (written by `agenticros mcp setup` or `agenticros codex setup`). |
+| `.codex/config.toml` | Codex CLI | Project-scoped MCP config (written by `agenticros mcp setup` or `agenticros codex setup --project`). |
+| `.mcp.json` | Claude Code | Project-scoped MCP config (written by `agenticros mcp setup` or `agenticros claude setup`). |
+| `~/Library/Application Support/Claude/claude_desktop_config.json` | Claude Desktop | MCP server registrations (written by `agenticros mcp setup` or `agenticros claude setup --desktop`). |
 | `~/agenticros/` | CLI (npm-install mode) | Copy of the monorepo, with built dist + colcon install. |
 | `/tmp/agenticros-*.pid` | CLI | PIDs of background processes the CLI spawned. |
 | `/tmp/agenticros-*.log` | CLI | Stdout/stderr from those processes. |
@@ -182,11 +221,12 @@ Read or edit `~/.agenticros/config.json`. Actions:
 ## Troubleshooting
 
 - **`doctor` shows red checks** → run `agenticros init` to walk through every
-  step. Re-run `doctor` afterward. For Codex-specific issues, run
-  `agenticros codex doctor`. For Hermes, run `agenticros hermes doctor`.
-- **Codex `/mcp` does not list agenticros** → run `agenticros codex setup`
+  step. Re-run `doctor` afterward. For MCP-specific issues, run
+  `agenticros mcp doctor` (or `agenticros codex doctor`, `agenticros hermes doctor`, `agenticros claude doctor`).
+- **MCP tools missing in any client** → run `agenticros mcp setup`. See [mcp-setup.md](mcp-setup.md).
+- **Codex `/mcp` does not list agenticros** → run `agenticros mcp setup --codex`
   (absolute MCP path required). See [codex-setup.md](codex-setup.md).
-- **Hermes MCP tools missing** → run `agenticros hermes setup`, then `/reload-mcp`
+- **Hermes MCP tools missing** → run `agenticros mcp setup --hermes`, then `/reload-mcp`
   in Hermes. See [hermes-setup.md](hermes-setup.md).
 - **`up` exits immediately** → `agenticros logs <component>` (the CLI now
   records where every child wrote its output) and read the error in context.

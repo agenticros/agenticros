@@ -1,6 +1,6 @@
 {
   "name": "agenticros",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "type": "module",
   "description": "AgenticROS - agentic AI for ROS-powered robots. Single CLI to launch real-robot or simulated demos, manage configuration, and inspect status.",
   "keywords": [

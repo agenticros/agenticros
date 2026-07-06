@@ -9,9 +9,8 @@
  *   4. OpenClaw plugin   -> scripts/setup_gateway_plugin.sh
  *   5. Robot config      -> prompt namespace + transport, write ~/.agenticros/config.json
  *   6. OpenAI key        -> prompt + scripts/configure_agenticros.sh
- *   7. Codex MCP         -> agenticros codex setup (optional)
- *   8. Hermes MCP        -> agenticros hermes setup (optional)
- *   9. Doctor summary
+ *   7. MCP clients       -> agenticros mcp setup (Codex, Hermes, Claude — optional)
+ *   8. Doctor summary
  *
  * Reuses the existing shell scripts as subprocesses (no logic duplication).
  */
@@ -24,8 +23,7 @@ import { confirm, input, password, select } from "@inquirer/prompts";
 import { execa } from "execa";
 
 import { runDoctorChecks } from "./doctor.js";
-import { codexOnPath, codexSetupCommand } from "./codex.js";
-import { hermesOnPath, hermesSetupCommand } from "./hermes.js";
+import { claudeOnPath, codexOnPath, hermesOnPath, mcpSetupCommand } from "../util/mcp-setup.js";
 import { isWindows } from "../util/env.js";
 import { getCliPaths, isAgenticrosMonorepo, resetPathsCache } from "../util/paths.js";
 import { header, info, ok, warn, err, dim, withSpinner } from "../util/logger.js";
@@ -212,45 +210,25 @@ export async function initCommand(opts: InitOptions): Promise<void> {
     ok("OpenAI API key already configured (skip).");
   }
 
-  // Step: Codex MCP (optional — same MCP server as Claude Code).
+  // Step: MCP clients (Codex, Hermes, Claude — same stdio server).
   const hasCodexCli = await codexOnPath();
-  if (hasCodexCli || opts.force) {
-    const wantCodex = await confirm({
-      message: hasCodexCli
-        ? "Configure Codex CLI to use the AgenticROS MCP server?"
-        : "Configure Codex MCP in ~/.codex/config.toml? (Codex CLI not on PATH yet)",
-      default: hasCodexCli,
-    });
-    if (wantCodex) {
-      await runStep("Configuring Codex MCP", async () => {
-        await codexSetupCommand({ scope: "global", quiet: true });
-      });
-      if (paths.repoRoot) {
-        await runStep("Configuring project Codex MCP", async () => {
-          await codexSetupCommand({ scope: "project", quiet: true });
-        });
-      }
-    }
-  } else {
-    dim("Codex CLI not on PATH — skip MCP setup. Run `agenticros codex setup` later.");
-  }
-
-  // Step: Hermes MCP (optional — same MCP server as Claude Code / Codex).
   const hasHermesCli = await hermesOnPath();
-  if (hasHermesCli || opts.force) {
-    const wantHermes = await confirm({
-      message: hasHermesCli
-        ? "Configure Hermes Agent to use the AgenticROS MCP server?"
-        : "Configure Hermes MCP in ~/.hermes/config.yaml? (Hermes CLI not on PATH yet)",
-      default: hasHermesCli,
+  const hasClaudeCli = await claudeOnPath();
+  const hasAnyMcpClient = hasCodexCli || hasHermesCli || hasClaudeCli;
+  if (hasAnyMcpClient || opts.force) {
+    const wantMcp = await confirm({
+      message: hasAnyMcpClient
+        ? "Configure MCP clients (Codex, Hermes, Claude) for AgenticROS?"
+        : "Write MCP config for Codex/Hermes/Claude? (no MCP CLI on PATH yet)",
+      default: hasAnyMcpClient,
     });
-    if (wantHermes) {
-      await runStep("Configuring Hermes MCP", async () => {
-        await hermesSetupCommand({ quiet: true });
+    if (wantMcp) {
+      await runStep("Configuring MCP clients", async () => {
+        await mcpSetupCommand({ repoRoot: paths.repoRoot, quiet: true });
       });
     }
   } else {
-    dim("Hermes CLI not on PATH — skip MCP setup. Run `agenticros hermes setup` later.");
+    dim("No MCP clients on PATH — skip. Run `agenticros mcp setup` later.");
   }
 
   // Step: doctor summary.

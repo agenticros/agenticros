@@ -23,10 +23,13 @@ import {
   readOpenclawConfig,
 } from "../util/openclaw-config.js";
 import { listSkills } from "../util/skills.js";
-import { buildCodexDoctorChecks } from "../util/codex-config.js";
-import { buildHermesDoctorChecks } from "../util/hermes-config.js";
 import { findMcpEntry } from "../util/mcp-discovery.js";
-import { hermesOnPath } from "./hermes.js";
+import {
+  buildMcpDoctorChecks,
+  claudeOnPath,
+  codexOnPath,
+  hermesOnPath,
+} from "../util/mcp-setup.js";
 
 export type Severity = "green" | "yellow" | "red";
 
@@ -247,32 +250,19 @@ export async function runDoctorChecks(): Promise<DoctorReport> {
     });
   }
 
-  // Codex CLI MCP config.
+  // MCP client configs (Codex, Hermes, Claude).
   const mcpEntry = findMcpEntry();
-  checks.push(...buildCodexDoctorChecks(mcpEntry, paths.repoRoot));
+  checks.push(...buildMcpDoctorChecks(mcpEntry, paths.repoRoot));
 
-  try {
-    const { exitCode } = await execa("codex", ["--version"], { reject: false });
-    checks.push({
-      id: "codex-cli",
-      label: exitCode === 0 ? "Codex CLI installed" : "Codex CLI not detected",
-      severity: exitCode === 0 ? "green" : "yellow",
-      hint:
-        exitCode === 0
-          ? undefined
-          : "Install from https://developers.openai.com/codex/ then run `agenticros codex setup`.",
-    });
-  } catch {
-    checks.push({
-      id: "codex-cli",
-      label: "Codex CLI not detected",
-      severity: "yellow",
-      hint: "Install from https://developers.openai.com/codex/ then run `agenticros codex setup`.",
-    });
-  }
-
-  // Hermes Agent MCP config.
-  checks.push(...buildHermesDoctorChecks(mcpEntry));
+  const hasCodex = await codexOnPath();
+  checks.push({
+    id: "codex-cli",
+    label: hasCodex ? "Codex CLI installed" : "Codex CLI not detected",
+    severity: hasCodex ? "green" : "yellow",
+    hint: hasCodex
+      ? undefined
+      : "Install from https://developers.openai.com/codex/ then run `agenticros mcp setup --codex`.",
+  });
 
   const hasHermes = await hermesOnPath();
   checks.push({
@@ -281,7 +271,17 @@ export async function runDoctorChecks(): Promise<DoctorReport> {
     severity: hasHermes ? "green" : "yellow",
     hint: hasHermes
       ? undefined
-      : "Install from https://github.com/NousResearch/hermes-agent then run `agenticros hermes setup`.",
+      : "Install from https://github.com/NousResearch/hermes-agent then run `agenticros mcp setup --hermes`.",
+  });
+
+  const hasClaude = await claudeOnPath();
+  checks.push({
+    id: "claude-cli",
+    label: hasClaude ? "Claude Code CLI installed" : "Claude Code CLI not detected",
+    severity: hasClaude ? "green" : "yellow",
+    hint: hasClaude
+      ? undefined
+      : "Install from https://claude.com/product/claude-code then run `agenticros mcp setup --claude`.",
   });
 
   // OpenAI key.

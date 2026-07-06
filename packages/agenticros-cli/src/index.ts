@@ -23,8 +23,10 @@ import { createSkillCommand } from "./commands/create-skill.js";
 import { publishSkillCommand } from "./commands/publish-skill.js";
 import { skillsDevCommand } from "./commands/skills-dev.js";
 import { robotsCommand } from "./commands/robots.js";
+import { claudeDoctorCommand, claudeSetupCommand } from "./commands/claude.js";
 import { codexDoctorCommand, codexSetupCommand } from "./commands/codex.js";
 import { hermesDoctorCommand, hermesSetupCommand } from "./commands/hermes.js";
+import { mcpDoctorCliCommand, mcpSetupCliCommand } from "./commands/mcp.js";
 import { runMenu } from "./menu.js";
 import { err } from "./util/logger.js";
 import { readFileSync } from "node:fs";
@@ -192,6 +194,79 @@ program
       return;
     }
     await skillsCommand({ action, arg });
+  });
+
+const mcpCmd = program
+  .command("mcp")
+  .description("Configure all MCP clients (Codex, Hermes, Claude) for AgenticROS.");
+
+mcpCmd
+  .command("setup")
+  .description(
+    "Register agenticros MCP in Codex, Hermes, and Claude configs (default: all hosts).",
+  )
+  .option("--all", "Configure all hosts (default)", true)
+  .option("--codex", "Configure Codex only (~/.codex/config.toml)", false)
+  .option("--hermes", "Configure Hermes only (~/.hermes/config.yaml)", false)
+  .option("--claude", "Configure Claude only (desktop + project .mcp.json)", false)
+  .option("--project", "Also write project-scoped configs (.codex/config.toml, .mcp.json)", false)
+  .option("--desktop", "Claude Desktop config only (with --claude)", false)
+  .action(async (opts: {
+    all?: boolean;
+    codex?: boolean;
+    hermes?: boolean;
+    claude?: boolean;
+    project?: boolean;
+    desktop?: boolean;
+  }) => {
+    const hostFlags = opts.codex || opts.hermes || opts.claude;
+    await mcpSetupCliCommand({
+      all: hostFlags ? false : opts.all,
+      codex: opts.codex,
+      hermes: opts.hermes,
+      claude: opts.claude,
+      project: opts.project,
+      desktop: opts.desktop,
+    });
+  });
+
+mcpCmd
+  .command("doctor")
+  .description("Validate MCP configs for Codex, Hermes, and Claude.")
+  .option("--json", "Emit JSON instead of a table", false)
+  .option("--codex", "Check Codex only", false)
+  .option("--hermes", "Check Hermes only", false)
+  .option("--claude", "Check Claude only", false)
+  .action(async (opts: {
+    json?: boolean;
+    codex?: boolean;
+    hermes?: boolean;
+    claude?: boolean;
+  }) => {
+    const exitCode = await mcpDoctorCliCommand(opts);
+    if (exitCode !== 0) process.exit(exitCode);
+  });
+
+const claudeCmd = program
+  .command("claude")
+  .description("Configure Claude Code / Claude Desktop to use the AgenticROS MCP server.");
+
+claudeCmd
+  .command("setup")
+  .description("Register agenticros MCP in Claude Desktop and/or project .mcp.json.")
+  .option("--desktop", "Claude Desktop claude_desktop_config.json only", false)
+  .option("--project", "Project .mcp.json only (repo root)", false)
+  .action(async (opts: { desktop?: boolean; project?: boolean }) => {
+    await claudeSetupCommand(opts);
+  });
+
+claudeCmd
+  .command("doctor")
+  .description("Validate Claude MCP config (desktop + project .mcp.json).")
+  .option("--json", "Emit JSON instead of a table", false)
+  .action(async (opts: { json?: boolean }) => {
+    const exitCode = await claudeDoctorCommand(opts);
+    if (exitCode !== 0) process.exit(exitCode);
   });
 
 const codexCmd = program

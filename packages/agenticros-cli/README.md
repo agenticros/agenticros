@@ -8,10 +8,9 @@ and keep your workspace healthy from a single binary.
 
 ```bash
 # Brand new machine: one command end-to-end
-npx agenticros init     # workspace + plugin + Codex/Hermes MCP + API key + doctor
+npx agenticros init     # workspace + plugin + MCP clients + API key + doctor
 agenticros              # interactive menu
-agenticros codex setup  # register AgenticROS MCP for OpenAI Codex CLI
-agenticros hermes setup # register AgenticROS MCP for Hermes Agent
+agenticros mcp setup    # register AgenticROS MCP for Codex, Hermes, and Claude
 agenticros up real      # bring up the real-robot stack
 agenticros up sim-amr   # bring up a simulated 2-wheel AMR
 agenticros up sim-arm   # bring up a simulated 6-DOF arm
@@ -55,10 +54,14 @@ Three ways, listed easiest first:
 | `agenticros up sim-arm` | Bring up the simulated 6-DOF arm (UR5e-shaped, per-joint position control). |
 | `agenticros down` | Stop everything we started. |
 | `agenticros doctor` | Coloured health-check table; `--json` for CI. |
-| `agenticros codex setup` | Register AgenticROS MCP in `~/.codex/config.toml` (or `--project`). |
+| `agenticros mcp setup` | Register AgenticROS MCP for Codex, Hermes, and Claude (primary). |
+| `agenticros mcp doctor` | Validate all MCP client configs. |
+| `agenticros codex setup` | Codex only — `~/.codex/config.toml` (or `--project`). |
 | `agenticros codex doctor` | Validate Codex MCP config paths and namespace policy. |
-| `agenticros hermes setup` | Register AgenticROS MCP in `~/.hermes/config.yaml`. |
+| `agenticros hermes setup` | Hermes only — `~/.hermes/config.yaml`. |
 | `agenticros hermes doctor` | Validate Hermes MCP config paths and namespace policy. |
+| `agenticros claude setup` | Claude only — Desktop + project `.mcp.json`. |
+| `agenticros claude doctor` | Validate Claude MCP config paths and namespace policy. |
 | `agenticros status` | Snapshot of running components + last mode. |
 | `agenticros logs [target]` | Tail `camera` / `mcp` / `sim` / `rosbridge` / `gateway`. |
 | `agenticros config [show\|set\|edit\|reset]` | Read or edit `~/.agenticros/config.json`. |
