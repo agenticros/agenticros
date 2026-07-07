@@ -244,4 +244,5 @@ Clamps are enforced in `packages/agenticros-claude-code/src/safety.ts` and `pack
 | `docs/zenoh-agenticros.md` | Zenoh integration |
 | `docs/cameras.md` | Camera configuration |
 | `docs/codex-setup.md` | OpenAI Codex CLI setup (`agenticros codex setup`) |
+| `docs/local-vlm.md` | Local Ollama VLM setup for OpenClaw / Hermes (no cloud API keys) |
 | `docs/teleop.md` | Teleop web app setup |

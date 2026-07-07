@@ -64,7 +64,7 @@ skipped (with a checkmark) when already done:
 3. ROS 2 workspace build (`colcon build --symlink-install`)
 4. OpenClaw plugin install (via `scripts/setup_gateway_plugin.sh`)
 5. Robot config (writes `~/.agenticros/config.json`)
-6. OpenAI API key (paste once → `scripts/configure_agenticros.sh`)
+6. OpenAI API key (optional — skip when using local Ollama; see [local-vlm.md](local-vlm.md))
 7. MCP client config (optional — `agenticros mcp setup` for Codex, Hermes, and Claude)
 8. Final `agenticros doctor` summary
 

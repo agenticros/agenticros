@@ -3,12 +3,13 @@
 > agentic AI for ROS-powered robots
 
 `agenticros` is the unified command-line tool for AgenticROS — bring up a real
-robot or a simulated one, drive it from Claude Code, OpenAI Codex, Hermes Agent, or OpenClaw,
+robot or a simulated one, drive it from Claude Code, OpenAI Codex, Hermes Agent, or OpenClaw
+(with **local Ollama VLMs** or cloud models),
 and keep your workspace healthy from a single binary.
 
 ```bash
 # Brand new machine: one command end-to-end
-npx agenticros init     # workspace + plugin + MCP clients + API key + doctor
+npx agenticros init     # workspace + plugin + MCP clients + optional API key + doctor
 agenticros              # interactive menu
 agenticros mcp setup    # register AgenticROS MCP for Codex, Hermes, and Claude
 agenticros up real      # bring up the real-robot stack
@@ -30,6 +31,20 @@ rather than replacing them, so they remain usable on their own. The published
 npm tarball bundles those scripts plus the ROS 2 source packages and the
 pre-built MCP server, so `npx agenticros init` works on a fresh machine with
 no `git clone` step.
+
+## Local VLM (Ollama)
+
+Run **without cloud LLM API keys** by pointing OpenClaw or Hermes at Ollama:
+
+```bash
+ollama pull qwen3-vl:8b-instruct   # or qwen3-vl:2b on smaller hardware
+npx agenticros init                # skip OpenAI key when prompted
+# Point OpenClaw primary model at Ollama (see docs/local-vlm.md)
+agenticros up sim-amr
+```
+
+OpenClaw: web chat, teleop, messaging, skills. Hermes: terminal + Ollama. Full guide:
+**[docs/local-vlm.md](../../docs/local-vlm.md)** (model picks, multimodal catalog patch, describer, Follow Me).
 
 ## Install
 
@@ -81,7 +96,7 @@ walks through:
 3. ROS 2 workspace build (`colcon build --symlink-install`)
 4. OpenClaw plugin install (`scripts/setup_gateway_plugin.sh`)
 5. Robot config (namespace, transport mode, sample `~/.agenticros/config.json`)
-6. OpenAI API key (paste once → `scripts/configure_agenticros.sh`)
+6. OpenAI API key (optional — skip when using local Ollama; see [docs/local-vlm.md](../../docs/local-vlm.md))
 7. Codex MCP config (optional — `~/.codex/config.toml` and project `.codex/config.toml`)
 8. Hermes MCP config (optional — `~/.hermes/config.yaml`)
 9. Final `agenticros doctor` summary

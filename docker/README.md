@@ -20,7 +20,7 @@ docker compose -f docker-compose.yml -f docker-compose.sim.yml up ros2
 
 That runs `ros2 launch agenticros_bringup rosbridge_gazebo.launch.py` inside the container (see the main [README](../README.md) **“RViz2 and Gazebo”** section).
 
-Then use OpenClaw on your machine with the AgenticROS plugin pointing at **`ws://localhost:9090`**. See the main [README](../README.md) for plugin install and config.
+Then use OpenClaw on your machine with the AgenticROS plugin pointing at **`ws://localhost:9090`**. See the main [README](../README.md) for plugin install and config. For **local Ollama** instead of cloud OpenAI, see [docs/local-vlm.md](../docs/local-vlm.md).
 
 ### Mode A (local DDS) + Gazebo on the host
 

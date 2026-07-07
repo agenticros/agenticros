@@ -2,6 +2,8 @@
 
 Use the **OpenAI Codex CLI** to control your ROS 2 robot through the same AgenticROS MCP server as Claude Code. Codex is a standard MCP client — no separate adapter package is required.
 
+> **Want fully local inference (no OpenAI API)?** Codex uses OpenAI models. Use **OpenClaw + Ollama** or **Hermes + Ollama** instead — see **[local-vlm.md](local-vlm.md)**.
+
 ## Prerequisites
 
 - Node.js 20+

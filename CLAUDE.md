@@ -245,6 +245,7 @@ Clamps are enforced in `packages/agenticros-claude-code/src/safety.ts` and `pack
 |------|---------|
 | `docs/architecture.md` | Full system architecture |
 | `docs/codex-setup.md` | OpenAI Codex CLI setup (`agenticros codex setup`) |
+| `docs/local-vlm.md` | Local Ollama VLM setup for OpenClaw / Hermes (no cloud API keys) |
 | `docs/cli.md` | `agenticros` CLI reference (includes `codex setup` / `codex doctor`) |
 | `docs/skills.md` | Skill development guide |
 | `docs/robot-setup.md` | Hardware/software setup |

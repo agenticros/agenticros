@@ -4,6 +4,8 @@ Use **[Hermes Agent](https://github.com/NousResearch/hermes-agent)** to control 
 
 Hermes is **model-agnostic**: OpenAI, Anthropic, OpenRouter, Ollama, and 200+ other providers. Your LLM choice does not change AgenticROS integration — only the MCP client config matters.
 
+For **fully local** inference with Ollama (no cloud API keys), see **[local-vlm.md](local-vlm.md)**.
+
 ## Prerequisites
 
 - Node.js 20+
@@ -127,8 +129,8 @@ Both are MCP clients. They can share `~/.agenticros/config.json`, cross-adapter 
 |--|--------|-------|-------------|----------|------------|
 | Protocol | MCP | MCP | MCP | OpenClaw plugin | Function calling |
 | Messaging / teleop | Yes (15+ channels) | No | No | Yes | No |
-| Model choice | 200+ providers / Ollama | OpenAI | Anthropic | Gateway models | Google Gemini |
+| Model choice | 200+ providers / Ollama | OpenAI | Anthropic | Gateway models (Ollama or cloud) | Google Gemini |
 | External skills | Hermes skills | Built-in missions | Built-in missions | Dynamic skill loader | Subset of tools |
 | Setup | `agenticros hermes setup` | `agenticros codex setup` | `.mcp.json` | `agenticros init` plugin step | `agenticros-gemini` |
 
-For teleop web UI and in-process `agenticros-skill-*` loading, use OpenClaw. For terminal MCP clients, use Codex or Claude Code. For messaging with a model-agnostic gateway, use Hermes + MCP.
+For teleop web UI and in-process `agenticros-skill-*` loading, use OpenClaw (local Ollama: [local-vlm.md](local-vlm.md)). For terminal MCP clients, use Codex or Claude Code. For messaging with a model-agnostic gateway, use Hermes + MCP.

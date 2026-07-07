@@ -4,6 +4,8 @@ MCP (Model Context Protocol) server that exposes AgenticROS ROS2 tools to **Clau
 
 This adapter does **not** provide the config or teleop web UI; use the [OpenClaw plugin](../../packages/agenticros) for that, or run the gateway for the browser-based teleop page.
 
+**Local models (no cloud API):** Claude and Codex still use cloud LLMs. For **fully local** VLM inference with Ollama, use the [OpenClaw plugin](../../packages/agenticros) or [Hermes Agent](../../docs/hermes-setup.md) — see **[docs/local-vlm.md](../../docs/local-vlm.md)**.
+
 ## Prerequisites
 
 - Node.js 20+

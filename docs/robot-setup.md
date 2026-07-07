@@ -296,7 +296,7 @@ The message comes from **OpenAI's API limits**, not from AgenticROS. The gateway
 1. **Confirm it's OpenAI** — Check gateway logs:  
    `journalctl --user -u openclaw-gateway.service -n 100 --no-pager | grep -i "429\|rate\|limit\|error"`
 2. **Check your OpenAI account** — [Usage](https://platform.openai.com/usage), [API keys](https://platform.openai.com/api-keys). Free/low tiers have strict RPM/TPM and can stay limited for a while.
-3. **What helps** — Wait (RPM/TPM reset in minutes; daily limits at UTC midnight). Or in OpenClaw switch to a model with higher limits if available.
+3. **What helps** — Wait (RPM/TPM reset in minutes; daily limits at UTC midnight). Or switch OpenClaw to a **local Ollama VLM** — see [local-vlm.md](local-vlm.md). Or in OpenClaw switch to a model with higher limits if available.
 4. **AgenticROS** — We only trim context/tool output to use fewer tokens; we can't remove OpenAI's limits.
 
 ### 404 errors when installing rosbridge_suite

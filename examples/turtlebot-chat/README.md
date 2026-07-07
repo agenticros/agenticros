@@ -5,7 +5,8 @@ Control a TurtleBot3 in Gazebo simulation using natural language through WhatsAp
 ## Prerequisites
 
 - Docker and Docker Compose
-- An OpenClaw instance with a messaging channel configured
+- An OpenClaw instance with a messaging channel configured (or web chat only)
+- **Optional:** [local Ollama VLM](../../docs/local-vlm.md) instead of a cloud OpenAI key for the gateway LLM
 
 ## Quick Start
 
@@ -20,6 +21,8 @@ Control a TurtleBot3 in Gazebo simulation using natural language through WhatsAp
    ```
    Configure the plugin with rosbridge URL: ws://localhost:9090
    ```
+
+   For **fully local** chat (no OpenAI): point OpenClaw at Ollama (`qwen3-vl:8b-instruct` or `qwen3-vl:2b`) — see [docs/local-vlm.md](../../docs/local-vlm.md).
 
 3. Send a message to your robot through any configured messaging app:
    - "Move forward 1 meter"

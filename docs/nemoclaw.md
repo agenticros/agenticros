@@ -10,6 +10,8 @@
 
 > Method A is the path the rest of this repo's scripts target. Method B is a sketch with a starting-point Dockerfile and the open issues you have to solve (USB passthrough, custom egress policy).
 
+> **Vanilla OpenClaw or Hermes on your laptop?** See **[local-vlm.md](local-vlm.md)** for Ollama setup without NemoClaw. This guide adds sandbox policy, Jetson tuning, and `nemoclaw inference set` on top of that.
+
 ## Part 1 — Installing NemoClaw
 
 These are the exact steps that succeeded on this Jetson (`nemoclaw v0.0.48`, NemoClaw sandbox build `1779389075`, OpenClaw `2026.4.24`, OpenShell `0.0.39`, Tegra L4T kernel 5.15).

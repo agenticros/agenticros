@@ -33,6 +33,29 @@ With AgenticROS, your robot can describe what it sees, follow intent ("go check 
 
 AgenticROS is built so that new adapters (LangGraph, OpenAI, local models, voice stacks, etc.) can be added without touching the ROS 2 layer. The core transport and tool contract are platform-agnostic; adapters are thin shims that surface those tools to each agent runtime.
 
+## Local VLM (Ollama) — no cloud API required
+
+Control your robot with a **local vision-language model** instead of OpenAI or other cloud APIs. AgenticROS robot tools work the same; you point **OpenClaw** or **Hermes** at Ollama on your machine.
+
+```bash
+ollama pull qwen3-vl:8b-instruct   # recommended: chat + tools + camera vision
+# or: ollama pull qwen3-vl:2b     # smaller hardware
+
+npx agenticros init               # skip the OpenAI key step when prompted
+# Configure OpenClaw to use Ollama as primary model (see guide below)
+agenticros up sim-amr             # or: agenticros up real
+```
+
+Then chat in OpenClaw web UI or Hermes: *"List ROS topics"*, *"drive forward slowly"*, *"what do you see?"*
+
+| Path | Best for |
+|------|----------|
+| **OpenClaw + Ollama** | Web chat, teleop, messaging channels, skills |
+| **Hermes + Ollama** | Terminal agent with any Ollama model |
+| **NemoClaw + Ollama** | Sandboxed Jetson / edge (see [docs/nemoclaw.md](docs/nemoclaw.md)) |
+
+**Full setup, model picks, multimodal catalog patches, describer, Follow Me VLM, and troubleshooting:** **[docs/local-vlm.md](docs/local-vlm.md)**
+
 ## Architecture
 
 ![AgenticROS architecture: agent platforms → adapter packages → shared TypeScript runtime → transports → ROS 2 workspace and robot](docs/images/agenticros-architecture.png)
@@ -114,7 +137,7 @@ Full architecture + design trade-offs: **[docs/strategy-ai-agents-plus-ros.md](d
 - `**packages/agenticros-claude-code**` — MCP server for Claude Code + Claude desktop / Dispatch (tools only; no config UI).
 - `**packages/agenticros-gemini**` — Gemini CLI (function calling; no MCP).
 - `**ros2_ws/**` — ROS2 workspace: `agenticros_msgs`, `agenticros_bringup` (Gazebo + RViz + rosbridge launches), `agenticros_discovery`, `agenticros_agent`, `agenticros_follow_me`.
-- `**docs/**` — Architecture, skills, robot setup, Zenoh, teleop.
+- `**docs/**` — Architecture, skills, robot setup, Zenoh, teleop, **[local VLM / Ollama](docs/local-vlm.md)**.
 - `**scripts/**` — Workspace setup, gateway plugin config, run demos.
 - `**docker/**` — Docker Compose and Dockerfiles for ROS2 + plugin images.
 - `**examples/**` — Example projects.
@@ -140,7 +163,7 @@ The first run launches the interactive menu:
 ? What would you like to do?
   Launch with real robot
 ❯ Launch with simulation
-  First-time setup (workspace + OpenClaw plugin + Codex MCP + API key)
+  First-time setup (workspace + OpenClaw plugin + Codex MCP + optional API key)
   Manage skills (2 registered, 0 available, 0 broken)
   Stop everything
   Doctor (health check)
@@ -148,8 +171,8 @@ The first run launches the interactive menu:
   Tail logs
 ```
 
-Pick **First-time setup** once (workspace + OpenClaw plugin + optional Codex MCP + API key, all
-idempotent), then choose how you want to run:
+Pick **First-time setup** once (workspace + OpenClaw plugin + optional Codex MCP + optional API key, all
+idempotent). **Using local Ollama instead of OpenAI?** Skip the API key step — see **[Local VLM (Ollama)](#local-vlm-ollama--no-cloud-api-required)**. Then choose how you want to run:
 
 | You want to … | Pick |
 |---|---|
@@ -165,7 +188,7 @@ so **Stop everything** cleanly tears the demo down.
 Prefer scripted invocations? Every menu item maps to a direct command:
 
 ```bash
-npx agenticros init             # one-time workspace + plugin + Codex/Hermes MCP + API key
+npx agenticros init             # one-time workspace + plugin + Codex/Hermes MCP (+ optional API key)
 agenticros codex setup          # register AgenticROS MCP for OpenAI Codex CLI
 agenticros codex doctor         # validate ~/.codex/config.toml
 agenticros hermes setup         # register AgenticROS MCP for Hermes Agent
