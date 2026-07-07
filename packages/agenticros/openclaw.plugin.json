@@ -30,7 +30,8 @@
       "follow_robot",
       "follow_me_see",
       "ollama_status",
-      "find_object"
+      "find_object",
+      "scan_surroundings"
     ]
   },
   "configSchema": {
@@ -184,7 +185,9 @@
         "default": [],
         "items": {
           "type": "object",
-          "required": ["id"],
+          "required": [
+            "id"
+          ],
           "properties": {
             "id": {
               "type": "string",

@@ -46,6 +46,13 @@ export interface PendingRequest {
  * fresh CONNECT tunnel.
  */
 function buildProxyAgentForUrl(wsUrl: string): HttpAgent | null {
+  // When NODE_USE_ENV_PROXY=1 (Node 22+ / NemoClaw sandbox), the runtime's
+  // built-in EnvHttpProxyAgent handles ws:// tunneling natively and adds the
+  // authentication headers the OpenShell proxy requires. A manual CONNECT
+  // request (our TunnelAgent below) omits those headers and gets 403 from
+  // the proxy. Skip our agent and let Node handle it.
+  if (process.env.NODE_USE_ENV_PROXY === "1") return null;
+
   let parsed: URL;
   try {
     parsed = new URL(wsUrl);
