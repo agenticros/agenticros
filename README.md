@@ -103,6 +103,8 @@ On the ROS side, every robot publishes a 1 Hz heartbeat on `<ns>/agenticros/robo
 
 `mission_cancel({ mission_id })` flips an in-process cancellation token; the runner stops at the next step boundary and marks remaining steps `cancelled`. When the [shared memory backend](#memory-optional) is on, every step is also written to `mission:<id>` in long-term memory, tagged with `step:<status>` and `capability:<id>`. A different agent — different process, different vendor — can `memory_recall` later and reconstruct exactly what happened, so two agents can collaborate on or hand off a mission.
 
+**How-to:** step-by-step fleet setup, declarative plans, NL goals, cancel, and handoff — **[docs/missions.md](docs/missions.md)**. Runnable walkthrough: **[examples/find-and-approach/README.md](examples/find-and-approach/README.md)**.
+
 Full architecture + design trade-offs: **[docs/strategy-ai-agents-plus-ros.md](docs/strategy-ai-agents-plus-ros.md)**.
 
 ## Repository layout
@@ -212,7 +214,7 @@ needing token auth: run `node scripts/agenticros-proxy.cjs 18790` and open
 See **[docs/openclaw-releases-and-plugin-routes.md](docs/openclaw-releases-and-plugin-routes.md)**
 and **[docs/teleop.md](docs/teleop.md)**.
 
-See **`docs/`** for robot setup, skills, teleop, simulation internals, and Docker.
+See **`docs/`** for robot setup, **[missions](docs/missions.md)**, skills, teleop, simulation internals, and Docker.
 
 ## RViz2 and Gazebo (TurtleBot3 + rosbridge)
 

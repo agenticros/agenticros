@@ -173,6 +173,40 @@ The `agenticros.capabilities[]` array tells the **planner** what verbs the skill
 
 `@agenticros/core`'s `listAllCapabilities(config)` merges the 6 built-in robot verbs (`drive_base`, `take_snapshot`, …) with every skill's declared capabilities, tagging each with its source.
 
+### Chaining your skill in missions
+
+Once a skill is registered, its capabilities appear in **`ros2_list_capabilities`** and are chainable via **`run_mission`** — **no per-skill MCP tool is required on OpenClaw**. The mission runner maps capability ids to the underlying tools using a shared binding table across all adapters.
+
+**What you need as a skill author:**
+
+1. Declare one or more entries in `package.json` → `agenticros.capabilities[]` (`id`, `verb`, `description`, optional `inputs` / `outputs`).
+2. Register the tool(s) your skill uses in `registerSkill()` as today.
+3. Ensure the capability `id` matches what the mission bindings expect — built-in skill ids today are `find_object` and `follow_person`.
+
+**Example — agent chains your skill after a built-in verb:**
+
+```json
+{
+  "mission": {
+    "steps": [
+      { "id": "find", "capability": "find_object", "inputs": { "target": "chair" } },
+      {
+        "id": "approach",
+        "capability": "drive_base",
+        "inputs": {
+          "linear_x": 0.2,
+          "angular_z": "{{find.outputs.horizontal_offset}}"
+        }
+      }
+    ]
+  }
+}
+```
+
+Agents can also pass a natural-language **`goal`** (*"find a chair and drive toward it"*) and the local planner compiles the same plan when `find_object` is in the registry.
+
+Full orchestration guide: **[docs/missions.md](missions.md)**.
+
 ## How loading works
 
 1. The OpenClaw config file (e.g. `~/.openclaw/openclaw.json`) sets `plugins.entries.agenticros.config.skillPackages` and / or `skillPaths`.
