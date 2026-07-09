@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import type { AgenticROSConfig } from "@agenticros/core";
-import { parseConfig } from "@agenticros/core";
+import { parseConfig, withResolvedSkillRefs, applyCachedSkillRefs } from "@agenticros/core";
 
 /**
  * Optional MCP / process env override: set `robot.namespace` without editing JSON.
@@ -61,12 +61,7 @@ function tryOpenClawConfig(): Record<string, unknown> | null {
   return null;
 }
 
-/**
- * Load and parse AgenticROS config.
- * 1) AGENTICROS_CONFIG_PATH or ~/.agenticros/config.json (full JSON object = config).
- * 2) If that file does not exist, try OpenClaw config and read plugins.entries.agenticros.config.
- */
-export function loadConfig(): AgenticROSConfig {
+function loadConfigSync(): AgenticROSConfig {
   const primaryPath = getConfigPath();
   try {
     const raw = fs.readFileSync(primaryPath, "utf8");
@@ -76,14 +71,14 @@ export function loadConfig(): AgenticROSConfig {
       if (process.stderr && typeof process.stderr.write === "function") {
         process.stderr.write(`[AgenticROS] Config from ${primaryPath}\n`);
       }
-      return applyMcpEnvOverrides(cfg);
+      return applyMcpEnvOverrides(applyCachedSkillRefs(cfg));
     }
   } catch (err) {
     const nodeErr = err as NodeJS.ErrnoException;
     if (nodeErr.code === "ENOENT") {
       const openclawConfig = tryOpenClawConfig();
       if (openclawConfig) {
-        return applyMcpEnvOverrides(parseConfig(openclawConfig));
+        return applyMcpEnvOverrides(applyCachedSkillRefs(parseConfig(openclawConfig)));
       }
       throw new Error(
         `AgenticROS config not found at ${primaryPath}. Create it or set AGENTICROS_CONFIG_PATH. ` +
@@ -92,5 +87,33 @@ export function loadConfig(): AgenticROSConfig {
     }
     throw err;
   }
-  return applyMcpEnvOverrides(parseConfig({}));
+  return applyMcpEnvOverrides(applyCachedSkillRefs(parseConfig({})));
+}
+
+/**
+ * Load and parse AgenticROS config (sync). Merges already-cached skillRefs into skillPaths.
+ */
+export function loadConfig(): AgenticROSConfig {
+  return loadConfigSync();
+}
+
+/**
+ * Load config and auto-fetch any missing skillRefs into the skills-cache (network).
+ */
+export async function loadConfigAsync(): Promise<AgenticROSConfig> {
+  const base = loadConfigSync();
+  if (!(base.skillRefs?.length)) return base;
+  const { config, errors } = await withResolvedSkillRefs(base, {
+    onLog: (msg) => {
+      if (process.stderr && typeof process.stderr.write === "function") {
+        process.stderr.write(`[AgenticROS] ${msg}\n`);
+      }
+    },
+  });
+  for (const e of errors) {
+    if (process.stderr && typeof process.stderr.write === "function") {
+      process.stderr.write(`[AgenticROS] skillRef ${e.ref}: ${e.error}\n`);
+    }
+  }
+  return applyMcpEnvOverrides(config);
 }

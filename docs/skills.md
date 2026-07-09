@@ -1,6 +1,6 @@
 # AgenticROS Skills
 
-Skills are optional packages that add tools and behaviors to the AgenticROS plugin. They're loaded at gateway start from **`skillPackages`** (npm package names) and **`skillPaths`** (directories). Each skill reads its config from **`config.skills.<skillId>`** and registers tools with the plugin.
+Skills are optional packages that add tools and behaviors to the AgenticROS plugin. They're loaded at gateway start from **`skillPackages`** (npm package names), **`skillPaths`** (directories), and **`skillRefs`** (marketplace refs auto-fetched into `~/.agenticros/skills-cache/`). Each skill reads its runtime config from **`config.skills.<skillId>`** (distinct from `skillRefs`).
 
 A central marketplace at **[skills.agenticros.com](https://skills.agenticros.com)** lists every published skill and supplies the install descriptors the CLI uses. Each skill has a **namespaced ref** `owner/skill-id` (your GitHub login + `agenticros.id`), e.g. `chrismatthieu/followme`. Legacy flat slugs still resolve for older listings. The marketplace stores **metadata only** — every skill's source code lives in its own GitHub repository.
 
@@ -222,7 +222,27 @@ Experienced ROS developers can wrap Nav2, MoveIt, YOLO nodes, etc. without rewri
 }
 ```
 
-Install via `skillPaths` pointing at the skill directory (see the navigate-to example README).
+Install via the marketplace (preferred) or `skillPaths` / `skillRefs`:
+
+```bash
+npx agenticros skills install chrismatthieu/navigate-to
+npx agenticros skills install chrismatthieu/detect-humans
+npx agenticros skills install chrismatthieu/start-slam
+npx agenticros skills install chrismatthieu/follow-me-ros
+```
+
+Or pin in config (auto-fetch on MCP/Gemini startup; OpenClaw merges already-cached paths):
+
+```jsonc
+{
+  "skillRefs": [
+    "chrismatthieu/navigate-to",
+    "chrismatthieu/detect-humans@main"
+  ]
+}
+```
+
+`ros2_list_capabilities` also returns **discoverable** marketplace capabilities (`discoverable: true`, `install_ref`) that are not installed yet, so an agent can propose `agenticros skills install <install_ref>`.
 Agents can also pass a natural-language **`goal`** (*"find a chair and drive toward it"*) and the local planner compiles the same plan when `find_object` is in the registry.
 
 Full orchestration guide: **[docs/missions.md](missions.md)**.

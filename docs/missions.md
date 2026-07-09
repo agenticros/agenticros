@@ -260,7 +260,10 @@ Builtin bindings live in `@agenticros/core` (`buildMissionBindings`). Skill-decl
 | `subscribe_once` | `ros2_subscribe_once` |
 | `follow_person` | `ros2_follow_me_start` (skill / Gemini / MCP) |
 | `find_object` | `ros2_find_object` (skill / Gemini / MCP) |
-| `navigate_to` | external Nav2 action (see [examples/navigate-to](../examples/navigate-to/)) |
+| `navigate_to` | external Nav2 action (`agenticros skills install chrismatthieu/navigate-to`) |
+| `detect_humans` | external vision topic subscribe (`chrismatthieu/detect-humans`) |
+| `start_slam` / `stop_slam` / `save_map` | external RTAB-Map services (`chrismatthieu/start-slam`) |
+| `follow_person_ros` / `stop_follow_person_ros` | external `agenticros_follow_me` services (`chrismatthieu/follow-me-ros`) |
 
 Skills you author can add new ids via `agenticros.capabilities[]` in `package.json` (or sibling `capabilities.json`); once registered, they appear in `ros2_list_capabilities` and are chainable in `run_mission` without editing three adapter binding tables. See [skills.md — Chaining your skill in missions](skills.md#chaining-your-skill-in-missions).
 

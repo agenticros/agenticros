@@ -418,6 +418,14 @@ export const AgenticROSConfigSchema = z.object({
 
   /** Npm (or local) package names to load as skills. Resolved via require.resolve from plugin context. */
   skillPackages: z.array(z.string()).default([]),
+
+  /**
+   * Marketplace skill refs to auto-fetch into `~/.agenticros/skills-cache/`
+   * (e.g. `agenticros/navigate-to` or `owner/skill@main`). Resolved at
+   * adapter startup into effective skillPaths. Never auto-upgrades pins.
+   * Distinct from `skills` (per-skill runtime config object).
+   */
+  skillRefs: z.array(z.string()).default([]),
 });
 
 export type AgenticROSConfig = z.infer<typeof AgenticROSConfigSchema>;

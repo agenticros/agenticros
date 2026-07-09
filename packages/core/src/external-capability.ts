@@ -156,12 +156,25 @@ export async function executeExternalCapability(
     }
 
     if (impl.topic) {
-      const topic = resolveName(impl.topic, ns);
+      const topicName =
+        typeof inputs.topic === "string" && inputs.topic.trim()
+          ? inputs.topic.trim()
+          : impl.topic;
+      const topic = resolveName(topicName, ns);
       const msgType = impl.msg_type ?? "";
-      const mode = typeof inputs.mode === "string" ? inputs.mode : "publish";
+      // Detection / sensor skills default to subscribe_once; publishers must pass mode: "publish".
+      const mode =
+        typeof inputs.mode === "string"
+          ? inputs.mode
+          : "subscribe";
       if (mode === "subscribe" || mode === "subscribe_once") {
         const timeout =
-          options.timeoutMs ?? (typeof inputs.timeout === "number" ? inputs.timeout : 5000);
+          options.timeoutMs ??
+          (typeof inputs.timeout_ms === "number"
+            ? inputs.timeout_ms
+            : typeof inputs.timeout === "number"
+              ? inputs.timeout
+              : 5000);
         const msg = await new Promise<Record<string, unknown>>((resolve, reject) => {
           let settled = false;
           const timer = setTimeout(() => {

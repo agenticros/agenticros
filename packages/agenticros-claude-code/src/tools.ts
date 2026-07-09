@@ -14,6 +14,7 @@ import {
   toNamespacedTopic,
   toNamespacedTopicFull,
   listAllCapabilities,
+  listCapabilitiesWithDiscoverable,
   runMission,
   listRobots,
   getActiveRobotId,
@@ -549,16 +550,18 @@ async function publishFollowMeCmd(
  * Format the capability list for tool responses — shared by claude-code,
  * OpenClaw, and Gemini so every adapter returns the same JSON shape.
  */
-function formatCapabilitiesResponse(caps: Capability[]): string {
-  const byKind = {
-    intrinsic: caps.filter((c) => c.source?.kind === "builtin").length,
-    skill: caps.filter((c) => c.source?.kind === "skill").length,
-  };
+function formatCapabilitiesResponse(
+  caps: Array<Capability & { discoverable?: boolean; installed?: boolean; install_ref?: string }>,
+): string {
+  const intrinsic = caps.filter((c) => c.source?.kind === "builtin").length;
+  const skill = caps.filter((c) => c.installed !== false && c.source?.kind === "skill").length;
+  const discoverable = caps.filter((c) => c.discoverable === true).length;
   return JSON.stringify({
     success: true,
     total: caps.length,
-    intrinsic_count: byKind.intrinsic,
-    skill_count: byKind.skill,
+    intrinsic_count: intrinsic,
+    skill_count: skill,
+    discoverable_count: discoverable,
     capabilities: caps,
   });
 }
@@ -891,7 +894,7 @@ export async function handleToolCall(
     } catch (err) {
       return robotResolveError(err);
     }
-    const caps = listAllCapabilities(config);
+    const caps = await listCapabilitiesWithDiscoverable(config);
     return { content: [{ type: "text", text: formatCapabilitiesResponse(caps) }] };
   }
   // ros2_list_robots reads the multi-robot section of the config (with

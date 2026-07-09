@@ -1,6 +1,6 @@
 {
   "name": "@agenticros/core",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "type": "module",
   "description": "AgenticROS core — platform-agnostic ROS2 transport, types, and config (the dep every AgenticROS skill imports).",
   "keywords": [

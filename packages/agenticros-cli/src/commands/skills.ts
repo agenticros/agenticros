@@ -10,11 +10,9 @@
  *                           plugin manifest's `contracts.tools` allowlist
  *                           matches the skills currently registered.
  *
- * All mutations target `~/.openclaw/openclaw.json` (or `$OPENCLAW_CONFIG`),
- * because that is what the OpenClaw plugin actually reads at gateway start.
- * The MCP server and the Gemini CLI do not (yet) load skills, so the active
- * `~/.agenticros/config.json` profile is left untouched — the user is free to
- * add per-skill behavior config there via the existing `agenticros config set`.
+ * Mutations target OpenClaw config and (for marketplace installs) also write
+ * `skillRefs` into `~/.agenticros/config.json` so MCP / Gemini can resolve
+ * capability manifests from `~/.agenticros/skills-cache/`.
  */
 
 import { existsSync } from "node:fs";
@@ -26,6 +24,7 @@ import { execa } from "execa";
 import {
   addSkillByPackage,
   addSkillByPath,
+  addSkillRef,
   deriveSkillId,
   inspectSkillDir,
   listSkills,
@@ -41,6 +40,7 @@ import {
   searchSkills,
   type MarketplaceSkill,
 } from "../util/marketplace.js";
+import { ensureSkillRefCached, skillsCacheDir } from "@agenticros/core";
 import { createSkillCommand } from "./create-skill.js";
 import { publishSkillCommand } from "./publish-skill.js";
 import { skillsDevCommand } from "./skills-dev.js";
@@ -526,7 +526,7 @@ async function installAction(rawRef: string | undefined): Promise<void> {
     }
   }
 
-  // 2) Clone + build.
+  // 2) Clone + build into adjacent dir (legacy discovery) AND skills-cache.
   let result;
   try {
     result = await cloneAndBuild(descriptor, {
@@ -544,6 +544,20 @@ async function installAction(rawRef: string | undefined): Promise<void> {
       : `Cloned and built at ${result.cloneDir}.`,
   );
 
+  // Also warm ~/.agenticros/skills-cache for skillRefs auto-fetch.
+  try {
+    const cachePath = await ensureSkillRefCached(ref, {
+      onLog: (msg) => info(msg),
+    });
+    ok(`Cached under ${cachePath} (skills-cache root: ${skillsCacheDir()}).`);
+  } catch (e) {
+    warn(
+      `skills-cache warm failed (skillPaths registration still ok): ${
+        e instanceof Error ? e.message : String(e)
+      }`,
+    );
+  }
+
   // 3) Confirm the clone is a real skill and register it.
   const info1 = inspectSkillDir(result.cloneDir);
   if (!info1) {
@@ -558,6 +572,9 @@ async function installAction(rawRef: string | undefined): Promise<void> {
     process.exit(1);
   }
   ok(reg.message);
+  const refReg = addSkillRef(ref);
+  if (refReg.ok) ok(refReg.message);
+  else warn(refReg.message);
   warnIfNotBuilt(result.cloneDir, info1.entry);
 
   // 4) Sync the OpenClaw contracts.tools allowlist + remind to restart.

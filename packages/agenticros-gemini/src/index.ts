@@ -10,7 +10,7 @@
  * Optional: GEMINI_MODEL (default gemini-2.5-flash) if you hit quota on a specific model.
  */
 
-import { loadConfig } from "./config.js";
+import { loadConfigAsync } from "./config.js";
 import { connect, disconnect } from "./transport.js";
 import { chatWithRobot } from "./chat.js";
 import { renderAgenticROSBanner } from "@agenticros/core";
@@ -32,7 +32,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const config = loadConfig();
+  const config = await loadConfigAsync();
   await connect(config);
 
   try {

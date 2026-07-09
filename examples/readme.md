@@ -8,9 +8,25 @@ This directory contains example AgenticROS workflows that show how AI agents can
 |---|---:|---|
 | [TurtleBot3 chat control](turtlebot-chat/README.md) | Ready | Control a TurtleBot3 in Gazebo through OpenClaw messaging channels such as WhatsApp, Telegram, Discord, or Slack. |
 | [Find and approach](find-and-approach/README.md) | Ready | Single-robot mission chaining: install Find Object, run `run_mission` with a NL goal or declarative find → approach plan. |
-| [Navigate To (Nav2 external skill)](navigate-to/README.md) | Ready | Phase 1 seed: wrap Nav2 `NavigateToPose` as an `external_ros_node` capability. |
+| [Navigate To (Nav2)](navigate-to/README.md) | Ready | Pointer to marketplace skill `chrismatthieu/navigate-to` (`external_ros_node` → Nav2). |
+| [Detect Humans](detect-humans/README.md) | Ready | Pointer to `chrismatthieu/detect-humans` — subscribe to on-robot detections. |
+| [Start SLAM](start-slam/README.md) | Ready | Pointer to `chrismatthieu/start-slam` — RTAB-Map service triggers. |
+| [Follow Me (ROS)](follow-me-ros/README.md) | Ready | Pointer to `chrismatthieu/follow-me-ros` — on-robot follow_me services. |
+| [MoveIt pick (stub)](moveit-pick/README.md) | Stub | Documented external MoveIt shape; no marketplace package until sim-arm lands. |
 | [Robotic arm control](arm-control/README.md) | Planned | Natural-language pick and place, joint control, gripper control, and camera-guided manipulation. Requires MoveIt2 action integration. |
 | [Multi-robot fleet patrol](fleet-patrol/README.md) | Planned | Scheduled waypoint patrols and fleet-wide status. Multi-robot missions and `ros2_find_robots_for` work today — see [docs/missions.md](../docs/missions.md). |
+
+## Marketplace seed skills (adjacent repos)
+
+Installable packages live next to this monorepo (same layout as find / followme):
+
+```bash
+npx agenticros skills install chrismatthieu/navigate-to
+npx agenticros skills install chrismatthieu/detect-humans
+npx agenticros skills install chrismatthieu/start-slam
+npx agenticros skills install chrismatthieu/follow-me-ros
+# or pin in config: "skillRefs": ["chrismatthieu/navigate-to", ...]
+```
 
 ## Quick start
 

@@ -8,7 +8,8 @@
  * detection (`hasRedChecks()`) so the UX stays consistent.
  */
 
-import { existsSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 
 import { execa } from "execa";
@@ -336,6 +337,40 @@ export async function runDoctorChecks(): Promise<DoctorReport> {
         });
       }
     }
+  }
+
+  // skillRefs / skills-cache (MCP + OpenClaw auto-fetch v1)
+  try {
+    const { skillsCacheDir } = await import("@agenticros/core");
+    const cacheRoot = skillsCacheDir();
+    const agenticrosCfgPath = join(homedir(), ".agenticros", "config.json");
+    let refCount = 0;
+    if (existsSync(agenticrosCfgPath)) {
+      try {
+        const raw = JSON.parse(readFileSync(agenticrosCfgPath, "utf8")) as {
+          skillRefs?: unknown;
+        };
+        if (Array.isArray(raw.skillRefs)) refCount = raw.skillRefs.length;
+      } catch {
+        /* ignore */
+      }
+    }
+    if (refCount > 0 || existsSync(cacheRoot)) {
+      checks.push({
+        id: "skills-cache",
+        label:
+          refCount > 0
+            ? `skillRefs: ${refCount} declared; cache ${existsSync(cacheRoot) ? cacheRoot : "(missing)"}`
+            : `skills-cache present at ${cacheRoot}`,
+        severity: existsSync(cacheRoot) || refCount === 0 ? "green" : "yellow",
+        hint:
+          refCount > 0 && !existsSync(cacheRoot)
+            ? "Run `agenticros skills install <owner/skill>` to warm ~/.agenticros/skills-cache/."
+            : undefined,
+      });
+    }
+  } catch {
+    /* core not resolvable in odd installs — skip */
   }
 
   // Skills (only meaningful once the OpenClaw config exists).

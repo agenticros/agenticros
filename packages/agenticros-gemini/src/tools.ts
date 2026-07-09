@@ -14,6 +14,7 @@ import {
   toNamespacedTopic,
   toNamespacedTopicFull,
   listAllCapabilities,
+  listCapabilitiesWithDiscoverable,
   runMission,
   listRobots,
   getActiveRobotId,
@@ -500,15 +501,17 @@ export async function executeTool(
   if (name === "ros2_list_capabilities") {
     const resolved = resolveRobotForTool(config, args);
     if ("error" in resolved) return resolved.error;
-    const caps: Capability[] = listAllCapabilities(config);
+    const caps = await listCapabilitiesWithDiscoverable(config);
     const intrinsic = caps.filter((c) => c.source?.kind === "builtin").length;
-    const skill = caps.filter((c) => c.source?.kind === "skill").length;
+    const skill = caps.filter((c) => c.installed !== false && c.source?.kind === "skill").length;
+    const discoverable = caps.filter((c) => c.discoverable === true).length;
     return {
       output: JSON.stringify({
         success: true,
         total: caps.length,
         intrinsic_count: intrinsic,
         skill_count: skill,
+        discoverable_count: discoverable,
         capabilities: caps,
       }),
     };

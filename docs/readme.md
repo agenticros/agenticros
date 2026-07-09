@@ -36,7 +36,8 @@ AgenticROS connects AI agent platforms to ROS2 robots through a shared core, tra
 
 - [Roadmap](roadmap.md) - open-source and paid-services roadmaps for advanced physical AI (near / mid / long term).
 - [Strategy: AI Agents + ROS](strategy-ai-agents-plus-ros.md) - product direction, phases, marketplace plans, spatial memory, and cross-agent collaboration.
-- [Blog: Phase 1 complete](blog/phase-1-complete.md) - capabilities, missions, fleet heartbeats, pause/resume, external Nav2 skills.
+- [Blog: Contract layer](blog/phase-1-complete.md) - capabilities, missions, fleet heartbeats, pause/resume, external Nav2 skills.
+- [Blog: Seed catalog & skillRefs](blog/seed-catalog-and-skillrefs.md) - external seed skills, marketplace auto-fetch, discoverable capabilities.
 
 ## Diagrams
 

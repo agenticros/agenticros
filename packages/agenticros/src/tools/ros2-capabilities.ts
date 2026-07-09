@@ -16,7 +16,7 @@
 import { Type } from "@sinclair/typebox";
 import type { OpenClawPluginApi } from "../plugin-api.js";
 import type { AgenticROSConfig, Capability } from "@agenticros/core";
-import { listAllCapabilities } from "@agenticros/core";
+import { listCapabilitiesWithDiscoverable } from "@agenticros/core";
 import { ROBOT_ID_SCHEMA, resolveRobotForTool } from "./_robot-helpers.js";
 
 export function registerCapabilitiesTool(
@@ -29,29 +29,26 @@ export function registerCapabilitiesTool(
     description:
       "List the high-level capabilities (named verbs) this robot can perform — built-in verbs like " +
       "drive_base / take_snapshot / measure_depth plus every capability declared by installed " +
-      "AgenticROS skills (e.g. follow_person, find_object). PREFER this over ros2_list_topics for " +
-      "high-level planning: capabilities are agent-meaningful verbs with typed inputs/outputs, " +
-      "not raw topic names. Returns one structured response listing every capability the robot " +
-      "supports right now. Pass robot_id (from ros2_list_robots) to scope to a specific robot; " +
-      "today every robot exposes the same capabilities, but the API is in place for per-robot " +
-      "capability declarations.",
+      "AgenticROS skills (e.g. follow_person, find_object). Also includes discoverable marketplace " +
+      "capabilities (discoverable:true, install_ref) that are not installed yet so you can propose " +
+      "`agenticros skills install <install_ref>`. PREFER this over ros2_list_topics for high-level " +
+      "planning. Pass robot_id to scope to a specific robot when using a multi-robot fleet.",
     parameters: Type.Object({ ...ROBOT_ID_SCHEMA }),
 
     async execute(_toolCallId, params) {
-      // robot_id is validated even though the response doesn't depend on
-      // it yet — unknown ids surface as a tool error, matching every
-      // other tool in the suite.
       const resolved = resolveRobotForTool(config, params);
       if ("error" in resolved) return resolved.error;
 
-      const caps: Capability[] = listAllCapabilities(config);
+      const caps = await listCapabilitiesWithDiscoverable(config);
       const intrinsic = caps.filter((c) => c.source?.kind === "builtin").length;
-      const skill = caps.filter((c) => c.source?.kind === "skill").length;
+      const skill = caps.filter((c) => c.installed !== false && c.source?.kind === "skill").length;
+      const discoverable = caps.filter((c) => c.discoverable === true).length;
       const result = {
         success: true,
         total: caps.length,
         intrinsic_count: intrinsic,
         skill_count: skill,
+        discoverable_count: discoverable,
         capabilities: caps,
       };
       return {

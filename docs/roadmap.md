@@ -32,11 +32,13 @@ premium skills — never on the real-time control path.
 | Capabilities, `run_mission`, NL planner, cancel, pause/resume | Shipped |
 | Fleet list / find-for / heartbeat online / `fleet.json` | Shipped |
 | Dynamic mission bindings + Gemini find/follow | Shipped |
-| External ROS-node skill loader + `navigate_to` seed | Shipped |
+| External ROS-node skill loader + seed catalog (navigate / detect / slam / follow-ros) | Shipped |
+| `skillRefs` + `~/.agenticros/skills-cache/` auto-fetch | Shipped (v1; restart still required) |
+| Discoverable marketplace capabilities in `ros2_list_capabilities` | Shipped |
 | Skills marketplace (metadata + git install) | Live at [skills.agenticros.com](https://skills.agenticros.com) |
 | Cross-adapter memory (local / mem0) | Shipped, off by default |
 | Safety (velocity clamps, OpenClaw `/estop`) | Baseline shipped |
-| Marketplace auto-fetch + paid licenses | Planned |
+| Marketplace auto-fetch (npm + hot-reload) + paid licenses | Planned (git skillRefs v1 shipped) |
 | Spatial memory | Planned |
 | ACP / A2A multi-agent mesh | Planned |
 
@@ -92,7 +94,7 @@ find/follow parity, and `external_ros_node` dispatch with a
 
 | # | Deliverable | Why |
 |---|-------------|-----|
-| 1 | **Broader seed skills** — `detect_humans` (YOLO/MediaPipe), `start_slam` (RTAB-Map), more Nav2 variants | Unlocks advanced physical AI verbs agents can plan against beyond `navigate_to` |
+| 1 | **Broader seed skills** — MoveIt pick, more Nav2 variants, richer SLAM save/load | External detect/slam/follow-ros/navigate seeds shipped; grow catalog further |
 | 2 | **Mission runner v2** — parallel steps (where safe), retry/backoff, mid-step cancel for interruptible skills | Complex missions need recovery, not only happy-path sequences (pause/resume already shipped) |
 | 3 | **Optional LLM planner** behind the same `compileGoalToMission` contract | Rule-based planner stays default; LLM expands coverage without changing the API |
 | 4 | **Safety depth** — workspace/geofence checks, `blocks_base` cmd_vel mutex, MCP estop parity | Baseline for multi-agent / multi-skill contention |

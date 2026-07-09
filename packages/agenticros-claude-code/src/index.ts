@@ -13,7 +13,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { ListToolsRequestSchema, CallToolRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import type { AgenticROSConfig } from "@agenticros/core";
 import { renderAgenticROSBanner } from "@agenticros/core";
-import { loadConfig } from "./config.js";
+import { loadConfig, loadConfigAsync } from "./config.js";
 import { connect, disconnect } from "./transport.js";
 import { TOOLS, handleToolCall, MEMORY_TOOL_NAMES, NO_TRANSPORT_TOOL_NAMES } from "./tools.js";
 import { ensureMemory } from "./memory.js";
@@ -75,8 +75,8 @@ function main(): void {
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
     try {
-      // Reload config from disk each time so edits to ~/.agenticros/config.json take effect without restarting Claude Code
-      config = loadConfig();
+      // Reload config from disk; resolve skillRefs into skills-cache when needed
+      config = await loadConfigAsync();
       const ns = (config.robot?.namespace ?? "").trim();
       process.stderr.write(
         `[AgenticROS] Config: robot.namespace=${ns ? `"${ns}"` : '""'} → ${ns ? `/${ns}/cmd_vel` : "/cmd_vel"}\n`,

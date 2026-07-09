@@ -16,7 +16,7 @@
  * surfaces (e.g. `followme`, `find`).
  */
 
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 
@@ -417,5 +417,78 @@ export function removeSkill(idOrName: string): RemoveResult {
     message: `Removed ${parts.join(" + ")} matching '${idOrName}' from ${openclawConfigPath()}.`,
     removedPaths,
     removedPackages,
+  };
+}
+
+/**
+ * Append a marketplace skillRef (e.g. `agenticros/navigate-to`) to the
+ * OpenClaw plugin config and `~/.agenticros/config.json` when present.
+ * Idempotent.
+ */
+export function addSkillRef(marketplaceRef: string): AddResult {
+  const ref = marketplaceRef.trim().toLowerCase();
+  if (!ref.includes("/")) {
+    return { ok: false, message: `Invalid skillRef '${marketplaceRef}' (expected owner/skill).` };
+  }
+
+  let wroteOpenclaw = false;
+  if (openclawConfigExists()) {
+    const cfg = readOpenclawConfig();
+    if (cfg) {
+      const pluginCfg = getAgenticrosPluginConfig(cfg);
+      const refs = ensureStringArray(pluginCfg, "skillRefs");
+      if (!refs.includes(ref)) {
+        refs.push(ref);
+        writeOpenclawConfig(cfg);
+        wroteOpenclaw = true;
+      }
+    }
+  }
+
+  let wroteAgenticros = false;
+  try {
+    const agenticrosPath = join(homedir(), ".agenticros", "config.json");
+    if (existsSync(agenticrosPath)) {
+      const raw = JSON.parse(readFileSync(agenticrosPath, "utf8")) as Record<string, unknown>;
+      const refs = Array.isArray(raw.skillRefs)
+        ? (raw.skillRefs as unknown[]).filter((x): x is string => typeof x === "string")
+        : [];
+      if (!refs.includes(ref)) {
+        refs.push(ref);
+        raw.skillRefs = refs;
+        writeFileSync(agenticrosPath, JSON.stringify(raw, null, 2) + "\n", "utf8");
+        wroteAgenticros = true;
+      }
+    } else {
+      // Create a minimal config so MCP/Gemini pick up skillRefs without OpenClaw.
+      mkdirSync(join(homedir(), ".agenticros"), { recursive: true });
+      writeFileSync(
+        agenticrosPath,
+        JSON.stringify({ skillRefs: [ref] }, null, 2) + "\n",
+        "utf8",
+      );
+      wroteAgenticros = true;
+    }
+  } catch (e) {
+    return {
+      ok: wroteOpenclaw,
+      message:
+        `Updated OpenClaw skillRefs=${wroteOpenclaw}; failed writing ~/.agenticros/config.json: ` +
+        (e instanceof Error ? e.message : String(e)),
+    };
+  }
+
+  if (!wroteOpenclaw && !wroteAgenticros) {
+    return {
+      ok: true,
+      message: `skillRef '${ref}' already registered.`,
+    };
+  }
+  const parts: string[] = [];
+  if (wroteOpenclaw) parts.push("OpenClaw skillRefs");
+  if (wroteAgenticros) parts.push("~/.agenticros/config.json skillRefs");
+  return {
+    ok: true,
+    message: `Registered skillRef '${ref}' (${parts.join(" + ")}).`,
   };
 }

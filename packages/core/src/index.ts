@@ -171,5 +171,35 @@ export type {
   FindRobotsForResult,
 } from "./find-robots-for.js";
 
+export {
+  DEFAULT_SKILLS_API,
+  DEFAULT_SKILLS_CACHE_DIR,
+  ensureSkillRefCached,
+  fetchInstallDescriptor,
+  githubRepoBasename,
+  parseSkillRef,
+  resolveSkillRefs,
+  skillsApiBase,
+  skillsCacheDir,
+  withResolvedSkillRefs,
+  applyCachedSkillRefs,
+} from "./skill-refs.js";
+export type {
+  InstallDescriptor,
+  ParsedSkillRef,
+  ResolveSkillRefsOptions,
+  ResolveSkillRefsResult,
+} from "./skill-refs.js";
+
+export {
+  fetchMarketplaceSkills,
+  listCapabilitiesWithDiscoverable,
+} from "./discoverable-capabilities.js";
+export type {
+  DiscoverableCapability,
+  ListCapabilitiesOptions,
+  ListedCapability,
+} from "./discoverable-capabilities.js";
+
 export { TransportPool, TRANSPORT_POOL_GLOBAL_KEY } from "./transport-pool.js";
 export type { TransportFactory } from "./transport-pool.js";

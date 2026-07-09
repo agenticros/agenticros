@@ -1,5 +1,5 @@
 import type { OpenClawPluginApi } from "./plugin-api.js";
-import { parseConfig, isCdrTypeSupported, agenticROSBannerLines } from "@agenticros/core";
+import { parseConfig, isCdrTypeSupported, agenticROSBannerLines, applyCachedSkillRefs } from "@agenticros/core";
 import { readAgenticROSConfigFromFile } from "./config-file.js";
 import { registerService } from "./service.js";
 import { registerTools } from "./tools/index.js";
@@ -35,6 +35,13 @@ export default {
       const msg = e instanceof Error ? e.message : String(e);
       api.logger.warn("AgenticROS: could not read config from file: " + msg + " — using gateway pluginConfig.");
       config = parseConfig(api.pluginConfig ?? {});
+    }
+    // Merge skillRefs that are already cached (no network in sync register).
+    config = applyCachedSkillRefs(config);
+    if ((config.skillRefs?.length ?? 0) > 0) {
+      api.logger.info(
+        `AgenticROS: skillRefs=${config.skillRefs!.length} (cached paths merged into skillPaths; run skills install to warm cache)`,
+      );
     }
     const mode = config.transport?.mode ?? "local";
     const zenohEndpoint = config.zenoh?.routerEndpoint ?? "";
