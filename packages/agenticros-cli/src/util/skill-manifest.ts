@@ -95,7 +95,7 @@ export function validateManifest(raw: unknown): ValidatedManifest {
   const coreDep = m.dependencies?.["@agenticros/core"];
   if (coreDep?.startsWith("file:")) {
     warnings.push(
-      "`@agenticros/core` is declared as a `file:` path. Publish a version from npm (e.g. `^0.5.0`) before others can install your skill.",
+      "`@agenticros/core` is declared as a `file:` path. Publish a version from npm (e.g. `^0.6.0`) before others can install your skill.",
     );
   }
   if (!block.description && !m.description) {

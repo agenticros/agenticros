@@ -61,7 +61,7 @@ Your `package.json` declares an `agenticros` block:
     ]
   },
   "dependencies": {
-    "@agenticros/core": "^0.5.0"
+    "@agenticros/core": "^0.6.0"
   }
 }
 ```

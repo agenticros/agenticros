@@ -101,7 +101,7 @@ Every skill is an npm package whose `package.json` declares a single `agenticros
     ]
   },
   "dependencies": {
-    "@agenticros/core": "^0.5.0"
+    "@agenticros/core": "^0.6.0"
   }
 }
 ```
