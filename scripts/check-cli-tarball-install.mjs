@@ -32,7 +32,15 @@
  */
 
 import { execSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -132,6 +140,31 @@ try {
   }
   ok(`Extracted to ${pkgDir}`);
 
+  // 3a. published package.json must not contain pnpm workspace: protocol
+  // (npm / npx consumers cannot resolve workspace:* — broke agenticros@0.4.0).
+  step("Checking published package.json has no workspace: dependencies...");
+  const publishedPkg = JSON.parse(
+    readFileSync(join(pkgDir, "package.json"), "utf8"),
+  );
+  const badDeps = [];
+  for (const section of ["dependencies", "optionalDependencies", "peerDependencies"]) {
+    const block = publishedPkg[section];
+    if (!block || typeof block !== "object") continue;
+    for (const [name, range] of Object.entries(block)) {
+      if (typeof range === "string" && range.startsWith("workspace:")) {
+        badDeps.push(`${section}.${name}=${range}`);
+      }
+    }
+  }
+  if (badDeps.length > 0) {
+    fail(
+      `Published package.json still has workspace: protocol (npm cannot install this):\n    ${badDeps.join("\n    ")}\n` +
+        `Use a semver range against the published @agenticros/core (e.g. "^0.7.0").`,
+    );
+    process.exit(1);
+  }
+  ok("No workspace: protocol in published dependencies.");
+
   // 3. critical files present in the SHIPPED tarball
   step("Verifying critical runtime files are in the tarball...");
   const runtimeInTar = join(pkgDir, "runtime");
@@ -150,8 +183,7 @@ try {
 
   // 5. write inline .npmrc (mirrors init.ts writeInitNpmrcInline)
   step("Writing inline .npmrc (mirroring writeInitNpmrcInline)...");
-  const fs = await import("node:fs");
-  fs.writeFileSync(
+  writeFileSync(
     join(installDir, ".npmrc"),
     [
       "shamefully-hoist=false",

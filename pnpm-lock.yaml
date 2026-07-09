@@ -66,8 +66,8 @@ importers:
   packages/agenticros-cli:
     dependencies:
       '@agenticros/core':
-        specifier: workspace:*
-        version: link:../core
+        specifier: ^0.7.0
+        version: 0.7.0
       '@inquirer/prompts':
         specifier: ^7.0.0
         version: 7.10.1(@types/node@20.19.35)
@@ -177,6 +177,10 @@ importers:
         version: 5.9.3
 
 packages:
+
+  '@agenticros/core@0.7.0':
+    resolution: {integrity: sha512-tbcKSf34DVD+pO51goHw1zbu/L12nP3oPvOHoFJK48qaZ4kuejEepljo5xUNB84AtA/QnH9quMPUZbc8rVF8zQ==}
+    engines: {node: '>=20'}
 
   '@eclipse-zenoh/zenoh-ts@1.9.0':
     resolution: {integrity: sha512-qG3VR9Yt81+KjH0WOybyKcNVS0vtBmmhyUJ7dCc5n+8AeAEYTpEvMBTh43Lwu8P+imzMYvFqjaMAO2HFK+x9hA==}
@@ -1976,6 +1980,23 @@ packages:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
 
 snapshots:
+
+  '@agenticros/core@0.7.0':
+    dependencies:
+      '@eclipse-zenoh/zenoh-ts': 1.9.0(patch_hash=pdjq6ms3zvqwikn6vpqzasydsy)
+      '@foxglove/cdr': 3.5.0
+      '@foxglove/rosmsg': 4.2.2
+      '@foxglove/rosmsg2-serialization': 3.1.0
+      ws: 8.19.0
+      zod: 3.25.76
+    optionalDependencies:
+      node-datachannel: 0.12.0
+      rclnodejs: 1.8.2
+    transitivePeerDependencies:
+      - bufferutil
+      - jiti
+      - supports-color
+      - utf-8-validate
 
   '@eclipse-zenoh/zenoh-ts@1.9.0(patch_hash=pdjq6ms3zvqwikn6vpqzasydsy)':
     dependencies:
