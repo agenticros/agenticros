@@ -37,11 +37,11 @@ premium skills — never on the real-time control path.
 | Seed catalog — `navigate_to`, `detect_humans`, `start_slam` / stop / save, `follow_person_ros` (adjacent repos) | Shipped |
 | `skillRefs` + `~/.agenticros/skills-cache/` (git + npm) | Shipped |
 | Discoverable marketplace capabilities in `ros2_list_capabilities` | Shipped |
-| Marketplace npm `@agenticros-skills/*` + CLI auto-restart | Shipped (true mid-session hot-reload still blocked on OpenClaw) |
+| Marketplace npm `@agenticros/*` + CLI auto-restart | Shipped (true mid-session hot-reload still blocked on OpenClaw) |
 | Skills marketplace (metadata + git/npm install) | Live at [skills.agenticros.com](https://skills.agenticros.com) |
 | Cross-adapter memory (local / mem0) | Shipped, off by default |
 | Safety (velocity clamps, OpenClaw `/estop`) | Baseline shipped |
-| Published packages | `@agenticros/core` **0.8.0**, CLI `agenticros` **0.5.0** |
+| Published packages | `@agenticros/core` **0.8.0**, CLI `agenticros` **0.5.1** |
 | Parallel mission steps + true hot-reload + paid licenses | Planned |
 | Spatial memory | Planned |
 | ACP / A2A multi-agent mesh | Planned |
@@ -92,7 +92,7 @@ embodied agents.
   mid-step cancel for interruptible skills), fleet heartbeats /
   `fleet.json`, dynamic bindings, Gemini find/follow,
   `external_ros_node` dispatch.
-- **Seeds (adjacent repos):** `@agenticros-skills/navigate-to`,
+- **Seeds (adjacent repos):** `@agenticros/navigate-to`,
   `detect-humans`, `start-slam`, `follow-me-ros` (MoveIt pick remains an
   examples stub until sim-arm).
 - **Marketplace UX v1+v2:** `skillRefs` → `~/.agenticros/skills-cache/`
@@ -216,7 +216,7 @@ OSS contract (capabilities, missions, safety, seed skills)   ← shipped
         ↓ compounds
 Marketplace UX v1 (skillRefs, discoverable)                  ← shipped
         ↓ compounds
-Marketplace UX v2 (npm @agenticros-skills/* + auto-restart)  ← shipped
+Marketplace UX v2 (npm @agenticros/* + auto-restart)  ← shipped
         ↓ needs ops
 Fleet cloud + mission console
         ↓ needs continuity
@@ -227,7 +227,7 @@ Hosted / spatial memory + multi-agent mesh
 |-------|-----------|------------|
 | **Contract layer** (shipped) | Capabilities, missions, fleet, external ROS nodes | — |
 | **Marketplace UX v1** (shipped) | `skillRefs`, skills-cache, discoverable caps | — |
-| **Marketplace UX v2** (shipped) | npm `@agenticros-skills/*`, CLI auto-restart | — |
+| **Marketplace UX v2** (shipped) | npm `@agenticros/*`, CLI auto-restart | — |
 | **True hot-reload** | Mid-session OpenClaw tool injection | — |
 | **Marketplace economy** | Client license hooks (open) | Paid skills + commissions |
 | **Spatial memory** | Schema + local backend | Hosted spatial memory / first paid skill |

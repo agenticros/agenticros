@@ -1,5 +1,5 @@
 {
-  "name": "@agenticros-skills/{{slug}}",
+  "name": "@agenticros/{{slug}}",
   "version": "0.1.0",
   "type": "module",
   "description": "{{description}}",

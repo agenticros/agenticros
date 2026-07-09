@@ -1,8 +1,8 @@
 # AgenticROS Skills
 
-Skills are optional packages that add tools and behaviors to the AgenticROS plugin. They're loaded at gateway start from **`skillPackages`** (npm package names), **`skillPaths`** (directories), and **`skillRefs`** (marketplace refs or `@agenticros-skills/*` pins auto-fetched into `~/.agenticros/skills-cache/`). Each skill reads its runtime config from **`config.skills.<skillId>`** (distinct from `skillRefs`).
+Skills are optional packages that add tools and behaviors to the AgenticROS plugin. They're loaded at gateway start from **`skillPackages`** (npm package names), **`skillPaths`** (directories), and **`skillRefs`** (marketplace refs or `@agenticros/*` pins auto-fetched into `~/.agenticros/skills-cache/`). Each skill reads its runtime config from **`config.skills.<skillId>`** (distinct from `skillRefs`).
 
-A central marketplace at **[skills.agenticros.com](https://skills.agenticros.com)** lists every published skill and supplies the install descriptors the CLI uses. Each skill has a **namespaced ref** `owner/skill-id` (your GitHub login + `agenticros.id`), e.g. `chrismatthieu/followme`, and preferably an npm package under **`@agenticros-skills/*`**. Legacy flat slugs still resolve for older listings. The marketplace stores **metadata** (including `npmPackage` when published); source also lives on GitHub.
+A central marketplace at **[skills.agenticros.com](https://skills.agenticros.com)** lists every published skill and supplies the install descriptors the CLI uses. Each skill has a **namespaced ref** `owner/skill-id` (your GitHub login + `agenticros.id`), e.g. `chrismatthieu/followme`, and preferably an npm package under **`@agenticros/*`**. Legacy flat slugs still resolve for older listings. The marketplace stores **metadata** (including `npmPackage` when published); source also lives on GitHub.
 
 ## Quick install — from the marketplace
 
@@ -16,7 +16,7 @@ npx agenticros skills search follow
 npx agenticros skills install chrismatthieu/followme
 
 # Or install directly from the scoped npm package:
-npx agenticros skills install @agenticros-skills/followme
+npx agenticros skills install @agenticros/followme
 
 # Skip the automatic gateway restart:
 npx agenticros skills install chrismatthieu/followme --no-restart
@@ -32,7 +32,7 @@ Run `agenticros skills` for the full subcommand list (create · dev · publish �
 
 ```bash
 npx agenticros create-skill my-first-skill
-cd agenticros-skill-my-first-skill   # folder name; package is @agenticros-skills/my-first-skill
+cd agenticros-skill-my-first-skill   # folder name; package is @agenticros/my-first-skill
 npm install
 npm run dev          # → Skill loaded: my-first-skill
 ```
@@ -54,14 +54,14 @@ cd agenticros-skill-wave-hand
 npx agenticros publish
 ```
 
-Requires `gh auth login -s public_repo` (or `GH_TOKEN`). The CLI validates `package.json`, builds, pushes to GitHub, submits to [skills.agenticros.com](https://skills.agenticros.com), and — when `package.json` name is `@agenticros-skills/<slug>` — runs `npm publish --access public`.
+Requires `gh auth login -s public_repo` (or `GH_TOKEN`). The CLI validates `package.json`, builds, pushes to GitHub, submits to [skills.agenticros.com](https://skills.agenticros.com), and — when `package.json` name is `@agenticros/<slug>` — runs `npm publish --access public`.
 
 Published skills use **namespaced URLs**: `https://skills.agenticros.com/<github-handle>/<skill-id>` (e.g. `chrismatthieu/wave-hand`). Install with:
 
 ```bash
 npx agenticros skills install chrismatthieu/wave-hand
 # or
-npx agenticros skills install @agenticros-skills/wave-hand
+npx agenticros skills install @agenticros/wave-hand
 ```
 
 Maintainer profile: `https://skills.agenticros.com/chrismatthieu`
@@ -80,7 +80,7 @@ Every skill is an npm package whose `package.json` declares a single `agenticros
 
 ```jsonc
 {
-  "name": "@agenticros-skills/followme",
+  "name": "@agenticros/followme",
   "version": "0.2.0",
   "publishConfig": { "access": "public" },
   "main": "dist/index.js",

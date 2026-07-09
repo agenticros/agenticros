@@ -236,7 +236,7 @@ Once Phase 2a's auto-fetch ships, the response also includes a
 `discoverable: true` flag for marketplace skills not yet installed —
 letting the agent propose mid-conversation installs (*"I don't see an
 inventory_scan skill; want me to add
-`@agenticros-skills/inventory-scan`?"*) instead of giving up.
+`@agenticros/inventory-scan`?"*) instead of giving up.
 
 ### (c) Skill chaining for missions
 
@@ -385,8 +385,8 @@ Users list skills in `~/.agenticros/config.json` (or a shared
 ```jsonc
 {
   "skills": [
-    "@agenticros-skills/follow-me@^1.2.0",
-    "@agenticros-skills/find-object@^0.3.0"
+    "@agenticros/follow-me@^1.2.0",
+    "@agenticros/find-object@^0.3.0"
   ]
 }
 ```
@@ -417,12 +417,12 @@ their world.
 
 **Submission.** `agenticros skills publish` packages the local skill
 directory, validates the capability manifest schema, signs the
-metadata, publishes to npm under `@agenticros-skills/*`, and registers
+metadata, publishes to npm under `@agenticros/*`, and registers
 metadata with the marketplace. Authentication via the developer's npm
 or GitHub account so we don't run another identity system.
 
 **Distribution.** Skills remain npm packages under
-`@agenticros-skills/*` scope. The marketplace is a *metadata +
+`@agenticros/*` scope. The marketplace is a *metadata +
 discovery* layer on top of npm, not a separate package host. (This
 keeps day-1 infra small and lets skill authors keep familiar publish
 flows.)
@@ -456,7 +456,7 @@ Phase 2a:
 ```jsonc
 {
   "skills": [
-    "@agenticros-skills/follow-me@^1.2.0",
+    "@agenticros/follow-me@^1.2.0",
     { "id": "@enterprise/inventory-scan@2.1.0", "license": "ent_..." }
   ]
 }
@@ -509,7 +509,7 @@ side-by-side:
   NVIDIA conversations.
 
 Packaging: ship spatial memory as a **marketplace skill**
-(`@agenticros-skills/spatial-memory`) selecting either backend per
+(`@agenticros/spatial-memory`) selecting either backend per
 config. Likely candidate to be the *first paid skill* on
 `skills.agenticros.com` — it's a feature with clear enterprise value
 (warehouse, inventory, maintenance use cases), and it doesn't gate the

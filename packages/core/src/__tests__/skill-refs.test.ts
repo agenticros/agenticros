@@ -24,14 +24,14 @@ test("parseSkillRef: owner/skill and @pin", () => {
 });
 
 test("parseSkillRef: npm scoped package", () => {
-  assert.deepEqual(parseSkillRef("@agenticros-skills/navigate-to"), {
+  assert.deepEqual(parseSkillRef("@agenticros/navigate-to"), {
     kind: "npm",
-    npmPackage: "@agenticros-skills/navigate-to",
+    npmPackage: "@agenticros/navigate-to",
     npmVersion: undefined,
   });
-  assert.deepEqual(parseSkillRef("@agenticros-skills/find@^0.2.0"), {
+  assert.deepEqual(parseSkillRef("@agenticros/find@^0.2.0"), {
     kind: "npm",
-    npmPackage: "@agenticros-skills/find",
+    npmPackage: "@agenticros/find",
     npmVersion: "^0.2.0",
   });
 });

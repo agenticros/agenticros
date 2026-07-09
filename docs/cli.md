@@ -214,7 +214,7 @@ Read or edit `~/.agenticros/config.json`. Actions:
 |---|---|
 | `agenticros create-skill <slug> [--template hello\|robot\|camera\|depth]` | Scaffold `./agenticros-skill-<slug>/` in cwd. |
 | `agenticros skills dev [--invoke <tool>] [--live]` | Load the skill locally without OpenClaw. |
-| `agenticros publish [--graduate]` | Validate, push to GitHub, submit to skills.agenticros.com; `npm publish` when name is `@agenticros-skills/*`. |
+| `agenticros publish [--graduate]` | Validate, push to GitHub, submit to skills.agenticros.com; `npm publish` when name is `@agenticros/*`. |
 | `agenticros skills install <owner/skill\|@scope/pkg> [--no-restart]` | Install from marketplace or npm; prefers npm when advertised; auto-restarts OpenClaw gateway unless `--no-restart`. |
 | `agenticros skills search <q>` | Search the marketplace. |
 

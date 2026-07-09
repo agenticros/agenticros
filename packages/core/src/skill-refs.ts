@@ -2,7 +2,7 @@
  * skillRefs → ~/.agenticros/skills-cache resolver (marketplace auto-fetch).
  *
  * Declarative refs like `owner/skill`, `owner/skill@main`, or
- * `@agenticros-skills/foo@^1.0.0` are resolved via the skills marketplace
+ * `@agenticros/foo@^1.0.0` are resolved via the skills marketplace
  * install API (or directly from npm), cached under ~/.agenticros/skills-cache,
  * and returned as absolute skillPaths for capability reading / OpenClaw loading.
  *

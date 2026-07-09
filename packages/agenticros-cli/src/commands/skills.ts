@@ -533,9 +533,9 @@ async function searchAction(rawQuery: string | undefined): Promise<void> {
 async function installAction(rawRef: string | undefined): Promise<void> {
   const ref = (rawRef ?? "").trim();
   if (!ref) {
-    err("Usage: agenticros skills install <owner/skill|@agenticros-skills/name>");
+    err("Usage: agenticros skills install <owner/skill|@agenticros/name>");
     err("Example: agenticros skills install chrismatthieu/followme");
-    err("Example: agenticros skills install @agenticros-skills/navigate-to");
+    err("Example: agenticros skills install @agenticros/navigate-to");
     err("Find skills at https://skills.agenticros.com or via `agenticros skills search`.");
     process.exit(2);
   }
