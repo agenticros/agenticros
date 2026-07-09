@@ -1,10 +1,10 @@
-# AgenticROS Phase 1: agents that know what your robot can do
+# AgenticROS: agents that know what your robot can do
 
 For a long time, talking to a robot through an LLM meant dumping topic lists into the prompt and hoping the model guessed the right `cmd_vel` twist. That works for demos. It falls apart the moment you have two robots, a Nav2 stack you already trust, or a second agent that needs to pick up where the first one left off.
 
-Phase 1 of AgenticROS is the contract layer that fixes that. Agents plan in **named capabilities** and **missions**, not raw topics. They can see which robots are online, pause a mission mid-flight, and call an existing ROS node — Nav2, YOLO, whatever you already run — without rewriting it in TypeScript.
+AgenticROS is the contract layer that fixes that. Agents plan in **named capabilities** and **missions**, not raw topics. They can see which robots are online, pause a mission mid-flight, and call an existing ROS node — Nav2, YOLO, whatever you already run — without rewriting it in TypeScript.
 
-This post is what shipped to finish Phase 1.
+This post walks through what that contract layer looks like in practice — and what we shipped recently to make it production-ready.
 
 ## The mental model shift
 
@@ -25,15 +25,15 @@ Agent: run_mission({ goal: "find a chair and drive toward it" })
 
 The agent asks `ros2_list_capabilities` once, gets a typed verb list (`find_object`, `follow_person`, `navigate_to`, `drive_base`, …), and plans against that. Same surface on OpenClaw, Claude / Codex MCP, and Gemini.
 
-## What we finished
+## What we shipped
 
 ### 1. Fleet awareness that matches the wire
 
 Robots already advertised themselves with an `agenticros_discovery` heartbeat on `<ns>/agenticros/robot_info` — id, kind, sensors, capability ids, timestamp. The TypeScript side was still inferring "online" from `<ns>/cmd_vel` heuristics.
 
-Phase 1 completion wires that heartbeat through: **5 second staleness** means online; older means offline. `ros2_list_robots`, `ros2_discover_robots`, and `ros2_find_robots_for(online=true)` all agree with what the robot is actually saying. `cmd_vel` remains a fallback for stacks that haven't started the discovery node yet. Namespaces that only advertise `robot_info` (arms, drones) also show up.
+We wired that heartbeat through end to end: **5 second staleness** means online; older means offline. `ros2_list_robots`, `ros2_discover_robots`, and `ros2_find_robots_for(online=true)` all agree with what the robot is actually saying. `cmd_vel` remains a fallback for stacks that haven't started the discovery node yet. Namespaces that only advertise `robot_info` (arms, drones) also show up.
 
-Fleet config also got the IaC shape we promised: if `~/.agenticros/fleet.json` exists (or `AGENTICROS_FLEET_PATH`), it wins over `config.robots[]`. Check it into git; treat the room like infrastructure.
+Fleet config also got the IaC shape we wanted: if `~/.agenticros/fleet.json` exists (or `AGENTICROS_FLEET_PATH`), it wins over `config.robots[]`. Check it into git; treat the room like infrastructure.
 
 ```text
 You: which AMRs with RealSense can follow a person right now?
@@ -59,7 +59,7 @@ Bindings now live in `@agenticros/core` (`buildMissionBindings`) and are built f
 
 ### 4. Gemini parity for the canonical demo
 
-Find → approach was the Phase 1 poster child on Claude and OpenClaw. Gemini could *plan* `find_object` / `follow_person` but couldn't *execute* them.
+Find → approach was the flagship demo on Claude and OpenClaw. Gemini could *plan* `find_object` / `follow_person` but couldn't *execute* them.
 
 Those tools are on Gemini now. Same mission dialect, same goal string, same robot.
 
@@ -112,11 +112,11 @@ Agent: mission_resume({ mission_id })
 
 If memory is enabled, a second agent on another adapter can `memory_recall({ namespace: "mission:<id>" })` and see every step that already ran.
 
-## What Phase 1 is — and isn't
+## What's in scope — and what's next
 
-**Is:** the agent↔ROS contract — capabilities, missions, fleet discovery, cross-adapter memory handoff, and a path for existing ROS nodes to show up as AI-callable verbs.
+**Today:** the agent↔ROS contract — capabilities, missions, fleet discovery, cross-adapter memory handoff, and a path for existing ROS nodes to show up as AI-callable verbs.
 
-**Isn't yet:** spatial memory ("where was the wrench?"), marketplace auto-fetch / paid skills, parallel mission steps with retries, or cross-vendor agent-to-agent protocols. Those are Phases 2–4 in the [strategy memo](../strategy-ai-agents-plus-ros.md) and [roadmap](../roadmap.md).
+**On the roadmap:** spatial memory ("where was the wrench?"), marketplace auto-fetch / paid skills, parallel mission steps with retries, and cross-vendor agent-to-agent protocols. See the [strategy memo](../strategy-ai-agents-plus-ros.md) and [roadmap](../roadmap.md).
 
 ## Try it
 
