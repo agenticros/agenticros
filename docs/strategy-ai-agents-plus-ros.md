@@ -2,7 +2,8 @@
 
 > Forward-looking memo. Captures positioning, audiences, the moat, and the
 > four-phase roadmap. Not a spec — actual engineering work for each phase
-> is tracked in separate plans.
+> is tracked in separate plans. For sequenced OSS + commercial deliverables,
+> see [roadmap.md](roadmap.md).
 
 ## 1. TL;DR
 

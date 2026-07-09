@@ -34,6 +34,7 @@ AgenticROS connects AI agent platforms to ROS2 robots through a shared core, tra
 
 ## Planning and strategy
 
+- [Roadmap](roadmap.md) - open-source and paid-services roadmaps for advanced physical AI (near / mid / long term).
 - [Strategy: AI Agents + ROS](strategy-ai-agents-plus-ros.md) - product direction, phases, marketplace plans, spatial memory, and cross-agent collaboration.
 
 ## Diagrams
