@@ -20,8 +20,7 @@ Every adapter exposes the same surface — OpenClaw, Claude Code / Desktop / Dis
    ```bash
    npx agenticros skills install chrismatthieu/find
    npx agenticros skills install chrismatthieu/followme
-   agenticros skills sync
-   # Restart OpenClaw gateway if you use the plugin adapter
+   # CLI syncs contracts.tools and auto-restarts the OpenClaw gateway
    ```
 
 ## Step 1 — Discover what the robot can do
@@ -55,9 +54,9 @@ For common verbs, pass a **`goal`** string to **`run_mission`**. A deterministic
 
 The response includes:
 
-- `mission_id` — pass to `mission_cancel` to abort at the next step boundary
-- `status` — `ok`, `failed`, or `cancelled`
-- `steps[]` — per-step inputs, outputs, errors, and duration
+- `mission_id` — pass to `mission_cancel` / `mission_pause` / `mission_resume`
+- `status` — `ok`, `error`, or `cancelled`
+- `steps[]` — per-step inputs, outputs, errors, `attempts`, and duration
 - When a `goal` was used: the **compiled plan** so you can see exactly what the planner emitted
 
 If the goal cannot be compiled, the error lists recognised verbs and the current capability registry so the agent can self-correct (e.g. install a missing skill).
@@ -98,9 +97,21 @@ When you need full control — custom `on_fail` behaviour, explicit wiring, or s
 | `id` | Unique within the mission; later steps reference `{{id.outputs.field}}` |
 | `capability` | Must exist in `ros2_list_capabilities` |
 | `inputs` | Literals or `{{stepId.outputs.fieldName}}` template refs |
-| `on_fail` | `"stop"` (default) aborts remaining steps; `"continue"` records the error and keeps going |
+| `on_fail` | `"stop"` (default) aborts remaining steps; `"continue"` records the error and keeps going. Applied only after retries are exhausted. |
+| `retry` | Optional `{ max_attempts, backoff_ms?, backoff_multiplier? }`. Default is a single attempt. |
 
-Steps run **sequentially**. Each step's structured outputs are available to later steps after the runner parses the tool response.
+Steps run **sequentially**. Each step's structured outputs are available to later steps after the runner parses the tool response. Parallel step groups remain on the roadmap.
+
+**Retry example:**
+
+```json
+{
+  "id": "nav",
+  "capability": "navigate_to",
+  "inputs": { "x": 1.0, "y": 0.0 },
+  "retry": { "max_attempts": 3, "backoff_ms": 500, "backoff_multiplier": 2 }
+}
+```
 
 ## Step 4 — Fleet setup (multi-robot)
 
@@ -198,7 +209,12 @@ Call **`mission_pause`**, then **`mission_resume`** with the same `mission_id` w
 { "mission_id": "<id from run_mission>" }
 ```
 
-Call **`mission_cancel`**. The runner stops at the **next step boundary** (the current step finishes; subsequent steps are marked `cancelled`). Safe to call on unknown ids.
+Call **`mission_cancel`**. Behaviour:
+
+- **Interruptible** capabilities (`interruptible: true` in the capability manifest — e.g. `find_object`, follow loops, external Nav2 actions): the runner aborts the in-flight tool via `AbortSignal` (and `cancelActionGoal` for ROS actions when the transport supports it). The current step is marked `cancelled`.
+- **Non-interruptible** steps: the current step finishes naturally; subsequent steps are marked `cancelled` at the next boundary.
+
+Safe to call on unknown ids.
 
 **Share progress across agents** — enable [memory](memory.md) (`config.memory.enabled: true`). Every step is written to namespace `mission:<mission_id>`. A second agent recalls the timeline:
 

@@ -45,13 +45,13 @@
  *
  * What's still deferred:
  *   - Parallel step execution (today: sequential only).
- *   - Per-tool cancellation (cancel TIES to step boundaries today;
- *     pause/resume also ties to step boundaries).
- *   - Retry / backoff policies.
  *
  * Shipped since the original Phase 1.f header:
  *   - Natural-language plan compilation (`compileGoalToMission` + goal arg).
  *   - Pause / resume via the same control token (`paused` flag).
+ *   - Step-level retry / backoff (`MissionStep.retry`).
+ *   - Mid-step cancel for interruptible capabilities via AbortSignal
+ *     on the dispatcher (non-interruptible steps still finish naturally).
  *
  * See: docs/strategy-ai-agents-plus-ros.md §4 (Phase 1.c / 1.f).
  */
@@ -131,8 +131,22 @@ export interface MissionStep {
    * Optional behaviour when this step fails. Defaults to "stop".
    *   - "stop":     halt the mission, mark it failed
    *   - "continue": record the failure and run the next step anyway
+   * Applied only after retry attempts (if any) are exhausted.
    */
   on_fail?: "stop" | "continue";
+  /**
+   * Optional retry / backoff when the step errors. Default is a single
+   * attempt (`max_attempts: 1`). Retries re-invoke the same tool with
+   * the same resolved args; `on_fail` applies only after the last attempt.
+   */
+  retry?: {
+    /** Total attempts including the first (minimum 1). */
+    max_attempts: number;
+    /** Delay before the second attempt (ms). Default 0. */
+    backoff_ms?: number;
+    /** Multiply backoff after each failed attempt. Default 1. */
+    backoff_multiplier?: number;
+  };
 }
 
 /** A complete mission plan. */
@@ -180,6 +194,8 @@ export interface MissionStepResult {
   error?: string;
   /** Wall time in ms. */
   duration_ms: number;
+  /** Number of dispatcher attempts used (including the successful one). */
+  attempts?: number;
 }
 
 /** Result of a mission run. */
@@ -222,6 +238,16 @@ export interface MissionResult {
   cancellation_reason?: string;
 }
 
+/** Optional context passed to each dispatcher invocation. */
+export interface MissionDispatchContext {
+  /**
+   * AbortSignal aborted when the mission is cancelled mid-step and the
+   * capability is `interruptible`. Long-running tools should poll
+   * `signal.aborted` (or listen for `abort`) and stop cleanly.
+   */
+  signal?: AbortSignal;
+}
+
 /**
  * A dispatcher invokes a single MCP tool by name and returns:
  *   - `text`: the tool's text response (free-form, for human display)
@@ -230,11 +256,28 @@ export interface MissionResult {
  *                `{{...}}` template resolution by later steps.
  *
  * Adapters wrap their existing tool entry points to satisfy this contract.
+ * The optional third argument carries an AbortSignal for mid-step cancel.
  */
 export type MissionToolDispatcher = (
   toolName: string,
   args: Record<string, unknown>,
+  ctx?: MissionDispatchContext,
 ) => Promise<{ text: string; outputs?: Record<string, unknown>; isError?: boolean }>;
+
+/** Thrown (or returned via isError) when a tool stops due to AbortSignal. */
+export class MissionStepAbortedError extends Error {
+  constructor(message = "Step aborted") {
+    super(message);
+    this.name = "MissionStepAbortedError";
+  }
+}
+
+function isAbortError(err: unknown): boolean {
+  if (err instanceof MissionStepAbortedError) return true;
+  if (err instanceof Error && err.name === "AbortError") return true;
+  if (err instanceof Error && /aborted|cancelled/i.test(err.message)) return true;
+  return false;
+}
 
 /**
  * Capability → MCP tool mapping. Each entry says "to satisfy capability X,
@@ -397,6 +440,7 @@ export async function runMission(
   options?: RunMissionOptions,
 ): Promise<MissionResult> {
   const capIds = new Set(capabilities.map((c) => c.id));
+  const capById = new Map(capabilities.map((c) => [c.id, c]));
   const stepOutputs: Record<string, Record<string, unknown> | undefined> = {};
   const results: MissionStepResult[] = [];
   const t0Mission = Date.now();
@@ -551,40 +595,153 @@ export async function runMission(
       if (effective) toolArgs.robot_id = effective;
     }
 
-    try {
-      const dispatched = await dispatcher(binding.tool, toolArgs);
-      const outputs =
-        dispatched.outputs ??
-        binding.parseOutputs?.(dispatched.text) ??
-        tryParseJsonOutputs(dispatched.text);
-      stepOutputs[step.id] = outputs;
-      const status: MissionStepResult["status"] = dispatched.isError ? "error" : "ok";
-      const result: MissionStepResult = {
-        id: step.id,
-        capability: step.capability,
-        status,
-        inputs: resolvedInputs,
-        outputs,
-        message: dispatched.text,
-        ...(dispatched.isError ? { error: dispatched.text } : {}),
-        duration_ms: Date.now() - t0,
-      };
-      results.push(result);
-      emitTranscript(idx, t0, result);
-      if (status === "error" && (step.on_fail ?? "stop") === "stop") aborted = true;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      const result: MissionStepResult = {
+    const maxAttempts = Math.max(1, Math.floor(step.retry?.max_attempts ?? 1));
+    let backoffMs = Math.max(0, step.retry?.backoff_ms ?? 0);
+    const backoffMult = step.retry?.backoff_multiplier ?? 1;
+    const interruptible = capById.get(step.capability)?.interruptible === true;
+
+    let attempts = 0;
+    let lastError: string | undefined;
+    let stepCancelledMid = false;
+    let finalResult: MissionStepResult | undefined;
+
+    while (attempts < maxAttempts) {
+      attempts += 1;
+      if (attempts > 1 && backoffMs > 0) {
+        await sleep(backoffMs);
+        backoffMs = Math.max(0, Math.round(backoffMs * backoffMult));
+      }
+
+      // Mid-step cancel: abort in-flight work when interruptible.
+      const controller = new AbortController();
+      let cancelPoll: ReturnType<typeof setInterval> | undefined;
+      if (interruptible && options?.cancellation) {
+        const token = options.cancellation;
+        const maybeAbort = () => {
+          if (token.cancelled && !controller.signal.aborted) {
+            controller.abort();
+          }
+        };
+        maybeAbort();
+        cancelPoll = setInterval(maybeAbort, PAUSE_POLL_MS);
+      }
+
+      try {
+        const dispatched = await dispatcher(binding.tool, toolArgs, {
+          signal: controller.signal,
+        });
+        if (cancelPoll) clearInterval(cancelPoll);
+
+        // Cooperative cancel: tool returned after abort without throwing.
+        if (controller.signal.aborted || options?.cancellation?.cancelled) {
+          if (interruptible) {
+            stepCancelledMid = true;
+            cancelled = true;
+            finalResult = {
+              id: step.id,
+              capability: step.capability,
+              status: "cancelled",
+              inputs: resolvedInputs,
+              message: `Cancelled mid-step: ${options?.cancellation?.reason ?? "cancelled"}`,
+              duration_ms: Date.now() - t0,
+              attempts,
+            };
+            break;
+          }
+        }
+
+        const outputs =
+          dispatched.outputs ??
+          binding.parseOutputs?.(dispatched.text) ??
+          tryParseJsonOutputs(dispatched.text);
+        stepOutputs[step.id] = outputs;
+        const status: MissionStepResult["status"] = dispatched.isError ? "error" : "ok";
+        if (status === "ok") {
+          finalResult = {
+            id: step.id,
+            capability: step.capability,
+            status: "ok",
+            inputs: resolvedInputs,
+            outputs,
+            message: dispatched.text,
+            duration_ms: Date.now() - t0,
+            attempts,
+          };
+          break;
+        }
+        lastError = dispatched.text;
+        if (attempts >= maxAttempts) {
+          finalResult = {
+            id: step.id,
+            capability: step.capability,
+            status: "error",
+            inputs: resolvedInputs,
+            outputs,
+            message: dispatched.text,
+            error: dispatched.text,
+            duration_ms: Date.now() - t0,
+            attempts,
+          };
+        }
+      } catch (err) {
+        if (cancelPoll) clearInterval(cancelPoll);
+        if (isAbortError(err) || controller.signal.aborted) {
+          stepCancelledMid = true;
+          cancelled = true;
+          finalResult = {
+            id: step.id,
+            capability: step.capability,
+            status: "cancelled",
+            inputs: resolvedInputs,
+            message: `Cancelled mid-step: ${options?.cancellation?.reason ?? (err instanceof Error ? err.message : "cancelled")}`,
+            duration_ms: Date.now() - t0,
+            attempts,
+          };
+          break;
+        }
+        lastError = err instanceof Error ? err.message : String(err);
+        if (attempts >= maxAttempts) {
+          finalResult = {
+            id: step.id,
+            capability: step.capability,
+            status: "error",
+            inputs: resolvedInputs,
+            error: lastError,
+            duration_ms: Date.now() - t0,
+            attempts,
+          };
+        }
+      } finally {
+        if (cancelPoll) clearInterval(cancelPoll);
+      }
+
+      // If cancel flipped during a non-interruptible attempt, finish
+      // this step's result then stop subsequent steps at the boundary.
+      if (!interruptible && options?.cancellation?.cancelled && !stepCancelledMid) {
+        cancelled = true;
+      }
+      if (finalResult) break;
+    }
+
+    if (!finalResult) {
+      finalResult = {
         id: step.id,
         capability: step.capability,
         status: "error",
         inputs: resolvedInputs,
-        error: msg,
+        error: lastError ?? "Unknown step failure",
         duration_ms: Date.now() - t0,
+        attempts,
       };
-      results.push(result);
-      emitTranscript(idx, t0, result);
-      if ((step.on_fail ?? "stop") === "stop") aborted = true;
+    }
+
+    results.push(finalResult);
+    emitTranscript(idx, t0, finalResult);
+    if (finalResult.status === "error" && (step.on_fail ?? "stop") === "stop") {
+      aborted = true;
+    }
+    if (options?.cancellation?.cancelled) {
+      cancelled = true;
     }
   }
 

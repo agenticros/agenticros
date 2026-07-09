@@ -56,9 +56,14 @@ import {
 export interface SkillsOptions {
   action?: string;
   arg?: string;
+  /** Skip automatic OpenClaw gateway restart after install/sync. */
+  noRestart?: boolean;
 }
 
+let skipGatewayRestart = false;
+
 export async function skillsCommand(opts: SkillsOptions): Promise<void> {
+  skipGatewayRestart = opts.noRestart === true;
   const action = (opts.action ?? "list").toLowerCase();
   switch (action) {
     case "list":
@@ -360,7 +365,7 @@ async function syncManifest(): Promise<void> {
     if (exitCode === 0) {
       ok("sync-skill-tools complete.");
       syncAlsoAllowFromManifest(paths.repoRoot ?? paths.installDir);
-      hintRestartGateway();
+      await restartGatewayIfPossible();
     } else {
       err(`sync-skill-tools exited with code ${exitCode}.`);
       process.exit(exitCode ?? 1);
@@ -412,21 +417,60 @@ async function postChangeFollowup(opts: FollowupOpts): Promise<void> {
       if (yes) await syncManifest();
       else {
         warn("Skipping sync. Run `agenticros skills sync` later before relying on the new skill.");
-        hintRestartGateway();
+        await restartGatewayIfPossible();
       }
     } else {
-      warn("Don't forget: `agenticros skills sync` then restart the OpenClaw gateway.");
+      warn("Don't forget: `agenticros skills sync` (gateway auto-restarts unless --no-restart).");
+      await restartGatewayIfPossible();
     }
   } else {
-    hintRestartGateway();
+    await restartGatewayIfPossible();
   }
+}
+
+/**
+ * Try to bounce the OpenClaw gateway so newly installed skills appear.
+ * True mid-session hot-reload is blocked on OpenClaw's sync register()
+ * snapshot — auto-restart is the pragmatic Marketplace UX v2 activation.
+ */
+async function restartGatewayIfPossible(): Promise<void> {
+  if (skipGatewayRestart) {
+    info("Skipping gateway restart (--no-restart). Restart manually when ready.");
+    hintRestartGateway();
+    return;
+  }
+  const attempts: Array<{ label: string; cmd: string; args: string[] }> = [
+    {
+      label: "systemctl --user restart openclaw-gateway.service",
+      cmd: "systemctl",
+      args: ["--user", "restart", "openclaw-gateway.service"],
+    },
+    {
+      label: "openclaw gateway restart",
+      cmd: "openclaw",
+      args: ["gateway", "restart"],
+    },
+  ];
+  for (const a of attempts) {
+    try {
+      const { exitCode } = await execa(a.cmd, a.args, { reject: false });
+      if (exitCode === 0) {
+        ok(`Restarted OpenClaw gateway via: ${a.label}`);
+        return;
+      }
+    } catch {
+      /* try next */
+    }
+  }
+  warn("Could not auto-restart the OpenClaw gateway.");
+  hintRestartGateway();
 }
 
 function hintRestartGateway(): void {
   info(
     "Restart the OpenClaw gateway to pick up the new skill list:\n" +
       "    systemctl --user restart openclaw-gateway.service\n" +
-      "  (or kill the gateway process and let your supervisor restart it.)",
+      "  (or: openclaw gateway restart)",
   );
 }
 
@@ -481,26 +525,65 @@ async function searchAction(rawQuery: string | undefined): Promise<void> {
 }
 
 /**
- * `agenticros skills install <owner/skill>` — pull install metadata from the
- * marketplace, clone+build the skill repo, and register it locally.
+ * `agenticros skills install <owner/skill|@scope/pkg>` — pull install metadata
+ * from the marketplace (or npm), cache under ~/.agenticros/skills-cache, and
+ * register it locally. Prefers npm when the install descriptor advertises
+ * `npmPackage`.
  */
 async function installAction(rawRef: string | undefined): Promise<void> {
-  const ref = (rawRef ?? "").trim().toLowerCase();
+  const ref = (rawRef ?? "").trim();
   if (!ref) {
-    err("Usage: agenticros skills install <owner/skill>");
+    err("Usage: agenticros skills install <owner/skill|@agenticros-skills/name>");
     err("Example: agenticros skills install chrismatthieu/followme");
+    err("Example: agenticros skills install @agenticros-skills/navigate-to");
     err("Find skills at https://skills.agenticros.com or via `agenticros skills search`.");
     process.exit(2);
   }
-  header(`Installing skill '${ref}' from the marketplace…`);
+  header(`Installing skill '${ref}'…`);
+
+  // Direct npm scoped ref — skip marketplace descriptor.
+  if (ref.startsWith("@")) {
+    try {
+      const cachePath = await ensureSkillRefCached(ref, {
+        onLog: (msg) => info(msg),
+      });
+      ok(`Cached under ${cachePath}`);
+      const info1 = inspectSkillDir(cachePath);
+      if (!info1) {
+        err(`Cached package at ${cachePath} is not an AgenticROS skill.`);
+        process.exit(1);
+      }
+      const reg = addSkillByPath(cachePath);
+      if (!reg.ok) {
+        err(reg.message);
+        process.exit(1);
+      }
+      ok(reg.message);
+      if (info1.packageName?.startsWith("@")) {
+        const pkgReg = addSkillByPackage(info1.packageName);
+        if (pkgReg.ok) ok(pkgReg.message);
+      }
+      const refReg = addSkillRef(ref);
+      if (refReg.ok) ok(refReg.message);
+      else warn(refReg.message);
+      warnIfNotBuilt(cachePath, info1.entry);
+      await postChangeFollowup({ ranSync: false });
+      return;
+    } catch (e) {
+      err(`npm install failed: ${e instanceof Error ? e.message : String(e)}`);
+      process.exit(1);
+    }
+  }
+
+  const marketplaceRef = ref.toLowerCase();
 
   // 1) Resolve metadata + install descriptor.
   let descriptor;
   let meta;
   try {
     [descriptor, meta] = await Promise.all([
-      getInstallDescriptor(ref),
-      getSkill(ref).catch(() => undefined),
+      getInstallDescriptor(marketplaceRef),
+      getSkill(marketplaceRef).catch(() => undefined),
     ]);
   } catch (e) {
     err(formatMarketplaceError(e));
@@ -509,15 +592,23 @@ async function installAction(rawRef: string | undefined): Promise<void> {
   if (meta) {
     info(`Skill:    ${colors.bold(meta.displayName || meta.name)}`);
     info(`Package:  ${meta.packageName}`);
+    if (descriptor.npmPackage) info(`npm:      ${descriptor.npmPackage}${descriptor.npmVersion ? `@${descriptor.npmVersion}` : ""}`);
     info(`Repo:     ${meta.githubUrl}`);
     info(`Author:   @${meta.maintainerLogin}`);
   } else {
     info(`Repo:     ${descriptor.githubUrl}`);
   }
 
+  const preferNpm = Boolean(
+    descriptor.npmPackage ||
+      (descriptor.packageName && String(descriptor.packageName).startsWith("@")),
+  );
+
   if (isTty) {
     const yes = await confirm({
-      message: `Clone, build, and register this skill locally?`,
+      message: preferNpm
+        ? `Install from npm and register this skill locally?`
+        : `Clone, build, and register this skill locally?`,
       default: true,
     });
     if (!yes) {
@@ -526,58 +617,79 @@ async function installAction(rawRef: string | undefined): Promise<void> {
     }
   }
 
-  // 2) Clone + build into adjacent dir (legacy discovery) AND skills-cache.
-  let result;
-  try {
-    result = await cloneAndBuild(descriptor, {
-      onLog: (msg) => info(msg),
-    });
-  } catch (e) {
-    err(`Clone/build failed: ${e instanceof Error ? e.message : String(e)}`);
-    err(`Inspect the partial clone (if any), fix the build, then run:`);
-    err(`    agenticros skills add <path>`);
-    process.exit(1);
-  }
-  ok(
-    result.alreadyExisted
-      ? `Updated existing clone at ${result.cloneDir}.`
-      : `Cloned and built at ${result.cloneDir}.`,
-  );
+  let skillDir: string | undefined;
 
-  // Also warm ~/.agenticros/skills-cache for skillRefs auto-fetch.
-  try {
-    const cachePath = await ensureSkillRefCached(ref, {
-      onLog: (msg) => info(msg),
-    });
-    ok(`Cached under ${cachePath} (skills-cache root: ${skillsCacheDir()}).`);
-  } catch (e) {
-    warn(
-      `skills-cache warm failed (skillPaths registration still ok): ${
-        e instanceof Error ? e.message : String(e)
-      }`,
+  // 2a) Prefer npm when advertised.
+  if (preferNpm) {
+    try {
+      skillDir = await ensureSkillRefCached(marketplaceRef, {
+        onLog: (msg) => info(msg),
+      });
+      ok(`Installed from npm into ${skillDir}`);
+    } catch (e) {
+      warn(
+        `npm path failed (${e instanceof Error ? e.message : String(e)}); falling back to git clone.`,
+      );
+    }
+  }
+
+  // 2b) Git clone fallback (also warms adjacent discovery).
+  if (!skillDir) {
+    let result;
+    try {
+      result = await cloneAndBuild(descriptor, {
+        onLog: (msg) => info(msg),
+      });
+    } catch (e) {
+      err(`Clone/build failed: ${e instanceof Error ? e.message : String(e)}`);
+      err(`Inspect the partial clone (if any), fix the build, then run:`);
+      err(`    agenticros skills add <path>`);
+      process.exit(1);
+    }
+    ok(
+      result.alreadyExisted
+        ? `Updated existing clone at ${result.cloneDir}.`
+        : `Cloned and built at ${result.cloneDir}.`,
     );
+    skillDir = result.cloneDir;
+    try {
+      const cachePath = await ensureSkillRefCached(marketplaceRef, {
+        onLog: (msg) => info(msg),
+      });
+      ok(`Cached under ${cachePath} (skills-cache root: ${skillsCacheDir()}).`);
+    } catch (e) {
+      warn(
+        `skills-cache warm failed (skillPaths registration still ok): ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      );
+    }
   }
 
   // 3) Confirm the clone is a real skill and register it.
-  const info1 = inspectSkillDir(result.cloneDir);
+  const info1 = inspectSkillDir(skillDir);
   if (!info1) {
-    err(`The clone at ${result.cloneDir} doesn't expose an AgenticROS skill manifest.`);
+    err(`The install at ${skillDir} doesn't expose an AgenticROS skill manifest.`);
     err('(Expected package.json with "agenticros": { "id": "..." }.)');
     err("Report this on the skill's GitHub repo — the marketplace listing is stale.");
     process.exit(1);
   }
-  const reg = addSkillByPath(result.cloneDir);
+  const reg = addSkillByPath(skillDir);
   if (!reg.ok) {
     err(reg.message);
     process.exit(1);
   }
   ok(reg.message);
-  const refReg = addSkillRef(ref);
+  if (info1.packageName?.startsWith("@")) {
+    const pkgReg = addSkillByPackage(info1.packageName);
+    if (pkgReg.ok) ok(pkgReg.message);
+  }
+  const refReg = addSkillRef(marketplaceRef);
   if (refReg.ok) ok(refReg.message);
   else warn(refReg.message);
-  warnIfNotBuilt(result.cloneDir, info1.entry);
+  warnIfNotBuilt(skillDir, info1.entry);
 
-  // 4) Sync the OpenClaw contracts.tools allowlist + remind to restart.
+  // 4) Sync the OpenClaw contracts.tools allowlist + auto-restart gateway.
   await postChangeFollowup({ ranSync: false });
 }
 

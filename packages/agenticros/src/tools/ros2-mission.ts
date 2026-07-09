@@ -167,7 +167,7 @@ export function registerMissionTool(
         if ("error" in resolved) return resolved.error;
       }
 
-      const dispatcher: MissionToolDispatcher = async (toolName, toolArgs) => {
+      const dispatcher: MissionToolDispatcher = async (toolName, toolArgs, ctx) => {
         if (isExternalToolName(toolName)) {
           const capId = capabilityIdFromExternalTool(toolName);
           const cap = caps.find((c) => c.id === capId);
@@ -182,6 +182,7 @@ export function registerMissionTool(
           const transport = await getTransportForRobot(config, resolved.robot);
           const ext = await executeExternalCapability(cap, toolArgs, transport, {
             namespace: resolved.robot.namespace,
+            signal: ctx?.signal,
           });
           return { text: ext.text, outputs: ext.outputs, isError: ext.isError };
         }
@@ -192,7 +193,7 @@ export function registerMissionTool(
             isError: true,
           };
         }
-        const res = await tool.execute(toolCallId, toolArgs, signal);
+        const res = await tool.execute(toolCallId, toolArgs, ctx?.signal ?? signal);
         const text = res.content
           .map((c) => (c.type === "text" ? c.text : `[image: ${c.mimeType}]`))
           .join("\n");

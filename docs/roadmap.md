@@ -30,28 +30,30 @@ premium skills — never on the real-time control path.
 | Adapters (OpenClaw, MCP/Codex/Claude, Gemini) | Shipped |
 | Core tools + camera/depth | Shipped |
 | Capabilities, `run_mission`, NL planner, cancel, pause/resume | Shipped |
+| Mission retries / backoff + mid-step cancel (interruptible) | Shipped |
 | Fleet list / find-for / heartbeat online / `fleet.json` | Shipped |
 | Dynamic mission bindings + Gemini find/follow | Shipped |
 | External ROS-node skill loader | Shipped |
 | Seed catalog — `navigate_to`, `detect_humans`, `start_slam` / stop / save, `follow_person_ros` (adjacent repos) | Shipped |
-| `skillRefs` + `~/.agenticros/skills-cache/` git auto-fetch | Shipped (v1; restart still required) |
+| `skillRefs` + `~/.agenticros/skills-cache/` (git + npm) | Shipped |
 | Discoverable marketplace capabilities in `ros2_list_capabilities` | Shipped |
-| Skills marketplace (metadata + git install) | Live at [skills.agenticros.com](https://skills.agenticros.com) |
+| Marketplace npm `@agenticros-skills/*` + CLI auto-restart | Shipped (true mid-session hot-reload still blocked on OpenClaw) |
+| Skills marketplace (metadata + git/npm install) | Live at [skills.agenticros.com](https://skills.agenticros.com) |
 | Cross-adapter memory (local / mem0) | Shipped, off by default |
 | Safety (velocity clamps, OpenClaw `/estop`) | Baseline shipped |
-| Published packages | `@agenticros/core` **0.7.0**, CLI `agenticros` **0.4.1** |
-| Marketplace npm packages + hot-reload + paid licenses | Planned |
+| Published packages | `@agenticros/core` **0.8.0**, CLI `agenticros` **0.5.0** |
+| Parallel mission steps + true hot-reload + paid licenses | Planned |
 | Spatial memory | Planned |
 | ACP / A2A multi-agent mesh | Planned |
 
 **Highest-leverage gaps for advanced physical AI**
 
 1. Seed catalog still thin on **MoveIt** / docking / richer Nav2 variants (detect / slam / follow-ros / navigate shipped).
-2. Missions are sequential; mid-step cancel and retry/backoff still deferred.
+2. Missions are sequential — **parallel** step groups still deferred (retries + mid-step cancel shipped).
 3. Memory is flat facts, not spatial.
 4. Safety is mostly velocity clamps — no workspace bounds or cmd_vel arbitration.
 5. Sim has no nav stack; arm/MoveIt WIP — hard to CI embodied behaviors.
-6. Marketplace auto-fetch is git-based; **npm `@agenticros-skills/*` + hot-reload** still open.
+6. True mid-session OpenClaw tool injection (without gateway restart) still open.
 7. Observability is logs/transcripts — no mission dashboard or fleet health UI.
 
 Write-ups: [contract layer](blog/phase-1-complete.md) · [seed catalog & skillRefs](blog/seed-catalog-and-skillrefs.md).
@@ -84,17 +86,19 @@ Write-ups: [contract layer](blog/phase-1-complete.md) · [seed catalog & skillRe
 Goal: make AgenticROS the default **open contract + skill catalog** for
 embodied agents.
 
-### Shipped — contract layer + marketplace UX v1
+### Shipped — contract layer + marketplace UX v2 + mission runner v2 (partial)
 
-- **Contract:** capabilities, missions (pause/resume + cancel), fleet
-  heartbeats / `fleet.json`, dynamic bindings, Gemini find/follow,
+- **Contract:** capabilities, missions (pause/resume + cancel + retries +
+  mid-step cancel for interruptible skills), fleet heartbeats /
+  `fleet.json`, dynamic bindings, Gemini find/follow,
   `external_ros_node` dispatch.
-- **Seeds (adjacent repos):** `agenticros-skill-navigate-to`,
+- **Seeds (adjacent repos):** `@agenticros-skills/navigate-to`,
   `detect-humans`, `start-slam`, `follow-me-ros` (MoveIt pick remains an
   examples stub until sim-arm).
-- **Marketplace UX v1:** `skillRefs` → `~/.agenticros/skills-cache/`,
-  discoverable caps in `ros2_list_capabilities`, CLI install writes
-  refs + warms cache. Gateway restart still required (no hot-reload).
+- **Marketplace UX v1+v2:** `skillRefs` → `~/.agenticros/skills-cache/`
+  (git **and** npm pack), discoverable caps, CLI install prefers npm when
+  advertised, auto-restarts OpenClaw gateway (`--no-restart` to skip).
+  True mid-session tool injection still blocked on OpenClaw sync register.
 
 See [missions.md](missions.md), [skills.md](skills.md),
 [blog/phase-1-complete.md](blog/phase-1-complete.md), and
@@ -105,13 +109,13 @@ See [missions.md](missions.md), [skills.md](skills.md),
 | # | Deliverable | Why |
 |---|-------------|-----|
 | 1 | **Deeper seed skills** — MoveIt pick (when sim-arm ready), more Nav2 variants, richer SLAM save/load, docking | Detect / slam / follow-ros / navigate shipped; catalog still thin for manipulation |
-| 2 | **Mission runner v2** — parallel steps (where safe), retry/backoff, mid-step cancel for interruptible skills | Complex missions need recovery, not only happy-path sequences (pause/resume already shipped) |
+| 2 | **Mission parallel steps** — DAG / parallel groups where safe (`blocks_base` mutex) | Retries + mid-step cancel shipped; parallel still deferred |
 | 3 | **Optional LLM planner** behind the same `compileGoalToMission` contract | Rule-based planner stays default; LLM expands coverage without changing the API |
 | 4 | **Safety depth** — workspace/geofence checks, `blocks_base` cmd_vel mutex, MCP estop parity | Baseline for multi-agent / multi-skill contention |
 | 5 | **Sim maturity** — Nav2 in Gazebo AMR, `/odom` bridge fix, headless CI, “mission CI” recipe | Prerequisite for reliable physical-AI development loops |
-| 6 | **Marketplace UX v2** — npm `@agenticros-skills/*` distribution, gateway hot-reload after mid-conversation install | Git skillRefs + discoverable shipped; remove restart cliff and clone/build for end users |
+| 6 | **True OpenClaw hot-reload** — mid-session tool injection without gateway restart | npm + auto-restart shipped; needs OpenClaw upstream contract |
 | 7 | **Observability baseline** — structured mission JSONL, `mission_status` tool, simple local view of recent missions / heartbeats | Debuggability for users and skill authors |
-| 8 | **Doc / DX polish** — architecture drift, stronger `agenticros doctor`, keep published CLI free of `workspace:` deps | Trust and time-to-first-embodiment (`agenticros@0.4.1` fixed npx install) |
+| 8 | **Doc / DX polish** — architecture drift, stronger `agenticros doctor`, keep published CLI free of `workspace:` deps | Trust and time-to-first-embodiment |
 
 ### Mid term (3–9 months) — Physical AI substrate
 
@@ -212,7 +216,7 @@ OSS contract (capabilities, missions, safety, seed skills)   ← shipped
         ↓ compounds
 Marketplace UX v1 (skillRefs, discoverable)                  ← shipped
         ↓ compounds
-Marketplace catalog (free + paid) + npm / hot-reload         ← next
+Marketplace UX v2 (npm @agenticros-skills/* + auto-restart)  ← shipped
         ↓ needs ops
 Fleet cloud + mission console
         ↓ needs continuity
@@ -223,7 +227,8 @@ Hosted / spatial memory + multi-agent mesh
 |-------|-----------|------------|
 | **Contract layer** (shipped) | Capabilities, missions, fleet, external ROS nodes | — |
 | **Marketplace UX v1** (shipped) | `skillRefs`, skills-cache, discoverable caps | — |
-| **Marketplace UX v2** | npm packages, hot-reload | — |
+| **Marketplace UX v2** (shipped) | npm `@agenticros-skills/*`, CLI auto-restart | — |
+| **True hot-reload** | Mid-session OpenClaw tool injection | — |
 | **Marketplace economy** | Client license hooks (open) | Paid skills + commissions |
 | **Spatial memory** | Schema + local backend | Hosted spatial memory / first paid skill |
 | **Multi-agent mesh** | ACP/A2A adapters | Enterprise agent-mesh / private fleets |
@@ -233,8 +238,8 @@ Hosted / spatial memory + multi-agent mesh
 ## If we only do five things next
 
 1. **MoveIt / docking / richer Nav2** seeds (and finish marketplace submit for any remaining listings).
-2. **Marketplace UX v2** — npm `@agenticros-skills/*` + hot-reload (git skillRefs + discoverable already shipped).
-3. Mission runner **retries / parallel / mid-step cancel**.
+2. **Mission parallel steps** (retries + mid-step cancel already shipped).
+3. **True OpenClaw hot-reload** (npm + auto-restart already shipped).
 4. **Spatial memory** (OSS schema first; paid hosted later).
 5. **Fleet mission console** as the first real SaaS surface on top of Mode C.
 

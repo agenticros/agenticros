@@ -1,17 +1,29 @@
 /**
- * skillRefs → ~/.agenticros/skills-cache resolver (marketplace auto-fetch v1).
+ * skillRefs → ~/.agenticros/skills-cache resolver (marketplace auto-fetch).
  *
- * Declarative refs like `agenticros/navigate-to` or `owner/skill@main` are
- * resolved via the skills marketplace install API, cloned into the cache,
- * built if needed, and returned as absolute skillPaths for capability
- * reading / OpenClaw loading.
+ * Declarative refs like `owner/skill`, `owner/skill@main`, or
+ * `@agenticros-skills/foo@^1.0.0` are resolved via the skills marketplace
+ * install API (or directly from npm), cached under ~/.agenticros/skills-cache,
+ * and returned as absolute skillPaths for capability reading / OpenClaw loading.
+ *
+ * Prefer npm when the install descriptor includes `npmPackage` (or the ref
+ * is already a scoped npm name). Fall back to git clone + build.
  *
  * Never auto-upgrades: if the cache dir for a pin already exists, reuse it
- * (optional pull when AGENTICROS_SKILLS_CACHE_PULL=1).
+ * (optional pull when AGENTICROS_SKILLS_CACHE_PULL=1 for git caches).
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir, homedir } from "node:os";
 import { basename, join } from "node:path";
 import { execFileSync } from "node:child_process";
 import type { AgenticROSConfig } from "./config.js";
@@ -20,12 +32,17 @@ export const DEFAULT_SKILLS_API = "https://skills.agenticros.com/api";
 export const DEFAULT_SKILLS_CACHE_DIR = join(homedir(), ".agenticros", "skills-cache");
 
 export interface ParsedSkillRef {
-  /** owner/skill (lowercase) */
-  marketplaceRef: string;
-  owner: string;
-  skill: string;
-  /** git ref / branch pin; default main */
-  gitRef: string;
+  kind: "marketplace" | "npm";
+  /** owner/skill (lowercase) — marketplace refs only */
+  marketplaceRef?: string;
+  owner?: string;
+  skill?: string;
+  /** git ref / branch pin; default main — marketplace refs */
+  gitRef?: string;
+  /** Scoped npm package name — npm refs */
+  npmPackage?: string;
+  /** Semver range or exact version pin — npm refs (default: latest resolved) */
+  npmVersion?: string;
 }
 
 export interface InstallDescriptor {
@@ -36,6 +53,10 @@ export interface InstallDescriptor {
   githubUrl: string;
   ref: string;
   buildCmd: string;
+  /** When set, prefer npm pack over git clone. */
+  npmPackage?: string;
+  /** Pinned npm version when known. */
+  npmVersion?: string;
 }
 
 export interface ResolveSkillRefsOptions {
@@ -54,10 +75,37 @@ export interface ResolveSkillRefsResult {
   errors: Array<{ ref: string; error: string }>;
 }
 
-/** Parse `owner/skill` or `owner/skill@branch`. */
+/**
+ * Parse `owner/skill`, `owner/skill@branch`, or `@scope/name[@semver]`.
+ */
 export function parseSkillRef(raw: string): ParsedSkillRef | null {
   const trimmed = raw.trim();
   if (!trimmed) return null;
+
+  if (trimmed.startsWith("@")) {
+    // @scope/name or @scope/name@1.2.3 / @scope/name@^1.0.0
+    const withoutAt = trimmed.slice(1);
+    const slash = withoutAt.indexOf("/");
+    if (slash <= 0) return null;
+    const scope = withoutAt.slice(0, slash);
+    const rest = withoutAt.slice(slash + 1);
+    if (!scope || !rest) return null;
+    // Version pin is the last @ after the package name segment.
+    const at = rest.lastIndexOf("@");
+    let pkgName = rest;
+    let npmVersion: string | undefined;
+    if (at > 0) {
+      pkgName = rest.slice(0, at);
+      npmVersion = rest.slice(at + 1).trim() || undefined;
+    }
+    if (!pkgName || pkgName.includes("/")) return null;
+    return {
+      kind: "npm",
+      npmPackage: `@${scope}/${pkgName}`,
+      npmVersion,
+    };
+  }
+
   const at = trimmed.lastIndexOf("@");
   let body = trimmed;
   let gitRef = "main";
@@ -71,6 +119,7 @@ export function parseSkillRef(raw: string): ParsedSkillRef | null {
   const skill = parts.slice(1).join("/").toLowerCase();
   if (!owner || !skill) return null;
   return {
+    kind: "marketplace",
     marketplaceRef: `${owner}/${skill}`,
     owner,
     skill,
@@ -107,13 +156,15 @@ export async function fetchInstallDescriptor(
     throw new Error(`Marketplace install ${res.status}: ${body.slice(0, 200)}`);
   }
   const desc = (await res.json()) as InstallDescriptor;
-  if (!desc.githubUrl) {
-    throw new Error(`Install descriptor for ${marketplaceRef} has no githubUrl`);
+  if (!desc.githubUrl && !desc.npmPackage && !desc.packageName) {
+    throw new Error(
+      `Install descriptor for ${marketplaceRef} has neither githubUrl nor npmPackage`,
+    );
   }
   return desc;
 }
 
-function cachePathFor(
+function cachePathForGit(
   cacheDir: string,
   owner: string,
   skill: string,
@@ -121,6 +172,12 @@ function cachePathFor(
 ): string {
   const safeRef = gitRef.replace(/[^a-zA-Z0-9._-]+/g, "_");
   return join(cacheDir, owner, skill, safeRef);
+}
+
+function cachePathForNpm(cacheDir: string, npmPackage: string, version: string): string {
+  const safeName = npmPackage.replace(/^@/, "").replace(/\//g, "__");
+  const safeVer = version.replace(/[^a-zA-Z0-9._+-]+/g, "_");
+  return join(cacheDir, "npm", safeName, safeVer);
 }
 
 function hasBuiltEntry(dir: string): boolean {
@@ -140,6 +197,10 @@ function run(cmd: string, args: string[], cwd: string, log: (m: string) => void)
   execFileSync(cmd, args, { cwd, stdio: "inherit" });
 }
 
+function runCapture(cmd: string, args: string[], cwd: string): string {
+  return execFileSync(cmd, args, { cwd, encoding: "utf8" }).trim();
+}
+
 function hasBin(name: string): boolean {
   try {
     execFileSync(name, ["--version"], { stdio: "ignore" });
@@ -147,6 +208,124 @@ function hasBin(name: string): boolean {
   } catch {
     return false;
   }
+}
+
+function safeNpmVersionPin(raw: string | undefined): string {
+  if (!raw || !raw.trim()) return "latest";
+  return raw.trim();
+}
+
+/**
+ * Resolve the exact version npm would install for a package@range.
+ */
+function resolveNpmVersion(npmPackage: string, versionRange: string, log: (m: string) => void): string {
+  const spec = versionRange === "latest" ? npmPackage : `${npmPackage}@${versionRange}`;
+  log(`Resolving npm version for ${spec}`);
+  const out = runCapture("npm", ["view", spec, "version"], process.cwd());
+  // npm view can return a single version or a JSON array for ranges — take last line.
+  const lines = out.split("\n").map((l) => l.trim()).filter(Boolean);
+  const last = lines[lines.length - 1] ?? "";
+  // Strip quotes if JSON-ish
+  const cleaned = last.replace(/^"|"$/g, "");
+  if (!cleaned) throw new Error(`Could not resolve npm version for ${spec}`);
+  return cleaned;
+}
+
+/**
+ * Pack an npm package into the skills cache and return the absolute dir.
+ */
+export async function ensureNpmPackageCached(
+  npmPackage: string,
+  versionRange: string | undefined,
+  opts: ResolveSkillRefsOptions = {},
+): Promise<string> {
+  const log = opts.onLog ?? (() => undefined);
+  const cacheRoot = skillsCacheDir(opts.cacheDir);
+  const pin = safeNpmVersionPin(versionRange);
+
+  // Fast path: exact version already cached
+  if (pin !== "latest" && !pin.startsWith("^") && !pin.startsWith("~") && !pin.includes("*")) {
+    const exactDir = cachePathForNpm(cacheRoot, npmPackage, pin);
+    if (existsSync(join(exactDir, "package.json"))) {
+      if (!hasBuiltEntry(exactDir) && !opts.offline) {
+        await buildInPlace(exactDir, log);
+      }
+      return exactDir;
+    }
+  }
+
+  if (opts.offline) {
+    // Best-effort: look for any cached version of this package
+    const safeName = npmPackage.replace(/^@/, "").replace(/\//g, "__");
+    const pkgRoot = join(cacheRoot, "npm", safeName);
+    if (existsSync(pkgRoot)) {
+      const versions = readdirSync(pkgRoot).filter((v) =>
+        existsSync(join(pkgRoot, v, "package.json")),
+      );
+      if (versions.length > 0) {
+        versions.sort();
+        return join(pkgRoot, versions[versions.length - 1]!);
+      }
+    }
+    throw new Error(`npm package ${npmPackage}@${pin} not in cache (offline)`);
+  }
+
+  const resolvedVersion = resolveNpmVersion(npmPackage, pin, log);
+  const dir = cachePathForNpm(cacheRoot, npmPackage, resolvedVersion);
+  if (existsSync(join(dir, "package.json"))) {
+    if (!hasBuiltEntry(dir)) {
+      await buildInPlace(dir, log);
+    }
+    return dir;
+  }
+
+  mkdirSync(join(cacheRoot, "npm", npmPackage.replace(/^@/, "").replace(/\//g, "__")), {
+    recursive: true,
+  });
+
+  const tmp = mkdtempSync(join(tmpdir(), "agenticros-skill-npm-"));
+  try {
+    const spec = `${npmPackage}@${resolvedVersion}`;
+    log(`npm pack ${spec} → ${tmp}`);
+    const tgzName = runCapture("npm", ["pack", spec, "--pack-destination", tmp], tmp);
+    const tgzPath = join(tmp, tgzName);
+    const extractDir = join(tmp, "extract");
+    mkdirSync(extractDir, { recursive: true });
+    run("tar", ["-xzf", tgzPath, "-C", extractDir], tmp, log);
+    const packedRoot = join(extractDir, "package");
+    if (!existsSync(join(packedRoot, "package.json"))) {
+      throw new Error(`npm pack for ${spec} did not produce package/package.json`);
+    }
+    mkdirSync(join(dir, ".."), { recursive: true });
+    if (existsSync(dir)) {
+      rmSync(dir, { recursive: true, force: true });
+    }
+    renameSync(packedRoot, dir);
+    writeFileSync(
+      join(dir, ".agenticros-skill-ref.json"),
+      JSON.stringify(
+        {
+          kind: "npm",
+          npmPackage,
+          npmVersion: resolvedVersion,
+          cachedAt: new Date().toISOString(),
+        },
+        null,
+        2,
+      ),
+    );
+  } finally {
+    try {
+      rmSync(tmp, { recursive: true, force: true });
+    } catch {
+      /* ignore */
+    }
+  }
+
+  if (!hasBuiltEntry(dir)) {
+    await buildInPlace(dir, log);
+  }
+  return dir;
 }
 
 /**
@@ -158,11 +337,18 @@ export async function ensureSkillRefCached(
 ): Promise<string> {
   const parsed = parseSkillRef(rawRef);
   if (!parsed) {
-    throw new Error(`Invalid skillRef "${rawRef}" (expected owner/skill or owner/skill@ref)`);
+    throw new Error(
+      `Invalid skillRef "${rawRef}" (expected owner/skill, owner/skill@ref, or @scope/name[@semver])`,
+    );
   }
   const log = opts.onLog ?? (() => undefined);
+
+  if (parsed.kind === "npm") {
+    return ensureNpmPackageCached(parsed.npmPackage!, parsed.npmVersion, opts);
+  }
+
   const cacheRoot = skillsCacheDir(opts.cacheDir);
-  const dir = cachePathFor(cacheRoot, parsed.owner, parsed.skill, parsed.gitRef);
+  const dir = cachePathForGit(cacheRoot, parsed.owner!, parsed.skill!, parsed.gitRef!);
 
   if (existsSync(join(dir, "package.json"))) {
     if (opts.pullIfPresent || process.env.AGENTICROS_SKILLS_CACHE_PULL === "1") {
@@ -182,25 +368,42 @@ export async function ensureSkillRefCached(
     throw new Error(`skillRef ${parsed.marketplaceRef} not in cache (offline)`);
   }
 
-  const descriptor = await fetchInstallDescriptor(parsed.marketplaceRef, opts.apiBase);
-  const gitRef = parsed.gitRef !== "main" ? parsed.gitRef : descriptor.ref || "main";
+  const descriptor = await fetchInstallDescriptor(parsed.marketplaceRef!, opts.apiBase);
+
+  // Prefer npm when the marketplace advertises an npm package.
+  const npmPkg = descriptor.npmPackage || (descriptor.packageName?.startsWith("@") ? descriptor.packageName : undefined);
+  if (npmPkg) {
+    const version =
+      parsed.gitRef && parsed.gitRef !== "main"
+        ? parsed.gitRef
+        : descriptor.npmVersion;
+    log(`Install descriptor prefers npm: ${npmPkg}${version ? `@${version}` : ""}`);
+    return ensureNpmPackageCached(npmPkg, version, opts);
+  }
+
+  if (!descriptor.githubUrl) {
+    throw new Error(
+      `Install descriptor for ${parsed.marketplaceRef} has no githubUrl or npmPackage`,
+    );
+  }
+
+  const gitRef = parsed.gitRef !== "main" ? parsed.gitRef! : descriptor.ref || "main";
   const repoUrl = descriptor.githubUrl.endsWith(".git")
     ? descriptor.githubUrl
     : `${descriptor.githubUrl}.git`;
 
-  mkdirSync(join(cacheRoot, parsed.owner, parsed.skill), { recursive: true });
+  mkdirSync(join(cacheRoot, parsed.owner!, parsed.skill!), { recursive: true });
   if (!existsSync(join(dir, ".git"))) {
     log(`Cloning ${repoUrl} (${gitRef}) → ${dir}`);
     try {
       run(
         "git",
         ["clone", "--branch", gitRef, "--single-branch", "--depth", "1", repoUrl, dir],
-        join(cacheRoot, parsed.owner, parsed.skill),
+        join(cacheRoot, parsed.owner!, parsed.skill!),
         log,
       );
     } catch {
-      // Branch pin may be a tag or default branch name mismatch — full clone + checkout.
-      run("git", ["clone", "--depth", "1", repoUrl, dir], join(cacheRoot, parsed.owner, parsed.skill), log);
+      run("git", ["clone", "--depth", "1", repoUrl, dir], join(cacheRoot, parsed.owner!, parsed.skill!), log);
       try {
         run("git", ["checkout", gitRef], dir, log);
       } catch {
@@ -209,12 +412,12 @@ export async function ensureSkillRefCached(
     }
   }
 
-  // Marker for which marketplace ref produced this cache entry
   try {
     writeFileSync(
       join(dir, ".agenticros-skill-ref.json"),
       JSON.stringify(
         {
+          kind: "git",
           marketplaceRef: parsed.marketplaceRef,
           gitRef,
           githubUrl: descriptor.githubUrl,
@@ -274,8 +477,6 @@ export async function resolveSkillRefs(
 
 /**
  * Return a config copy with skillRefs resolved into skillPaths (deduped).
- * Sync-friendly path: if offline or empty refs, returns config unchanged
- * except merging any already-cached paths when possible without network.
  */
 export async function withResolvedSkillRefs(
   config: AgenticROSConfig,
@@ -314,7 +515,33 @@ export function applyCachedSkillRefs(config: AgenticROSConfig): AgenticROSConfig
   for (const raw of refs) {
     const parsed = parseSkillRef(raw);
     if (!parsed) continue;
-    const dir = cachePathFor(cacheRoot, parsed.owner, parsed.skill, parsed.gitRef);
+    if (parsed.kind === "npm") {
+      const safeName = parsed.npmPackage!.replace(/^@/, "").replace(/\//g, "__");
+      const pkgRoot = join(cacheRoot, "npm", safeName);
+      if (!existsSync(pkgRoot)) continue;
+      const pin = parsed.npmVersion;
+      if (pin && !pin.startsWith("^") && !pin.startsWith("~") && !pin.includes("*") && pin !== "latest") {
+        const dir = cachePathForNpm(cacheRoot, parsed.npmPackage!, pin);
+        if (existsSync(join(dir, "package.json")) && !have.has(dir)) {
+          have.add(dir);
+          merged.push(dir);
+        }
+        continue;
+      }
+      // Any cached version — prefer highest lexical version dir
+      const versions = readdirSync(pkgRoot).filter((v) =>
+        existsSync(join(pkgRoot, v, "package.json")),
+      );
+      if (versions.length === 0) continue;
+      versions.sort();
+      const dir = join(pkgRoot, versions[versions.length - 1]!);
+      if (!have.has(dir)) {
+        have.add(dir);
+        merged.push(dir);
+      }
+      continue;
+    }
+    const dir = cachePathForGit(cacheRoot, parsed.owner!, parsed.skill!, parsed.gitRef!);
     if (existsSync(join(dir, "package.json")) && !have.has(dir)) {
       have.add(dir);
       merged.push(dir);

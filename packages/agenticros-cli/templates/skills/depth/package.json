@@ -1,5 +1,5 @@
 {
-  "name": "agenticros-skill-{{slug}}",
+  "name": "@agenticros-skills/{{slug}}",
   "version": "0.1.0",
   "type": "module",
   "description": "{{description}}",
@@ -15,8 +15,13 @@
     "displayName": "{{displayName}}",
     "description": "{{description}}",
     "tutorial": false,
-    "categories": ["vision", "telemetry"],
-    "screenshots": ["docs/icon.png"],
+    "categories": [
+      "vision",
+      "telemetry"
+    ],
+    "screenshots": [
+      "docs/icon.png"
+    ],
     "capabilities": [
       {
         "id": "{{toolName}}",
@@ -26,13 +31,20 @@
     ]
   },
   "dependencies": {
-    "@agenticros/core": "^0.6.0",
+    "@agenticros/core": "^0.8.0",
     "@sinclair/typebox": "^0.34.0"
   },
   "devDependencies": {
     "@types/node": "^20.17.0",
     "typescript": "^5.7.0"
   },
-  "keywords": ["agenticros", "depth", "realsense"],
-  "license": "Apache-2.0"
+  "keywords": [
+    "agenticros",
+    "depth",
+    "realsense"
+  ],
+  "license": "Apache-2.0",
+  "publishConfig": {
+    "access": "public"
+  }
 }

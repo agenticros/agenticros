@@ -486,6 +486,7 @@ export async function executeTool(
   name: string,
   args: Record<string, unknown>,
   config: AgenticROSConfig,
+  opts?: { signal?: AbortSignal },
 ): Promise<ToolResult> {
   // Memory tools never need the ROS transport — dispatch them before
   // getTransport() (which throws when zenohd is down). Mirrors the gating in
@@ -706,7 +707,7 @@ export async function executeTool(
       const resolved = resolveRobotForTool(config, { robot_id: mission.robot_id });
       if ("error" in resolved) return resolved.error;
     }
-    const dispatcher: MissionToolDispatcher = async (toolName, toolArgs) => {
+    const dispatcher: MissionToolDispatcher = async (toolName, toolArgs, ctx) => {
       if (isExternalToolName(toolName)) {
         const capId = capabilityIdFromExternalTool(toolName);
         const cap = caps.find((c) => c.id === capId);
@@ -720,10 +721,11 @@ export async function executeTool(
         const transport = await getTransportForRobot(config, resolved.robot);
         const ext = await executeExternalCapability(cap, toolArgs, transport, {
           namespace: resolved.robot.namespace,
+          signal: ctx?.signal,
         });
         return { text: ext.text, outputs: ext.outputs, isError: ext.isError };
       }
-      const sub = await executeTool(toolName, toolArgs, config);
+      const sub = await executeTool(toolName, toolArgs, config, { signal: ctx?.signal });
       return { text: sub.output };
     };
 
@@ -1192,6 +1194,7 @@ export async function executeTool(
           clockwise: args["clockwise"] as boolean | undefined,
           timeoutSeconds: args["timeout_seconds"] as number | undefined,
           minConfidence: args["min_confidence"] as number | undefined,
+          signal: opts?.signal,
         });
         const summary = result.error
           ? result.error

@@ -48,6 +48,8 @@ export interface InstallDescriptor {
   githubUrl: string;
   ref: string;
   buildCmd: string;
+  npmPackage?: string;
+  npmVersion?: string;
 }
 
 export function skillApiPath(ref: string): string {

@@ -1,5 +1,5 @@
 {
-  "name": "agenticros-skill-{{slug}}",
+  "name": "@agenticros-skills/{{slug}}",
   "version": "0.1.0",
   "type": "module",
   "description": "{{description}}",
@@ -15,8 +15,12 @@
     "displayName": "{{displayName}}",
     "description": "{{description}}",
     "tutorial": true,
-    "categories": ["communication"],
-    "screenshots": ["docs/icon.png"],
+    "categories": [
+      "communication"
+    ],
+    "screenshots": [
+      "docs/icon.png"
+    ],
     "capabilities": [
       {
         "id": "{{toolName}}",
@@ -32,6 +36,13 @@
     "@types/node": "^20.17.0",
     "typescript": "^5.7.0"
   },
-  "keywords": ["agenticros", "tutorial", "getting-started"],
-  "license": "Apache-2.0"
+  "keywords": [
+    "agenticros",
+    "tutorial",
+    "getting-started"
+  ],
+  "license": "Apache-2.0",
+  "publishConfig": {
+    "access": "public"
+  }
 }

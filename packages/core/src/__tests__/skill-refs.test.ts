@@ -12,6 +12,7 @@ import {
 
 test("parseSkillRef: owner/skill and @pin", () => {
   assert.deepEqual(parseSkillRef("agenticros/navigate-to"), {
+    kind: "marketplace",
     marketplaceRef: "agenticros/navigate-to",
     owner: "agenticros",
     skill: "navigate-to",
@@ -20,6 +21,19 @@ test("parseSkillRef: owner/skill and @pin", () => {
   assert.equal(parseSkillRef("agenticros/start-slam@v0.1.0")?.gitRef, "v0.1.0");
   assert.equal(parseSkillRef("nope"), null);
   assert.equal(parseSkillRef(""), null);
+});
+
+test("parseSkillRef: npm scoped package", () => {
+  assert.deepEqual(parseSkillRef("@agenticros-skills/navigate-to"), {
+    kind: "npm",
+    npmPackage: "@agenticros-skills/navigate-to",
+    npmVersion: undefined,
+  });
+  assert.deepEqual(parseSkillRef("@agenticros-skills/find@^0.2.0"), {
+    kind: "npm",
+    npmPackage: "@agenticros-skills/find",
+    npmVersion: "^0.2.0",
+  });
 });
 
 test("parseConfig: skillRefs defaults to []", () => {

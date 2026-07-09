@@ -179,6 +179,7 @@ program
   .option("--graduate", "With `skills publish`: graduate a tutorial skill", false)
   .option("--invoke <tool>", "With `skills dev`: run a tool handler")
   .option("--live", "With `skills dev`: allow live transport", false)
+  .option("--no-restart", "Skip automatic OpenClaw gateway restart after install/sync", false)
   .action(async (action: string | undefined, arg: string | undefined, opts) => {
     const act = (action ?? "list").toLowerCase();
     if (act === "create") {
@@ -193,7 +194,7 @@ program
       await publishSkillCommand({ graduate: opts.graduate, yes: false });
       return;
     }
-    await skillsCommand({ action, arg });
+    await skillsCommand({ action, arg, noRestart: opts.restart === false });
   });
 
 const mcpCmd = program

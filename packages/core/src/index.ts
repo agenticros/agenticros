@@ -84,13 +84,14 @@ export type {
   ExecuteExternalResult,
 } from "./external-capability.js";
 
-export { runMission } from "./mission.js";
+export { runMission, MissionStepAbortedError } from "./mission.js";
 export type {
   Mission,
   MissionStep,
   MissionResult,
   MissionStepResult,
   MissionToolDispatcher,
+  MissionDispatchContext,
   CapabilityToolBinding,
   CapabilityToolBindings,
   MissionCancellationToken,
@@ -175,6 +176,7 @@ export {
   DEFAULT_SKILLS_API,
   DEFAULT_SKILLS_CACHE_DIR,
   ensureSkillRefCached,
+  ensureNpmPackageCached,
   fetchInstallDescriptor,
   githubRepoBasename,
   parseSkillRef,

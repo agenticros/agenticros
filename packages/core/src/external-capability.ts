@@ -16,6 +16,11 @@ export interface ExecuteExternalOptions {
   namespace?: string;
   /** Optional timeout for subscribe_once (ms). */
   timeoutMs?: number;
+  /**
+   * When aborted mid-action, call `transport.cancelActionGoal` (best-effort).
+   * Subscribe waits also reject early on abort.
+   */
+  signal?: AbortSignal;
 }
 
 export interface ExecuteExternalResult {
@@ -98,6 +103,7 @@ export async function executeExternalCapability(
   }
 
   const ns = options.namespace;
+  const signal = options.signal;
 
   try {
     if (impl.action) {
@@ -110,22 +116,46 @@ export async function executeExternalCapability(
         };
       }
       const args = buildExternalGoal(impl, inputs);
-      const result = await transport.sendActionGoal({
+      const goalPromise = transport.sendActionGoal({
         action,
         actionType,
         args,
       });
-      const outputs = {
-        success: result.result,
-        ...(result.values ?? {}),
-        launch_hint: impl.launch ?? null,
-        package_hint: impl.package ?? null,
-      };
-      return {
-        text: JSON.stringify(outputs),
-        outputs,
-        isError: !result.result,
-      };
+      let onAbort: (() => void) | undefined;
+      const abortPromise = signal
+        ? new Promise<never>((_, reject) => {
+            const fail = () => {
+              void transport.cancelActionGoal(action).catch(() => {});
+              reject(new Error("Action cancelled"));
+            };
+            if (signal.aborted) {
+              fail();
+              return;
+            }
+            onAbort = fail;
+            signal.addEventListener("abort", fail, { once: true });
+          })
+        : null;
+      try {
+        const result = abortPromise
+          ? await Promise.race([goalPromise, abortPromise])
+          : await goalPromise;
+        const outputs = {
+          success: result.result,
+          ...(result.values ?? {}),
+          launch_hint: impl.launch ?? null,
+          package_hint: impl.package ?? null,
+        };
+        return {
+          text: JSON.stringify(outputs),
+          outputs,
+          isError: !result.result,
+        };
+      } finally {
+        if (signal && onAbort) {
+          signal.removeEventListener("abort", onAbort);
+        }
+      }
     }
 
     if (impl.service) {
@@ -177,28 +207,40 @@ export async function executeExternalCapability(
               : 5000);
         const msg = await new Promise<Record<string, unknown>>((resolve, reject) => {
           let settled = false;
-          const timer = setTimeout(() => {
+          let sub: { unsubscribe: () => void } | undefined;
+          let onAbort: (() => void) | undefined;
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          const finish = (fn: () => void) => {
             if (settled) return;
             settled = true;
+            if (timer) clearTimeout(timer);
+            if (signal && onAbort) signal.removeEventListener("abort", onAbort);
             try {
-              sub.unsubscribe();
+              sub?.unsubscribe();
             } catch {
               /* ignore */
             }
-            reject(new Error(`Timed out waiting for message on ${topic} after ${timeout}ms`));
+            fn();
+          };
+          timer = setTimeout(() => {
+            finish(() =>
+              reject(new Error(`Timed out waiting for message on ${topic} after ${timeout}ms`)),
+            );
           }, timeout);
-          const sub = transport.subscribe(
+          onAbort = () => {
+            finish(() => reject(new Error("Subscribe cancelled")));
+          };
+          if (signal) {
+            if (signal.aborted) {
+              onAbort();
+              return;
+            }
+            signal.addEventListener("abort", onAbort, { once: true });
+          }
+          sub = transport.subscribe(
             { topic, type: msgType || "std_msgs/msg/String" },
             (message) => {
-              if (settled) return;
-              settled = true;
-              clearTimeout(timer);
-              try {
-                sub.unsubscribe();
-              } catch {
-                /* ignore */
-              }
-              resolve(message as Record<string, unknown>);
+              finish(() => resolve(message as Record<string, unknown>));
             },
           );
         });

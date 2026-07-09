@@ -795,7 +795,7 @@ async function handleRunMission(
       return robotResolveError(err);
     }
   }
-  const dispatcher: MissionToolDispatcher = async (toolName, toolArgs) => {
+  const dispatcher: MissionToolDispatcher = async (toolName, toolArgs, ctx) => {
     if (isExternalToolName(toolName)) {
       const capId = capabilityIdFromExternalTool(toolName);
       const cap = caps.find((c) => c.id === capId);
@@ -817,10 +817,11 @@ async function handleRunMission(
       const transport = await getTransportForRobot(config, robot);
       const ext = await executeExternalCapability(cap, toolArgs, transport, {
         namespace: robot.namespace,
+        signal: ctx?.signal,
       });
       return { text: ext.text, outputs: ext.outputs, isError: ext.isError };
     }
-    const res = await handleToolCall(toolName, toolArgs, config);
+    const res = await handleToolCall(toolName, toolArgs, config, { signal: ctx?.signal });
     const text = res.content
       .map((c) => (c.type === "text" ? c.text : `[image: ${c.mimeType}]`))
       .join("\n");
@@ -877,6 +878,7 @@ export async function handleToolCall(
   name: string,
   args: Record<string, unknown>,
   config: AgenticROSConfig,
+  opts?: { signal?: AbortSignal },
 ): Promise<{ content: ToolContent[]; isError?: boolean }> {
   // Memory tools are self-contained — they never touch the ROS transport, so
   // dispatch them before getTransport() (which throws when zenohd is down).
@@ -1470,6 +1472,7 @@ export async function handleToolCall(
         clockwise: args["clockwise"] as boolean | undefined,
         timeoutSeconds: args["timeout_seconds"] as number | undefined,
         minConfidence: args["min_confidence"] as number | undefined,
+        signal: opts?.signal,
       });
       const summary = result.error
         ? result.error
@@ -1481,7 +1484,7 @@ export async function handleToolCall(
         : `${target} not found within ${result.elapsedSeconds.toFixed(1)}s. Robot stopped.`;
       return {
         content: [{ type: "text", text: summary + "\n" + JSON.stringify(result) }],
-        isError: !!result.error,
+        isError: !!result.error && result.error !== "Cancelled",
       };
     }
 

@@ -245,6 +245,29 @@ export async function publishSkillCommand(opts: PublishSkillOptions): Promise<vo
     process.exit(1);
   }
 
+  // Marketplace UX v2 — also publish to npm under @agenticros-skills/* when scoped.
+  const pkgName = String(manifest.name ?? "");
+  if (pkgName.startsWith("@agenticros-skills/")) {
+    info(`Publishing ${pkgName}@${manifest.version} to npm…`);
+    try {
+      await execa("npm", ["publish", "--access", "public"], { cwd, stdio: "inherit" });
+      ok(`Published ${pkgName}@${manifest.version} to npm`);
+    } catch (e) {
+      warn(
+        `npm publish failed (marketplace listing still live): ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      );
+      warn(
+        "Create the @agenticros-skills npm org at https://www.npmjs.com/org/create if needed, then re-run publish.",
+      );
+    }
+  } else {
+    warn(
+      `package.json name is "${pkgName}" — prefer @agenticros-skills/<slug> for npm distribution.`,
+    );
+  }
+
   const ref = result.marketplaceRef ?? `${login}/${block.id}`;
   const site = apiBase().replace(/\/api$/, "");
   ok("Published to skills.agenticros.com");
@@ -252,6 +275,9 @@ export async function publishSkillCommand(opts: PublishSkillOptions): Promise<vo
   info(`  Profile: ${site}/${login}`);
   info("");
   info(`Install: ${colors.bold(`npx agenticros skills install ${ref}`)}`);
+  if (pkgName.startsWith("@agenticros-skills/")) {
+    info(`Or npm:  ${colors.bold(`npx agenticros skills install ${pkgName}`)}`);
+  }
   if (result.warnings?.length) {
     for (const w of result.warnings) warn(w);
   }

@@ -25,6 +25,8 @@ export interface FindObjectOptions {
   timeoutSeconds?: number;
   minConfidence?: number;
   clockwise?: boolean;
+  /** When aborted, stop rotating and return found:false. */
+  signal?: AbortSignal;
 }
 
 export interface FindObjectResult {
@@ -107,6 +109,9 @@ export async function findObject(
 
     const deadline = startedAt + timeoutMs;
     while (Date.now() < deadline && !result) {
+      if (opts.signal?.aborted) {
+        break;
+      }
       // Keep the rotation alive in case the robot times out cmd_vel commands.
       await publishTwist(0, angularZ);
 
@@ -139,6 +144,17 @@ export async function findObject(
   }
 
   const elapsedSeconds = (Date.now() - startedAt) / 1000;
+  if (opts.signal?.aborted && !result) {
+    return {
+      found: false,
+      target: opts.target,
+      classId,
+      elapsedSeconds,
+      rotationDirection: clockwise ? "clockwise" : "counterclockwise",
+      angularSpeed: requestedSpeed,
+      error: "Cancelled",
+    };
+  }
   return {
     found: !!result,
     target: opts.target,
