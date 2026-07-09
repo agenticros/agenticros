@@ -99,6 +99,12 @@ importers:
       '@google/genai':
         specifier: ^1.0.0
         version: 1.46.0(@modelcontextprotocol/sdk@1.27.1(zod@3.25.76))
+      onnxruntime-node:
+        specifier: ^1.20.0
+        version: 1.26.0
+      sharp:
+        specifier: ^0.33.0
+        version: 0.33.5
       zod:
         specifier: ^3.24.0
         version: 3.25.76

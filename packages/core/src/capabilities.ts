@@ -193,9 +193,30 @@ function normalizeCapability(
   };
 }
 
+function readCapabilitiesJson(
+  packageDir: string,
+): Array<Partial<Capability> & { id: string }> {
+  const capsPath = join(packageDir, "capabilities.json");
+  if (!existsSync(capsPath)) return [];
+  try {
+    const raw = JSON.parse(readFileSync(capsPath, "utf-8")) as unknown;
+    const list = Array.isArray(raw)
+      ? raw
+      : raw && typeof raw === "object" && Array.isArray((raw as { capabilities?: unknown }).capabilities)
+        ? (raw as { capabilities: unknown[] }).capabilities
+        : [];
+    const out: Array<Partial<Capability> & { id: string }> = [];
+    for (const c of list) if (isCapabilityLike(c)) out.push(c);
+    return out;
+  } catch {
+    return [];
+  }
+}
+
 /**
- * Read the `agenticros.capabilities[]` array from a skill's package.json.
- * Returns `null` if the package doesn't declare a valid `agenticros` block.
+ * Read the `agenticros.capabilities[]` array from a skill's package.json,
+ * merging any sibling `capabilities.json`. Returns `null` if the package
+ * doesn't declare a valid `agenticros` block.
  *
  * The legacy `agenticrosSkill: true | { capabilities }` form is NOT supported
  * — every skill must use the single `agenticros` block as its source of truth.
@@ -220,10 +241,24 @@ function readSkillManifestFromDir(
   const packageName = pkg.name ?? "unknown";
   const skillId = pkg.agenticros.id;
   const rawCaps: Array<Partial<Capability> & { id: string }> = [];
+  const seenIds = new Set<string>();
 
   const caps = pkg.agenticros.capabilities;
   if (Array.isArray(caps)) {
-    for (const c of caps) if (isCapabilityLike(c)) rawCaps.push(c);
+    for (const c of caps) {
+      if (isCapabilityLike(c) && !seenIds.has(c.id)) {
+        seenIds.add(c.id);
+        rawCaps.push(c);
+      }
+    }
+  }
+
+  // Sibling capabilities.json merges in (package.json wins on id conflict).
+  for (const c of readCapabilitiesJson(packageDir)) {
+    if (!seenIds.has(c.id)) {
+      seenIds.add(c.id);
+      rawCaps.push(c);
+    }
   }
 
   return { packageName, skillId, rawCaps };

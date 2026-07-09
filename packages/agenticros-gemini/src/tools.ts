@@ -5,7 +5,6 @@
 import type {
   AgenticROSConfig,
   Capability,
-  CapabilityToolBindings,
   Mission,
   MissionToolDispatcher,
 } from "@agenticros/core";
@@ -13,6 +12,7 @@ import {
   resolveCameraSubscribeTopic,
   resolveMemoryNamespace,
   toNamespacedTopic,
+  toNamespacedTopicFull,
   listAllCapabilities,
   runMission,
   listRobots,
@@ -26,6 +26,10 @@ import {
   missionTranscriptNamespace,
   MissionRegistry,
   compileGoalToMission,
+  buildMissionBindings,
+  isExternalToolName,
+  capabilityIdFromExternalTool,
+  executeExternalCapability,
 } from "@agenticros/core";
 import {
   ROS_MSG_COMPRESSED_IMAGE,
@@ -40,6 +44,9 @@ import { getTransportForRobot } from "./transport.js";
 import { checkPublishSafety } from "./safety.js";
 import { getDepthDistance } from "./depth.js";
 import { ensureMemory } from "./memory.js";
+import { getFollowMeLocal } from "./follow-me/loop.js";
+import { getFollowMeDepth } from "./follow-me/depth-loop.js";
+import { findObject } from "./find-object/find-object.js";
 
 const MEMORY_TOOL_NAMES = new Set([
   "memory_remember",
@@ -56,91 +63,6 @@ const MEMORY_TOOL_NAMES = new Set([
  * pattern used by the Claude Code MCP server and the OpenClaw plugin.
  */
 const MISSION_REGISTRY = new MissionRegistry();
-
-/**
- * Capability → MCP tool dispatch table for `run_mission` (Phase 1.c).
- * Mirrors the table in packages/agenticros-claude-code/src/tools.ts and
- * packages/agenticros/src/tools/ros2-mission.ts — all three adapters
- * agree on what each capability does.
- */
-const MISSION_BINDINGS: CapabilityToolBindings = {
-  drive_base: {
-    tool: "ros2_publish",
-    buildArgs: (inputs) => {
-      const lx = Number(inputs.linear_x ?? 0) || 0;
-      const az = Number(inputs.angular_z ?? 0) || 0;
-      return {
-        topic: "/cmd_vel",
-        type: "geometry_msgs/msg/Twist",
-        message: {
-          linear: { x: lx, y: 0, z: 0 },
-          angular: { x: 0, y: 0, z: az },
-        },
-      };
-    },
-  },
-  take_snapshot: {
-    tool: "ros2_camera_snapshot",
-    buildArgs: (inputs) => {
-      const out: Record<string, unknown> = {};
-      if (typeof inputs.topic === "string") out.topic = inputs.topic;
-      if (typeof inputs.message_type === "string") out.message_type = inputs.message_type;
-      if (typeof inputs.timeout === "number") out.timeout = inputs.timeout;
-      return out;
-    },
-  },
-  measure_depth: {
-    tool: "ros2_depth_distance",
-    buildArgs: (inputs) => {
-      const out: Record<string, unknown> = {};
-      if (typeof inputs.topic === "string") out.topic = inputs.topic;
-      if (typeof inputs.timeout === "number") out.timeout = inputs.timeout;
-      return out;
-    },
-  },
-  list_topics: {
-    tool: "ros2_list_topics",
-    buildArgs: () => ({}),
-  },
-  publish_topic: {
-    tool: "ros2_publish",
-    buildArgs: (inputs) => ({
-      topic: String(inputs.topic ?? ""),
-      type: String(inputs.type ?? inputs.msg_type ?? ""),
-      message: inputs.message ?? inputs.msg ?? {},
-    }),
-  },
-  subscribe_once: {
-    tool: "ros2_subscribe_once",
-    buildArgs: (inputs) => {
-      const out: Record<string, unknown> = { topic: String(inputs.topic ?? "") };
-      if (typeof inputs.type === "string") out.type = inputs.type;
-      if (typeof inputs.timeout === "number") out.timeout = inputs.timeout;
-      return out;
-    },
-  },
-  follow_person: {
-    tool: "ros2_follow_me_start",
-    buildArgs: (inputs) => {
-      const out: Record<string, unknown> = {};
-      if (typeof inputs.target_distance === "number") out.target_distance = inputs.target_distance;
-      if (typeof inputs.mode === "string") out.mode = inputs.mode;
-      return out;
-    },
-  },
-  find_object: {
-    tool: "ros2_find_object",
-    buildArgs: (inputs) => {
-      const target = String(inputs.target ?? "");
-      const out: Record<string, unknown> = { target };
-      if (typeof inputs.angular_speed === "number") out.angular_speed = inputs.angular_speed;
-      if (typeof inputs.clockwise === "boolean") out.clockwise = inputs.clockwise;
-      if (typeof inputs.timeout_seconds === "number") out.timeout_seconds = inputs.timeout_seconds;
-      if (typeof inputs.min_confidence === "number") out.min_confidence = inputs.min_confidence;
-      return out;
-    },
-  },
-};
 
 const DEFAULT_DEPTH_TOPIC = "/camera/camera/depth/image_rect_raw";
 const ENABLE_MULTIMODAL_FUNCTION_RESPONSE =
@@ -187,6 +109,28 @@ function resolveRobotForTool(
     const msg = err instanceof Error ? err.message : String(err);
     return { error: { output: msg } };
   }
+}
+
+function followMeMode(args: Record<string, unknown>): "node" | "local" | "depth" {
+  const raw = String(args["mode"] ?? "depth").toLowerCase().trim();
+  if (raw === "local") return "local";
+  if (raw === "depth") return "depth";
+  return "node";
+}
+
+async function publishFollowMeCmd(
+  config: AgenticROSConfig,
+  robot: ResolvedRobot,
+  payload: Record<string, unknown>,
+): Promise<{ topic: string }> {
+  const transport = await getTransportForRobot(config, robot);
+  const topic = toNamespacedTopicFull(robot.namespace, "/follow_me/cmd");
+  await transport.publish({
+    topic,
+    type: "std_msgs/msg/String",
+    msg: { data: JSON.stringify(payload) },
+  });
+  return { topic };
 }
 
 export const GEMINI_FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
@@ -326,6 +270,70 @@ export const GEMINI_FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
     }),
   },
   {
+    name: "ros2_follow_me_start",
+    description:
+      "Start the follow-me skill — the robot follows a person. Modes: 'depth' (default), 'node', or 'local' (YOLO). Pass robot_id for multi-robot.",
+    parametersJsonSchema: schemaFromProps({
+      mode: { type: "string", description: "'depth' (default), 'node', or 'local'." },
+      target_description: { type: "string", description: "Optional person description." },
+      ...ROBOT_ID_PROP,
+    }),
+  },
+  {
+    name: "ros2_follow_me_stop",
+    description: "Stop the follow-me skill.",
+    parametersJsonSchema: schemaFromProps({
+      mode: { type: "string", description: "'depth' (default), 'node', or 'local'." },
+      ...ROBOT_ID_PROP,
+    }),
+  },
+  {
+    name: "ros2_follow_me_status",
+    description: "Read follow-me status for the active or named robot.",
+    parametersJsonSchema: schemaFromProps({
+      mode: { type: "string", description: "'depth' (default), 'node', or 'local'." },
+      timeout: { type: "number", description: "Timeout ms for mode=node (default 3000)." },
+      ...ROBOT_ID_PROP,
+    }),
+  },
+  {
+    name: "ros2_follow_me_set_distance",
+    description: "Set follow-me target distance in meters (0.2–5.0).",
+    parametersJsonSchema: schemaFromProps(
+      {
+        mode: { type: "string", description: "'depth' (default), 'node', or 'local'." },
+        distance: { type: "number", description: "Target distance in meters." },
+        ...ROBOT_ID_PROP,
+      },
+      ["distance"],
+    ),
+  },
+  {
+    name: "ros2_follow_me_set_target",
+    description: "Update the follow-me target description while running.",
+    parametersJsonSchema: schemaFromProps({
+      mode: { type: "string", description: "'depth' (default), 'node', or 'local'." },
+      target_description: { type: "string", description: "Person description." },
+      ...ROBOT_ID_PROP,
+    }),
+  },
+  {
+    name: "ros2_find_object",
+    description:
+      "Rotate in place until a COCO-class object is found in the camera, then stop. Returns horizontal_offset for approach missions.",
+    parametersJsonSchema: schemaFromProps(
+      {
+        target: { type: "string", description: "COCO class name (e.g. chair, bottle)." },
+        angular_speed: { type: "number", description: "Rotation speed rad/s." },
+        clockwise: { type: "boolean", description: "Rotate clockwise (default true)." },
+        timeout_seconds: { type: "number", description: "Search timeout seconds." },
+        min_confidence: { type: "number", description: "Min detection confidence." },
+        ...ROBOT_ID_PROP,
+      },
+      ["target"],
+    ),
+  },
+  {
     name: "memory_remember",
     description:
       "Store a durable fact in long-term memory. Call this when the user says \"remember that ...\", \"note that ...\", \"from now on ...\", or shares a stable personal fact (preferences, names, places, routines, robot hardware like the camera/eyes the robot has). The store is shared across all AgenticROS adapters talking to this robot (OpenClaw, Claude Desktop, Claude Code, Gemini). Do NOT auto-store chat transcripts. Only available when memory is enabled in config.",
@@ -408,6 +416,40 @@ export const GEMINI_FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
         reason: {
           type: "string",
           description: "Optional free-text reason — surfaced in the cancelled mission result.",
+        },
+      },
+      required: ["mission_id"],
+    },
+  },
+  {
+    name: "mission_pause",
+    description:
+      "Pause a mission that's currently running in this Gemini CLI process. Pass the mission_id returned by run_mission. The runner waits at the next step boundary until mission_resume (or mission_cancel). Idempotent if already paused.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: {
+        mission_id: {
+          type: "string",
+          description: "The mission_id echoed by run_mission. Required.",
+        },
+        reason: {
+          type: "string",
+          description: "Optional free-text reason — surfaced in the paused transcript entry.",
+        },
+      },
+      required: ["mission_id"],
+    },
+  },
+  {
+    name: "mission_resume",
+    description:
+      "Resume a mission previously paused with mission_pause. Pass the mission_id returned by run_mission. Idempotent if the mission is not paused.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: {
+        mission_id: {
+          type: "string",
+          description: "The mission_id echoed by run_mission. Required.",
         },
       },
       required: ["mission_id"],
@@ -543,9 +585,8 @@ export async function executeTool(
       };
     }
   }
-  // mission_cancel mutates only the in-process MissionRegistry and
-  // must work without a ROS transport — keep it above the
-  // unconditional transport resolution.
+  // mission_cancel / pause / resume mutate only the in-process
+  // MissionRegistry and must work without a ROS transport.
   if (name === "mission_cancel") {
     const missionId = typeof args["mission_id"] === "string" ? (args["mission_id"] as string).trim() : "";
     if (!missionId) {
@@ -565,6 +606,48 @@ export async function executeTool(
         found: outcome.found,
         already_cancelled: outcome.alreadyCancelled,
         reason: reason ?? null,
+      }),
+    };
+  }
+  if (name === "mission_pause") {
+    const missionId = typeof args["mission_id"] === "string" ? (args["mission_id"] as string).trim() : "";
+    if (!missionId) {
+      return {
+        output: JSON.stringify({
+          success: false,
+          error: "mission_pause requires 'mission_id' (a non-empty string returned by run_mission).",
+        }),
+      };
+    }
+    const reason = typeof args["reason"] === "string" ? (args["reason"] as string) : undefined;
+    const outcome = MISSION_REGISTRY.pause(missionId, reason);
+    return {
+      output: JSON.stringify({
+        success: true,
+        mission_id: missionId,
+        found: outcome.found,
+        already_paused: outcome.alreadyPaused,
+        reason: reason ?? null,
+      }),
+    };
+  }
+  if (name === "mission_resume") {
+    const missionId = typeof args["mission_id"] === "string" ? (args["mission_id"] as string).trim() : "";
+    if (!missionId) {
+      return {
+        output: JSON.stringify({
+          success: false,
+          error: "mission_resume requires 'mission_id' (a non-empty string returned by run_mission).",
+        }),
+      };
+    }
+    const outcome = MISSION_REGISTRY.resume(missionId);
+    return {
+      output: JSON.stringify({
+        success: true,
+        mission_id: missionId,
+        found: outcome.found,
+        was_paused: outcome.wasPaused,
       }),
     };
   }
@@ -621,6 +704,22 @@ export async function executeTool(
       if ("error" in resolved) return resolved.error;
     }
     const dispatcher: MissionToolDispatcher = async (toolName, toolArgs) => {
+      if (isExternalToolName(toolName)) {
+        const capId = capabilityIdFromExternalTool(toolName);
+        const cap = caps.find((c) => c.id === capId);
+        if (!cap) {
+          return { text: `Unknown external capability "${capId}".`, isError: true };
+        }
+        const resolved = resolveRobotForTool(config, toolArgs);
+        if ("error" in resolved) {
+          return { text: resolved.error.output, isError: true };
+        }
+        const transport = await getTransportForRobot(config, resolved.robot);
+        const ext = await executeExternalCapability(cap, toolArgs, transport, {
+          namespace: resolved.robot.namespace,
+        });
+        return { text: ext.text, outputs: ext.outputs, isError: ext.isError };
+      }
       const sub = await executeTool(toolName, toolArgs, config);
       return { text: sub.output };
     };
@@ -638,7 +737,7 @@ export async function executeTool(
 
     let result;
     try {
-      result = await runMission(mission, caps, MISSION_BINDINGS, dispatcher, {
+      result = await runMission(mission, caps, buildMissionBindings(caps), dispatcher, {
         mission_id: missionId,
         cancellation: regEntry.cancellation,
         transcript,
@@ -939,6 +1038,168 @@ export async function executeTool(
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         return { output: `Depth distance failed: ${message}` };
+      }
+    }
+
+    case "ros2_follow_me_start": {
+      const mode = followMeMode(args);
+      const desc = String(args["target_description"] ?? "").trim();
+      if (mode === "local") {
+        try {
+          const loop = getFollowMeLocal(robot, config, transport);
+          await loop.start({ targetDescription: desc || undefined });
+          return {
+            output: `Follow-me (local) started on ${robot.id}${desc ? ` (target: ${desc})` : " (closest person)"}.`,
+          };
+        } catch (err) {
+          return { output: `Follow-me local start failed: ${err instanceof Error ? err.message : String(err)}` };
+        }
+      }
+      if (mode === "depth") {
+        try {
+          const loop = getFollowMeDepth(robot, config, transport);
+          await loop.start({ targetDescription: desc || undefined });
+          return {
+            output: `Follow-me (depth-only) started on ${robot.id}. Use ros2_follow_me_status with mode='depth' to check.`,
+          };
+        } catch (err) {
+          return { output: `Follow-me depth start failed: ${err instanceof Error ? err.message : String(err)}` };
+        }
+      }
+      try {
+        const { topic } = await publishFollowMeCmd(config, robot, {
+          action: "start",
+          ...(desc ? { target: desc } : {}),
+        });
+        return {
+          output: `Follow-me start sent to ${topic}${desc ? ` (target: ${desc})` : ""}.`,
+        };
+      } catch (err) {
+        return { output: `Follow-me start failed: ${err instanceof Error ? err.message : String(err)}` };
+      }
+    }
+
+    case "ros2_follow_me_stop": {
+      const mode = followMeMode(args);
+      if (mode === "local") {
+        getFollowMeLocal(robot, config, transport).stop();
+        return { output: `Follow-me (local) stopped on ${robot.id}.` };
+      }
+      if (mode === "depth") {
+        getFollowMeDepth(robot, config, transport).stop();
+        return { output: `Follow-me (depth) stopped on ${robot.id}.` };
+      }
+      try {
+        const { topic } = await publishFollowMeCmd(config, robot, { action: "stop" });
+        return { output: `Follow-me stop sent to ${topic}.` };
+      } catch (err) {
+        return { output: `Follow-me stop failed: ${err instanceof Error ? err.message : String(err)}` };
+      }
+    }
+
+    case "ros2_follow_me_status": {
+      const mode = followMeMode(args);
+      if (mode === "local") {
+        const status = getFollowMeLocal(robot, config, transport).status();
+        return { output: JSON.stringify(status) };
+      }
+      if (mode === "depth") {
+        const status = getFollowMeDepth(robot, config, transport).status();
+        return { output: JSON.stringify(status) };
+      }
+      try {
+        const statusTopic = toNamespacedTopicFull(robot.namespace, "/follow_me/status");
+        const timeout = (args["timeout"] as number | undefined) ?? 3000;
+        const statusMsg = await new Promise<Record<string, unknown>>((resolve, reject) => {
+          const timer = setTimeout(() => {
+            sub.unsubscribe();
+            reject(new Error(`Timeout waiting for ${statusTopic}`));
+          }, timeout);
+          const sub = transport.subscribe(
+            { topic: statusTopic, type: "std_msgs/msg/String" },
+            (m) => {
+              clearTimeout(timer);
+              sub.unsubscribe();
+              resolve(m as Record<string, unknown>);
+            },
+          );
+        });
+        return { output: JSON.stringify(statusMsg) };
+      } catch (err) {
+        return { output: `Follow-me status failed: ${err instanceof Error ? err.message : String(err)}` };
+      }
+    }
+
+    case "ros2_follow_me_set_distance": {
+      const mode = followMeMode(args);
+      const distance = Number(args["distance"]);
+      if (!Number.isFinite(distance)) {
+        return { output: "ros2_follow_me_set_distance requires numeric 'distance'." };
+      }
+      if (mode === "local") {
+        getFollowMeLocal(robot, config, transport).setTargetDistance(distance);
+        return { output: `Follow-me (local) target distance set to ${distance} m on ${robot.id}.` };
+      }
+      if (mode === "depth") {
+        getFollowMeDepth(robot, config, transport).setTargetDistance(distance);
+        return { output: `Follow-me (depth) target distance set to ${distance} m on ${robot.id}.` };
+      }
+      try {
+        const { topic } = await publishFollowMeCmd(config, robot, {
+          action: "set_distance",
+          distance,
+        });
+        return { output: `Follow-me set_distance sent to ${topic}.` };
+      } catch (err) {
+        return { output: `Follow-me set_distance failed: ${err instanceof Error ? err.message : String(err)}` };
+      }
+    }
+
+    case "ros2_follow_me_set_target": {
+      const mode = followMeMode(args);
+      const desc = String(args["target_description"] ?? "").trim();
+      if (mode === "local") {
+        getFollowMeLocal(robot, config, transport).setTargetDescription(desc);
+        return { output: `Follow-me (local) target updated on ${robot.id}.` };
+      }
+      if (mode === "depth") {
+        getFollowMeDepth(robot, config, transport).setTargetDescription(desc);
+        return { output: "Depth mode recorded target description (still follows closest blob)." };
+      }
+      try {
+        const { topic } = await publishFollowMeCmd(config, robot, {
+          action: "set_target",
+          target_description: desc,
+        });
+        return { output: `Follow-me set_target sent to ${topic}.` };
+      } catch (err) {
+        return { output: `Follow-me set_target failed: ${err instanceof Error ? err.message : String(err)}` };
+      }
+    }
+
+    case "ros2_find_object": {
+      const target = String(args["target"] ?? "").trim();
+      if (!target) {
+        return { output: "Missing required argument: target" };
+      }
+      try {
+        const result = await findObject(robot, config, transport, {
+          target,
+          angularSpeed: args["angular_speed"] as number | undefined,
+          clockwise: args["clockwise"] as boolean | undefined,
+          timeoutSeconds: args["timeout_seconds"] as number | undefined,
+          minConfidence: args["min_confidence"] as number | undefined,
+        });
+        const summary = result.error
+          ? result.error
+          : result.found
+            ? `Found ${target} after ${result.elapsedSeconds.toFixed(1)}s. ` +
+              `Confidence ${((result.detection!.confidence) * 100).toFixed(0)}%, ` +
+              `horizontal offset ${result.detection!.horizontalOffset.toFixed(2)}. Robot stopped.`
+            : `${target} not found within ${result.elapsedSeconds.toFixed(1)}s. Robot stopped.`;
+        return { output: summary + "\n" + JSON.stringify(result) };
+      } catch (err) {
+        return { output: `ros2_find_object failed: ${err instanceof Error ? err.message : String(err)}` };
       }
     }
 

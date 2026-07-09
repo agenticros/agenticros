@@ -182,7 +182,15 @@ Set **`inputs.robot_id`** on individual steps. Per-step id wins over `mission.ro
 
 Replace `grasp` with your arm skill's capability id once that skill is installed and bound. The pattern — **fleet filter → single mission → per-step `robot_id`** — is the multi-robot orchestration model.
 
-## Step 5 — Cancel and hand off
+## Step 5 — Pause, cancel, and hand off
+
+**Pause in flight** (holds before the next step):
+
+```json
+{ "mission_id": "<id from run_mission>", "reason": "human in aisle" }
+```
+
+Call **`mission_pause`**, then **`mission_resume`** with the same `mission_id` when ready. Cancel while paused still aborts cleanly.
 
 **Cancel in flight:**
 
@@ -199,6 +207,12 @@ memory_recall({ "query": "step status", "namespace": "mission:<mission_id>" })
 ```
 
 Use this for handoffs, debugging, or post-mortems without re-querying ROS.
+
+## Fleet config (`fleet.json`)
+
+When `~/.agenticros/fleet.json` exists (or `AGENTICROS_FLEET_PATH` points at a file), that robot list **wins** over `config.robots[]`. The file may be a JSON array of robot entries or `{ "robots": [ ... ] }` using the same shape as `config.robots`.
+
+Online status prefers the `agenticros_discovery` heartbeat on `<ns>/agenticros/robot_info` (5 s staleness). `<ns>/cmd_vel` remains a fallback when no heartbeats are present.
 
 ## Contract layer — what gets validated
 
@@ -234,7 +248,7 @@ See also: [find-and-approach example](../examples/find-and-approach/README.md).
 
 ## Supported capabilities in missions today
 
-The mission runner binds these capability ids to tools (adapters stay in sync):
+Builtin bindings live in `@agenticros/core` (`buildMissionBindings`). Skill-declared capabilities are auto-bound to `ros2_<id>` (or `external:<id>` for `external_ros_node`).
 
 | Capability | Underlying tool |
 |---|---|
@@ -244,10 +258,11 @@ The mission runner binds these capability ids to tools (adapters stay in sync):
 | `list_topics` | `ros2_list_topics` |
 | `publish_topic` | `ros2_publish` (arbitrary topic) |
 | `subscribe_once` | `ros2_subscribe_once` |
-| `follow_person` | `ros2_follow_me_start` (skill) |
-| `find_object` | `ros2_find_object` (skill / MCP built-in) |
+| `follow_person` | `ros2_follow_me_start` (skill / Gemini / MCP) |
+| `find_object` | `ros2_find_object` (skill / Gemini / MCP) |
+| `navigate_to` | external Nav2 action (see [examples/navigate-to](../examples/navigate-to/)) |
 
-Skills you author can add new ids via `agenticros.capabilities[]` in `package.json`; once registered, they appear in `ros2_list_capabilities` and are chainable in `run_mission` without a new MCP tool on OpenClaw. See [skills.md — Chaining your skill in missions](skills.md#chaining-your-skill-in-missions).
+Skills you author can add new ids via `agenticros.capabilities[]` in `package.json` (or sibling `capabilities.json`); once registered, they appear in `ros2_list_capabilities` and are chainable in `run_mission` without editing three adapter binding tables. See [skills.md — Chaining your skill in missions](skills.md#chaining-your-skill-in-missions).
 
 ## Related docs
 

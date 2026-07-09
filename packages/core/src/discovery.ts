@@ -102,9 +102,13 @@ export function effectiveCmdVelNamespace(robotNamespace: string): string {
 /**
  * Find every robot-shaped namespace in a topic list.
  *
- * Detection rule: any `/<seg>/cmd_vel` topic implies a robot with
- * namespace `<seg>`. The unnamespaced `/cmd_vel` topic registers the
- * empty namespace (id=""). Topic count under each namespace is
+ * Detection rules (either is enough):
+ *   1. `/<seg>/cmd_vel` — classic mobile-base signal
+ *   2. `/<seg>/agenticros/robot_info` — Phase 1.d heartbeat (arms/drones
+ *      without cmd_vel still show up)
+ *
+ * The unnamespaced `/cmd_vel` / `/agenticros/robot_info` topics register
+ * the empty namespace (id=""). Topic count under each namespace is
  * accumulated so consumers can rank by liveness.
  *
  * The returned `DetectedRobot.configuredRobotId` is always `null` here —
@@ -122,6 +126,20 @@ export function detectRobotsFromTopics(topics: TopicInfo[]): DetectedRobot[] {
       const ns = m[1]!;
       if (!byNs.has(ns)) byNs.set(ns, { cmdVelTopic: t.name, topicCount: 0 });
     } else if (t.name === "/cmd_vel" && !byNs.has("")) {
+      byNs.set("", { cmdVelTopic: "/cmd_vel", topicCount: 0 });
+    }
+
+    // Heartbeat topic — covers robots that don't publish cmd_vel.
+    const hb = t.name.match(/^\/([^/]+)\/agenticros\/robot_info$/);
+    if (hb) {
+      const ns = hb[1]!;
+      if (!byNs.has(ns)) {
+        byNs.set(ns, { cmdVelTopic: `/${ns}/cmd_vel`, topicCount: 0 });
+      }
+    } else if (
+      (t.name === "/agenticros/robot_info" || t.name === "agenticros/robot_info") &&
+      !byNs.has("")
+    ) {
       byNs.set("", { cmdVelTopic: "/cmd_vel", topicCount: 0 });
     }
   }

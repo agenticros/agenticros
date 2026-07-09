@@ -29,25 +29,24 @@ premium skills — never on the real-time control path.
 | Transports (local, Zenoh, rosbridge, WebRTC) | Shipped |
 | Adapters (OpenClaw, MCP/Codex/Claude, Gemini) | Shipped |
 | Core tools + camera/depth | Shipped |
-| Capabilities, `run_mission`, NL planner, cancel | Phase 1 largely shipped |
-| Fleet list / find-for / per-robot transport | Phase 1 largely shipped |
+| Capabilities, `run_mission`, NL planner, cancel, pause/resume | Phase 1 complete |
+| Fleet list / find-for / heartbeat online / `fleet.json` | Phase 1 complete |
+| Dynamic mission bindings + Gemini find/follow | Phase 1 complete |
+| External ROS-node skill loader + `navigate_to` seed | Phase 1 complete |
 | Skills marketplace (metadata + git install) | Live at [skills.agenticros.com](https://skills.agenticros.com) |
 | Cross-adapter memory (local / mem0) | Shipped, off by default |
 | Safety (velocity clamps, OpenClaw `/estop`) | Baseline shipped |
-| External ROS-node skill loader | Design only |
-| Nav2 / MoveIt / SLAM first-class verbs | Not yet |
-| Marketplace auto-fetch + paid licenses | Not yet |
+| Marketplace auto-fetch + paid licenses | Phase 2 (planned) |
 | Spatial memory | Phase 3 (planned) |
 | ACP / A2A multi-agent mesh | Phase 4 (planned) |
 
 **Highest-leverage gaps for advanced physical AI**
 
-1. No first-class Nav2 / MoveIt / SLAM verbs — agents fall back to raw topics/actions.
-2. `external_ros_node` manifests are design-only — blocks the experienced ROS audience.
-3. Missions are sequential; cancel only at step boundaries.
-4. Memory is flat facts, not spatial.
-5. Safety is mostly velocity clamps — no workspace bounds or cmd_vel arbitration.
-6. Sim has no nav stack; arm/MoveIt WIP — hard to CI embodied behaviors.
+1. Broader seed catalog (MoveIt, SLAM, YOLO as external skills) beyond `navigate_to`.
+2. Missions are sequential; mid-step cancel and retry/backoff still deferred.
+3. Memory is flat facts, not spatial.
+4. Safety is mostly velocity clamps — no workspace bounds or cmd_vel arbitration.
+5. Sim has no nav stack; arm/MoveIt WIP — hard to CI embodied behaviors.
 7. Marketplace install is still clone + build.
 8. Observability is logs/transcripts — no mission dashboard or fleet health UI.
 

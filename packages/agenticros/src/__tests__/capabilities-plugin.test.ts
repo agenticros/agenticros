@@ -131,6 +131,8 @@ test("plugin: register() is synchronous and produces the base 15-tool surface", 
     "run_mission",
     // Phase 1.f — cancel an in-flight mission by id.
     "mission_cancel",
+    "mission_pause",
+    "mission_resume",
   ];
   for (const name of expected) {
     assert.ok(toolNames.includes(name), `Expected base tool ${name} in registered set`);

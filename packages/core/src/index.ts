@@ -66,6 +66,24 @@ export type {
   CapabilitySource,
 } from "./capabilities.js";
 
+export {
+  CapabilitySchema,
+  CapabilityFieldSchema,
+  CapabilityImplementationSchema,
+  parseCapability,
+  safeParseCapability,
+} from "./capability-schema.js";
+export type { ParsedCapability } from "./capability-schema.js";
+
+export {
+  buildExternalGoal,
+  executeExternalCapability,
+} from "./external-capability.js";
+export type {
+  ExecuteExternalOptions,
+  ExecuteExternalResult,
+} from "./external-capability.js";
+
 export { runMission } from "./mission.js";
 export type {
   Mission,
@@ -76,10 +94,26 @@ export type {
   CapabilityToolBinding,
   CapabilityToolBindings,
   MissionCancellationToken,
+  MissionControlToken,
   MissionTranscriptEntry,
   MissionTranscriptSink,
   RunMissionOptions,
 } from "./mission.js";
+
+export {
+  BUILTIN_MISSION_BINDINGS,
+  EXTERNAL_TOOL_PREFIX,
+  buildMissionBindings,
+  capabilityIdFromExternalTool,
+  defaultToolForCapability,
+  externalToolName,
+  isExternalToolName,
+  passthroughBuildArgs,
+} from "./mission-bindings.js";
+export type {
+  BuildMissionBindingsOptions,
+  CapabilityWithTool,
+} from "./mission-bindings.js";
 
 export {
   MissionRegistry,
@@ -109,6 +143,26 @@ export {
   effectiveCmdVelNamespace,
 } from "./discovery.js";
 export type { DetectedRobot, RobotDiscoveryResult } from "./discovery.js";
+
+export {
+  DEFAULT_HEARTBEAT_STALENESS_MS,
+  detectHeartbeatNamespacesFromTopics,
+  isHeartbeatFresh,
+  isRobotInfoTopic,
+  mergeRobotHeartbeats,
+  namespaceFromRobotInfoTopic,
+  onlineIdsFromHeartbeats,
+  parseRobotInfoMessage,
+} from "./heartbeat.js";
+export type { HeartbeatOnlineOptions, RobotHeartbeat } from "./heartbeat.js";
+
+export {
+  DEFAULT_FLEET_FILENAME,
+  applyFleetOverride,
+  loadFleetFile,
+  resolveFleetPath,
+} from "./fleet-config.js";
+export type { FleetFileResult } from "./fleet-config.js";
 
 export { findRobotsFor } from "./find-robots-for.js";
 export type {

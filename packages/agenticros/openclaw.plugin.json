@@ -21,6 +21,8 @@
       "ros2_find_robots_for",
       "run_mission",
       "mission_cancel",
+      "mission_pause",
+      "mission_resume",
       "ros2_camera_snapshot",
       "ros2_depth_distance",
       "memory_remember",

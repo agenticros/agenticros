@@ -14,6 +14,8 @@ import { registerDiscoverRobotsTool } from "./ros2-discover.js";
 import { registerFindRobotsForTool } from "./ros2-find-robots-for.js";
 import { registerMissionTool, type ToolRegistry } from "./ros2-mission.js";
 import { registerMissionCancelTool } from "./mission-cancel.js";
+import { registerMissionPauseTool } from "./mission-pause.js";
+import { registerMissionResumeTool } from "./mission-resume.js";
 
 /**
  * Wrap the OpenClaw API so every registerTool() call is also recorded in
@@ -21,11 +23,8 @@ import { registerMissionCancelTool } from "./mission-cancel.js";
  * dispatch sub-tool calls by name (e.g. capability "drive_base" routes
  * to the registered "ros2_publish" tool's execute()).
  *
- * We keep this internal — skills that register their own tools via
- * `api.registerTool` won't appear in the registry, which is fine for
- * v1: today the mission runner only supports the eight intrinsic
- * capability bindings declared in ros2-mission.ts. Phase 1.d will
- * extend this to capture skill-declared tools as well.
+ * Skill tools registered via `api.registerTool` are captured too, so
+ * `buildMissionBindings` can resolve `ros2_<capability_id>` when present.
  */
 function wrapApiWithToolCapture(api: OpenClawPluginApi): {
   wrappedApi: OpenClawPluginApi;
@@ -63,4 +62,6 @@ export function registerTools(api: OpenClawPluginApi, config: AgenticROSConfig):
   registerFindRobotsForTool(wrappedApi, config);
   registerMissionTool(wrappedApi, config, registry);
   registerMissionCancelTool(wrappedApi);
+  registerMissionPauseTool(wrappedApi);
+  registerMissionResumeTool(wrappedApi);
 }

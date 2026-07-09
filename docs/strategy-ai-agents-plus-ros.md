@@ -149,6 +149,12 @@ Concrete inventory of what already supports the platform-layer thesis:
 
 ## 4. Phase 1: Capability registry + skill chaining + multi-robot fleet discovery
 
+> **Status (2026-07):** Phase 1 is **complete** for the contract layer —
+> capabilities, missions (incl. pause/resume), fleet heartbeats +
+> `fleet.json`, dynamic bindings, Gemini find/follow parity, and
+> `external_ros_node` dispatch with a `navigate_to` seed skill. See
+> [roadmap.md](roadmap.md) and [blog/phase-1-complete.md](blog/phase-1-complete.md).
+
 The single goal: an agent that has never seen any of our robots can
 ask *"what robots are here, what can each one do, and can they do X
 then Y?"* and get a structured answer it can plan against — without us

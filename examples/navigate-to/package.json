@@ -1,0 +1,40 @@
+{
+  "name": "agenticros-skill-navigate-to",
+  "version": "0.1.0",
+  "description": "External ROS-node skill: navigate to a pose via Nav2 NavigateToPose.",
+  "main": "dist/index.js",
+  "type": "module",
+  "agenticros": {
+    "id": "navigate-to",
+    "displayName": "Navigate To",
+    "description": "Send a Nav2 NavigateToPose goal. Requires Nav2 running on the robot; AgenticROS dispatches the action over the configured transport.",
+    "categories": ["navigation"],
+    "capabilities": [
+      {
+        "id": "navigate_to",
+        "verb": "navigate",
+        "description": "Navigate the robot base to a map pose via Nav2.",
+        "inputs": {
+          "x": { "type": "number", "description": "Goal x in meters (map frame)." },
+          "y": { "type": "number", "description": "Goal y in meters (map frame)." },
+          "yaw": { "type": "number", "description": "Goal yaw in radians.", "optional": true },
+          "frame_id": { "type": "string", "description": "Pose frame_id (default map).", "optional": true }
+        },
+        "outputs": {
+          "success": { "type": "boolean", "description": "Whether the action reported success." }
+        },
+        "interruptible": true,
+        "blocks_base": true,
+        "implementation": {
+          "kind": "external_ros_node",
+          "package": "nav2_bringup",
+          "launch": "navigation_launch.py",
+          "action": "navigate_to_pose",
+          "msg_type": "nav2_msgs/action/NavigateToPose"
+        }
+      }
+    ]
+  },
+  "keywords": ["agenticros", "nav2", "navigation"],
+  "license": "Apache-2.0"
+}

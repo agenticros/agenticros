@@ -25,6 +25,7 @@
 import type { AgenticROSConfig } from "./config.js";
 import { getTransportConfig } from "./config.js";
 import type { TransportConfig } from "./transport/types.js";
+import { applyFleetOverride } from "./fleet-config.js";
 
 /** Sensor/hardware tags on a robot (Phase 1.e). */
 export interface RobotSensors {
@@ -85,7 +86,10 @@ const DEFAULT_SENSORS: RobotSensors = {
 };
 
 export function listRobots(config: AgenticROSConfig): ResolvedRobot[] {
-  const explicit = Array.isArray(config.robots) ? config.robots : [];
+  // Phase 1.d — ~/.agenticros/fleet.json (or AGENTICROS_FLEET_PATH) wins
+  // over config.robots when present and non-empty.
+  const effective = applyFleetOverride(config);
+  const explicit = Array.isArray(effective.robots) ? effective.robots : [];
   if (explicit.length > 0) {
     return explicit.map((r) => ({
       id: String(r.id),
@@ -107,7 +111,7 @@ export function listRobots(config: AgenticROSConfig): ResolvedRobot[] {
   // ros2_find_robots_for). Users on multi-robot deployments will have
   // promoted into config.robots[] anyway, where the fields are
   // explicit.
-  const legacy = config.robot ?? { name: "Robot", namespace: "", cameraTopic: "" };
+  const legacy = effective.robot ?? { name: "Robot", namespace: "", cameraTopic: "" };
   const id = (legacy.namespace?.trim() || "default");
   return [
     {

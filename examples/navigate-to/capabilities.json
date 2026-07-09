@@ -1,0 +1,19 @@
+[
+  {
+    "id": "navigate_to",
+    "verb": "navigate",
+    "description": "Navigate the robot base to a map pose via Nav2 (duplicate of package.json for capabilities.json path testing).",
+    "inputs": {
+      "x": { "type": "number", "description": "Goal x in meters (map frame)." },
+      "y": { "type": "number", "description": "Goal y in meters (map frame)." },
+      "yaw": { "type": "number", "description": "Goal yaw in radians.", "optional": true }
+    },
+    "implementation": {
+      "kind": "external_ros_node",
+      "package": "nav2_bringup",
+      "launch": "navigation_launch.py",
+      "action": "navigate_to_pose",
+      "msg_type": "nav2_msgs/action/NavigateToPose"
+    }
+  }
+]

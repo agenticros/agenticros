@@ -22,7 +22,6 @@ import { Type } from "@sinclair/typebox";
 import type { AgentTool, OpenClawPluginApi } from "../plugin-api.js";
 import type {
   AgenticROSConfig,
-  CapabilityToolBindings,
   Mission,
   MissionToolDispatcher,
 } from "@agenticros/core";
@@ -33,10 +32,15 @@ import {
   createMemoryTranscriptSink,
   missionTranscriptNamespace,
   compileGoalToMission,
+  buildMissionBindings,
+  isExternalToolName,
+  capabilityIdFromExternalTool,
+  executeExternalCapability,
 } from "@agenticros/core";
 import { resolveRobotForTool } from "./_robot-helpers.js";
 import { getMissionRegistry } from "../mission-registry.js";
 import { getMemory } from "../memory.js";
+import { getTransportForRobot } from "../service.js";
 
 /**
  * Snapshot of the registered tools, keyed by tool name. Built in
@@ -44,85 +48,6 @@ import { getMemory } from "../memory.js";
  * tool can dispatch sub-tool calls by name.
  */
 export type ToolRegistry = Map<string, AgentTool>;
-
-const MISSION_BINDINGS: CapabilityToolBindings = {
-  drive_base: {
-    tool: "ros2_publish",
-    buildArgs: (inputs) => {
-      const lx = Number(inputs.linear_x ?? 0) || 0;
-      const az = Number(inputs.angular_z ?? 0) || 0;
-      return {
-        topic: "/cmd_vel",
-        type: "geometry_msgs/msg/Twist",
-        message: {
-          linear: { x: lx, y: 0, z: 0 },
-          angular: { x: 0, y: 0, z: az },
-        },
-      };
-    },
-  },
-  take_snapshot: {
-    tool: "ros2_camera_snapshot",
-    buildArgs: (inputs) => {
-      const out: Record<string, unknown> = {};
-      if (typeof inputs.topic === "string") out.topic = inputs.topic;
-      if (typeof inputs.message_type === "string") out.message_type = inputs.message_type;
-      if (typeof inputs.timeout === "number") out.timeout = inputs.timeout;
-      return out;
-    },
-  },
-  measure_depth: {
-    tool: "ros2_depth_distance",
-    buildArgs: (inputs) => {
-      const out: Record<string, unknown> = {};
-      if (typeof inputs.topic === "string") out.topic = inputs.topic;
-      if (typeof inputs.timeout === "number") out.timeout = inputs.timeout;
-      return out;
-    },
-  },
-  list_topics: {
-    tool: "ros2_list_topics",
-    buildArgs: () => ({}),
-  },
-  publish_topic: {
-    tool: "ros2_publish",
-    buildArgs: (inputs) => ({
-      topic: String(inputs.topic ?? ""),
-      type: String(inputs.type ?? inputs.msg_type ?? ""),
-      message: inputs.message ?? inputs.msg ?? {},
-    }),
-  },
-  subscribe_once: {
-    tool: "ros2_subscribe_once",
-    buildArgs: (inputs) => {
-      const out: Record<string, unknown> = { topic: String(inputs.topic ?? "") };
-      if (typeof inputs.type === "string") out.type = inputs.type;
-      if (typeof inputs.timeout === "number") out.timeout = inputs.timeout;
-      return out;
-    },
-  },
-  follow_person: {
-    tool: "ros2_follow_me_start",
-    buildArgs: (inputs) => {
-      const out: Record<string, unknown> = {};
-      if (typeof inputs.target_distance === "number") out.target_distance = inputs.target_distance;
-      if (typeof inputs.mode === "string") out.mode = inputs.mode;
-      return out;
-    },
-  },
-  find_object: {
-    tool: "ros2_find_object",
-    buildArgs: (inputs) => {
-      const target = String(inputs.target ?? "");
-      const out: Record<string, unknown> = { target };
-      if (typeof inputs.angular_speed === "number") out.angular_speed = inputs.angular_speed;
-      if (typeof inputs.clockwise === "boolean") out.clockwise = inputs.clockwise;
-      if (typeof inputs.timeout_seconds === "number") out.timeout_seconds = inputs.timeout_seconds;
-      if (typeof inputs.min_confidence === "number") out.min_confidence = inputs.min_confidence;
-      return out;
-    },
-  },
-};
 
 export function registerMissionTool(
   api: OpenClawPluginApi,
@@ -143,9 +68,9 @@ export function registerMissionTool(
       "provided) the compiled plan + candidate match list so you can see what the planner did. " +
       "When memory is enabled, every step is also written to the shared memory under namespace " +
       "mission:<mission_id> so a second agent can recall the timeline via memory_recall. " +
-      "Today the runner supports: drive_base, take_snapshot, measure_depth, list_topics, " +
-      "publish_topic, subscribe_once, follow_person, find_object. " +
-      "Pass mission.robot_id (or top-level robot_id with goal) to target every step at one robot.",
+      "Bindings are built from the capability registry (builtins + skill-declared). " +
+      "Pass mission.robot_id (or top-level robot_id with goal) to target every step at one robot. " +
+      "Use mission_pause / mission_resume / mission_cancel with the returned mission_id.",
     parameters: Type.Object({
       goal: Type.Optional(
         Type.String({
@@ -186,6 +111,13 @@ export function registerMissionTool(
 
     async execute(toolCallId, params, signal) {
       const caps = listAllCapabilities(config);
+      const missionBindings = buildMissionBindings(caps, {
+        toolNameResolver: (cap) => {
+          const preferred = `ros2_${cap.id}`;
+          if (registry.has(preferred)) return preferred;
+          return undefined;
+        },
+      });
       const missionRaw = params["mission"];
       const goalRaw = params["goal"];
       const topLevelRobotId = typeof params["robot_id"] === "string" ? (params["robot_id"] as string) : undefined;
@@ -236,6 +168,23 @@ export function registerMissionTool(
       }
 
       const dispatcher: MissionToolDispatcher = async (toolName, toolArgs) => {
+        if (isExternalToolName(toolName)) {
+          const capId = capabilityIdFromExternalTool(toolName);
+          const cap = caps.find((c) => c.id === capId);
+          if (!cap) {
+            return { text: `Unknown external capability "${capId}".`, isError: true };
+          }
+          const resolved = resolveRobotForTool(config, toolArgs);
+          if ("error" in resolved) {
+            const errText = resolved.error.content.map((c) => ("text" in c ? c.text : "")).join("\n");
+            return { text: errText, isError: true };
+          }
+          const transport = await getTransportForRobot(config, resolved.robot);
+          const ext = await executeExternalCapability(cap, toolArgs, transport, {
+            namespace: resolved.robot.namespace,
+          });
+          return { text: ext.text, outputs: ext.outputs, isError: ext.isError };
+        }
         const tool = registry.get(toolName);
         if (!tool) {
           return {
@@ -273,7 +222,7 @@ export function registerMissionTool(
 
       let result;
       try {
-        result = await runMission(mission, caps, MISSION_BINDINGS, dispatcher, {
+        result = await runMission(mission, caps, missionBindings, dispatcher, {
           mission_id: missionId,
           cancellation: regEntry.cancellation,
           transcript,

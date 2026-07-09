@@ -35,7 +35,7 @@ export interface MissionRegistryEntry {
   name?: string;
   /** ms since epoch when the mission was registered. */
   started_at: number;
-  /** The token the mission runner reads each step. */
+  /** The token the mission runner reads each step (cancel + pause). */
   cancellation: MissionCancellationToken;
 }
 
@@ -45,7 +45,7 @@ export interface MissionRegistryEntry {
  * Uses `crypto.randomUUID()` when available (Node 14.17+, Bun, modern
  * browsers); falls back to a Math.random hex string with a `mns_` prefix.
  * Either way the id is opaque to downstream consumers — they just echo
- * it back to `mission_cancel` / `memory_recall`.
+ * it back to `mission_cancel` / `mission_pause` / `memory_recall`.
  */
 export function generateMissionId(): string {
   const g = globalThis as { crypto?: { randomUUID?: () => string } };
@@ -86,7 +86,7 @@ export class MissionRegistry {
       mission_id: missionId,
       name: opts?.name,
       started_at: Date.now(),
-      cancellation: { cancelled: false },
+      cancellation: { cancelled: false, paused: false },
     };
     this.entries.set(missionId, entry);
     return {
@@ -112,8 +112,36 @@ export class MissionRegistry {
     if (!entry) return { found: false, alreadyCancelled: false };
     const alreadyCancelled = entry.cancellation.cancelled === true;
     entry.cancellation.cancelled = true;
+    entry.cancellation.paused = false;
     if (reason !== undefined) entry.cancellation.reason = reason;
     return { found: true, alreadyCancelled };
+  }
+
+  /**
+   * Pause the named mission at the next step boundary.
+   * Idempotent — pausing an already-paused mission is a no-op.
+   */
+  pause(missionId: string, reason?: string): { found: boolean; alreadyPaused: boolean } {
+    const entry = this.entries.get(missionId);
+    if (!entry) return { found: false, alreadyPaused: false };
+    if (entry.cancellation.cancelled) {
+      return { found: true, alreadyPaused: entry.cancellation.paused === true };
+    }
+    const alreadyPaused = entry.cancellation.paused === true;
+    entry.cancellation.paused = true;
+    if (reason !== undefined) entry.cancellation.reason = reason;
+    return { found: true, alreadyPaused };
+  }
+
+  /**
+   * Resume a paused mission. Idempotent when not paused.
+   */
+  resume(missionId: string): { found: boolean; wasPaused: boolean } {
+    const entry = this.entries.get(missionId);
+    if (!entry) return { found: false, wasPaused: false };
+    const wasPaused = entry.cancellation.paused === true;
+    entry.cancellation.paused = false;
+    return { found: true, wasPaused };
   }
 
   /** True when the named mission is currently registered. */

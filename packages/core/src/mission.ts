@@ -45,9 +45,13 @@
  *
  * What's still deferred:
  *   - Parallel step execution (today: sequential only).
- *   - Per-tool cancellation (cancel TIES to step boundaries today).
- *   - Natural-language plan compilation (today: declarative only).
+ *   - Per-tool cancellation (cancel TIES to step boundaries today;
+ *     pause/resume also ties to step boundaries).
  *   - Retry / backoff policies.
+ *
+ * Shipped since the original Phase 1.f header:
+ *   - Natural-language plan compilation (`compileGoalToMission` + goal arg).
+ *   - Pause / resume via the same control token (`paused` flag).
  *
  * See: docs/strategy-ai-agents-plus-ros.md §4 (Phase 1.c / 1.f).
  */
@@ -55,18 +59,25 @@
 import type { Capability } from "./capabilities.js";
 
 /**
- * Cancellation token consumed by `runMission`.
+ * Cancellation / pause token consumed by `runMission`.
  *
  * Plain object (not AbortController) so it's easy to share across
  * processes via a registry without pulling Web platform shims in. The
- * runner only reads `cancelled`; `reason` is surfaced in the result
- * for traceability.
+ * runner reads `cancelled` and `paused` at each step boundary.
  */
 export interface MissionCancellationToken {
   cancelled: boolean;
-  /** Optional free-text reason — bubbled up into the cancelled step results. */
+  /**
+   * When true, the runner waits at the next step boundary until
+   * `paused` is cleared or `cancelled` is set. Phase 1 pause/resume.
+   */
+  paused?: boolean;
+  /** Optional free-text reason — bubbled up into cancelled / paused results. */
   reason?: string;
 }
+
+/** Alias — control token is the same object as the cancellation token. */
+export type MissionControlToken = MissionCancellationToken;
 
 /**
  * Per-step transcript sink. Called immediately after a step finishes
@@ -154,8 +165,11 @@ export interface MissionStepResult {
    *   - "error":    tool returned an error or the binding/build threw.
    *   - "skipped":  earlier step failed with on_fail=stop.
    *   - "cancelled": mission was cancelled (Phase 1.f) before this step ran.
+   *   - "paused":   transcript-only marker emitted when the runner entered
+   *                 a pause wait before this step (not a final step outcome
+   *                 in `MissionResult.steps` — those use ok/error/skipped/cancelled).
    */
-  status: "ok" | "error" | "skipped" | "cancelled";
+  status: "ok" | "error" | "skipped" | "cancelled" | "paused";
   /** Resolved inputs (with `{{...}}` templates substituted). */
   inputs: Record<string, unknown>;
   /** Outputs parsed from the tool response (may be `undefined` for fire-and-forget). */
@@ -252,6 +266,31 @@ export interface CapabilityToolBinding {
 export type CapabilityToolBindings = Record<string, CapabilityToolBinding>;
 
 const TEMPLATE_RE = /\{\{\s*([a-zA-Z0-9_]+)\.outputs\.([a-zA-Z0-9_]+)\s*\}\}/g;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+const PAUSE_POLL_MS = 100;
+
+/**
+ * Wait while `token.paused` is true. Returns when resumed or cancelled.
+ * Emits one transcript entry with status "paused" the first time we enter
+ * the wait (so a second agent can see the mission is held).
+ */
+async function waitWhilePaused(
+  token: MissionCancellationToken | undefined,
+  emitPaused: () => void,
+): Promise<"resumed" | "cancelled"> {
+  if (!token?.paused || token.cancelled) {
+    return token?.cancelled ? "cancelled" : "resumed";
+  }
+  emitPaused();
+  while (token.paused && !token.cancelled) {
+    await sleep(PAUSE_POLL_MS);
+  }
+  return token.cancelled ? "cancelled" : "resumed";
+}
 
 /**
  * Substitute `{{stepId.outputs.field}}` references in `value` using the
@@ -402,6 +441,24 @@ export async function runMission(
     // preemption is out of scope; see the module header).
     if (!cancelled && options?.cancellation?.cancelled) {
       cancelled = true;
+    }
+
+    // Pause: wait at the step boundary until resume or cancel.
+    if (!cancelled && options?.cancellation?.paused) {
+      const pauseOutcome = await waitWhilePaused(options.cancellation, () => {
+        const pausedMarker: MissionStepResult = {
+          id: step.id,
+          capability: step.capability,
+          status: "paused",
+          inputs: {},
+          message: `Paused: ${options.cancellation?.reason ?? "paused"}`,
+          duration_ms: 0,
+        };
+        emitTranscript(idx, t0, pausedMarker);
+      });
+      if (pauseOutcome === "cancelled" || options.cancellation?.cancelled) {
+        cancelled = true;
+      }
     }
 
     if (cancelled) {

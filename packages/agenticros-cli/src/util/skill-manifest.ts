@@ -105,6 +105,34 @@ export function validateManifest(raw: unknown): ValidatedManifest {
     warnings.push(
       "Declare at least one capability in `agenticros.capabilities` so the agent planner can reason about your skill.",
     );
+  } else {
+    for (const cap of block.capabilities) {
+      if (!cap || typeof cap !== "object" || typeof (cap as { id?: unknown }).id !== "string") {
+        warnings.push("Each capability must be an object with a string `id`.");
+        continue;
+      }
+      const c = cap as {
+        id: string;
+        verb?: string;
+        implementation?: { kind?: string; action?: string; service?: string; topic?: string; msg_type?: string };
+      };
+      if (!c.verb || typeof c.verb !== "string") {
+        warnings.push(`Capability "${c.id}" should declare a string \`verb\`.`);
+      }
+      const impl = c.implementation;
+      if (impl && typeof impl === "object" && impl.kind === "external_ros_node") {
+        if (!impl.action && !impl.service && !impl.topic) {
+          warnings.push(
+            `Capability "${c.id}" external_ros_node should set action, service, or topic.`,
+          );
+        }
+        if ((impl.action || impl.service || impl.topic) && !impl.msg_type) {
+          warnings.push(
+            `Capability "${c.id}" external_ros_node should set msg_type for action/service/topic dispatch.`,
+          );
+        }
+      }
+    }
   }
   if (!block.screenshots || block.screenshots.length === 0) {
     warnings.push(

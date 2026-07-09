@@ -7,7 +7,6 @@ import type {
   Capability,
   Mission,
   MissionToolDispatcher,
-  CapabilityToolBindings,
   ResolvedRobot,
 } from "@agenticros/core";
 import {
@@ -26,6 +25,10 @@ import {
   createMemoryTranscriptSink,
   missionTranscriptNamespace,
   compileGoalToMission,
+  buildMissionBindings,
+  isExternalToolName,
+  capabilityIdFromExternalTool,
+  executeExternalCapability,
 } from "@agenticros/core";
 import { getMissionRegistry } from "./mission-registry.js";
 import {
@@ -73,9 +76,12 @@ export const NO_TRANSPORT_TOOL_NAMES = new Set<string>([
   // tool falls back to a transport-driven discovery only when the caller
   // passes online=true. See the handler for the precise branch.
   "ros2_find_robots_for",
-  // mission_cancel only mutates the in-process MissionRegistry — it
-  // never publishes to ROS, so it must work even when zenohd is down.
+  // mission_cancel / mission_pause / mission_resume only mutate the
+  // in-process MissionRegistry — they never publish to ROS, so they
+  // must work even when zenohd is down.
   "mission_cancel",
+  "mission_pause",
+  "mission_resume",
   // run_mission's *outer* call doesn't need transport — its handler
   // first compiles the goal (Phase 1.g, no transport) or validates
   // the mission shape, then per-step calls go through the transport
@@ -464,6 +470,40 @@ export const TOOLS: McpTool[] = [
       required: ["mission_id"],
     },
   },
+  {
+    name: "mission_pause",
+    description:
+      "Pause a mission that's currently running in this MCP server. Pass the mission_id returned by run_mission. The runner waits at the next step boundary until mission_resume (or mission_cancel). Idempotent if already paused.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        mission_id: {
+          type: "string",
+          description: "The mission_id echoed by run_mission. Required.",
+        },
+        reason: {
+          type: "string",
+          description: "Optional free-text reason — surfaced in the paused transcript entry.",
+        },
+      },
+      required: ["mission_id"],
+    },
+  },
+  {
+    name: "mission_resume",
+    description:
+      "Resume a mission previously paused with mission_pause. Pass the mission_id returned by run_mission. Idempotent if the mission is not paused.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        mission_id: {
+          type: "string",
+          description: "The mission_id echoed by run_mission. Required.",
+        },
+      },
+      required: ["mission_id"],
+    },
+  },
 ];
 
 export type ToolContent = { type: "text"; text: string } | { type: "image"; data: string; mimeType: string };
@@ -574,95 +614,6 @@ function formatFindRobotsForResponse(result: FindRobotsForResult): string {
 }
 
 /**
- * Capability → MCP tool dispatch table used by `run_mission`.
- *
- * Every capability returned by `ros2_list_capabilities` that the mission
- * runner can actually execute must appear here. If you add a new
- * intrinsic capability to BUILTIN_CAPABILITIES, mirror it here. For new
- * skill-declared capabilities, this is where you map them to the
- * corresponding MCP tool. Steps that name a capability without an entry
- * fail with an actionable "no mission-runner tool binding" error.
- */
-const MISSION_BINDINGS: CapabilityToolBindings = {
-  drive_base: {
-    tool: "ros2_publish",
-    buildArgs: (inputs) => {
-      const lx = Number(inputs.linear_x ?? 0) || 0;
-      const az = Number(inputs.angular_z ?? 0) || 0;
-      return {
-        topic: "/cmd_vel",
-        type: "geometry_msgs/msg/Twist",
-        message: {
-          linear: { x: lx, y: 0, z: 0 },
-          angular: { x: 0, y: 0, z: az },
-        },
-      };
-    },
-  },
-  take_snapshot: {
-    tool: "ros2_camera_snapshot",
-    buildArgs: (inputs) => {
-      const out: Record<string, unknown> = {};
-      if (typeof inputs.topic === "string") out.topic = inputs.topic;
-      if (typeof inputs.message_type === "string") out.message_type = inputs.message_type;
-      if (typeof inputs.timeout === "number") out.timeout = inputs.timeout;
-      return out;
-    },
-  },
-  measure_depth: {
-    tool: "ros2_depth_distance",
-    buildArgs: (inputs) => {
-      const out: Record<string, unknown> = {};
-      if (typeof inputs.topic === "string") out.topic = inputs.topic;
-      if (typeof inputs.timeout === "number") out.timeout = inputs.timeout;
-      return out;
-    },
-  },
-  list_topics: {
-    tool: "ros2_list_topics",
-    buildArgs: () => ({}),
-  },
-  publish_topic: {
-    tool: "ros2_publish",
-    buildArgs: (inputs) => ({
-      topic: String(inputs.topic ?? ""),
-      type: String(inputs.type ?? inputs.msg_type ?? ""),
-      message: inputs.message ?? inputs.msg ?? {},
-    }),
-  },
-  subscribe_once: {
-    tool: "ros2_subscribe_once",
-    buildArgs: (inputs) => {
-      const out: Record<string, unknown> = { topic: String(inputs.topic ?? "") };
-      if (typeof inputs.type === "string") out.type = inputs.type;
-      if (typeof inputs.timeout === "number") out.timeout = inputs.timeout;
-      return out;
-    },
-  },
-  follow_person: {
-    tool: "ros2_follow_me_start",
-    buildArgs: (inputs) => {
-      const out: Record<string, unknown> = {};
-      if (typeof inputs.target_distance === "number") out.target_distance = inputs.target_distance;
-      if (typeof inputs.mode === "string") out.mode = inputs.mode;
-      return out;
-    },
-  },
-  find_object: {
-    tool: "ros2_find_object",
-    buildArgs: (inputs) => {
-      const target = String(inputs.target ?? "");
-      const out: Record<string, unknown> = { target };
-      if (typeof inputs.angular_speed === "number") out.angular_speed = inputs.angular_speed;
-      if (typeof inputs.clockwise === "boolean") out.clockwise = inputs.clockwise;
-      if (typeof inputs.timeout_seconds === "number") out.timeout_seconds = inputs.timeout_seconds;
-      if (typeof inputs.min_confidence === "number") out.min_confidence = inputs.min_confidence;
-      return out;
-    },
-  },
-};
-
-/**
  * Phase 1.f — `mission_cancel` handler. Lives at module scope so the
  * outer `handleToolCall` can invoke it WITHOUT first resolving a
  * transport (the cancel never touches ROS — see the registry note in
@@ -695,6 +646,70 @@ function handleMissionCancel(
           found: outcome.found,
           already_cancelled: outcome.alreadyCancelled,
           reason: reason ?? null,
+        }),
+      },
+    ],
+  };
+}
+
+function handleMissionPause(
+  args: Record<string, unknown>,
+): { content: ToolContent[]; isError?: boolean } {
+  const missionId = typeof args["mission_id"] === "string" ? args["mission_id"].trim() : "";
+  if (!missionId) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: "mission_pause requires 'mission_id' (a non-empty string returned by run_mission).",
+        },
+      ],
+      isError: true,
+    };
+  }
+  const reason = typeof args["reason"] === "string" ? args["reason"] : undefined;
+  const outcome = getMissionRegistry().pause(missionId, reason);
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify({
+          success: true,
+          mission_id: missionId,
+          found: outcome.found,
+          already_paused: outcome.alreadyPaused,
+          reason: reason ?? null,
+        }),
+      },
+    ],
+  };
+}
+
+function handleMissionResume(
+  args: Record<string, unknown>,
+): { content: ToolContent[]; isError?: boolean } {
+  const missionId = typeof args["mission_id"] === "string" ? args["mission_id"].trim() : "";
+  if (!missionId) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: "mission_resume requires 'mission_id' (a non-empty string returned by run_mission).",
+        },
+      ],
+      isError: true,
+    };
+  }
+  const outcome = getMissionRegistry().resume(missionId);
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify({
+          success: true,
+          mission_id: missionId,
+          found: outcome.found,
+          was_paused: outcome.wasPaused,
         }),
       },
     ],
@@ -778,6 +793,30 @@ async function handleRunMission(
     }
   }
   const dispatcher: MissionToolDispatcher = async (toolName, toolArgs) => {
+    if (isExternalToolName(toolName)) {
+      const capId = capabilityIdFromExternalTool(toolName);
+      const cap = caps.find((c) => c.id === capId);
+      if (!cap) {
+        return {
+          text: `Unknown external capability "${capId}".`,
+          isError: true,
+        };
+      }
+      let robot;
+      try {
+        robot = resolveRobotFromArgs(config, toolArgs);
+      } catch (err) {
+        return {
+          text: err instanceof Error ? err.message : String(err),
+          isError: true,
+        };
+      }
+      const transport = await getTransportForRobot(config, robot);
+      const ext = await executeExternalCapability(cap, toolArgs, transport, {
+        namespace: robot.namespace,
+      });
+      return { text: ext.text, outputs: ext.outputs, isError: ext.isError };
+    }
     const res = await handleToolCall(toolName, toolArgs, config);
     const text = res.content
       .map((c) => (c.type === "text" ? c.text : `[image: ${c.mimeType}]`))
@@ -796,7 +835,7 @@ async function handleRunMission(
 
   let result;
   try {
-    result = await runMission(mission, caps, MISSION_BINDINGS, dispatcher, {
+    result = await runMission(mission, caps, buildMissionBindings(caps), dispatcher, {
       mission_id: missionId,
       cancellation: regEntry.cancellation,
       transcript,
@@ -915,14 +954,16 @@ export async function handleToolCall(
       };
     }
   }
-  // mission_cancel + run_mission must NOT trigger a transport connect
-  // at this outer layer: mission_cancel only mutates the in-process
-  // MissionRegistry, and run_mission's handler does its OWN per-step
-  // dispatch (each step's inner `handleToolCall` connects as needed).
-  // Routing the outer call through `getTransportForRobot()` would
-  // hang or fail when an agent only wanted to compile / cancel.
+  // mission_cancel / pause / resume + run_mission must NOT trigger a
+  // transport connect at this outer layer.
   if (name === "mission_cancel") {
     return handleMissionCancel(args);
+  }
+  if (name === "mission_pause") {
+    return handleMissionPause(args);
+  }
+  if (name === "mission_resume") {
+    return handleMissionResume(args);
   }
   if (name === "run_mission") {
     return handleRunMission(args, config);

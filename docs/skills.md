@@ -175,13 +175,13 @@ The `agenticros.capabilities[]` array tells the **planner** what verbs the skill
 
 ### Chaining your skill in missions
 
-Once a skill is registered, its capabilities appear in **`ros2_list_capabilities`** and are chainable via **`run_mission`** — **no per-skill MCP tool is required on OpenClaw**. The mission runner maps capability ids to the underlying tools using a shared binding table across all adapters.
+Once a skill is registered, its capabilities appear in **`ros2_list_capabilities`** and are chainable via **`run_mission`**. Bindings are built dynamically in `@agenticros/core` (`buildMissionBindings`) — you do **not** edit three adapter tables for a new skill.
 
 **What you need as a skill author:**
 
-1. Declare one or more entries in `package.json` → `agenticros.capabilities[]` (`id`, `verb`, `description`, optional `inputs` / `outputs`).
-2. Register the tool(s) your skill uses in `registerSkill()` as today.
-3. Ensure the capability `id` matches what the mission bindings expect — built-in skill ids today are `find_object` and `follow_person`.
+1. Declare one or more entries in `package.json` → `agenticros.capabilities[]` (or a sibling `capabilities.json`). Include `id`, `verb`, `description`, optional `inputs` / `outputs`.
+2. For **in-process** skills: register tools in `registerSkill()` named `ros2_<capability_id>` (or set an explicit `tool` field on the capability).
+3. For **external ROS nodes**: set `implementation.kind` to `"external_ros_node"` with `action` / `service` / `topic` + `msg_type`. The mission runner dispatches via the transport; `launch` is metadata only (operator-owned bringup). See [examples/navigate-to](../examples/navigate-to/).
 
 **Example — agent chains your skill after a built-in verb:**
 
@@ -203,6 +203,26 @@ Once a skill is registered, its capabilities appear in **`ros2_list_capabilities
 }
 ```
 
+### External ROS-node skills
+
+Experienced ROS developers can wrap Nav2, MoveIt, YOLO nodes, etc. without rewriting control loops in TypeScript:
+
+```jsonc
+{
+  "id": "navigate_to",
+  "verb": "navigate",
+  "description": "Navigate to a pose via Nav2.",
+  "implementation": {
+    "kind": "external_ros_node",
+    "package": "nav2_bringup",
+    "launch": "navigation_launch.py",
+    "action": "navigate_to_pose",
+    "msg_type": "nav2_msgs/action/NavigateToPose"
+  }
+}
+```
+
+Install via `skillPaths` pointing at the skill directory (see the navigate-to example README).
 Agents can also pass a natural-language **`goal`** (*"find a chair and drive toward it"*) and the local planner compiles the same plan when `find_object` is in the registry.
 
 Full orchestration guide: **[docs/missions.md](missions.md)**.
