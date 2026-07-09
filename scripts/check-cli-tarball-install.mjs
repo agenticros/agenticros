@@ -39,6 +39,7 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -252,9 +253,9 @@ try {
   step("Simulating refresh over a pre-existing snapshot (regression test for 0.1.7)...");
   const fakeOld = join(work, "old-install");
   mkdirSync(fakeOld);
-  fs.writeFileSync(join(fakeOld, "tsconfig.base.json"), '{"old":"to-be-overwritten"}');
+  writeFileSync(join(fakeOld, "tsconfig.base.json"), '{"old":"to-be-overwritten"}');
   mkdirSync(join(fakeOld, "packages"), { recursive: true });
-  fs.writeFileSync(
+  writeFileSync(
     join(fakeOld, "packages", "preserved.txt"),
     "must survive overlay refresh",
   );
@@ -266,7 +267,7 @@ try {
     const src = join(runtimeInTar, rel);
     const dst = join(fakeOld, rel);
     if (!existsSync(src)) continue;
-    const srcIsDir = fs.statSync(src).isDirectory();
+    const srcIsDir = statSync(src).isDirectory();
     if (srcIsDir && existsSync(dst)) {
       run("cp", ["-a", `${src}/.`, `${dst}/`]);
     } else {
@@ -275,12 +276,12 @@ try {
     }
   }
 
-  const tsStat = fs.statSync(join(fakeOld, "tsconfig.base.json"));
+  const tsStat = statSync(join(fakeOld, "tsconfig.base.json"));
   if (!tsStat.isFile()) {
     fail("Refresh turned tsconfig.base.json into a non-file. cp branching is wrong.");
     process.exit(1);
   }
-  const tsContent = fs.readFileSync(join(fakeOld, "tsconfig.base.json"), "utf8");
+  const tsContent = readFileSync(join(fakeOld, "tsconfig.base.json"), "utf8");
   if (tsContent.includes('"old":"to-be-overwritten"')) {
     fail("Refresh failed to overwrite tsconfig.base.json with the bundle's version.");
     process.exit(1);
