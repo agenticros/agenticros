@@ -66,8 +66,8 @@ importers:
   packages/agenticros-cli:
     dependencies:
       '@agenticros/core':
-        specifier: ^0.8.0
-        version: 0.8.0
+        specifier: ^0.8.1
+        version: 0.8.1
       '@inquirer/prompts':
         specifier: ^7.0.0
         version: 7.10.1(@types/node@20.19.35)
@@ -178,8 +178,8 @@ importers:
 
 packages:
 
-  '@agenticros/core@0.8.0':
-    resolution: {integrity: sha512-E6WJBHhd0QE2YTGBrKe84q+SAGjgLMCp785BRh8UJDS4WUKqL80B04TMjZ1JLjtphCl/uk9XNZPjIjzBixz0kg==}
+  '@agenticros/core@0.8.1':
+    resolution: {integrity: sha512-zFpzuViviZb6y3c+W0B1LzCpQvmhcvPYwrT9ZKL9u3eTLGNmKR2I5IhDlvF03Yv2/TwQzDHGGNZ6+onerPlG0Q==}
     engines: {node: '>=20'}
 
   '@eclipse-zenoh/zenoh-ts@1.9.0':
@@ -1981,7 +1981,7 @@ packages:
 
 snapshots:
 
-  '@agenticros/core@0.8.0':
+  '@agenticros/core@0.8.1':
     dependencies:
       '@eclipse-zenoh/zenoh-ts': 1.9.0(patch_hash=pdjq6ms3zvqwikn6vpqzasydsy)
       '@foxglove/cdr': 3.5.0

@@ -233,10 +233,13 @@ Experienced ROS developers can wrap Nav2, MoveIt, YOLO nodes, etc. without rewri
 Install via the marketplace (preferred) or `skillPaths` / `skillRefs`:
 
 ```bash
-npx agenticros skills install chrismatthieu/navigate-to
-npx agenticros skills install chrismatthieu/detect-humans
-npx agenticros skills install chrismatthieu/start-slam
-npx agenticros skills install chrismatthieu/follow-me-ros
+npx agenticros skills install @agenticros/navigate-to
+npx agenticros skills install @agenticros/navigate-through-poses
+npx agenticros skills install @agenticros/detect-humans
+npx agenticros skills install @agenticros/start-slam
+npx agenticros skills install @agenticros/follow-me-ros
+npx agenticros skills install @agenticros/moveit-pick
+npx agenticros skills install @agenticros/dock-to-charger
 ```
 
 Or pin in config (auto-fetch on MCP/Gemini startup; OpenClaw merges already-cached paths):
@@ -244,8 +247,9 @@ Or pin in config (auto-fetch on MCP/Gemini startup; OpenClaw merges already-cach
 ```jsonc
 {
   "skillRefs": [
-    "chrismatthieu/navigate-to",
-    "chrismatthieu/detect-humans@main"
+    "@agenticros/navigate-to",
+    "chrismatthieu/detect-humans@main",
+    "@agenticros/dock-to-charger"
   ]
 }
 ```

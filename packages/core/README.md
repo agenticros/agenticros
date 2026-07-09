@@ -39,7 +39,9 @@ Your `package.json` declares an `agenticros` block:
 
 ```jsonc
 {
-  "name": "agenticros-skill-myskill",
+  "name": "@agenticros/myskill",
+  "version": "0.1.0",
+  "publishConfig": { "access": "public" },
   "main": "dist/index.js",
   "repository": {
     "type": "git",
@@ -61,7 +63,7 @@ Your `package.json` declares an `agenticros` block:
     ]
   },
   "dependencies": {
-    "@agenticros/core": "^0.6.0"
+    "@agenticros/core": "^0.8.1"
   }
 }
 ```

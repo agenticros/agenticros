@@ -3,7 +3,8 @@
 Install the adjacent skill:
 
 ```bash
-npx agenticros skills install chrismatthieu/detect-humans
+npx agenticros skills install @agenticros/detect-humans
+# or: npx agenticros skills install chrismatthieu/detect-humans
 ```
 
 Capability: `detect_humans` — subscribe once to a `vision_msgs/Detection2DArray` topic from your on-robot vision stack.

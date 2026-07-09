@@ -276,10 +276,13 @@ Builtin bindings live in `@agenticros/core` (`buildMissionBindings`). Skill-decl
 | `subscribe_once` | `ros2_subscribe_once` |
 | `follow_person` | `ros2_follow_me_start` (skill / Gemini / MCP) |
 | `find_object` | `ros2_find_object` (skill / Gemini / MCP) |
-| `navigate_to` | external Nav2 action (`agenticros skills install chrismatthieu/navigate-to`) |
-| `detect_humans` | external vision topic subscribe (`chrismatthieu/detect-humans`) |
-| `start_slam` / `stop_slam` / `save_map` | external RTAB-Map services (`chrismatthieu/start-slam`) |
-| `follow_person_ros` / `stop_follow_person_ros` | external `agenticros_follow_me` services (`chrismatthieu/follow-me-ros`) |
+| `navigate_to` | external Nav2 action (`npx agenticros skills install @agenticros/navigate-to`) |
+| `navigate_through_poses` | external Nav2 through-poses (`@agenticros/navigate-through-poses`) |
+| `detect_humans` | external vision topic subscribe (`@agenticros/detect-humans`) |
+| `start_slam` / `stop_slam` / `save_map` / `load_map` | external RTAB-Map services (`@agenticros/start-slam`) |
+| `follow_person_ros` / `stop_follow_person_ros` | external `agenticros_follow_me` services (`@agenticros/follow-me-ros`) |
+| `pick_object` | external MoveIt MoveGroup (`@agenticros/moveit-pick`; operator bringup) |
+| `dock_to_charger` | external OpenNav DockRobot (`@agenticros/dock-to-charger`; operator bringup) |
 
 Skills you author can add new ids via `agenticros.capabilities[]` in `package.json` (or sibling `capabilities.json`); once registered, they appear in `ros2_list_capabilities` and are chainable in `run_mission` without editing three adapter binding tables. See [skills.md — Chaining your skill in missions](skills.md#chaining-your-skill-in-missions).
 

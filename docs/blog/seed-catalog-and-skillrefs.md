@@ -9,22 +9,28 @@ Install from [skills.agenticros.com](https://skills.agenticros.com):
 | Skill | Capability | What it does |
 |-------|------------|--------------|
 | **Detect humans** | `detect_humans` | Subscribe to your vision stack’s `Detection2DArray` |
-| **Start SLAM** | `start_slam` / `stop_slam` / `save_map` | Trigger RTAB-Map mapping from a mission step |
+| **Start SLAM** | `start_slam` / `stop_slam` / `save_map` / `load_map` | Trigger RTAB-Map mapping / map load from a mission step |
 | **Follow Me (ROS)** | `follow_person_ros` | Call the on-robot follow node via services |
 | **Navigate To** | `navigate_to` | Nav2 `NavigateToPose` as a marketplace skill |
+| **Navigate Through Poses** | `navigate_through_poses` | Nav2 waypoint routes |
+| **MoveIt Pick** | `pick_object` | MoveIt `MoveGroup` (operator bringup) |
+| **Dock to Charger** | `dock_to_charger` | OpenNav `DockRobot` (operator bringup) |
 
 Each one is a small adjacent package — same layout as Find / Follow Me — with a capability manifest. Keep your C++/Python stack; AgenticROS dispatches over the transport you already use.
 
 ```bash
-npx agenticros skills install chrismatthieu/navigate-to
-npx agenticros skills install chrismatthieu/detect-humans
-npx agenticros skills install chrismatthieu/start-slam
-npx agenticros skills install chrismatthieu/follow-me-ros
+npx agenticros skills install @agenticros/navigate-to
+npx agenticros skills install @agenticros/navigate-through-poses
+npx agenticros skills install @agenticros/detect-humans
+npx agenticros skills install @agenticros/start-slam
+npx agenticros skills install @agenticros/follow-me-ros
+npx agenticros skills install @agenticros/moveit-pick
+npx agenticros skills install @agenticros/dock-to-charger
 ```
 
-## Marketplace auto-fetch (v1)
+## Marketplace auto-fetch (v1 + v2)
 
-Declare skills in config with **`skillRefs`**. On startup we resolve them from the marketplace, clone into `~/.agenticros/skills-cache/`, and load them — no more “clone, build, wire `skillPaths`, hope you remembered sync.”
+Declare skills in config with **`skillRefs`**. On startup we resolve them from the marketplace (preferring **npm** `@agenticros/*` when listed), pack/clone into `~/.agenticros/skills-cache/`, and load them — no more “clone, build, wire `skillPaths`, hope you remembered sync.” CLI install also **auto-restarts** the OpenClaw gateway (`--no-restart` to skip).
 
 ```jsonc
 {
@@ -47,8 +53,8 @@ Same mission dialect on OpenClaw, Claude / Codex MCP, and Gemini.
 
 ```bash
 npx agenticros init
-npx agenticros skills install chrismatthieu/navigate-to
-# or pin in config: "skillRefs": ["chrismatthieu/start-slam"]
+npx agenticros skills install @agenticros/navigate-to
+# or pin in config: "skillRefs": ["chrismatthieu/start-slam", "@agenticros/dock-to-charger"]
 ```
 
 More: [agenticros.com](https://agenticros.com) · [skills.agenticros.com](https://skills.agenticros.com) · [missions](../missions.md) · [skills](../skills.md)
@@ -61,9 +67,9 @@ More: [agenticros.com](https://agenticros.com) · [skills.agenticros.com](https:
 >
 > AgenticROS already lets agents plan in capabilities and missions — not raw ROS topics. What’s new is a bigger seed catalog of *external* skills (wrap the ROS nodes you already run) and a thinner path from marketplace → robot.
 >
-> New seeds: detect humans, start SLAM, Follow Me (ROS), Navigate To (Nav2).
+> New seeds: Nav2 through-poses, MoveIt pick, dock-to-charger, SLAM load_map — plus navigate-to, detect humans, start SLAM, Follow Me (ROS).
 >
-> Plus `skillRefs` auto-fetch into `~/.agenticros/skills-cache/` and discoverable marketplace capabilities in `ros2_list_capabilities`.
+> Plus `skillRefs` npm auto-fetch into `~/.agenticros/skills-cache/` and discoverable marketplace capabilities in `ros2_list_capabilities`.
 >
 > agenticros.com · skills.agenticros.com
 >
@@ -71,4 +77,4 @@ More: [agenticros.com](https://agenticros.com) · [skills.agenticros.com](https:
 
 **X / repost (~200 chars)**
 
-> New AgenticROS seeds: detect humans, start SLAM, ROS Follow Me, Nav2 navigate-to — plus skillRefs auto-fetch and discoverable marketplace capabilities. agenticros.com
+> New AgenticROS seeds: Nav2 through-poses, MoveIt pick, docking, SLAM load_map — plus skillRefs npm install + auto-restart. agenticros.com

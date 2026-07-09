@@ -484,79 +484,49 @@ Add `{ "memory": { "enabled": true, "backend": "mem0" } }` to `~/.agenticros/con
 
 ## Skills
 
-AgenticROS **skills** are optional packages that add tools and behaviors to the plugin (e.g. `follow_person`, `find_object`). They are loaded at OpenClaw gateway start. Browse and install from **[skills.agenticros.com](https://skills.agenticros.com)**, or scaffold and publish your own with the CLI.
+AgenticROS **skills** are optional packages that add tools and behaviors (e.g. `follow_person`, `find_object`, `navigate_to`). They load at OpenClaw gateway start from **`skillPackages`**, **`skillPaths`**, and **`skillRefs`** (marketplace / npm pins cached under `~/.agenticros/skills-cache/`). Browse and install from **[skills.agenticros.com](https://skills.agenticros.com)**, or scaffold and publish your own with the CLI.
 
 ### Managing skills with the CLI
 
-The `agenticros skills` command (and the **Manage skills** menu entry) does everything for you: it scans the usual locations for clones, edits `~/.openclaw/openclaw.json`, refreshes the plugin manifest's `contracts.tools` allowlist, and reminds you to bounce the gateway.
-
 ```bash
-# Install from the marketplace (owner/skill-id ref)
+# Search + install (prefers npm @agenticros/* when advertised; else git clone)
 npx agenticros skills search follow
+npx agenticros skills install @agenticros/followme
 npx agenticros skills install chrismatthieu/followme
 
-agenticros skills                       # list registered + cloned-but-unregistered
+# Skip automatic OpenClaw gateway restart:
+npx agenticros skills install @agenticros/navigate-to --no-restart
+
+agenticros skills                       # list registered skills
 agenticros skills discover              # interactive picker over candidates on disk
 agenticros skills add <path-or-name>    # register a clone (path) or npm package
 agenticros skills remove <id-or-name>   # unregister
-agenticros skills sync                  # refresh OpenClaw contracts.tools allowlist
+agenticros skills sync                  # refresh contracts.tools (+ auto-restart)
 ```
 
-**Create and publish** a new skill:
+**Create and publish** a new skill (npm name `@agenticros/<slug>`):
 
 ```bash
 npx agenticros create-skill my-skill --template robot
 cd agenticros-skill-my-skill && npm install && npm run dev
-npx agenticros publish
+npx agenticros publish   # GitHub + marketplace + npm publish
 ```
 
-A typical manual install (without the marketplace) looks like:
-
-```bash
-# clone whichever skills you want, anywhere near the repo
-cd ~/Projects
-git clone https://github.com/agenticros/agenticros-skill-followme
-git clone https://github.com/agenticros/agenticros-skill-find
-
-# build them (skills compile independently of the main workspace)
-cd agenticros-skill-followme && pnpm install && pnpm build && cd ..
-cd agenticros-skill-find     && pnpm install && pnpm build && cd ..
-
-# register both — short ids resolve against the discovered clones
-agenticros skills add followme
-agenticros skills add find
-agenticros skills sync                  # update contracts.tools
-systemctl --user restart openclaw-gateway.service
-```
-
-`agenticros skills` then shows them as registered, and `agenticros doctor` includes a skills health-check that flags any clone that hasn't been built or whose `skillPaths` entry no longer exists.
-
-Listing output:
-
-```text
-╔─────────────────────╗
-║  AgenticROS skills  ║
-╚─────────────────────╝
-
-› OpenClaw config: /home/you/.openclaw/openclaw.json
-
-Registered:
-  ● followme  agenticros-skill-followme
-      via path  →  /home/you/Projects/agenticros-skill-followme
-  ● find      agenticros-skill-find
-      via path  →  /home/you/Projects/agenticros-skill-find
-```
+Seed catalog (npm): `@agenticros/followme`, `find`, `navigate-to`, `navigate-through-poses`, `detect-humans`, `start-slam`, `follow-me-ros`, `moveit-pick`, `dock-to-charger`.
 
 ### What the CLI writes
 
-- `~/.openclaw/openclaw.json` → `plugins.entries.agenticros.config.skillPaths[]` and `.skillPackages[]` (the only place the plugin actually reads from at gateway start).
-- `packages/agenticros/openclaw.plugin.json` → `contracts.tools` allowlist via `scripts/sync-skill-tools.mjs`. Required on OpenClaw **2026+**, which silently drops any tool a plugin registers but hasn't declared.
+- `~/.openclaw/openclaw.json` → `plugins.entries.agenticros.config.skillPaths[]`, `.skillPackages[]`, and `.skillRefs[]`
+- `~/.agenticros/config.json` → `skillRefs` for MCP / Gemini
+- Plugin `contracts.tools` via `scripts/sync-skill-tools.mjs` (OpenClaw 2026+)
 
-Per-skill behaviour lives under `config.skills.<skillId>` (e.g. `config.skills.followme.depthTopic`). The CLI doesn't auto-write these — use `agenticros config set skills.find.confidence=0.5` or edit `~/.openclaw/openclaw.json` directly. See each skill's README for its options.
+Per-skill behaviour lives under `config.skills.<skillId>`. See each skill's README.
 
 ### Contract & writing your own skill
 
-A skill is a Node package with an `"agenticros": { "id": "..." }` block in `package.json` and a `registerSkill(api, config, context)` export from `main`. Scaffold with `npx agenticros create-skill`, publish to **[skills.agenticros.com](https://skills.agenticros.com)** with `npx agenticros publish`, and install with `npx agenticros skills install <owner/skill-id>` (e.g. `chrismatthieu/followme`). See **[docs/skills.md](docs/skills.md)** for the full contract and **[agenticros-skill-followme](https://github.com/agenticros/agenticros-skill-followme)** ([marketplace listing](https://skills.agenticros.com/chrismatthieu/followme)) as a reference template.
+A skill is a Node package with an `"agenticros": { "id": "..." }` block in `package.json` and a `registerSkill(api, config, context)` export from `main`. Scaffold with `npx agenticros create-skill`, publish with `npx agenticros publish`, install with `npx agenticros skills install @agenticros/<slug>`. See **[docs/skills.md](docs/skills.md)** and **[@agenticros/followme](https://www.npmjs.com/package/@agenticros/followme)** ([marketplace](https://skills.agenticros.com/chrismatthieu/followme)).
+
+Missions support step **`retry`**, **pause/resume**, and **mid-step cancel** for interruptible capabilities — see **[docs/missions.md](docs/missions.md)**.
 
 ## Strategy & vision
 

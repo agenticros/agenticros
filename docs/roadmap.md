@@ -34,27 +34,26 @@ premium skills — never on the real-time control path.
 | Fleet list / find-for / heartbeat online / `fleet.json` | Shipped |
 | Dynamic mission bindings + Gemini find/follow | Shipped |
 | External ROS-node skill loader | Shipped |
-| Seed catalog — `navigate_to`, `detect_humans`, `start_slam` / stop / save, `follow_person_ros` (adjacent repos) | Shipped |
+| Seed catalog — navigate / through-poses / detect / slam (+load) / follow-ros / moveit-pick / dock | Shipped (operator bringup; sim MoveIt/Nav2 CI still WIP) |
 | `skillRefs` + `~/.agenticros/skills-cache/` (git + npm) | Shipped |
 | Discoverable marketplace capabilities in `ros2_list_capabilities` | Shipped |
 | Marketplace npm `@agenticros/*` + CLI auto-restart | Shipped (true mid-session hot-reload still blocked on OpenClaw) |
 | Skills marketplace (metadata + git/npm install) | Live at [skills.agenticros.com](https://skills.agenticros.com) |
 | Cross-adapter memory (local / mem0) | Shipped, off by default |
 | Safety (velocity clamps, OpenClaw `/estop`) | Baseline shipped |
-| Published packages | `@agenticros/core` **0.8.0**, CLI `agenticros` **0.5.1** |
+| Published packages | `@agenticros/core` **0.8.1**, CLI `agenticros` **0.5.2** |
 | Parallel mission steps + true hot-reload + paid licenses | Planned |
 | Spatial memory | Planned |
 | ACP / A2A multi-agent mesh | Planned |
 
 **Highest-leverage gaps for advanced physical AI**
 
-1. Seed catalog still thin on **MoveIt** / docking / richer Nav2 variants (detect / slam / follow-ros / navigate shipped).
+1. Sim maturity — Nav2 in Gazebo AMR + MoveIt2 on sim-arm (seeds exist; CI demos still thin).
 2. Missions are sequential — **parallel** step groups still deferred (retries + mid-step cancel shipped).
 3. Memory is flat facts, not spatial.
 4. Safety is mostly velocity clamps — no workspace bounds or cmd_vel arbitration.
-5. Sim has no nav stack; arm/MoveIt WIP — hard to CI embodied behaviors.
-6. True mid-session OpenClaw tool injection (without gateway restart) still open.
-7. Observability is logs/transcripts — no mission dashboard or fleet health UI.
+5. True mid-session OpenClaw tool injection (without gateway restart) still open.
+6. Observability is logs/transcripts — no mission dashboard or fleet health UI.
 
 Write-ups: [contract layer](blog/phase-1-complete.md) · [seed catalog & skillRefs](blog/seed-catalog-and-skillrefs.md).
 
@@ -92,9 +91,10 @@ embodied agents.
   mid-step cancel for interruptible skills), fleet heartbeats /
   `fleet.json`, dynamic bindings, Gemini find/follow,
   `external_ros_node` dispatch.
-- **Seeds (adjacent repos):** `@agenticros/navigate-to`,
-  `detect-humans`, `start-slam`, `follow-me-ros` (MoveIt pick remains an
-  examples stub until sim-arm).
+- **Seeds (adjacent repos / npm `@agenticros/*`):** `navigate-to`,
+  `navigate-through-poses`, `detect-humans`, `start-slam` (+ `load_map`),
+  `follow-me-ros`, `moveit-pick`, `dock-to-charger`, plus in-process
+  `find` / `followme`. Operator bringup required; sim MoveIt/Nav2 CI still WIP.
 - **Marketplace UX v1+v2:** `skillRefs` → `~/.agenticros/skills-cache/`
   (git **and** npm pack), discoverable caps, CLI install prefers npm when
   advertised, auto-restarts OpenClaw gateway (`--no-restart` to skip).
@@ -108,7 +108,7 @@ See [missions.md](missions.md), [skills.md](skills.md),
 
 | # | Deliverable | Why |
 |---|-------------|-----|
-| 1 | **Deeper seed skills** — MoveIt pick (when sim-arm ready), more Nav2 variants, richer SLAM save/load, docking | Detect / slam / follow-ros / navigate shipped; catalog still thin for manipulation |
+| 1 | **Sim-backed demos** for MoveIt / Nav2 / docking seeds | Operator-bringup seeds shipped; CI still needs sim-arm MoveIt2 + sim-amr Nav2 |
 | 2 | **Mission parallel steps** — DAG / parallel groups where safe (`blocks_base` mutex) | Retries + mid-step cancel shipped; parallel still deferred |
 | 3 | **Optional LLM planner** behind the same `compileGoalToMission` contract | Rule-based planner stays default; LLM expands coverage without changing the API |
 | 4 | **Safety depth** — workspace/geofence checks, `blocks_base` cmd_vel mutex, MCP estop parity | Baseline for multi-agent / multi-skill contention |
@@ -237,7 +237,7 @@ Hosted / spatial memory + multi-agent mesh
 
 ## If we only do five things next
 
-1. **MoveIt / docking / richer Nav2** seeds (and finish marketplace submit for any remaining listings).
+1. **Sim maturity** — Nav2 in Gazebo AMR + MoveIt2 on sim-arm (operator seeds already shipped).
 2. **Mission parallel steps** (retries + mid-step cancel already shipped).
 3. **True OpenClaw hot-reload** (npm + auto-restart already shipped).
 4. **Spatial memory** (OSS schema first; paid hosted later).

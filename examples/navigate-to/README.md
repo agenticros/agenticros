@@ -3,7 +3,8 @@
 Canonical package: **[agenticros-skill-navigate-to](https://github.com/agenticros/agenticros-skill-navigate-to)** (adjacent repo).
 
 ```bash
-npx agenticros skills install chrismatthieu/navigate-to
+npx agenticros skills install @agenticros/navigate-to
+# or: npx agenticros skills install chrismatthieu/navigate-to
 # or pin: "skillRefs": ["chrismatthieu/navigate-to"]
 ```
 

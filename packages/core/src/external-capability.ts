@@ -80,6 +80,41 @@ export function buildExternalGoal(
     };
   }
 
+  if (
+    msgType.includes("navigatethroughposes") ||
+    impl.action?.includes("navigate_through_poses")
+  ) {
+    const frame = typeof inputs.frame_id === "string" ? inputs.frame_id : "map";
+    const rawPoses = Array.isArray(inputs.poses) ? inputs.poses : [];
+    const poses = rawPoses.map((p) => {
+      const entry = p && typeof p === "object" ? (p as Record<string, unknown>) : {};
+      const x = Number(entry.x ?? 0) || 0;
+      const y = Number(entry.y ?? 0) || 0;
+      const yaw = Number(entry.yaw ?? 0) || 0;
+      const qz = Math.sin(yaw / 2);
+      const qw = Math.cos(yaw / 2);
+      const poseFrame =
+        typeof entry.frame_id === "string" ? entry.frame_id : frame;
+      return {
+        header: { frame_id: poseFrame },
+        pose: {
+          position: { x, y, z: Number(entry.z ?? 0) || 0 },
+          orientation: { x: 0, y: 0, z: qz, w: qw },
+        },
+      };
+    });
+    return { poses };
+  }
+
+  if (
+    msgType.includes("dockrobot") ||
+    impl.action?.includes("dock_robot")
+  ) {
+    if (typeof inputs.dock_id === "string" && inputs.dock_id.trim()) {
+      return { dock_id: inputs.dock_id.trim() };
+    }
+  }
+
   // Passthrough remaining inputs (minus robot_id).
   const { robot_id: _rid, ...rest } = inputs;
   return rest;

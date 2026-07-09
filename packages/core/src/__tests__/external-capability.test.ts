@@ -26,6 +26,27 @@ test("buildExternalGoal maps x/y/yaw to NavigateToPose", () => {
   assert.equal(pose.pose.position.y, 2);
 });
 
+test("buildExternalGoal maps poses[] to NavigateThroughPoses", () => {
+  const goal = buildExternalGoal(
+    {
+      kind: "external_ros_node",
+      action: "navigate_through_poses",
+      msg_type: "nav2_msgs/action/NavigateThroughPoses",
+    },
+    {
+      poses: [
+        { x: 1, y: 0, yaw: 0 },
+        { x: 2, y: 1, yaw: Math.PI / 2 },
+      ],
+    },
+  );
+  const poses = (goal as { poses: Array<{ pose: { position: { x: number; y: number } } }> })
+    .poses;
+  assert.equal(poses.length, 2);
+  assert.equal(poses[0]!.pose.position.x, 1);
+  assert.equal(poses[1]!.pose.position.y, 1);
+});
+
 test("executeExternalCapability sends action goal", async () => {
   const calls: unknown[] = [];
   const transport = {
