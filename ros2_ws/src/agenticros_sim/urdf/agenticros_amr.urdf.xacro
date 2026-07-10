@@ -19,6 +19,15 @@
 -->
 <robot name="agenticros_amr" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
+  <!-- ===================== base_footprint (Nav2 / costmap convention) ===================== -->
+  <link name="base_footprint"/>
+  <joint name="base_footprint_joint" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+    <!-- base_link visual origin is chassis center ~0.10 m above ground -->
+    <origin xyz="0 0 0.10" rpy="0 0 0"/>
+  </joint>
+
   <!-- ===================== base_link ===================== -->
   <link name="base_link">
     <visual>

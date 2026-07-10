@@ -73,6 +73,7 @@ program
   .option("--rviz", "Open RViz alongside the sim (sim targets only)", false)
   .option("--headless", "Run gz-sim with no GUI (auto-enabled on Jetson or when $DISPLAY is unset)")
   .option("--no-headless", "Force gz-sim GUI on (override Jetson auto-headless)")
+  .option("--nav2", "sim-amr only: also launch Nav2 (map + AMCL + navigation)", false)
   .option("--no-camera", "Skip starting the RealSense camera (real target only)")
   .option("--no-motors", "Skip starting the motor controller (real target only)")
   .action(async (target: string | undefined, opts) => {

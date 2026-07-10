@@ -11,20 +11,23 @@ names the real-robot plugin already expects.
 agenticros_sim/
 ├── worlds/agenticros_indoor.sdf       12 x 12 m indoor room with obstacles
 │                                      and one "person" target for follow-me
+├── maps/agenticros_indoor.{yaml,pgm}  Occupancy grid for Nav2 / AMCL
 ├── models/
 │   ├── agenticros_amr/                 2-wheel diff-drive AMR with sensors
 │   └── agenticros_arm/                 6-DOF UR5e-shaped robotic arm
 ├── urdf/
-│   ├── agenticros_amr.urdf.xacro       URDF mirror for RViz (AMR)
+│   ├── agenticros_amr.urdf.xacro       URDF mirror for RViz (AMR; base_footprint)
 │   └── agenticros_arm.urdf.xacro       URDF mirror for RViz (arm)
 ├── config/
 │   ├── amr_bridge.yaml                 gz <-> ROS topic mapping (AMR)
+│   ├── nav2_params.yaml                Nav2 / AMCL params for the AMR
 │   ├── amr_view.rviz                   RViz config: camera, scan, TF
 │   ├── arm_bridge.yaml                 gz <-> ROS topic mapping (arm)
 │   └── arm_view.rviz                   RViz config: RobotModel + TF
 ├── launch/
-│   ├── sim_amr.launch.py               One-stop launcher (AMR)
-│   └── sim_arm.launch.py               One-stop launcher (arm)
+│   ├── sim_amr.launch.py               Gazebo AMR + bridge
+│   ├── sim_amr_nav2.launch.py          Gazebo AMR + Nav2 (map + AMCL)
+│   └── sim_arm.launch.py               Gazebo arm
 ├── env-hooks/                          Add the package's share/ to GZ_SIM_RESOURCE_PATH
 └── CMakeLists.txt + package.xml        Standard ament_cmake skeleton
 ```
@@ -35,6 +38,8 @@ agenticros_sim/
 # Easiest: use the agenticros CLI (handles ROS sourcing + workspace build).
 agenticros up sim-amr            # AMR: GUI
 agenticros up sim-amr --rviz     # AMR: GUI + RViz panel
+agenticros up sim-amr --nav2     # AMR + Nav2 (map + AMCL + navigation)
+agenticros up sim-amr --nav2 --headless
 agenticros up sim-arm            # Arm: GUI
 agenticros up sim-arm --rviz     # Arm: GUI + RViz (RobotModel + TF)
 
@@ -42,12 +47,15 @@ agenticros up sim-arm --rviz     # Arm: GUI + RViz (RobotModel + TF)
 cd ros2_ws && colcon build --symlink-install --packages-select agenticros_sim
 source install/setup.bash
 ros2 launch agenticros_sim sim_amr.launch.py
+ros2 launch agenticros_sim sim_amr_nav2.launch.py gui:=false
 ros2 launch agenticros_sim sim_amr.launch.py use_rviz:=true
 ros2 launch agenticros_sim sim_amr.launch.py gui:=false      # headless
 ros2 launch agenticros_sim sim_arm.launch.py
 ros2 launch agenticros_sim sim_arm.launch.py use_rviz:=true
 ```
 
+Nav2 requires `ros-$ROS_DISTRO-nav2-bringup`. After `--nav2`, install
+`@agenticros/navigate-to` and call `run_mission` with `navigate_to`.
 ## Arm topic layout
 
 The arm exposes one position-command topic per joint plus the usual
@@ -133,13 +141,8 @@ works against sim without configuration changes.
 
 These are non-fatal but worth knowing as you build sim demos:
 
-1. **`/odom` does not flow through the bridge.** The gz-sim diff-drive plugin
-   publishes `gz.msgs.Odometry` to `/odometry`, but `ros_gz_bridge` on Humble
-   appears to expect `gz.msgs.OdometryWithCovariance` for the
-   `nav_msgs/msg/Odometry` mapping. The other transforms (`/tf`, `/tf_static`)
-   work and are usually enough for navigation demos. Fix candidates:
-   add an `<odom_publisher_topic>` for `_with_covariance` in the diff-drive
-   config, or write a tiny relay node. Tracked for Phase 4 polish.
+1. **`/odom` flows through the bridge** via `gz.msgs.OdometryWithCovariance`
+   from the OdometryPublisher system (DiffDrive still owns `/tf`).
 2. **`/camera/camera/color/image_raw` is silent in headless mode** on this
    Jetson (`libEGL: failed to create dri2 screen`). Depth, lidar, IMU, and
    joint_states all stream correctly regardless. With `gui:=true` (a real

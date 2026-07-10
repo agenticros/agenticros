@@ -221,9 +221,26 @@
       <odom_topic>odometry</odom_topic>
       <tf_topic>tf</tf_topic>
       <frame_id>odom</frame_id>
-      <child_frame_id>base_link</child_frame_id>
+      <child_frame_id>base_footprint</child_frame_id>
       <max_linear_acceleration>1.0</max_linear_acceleration>
       <max_angular_acceleration>2.0</max_angular_acceleration>
+    </plugin>
+
+    <!--
+      Odometry with covariance for ros_gz_bridge on Humble/Jazzy.
+      DiffDrive publishes bare gz.msgs.Odometry on /odometry; some Humble
+      bridge builds only convert OdometryWithCovariance reliably to
+      nav_msgs/Odometry. TF stays on DiffDrive (tf_topic below is unused).
+    -->
+    <plugin
+      filename="gz-sim-odometry-publisher-system"
+      name="gz::sim::systems::OdometryPublisher">
+      <odom_frame>odom</odom_frame>
+      <robot_base_frame>base_footprint</robot_base_frame>
+      <odom_topic>odometry</odom_topic>
+      <odom_covariance_topic>odometry_with_covariance</odom_covariance_topic>
+      <tf_topic>odometry_publisher_tf_unused</tf_topic>
+      <dimensions>2</dimensions>
     </plugin>
 
     <plugin filename="gz-sim-joint-state-publisher-system" name="gz::sim::systems::JointStatePublisher">

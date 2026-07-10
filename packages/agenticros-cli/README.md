@@ -14,6 +14,7 @@ agenticros              # interactive menu
 agenticros mcp setup    # register AgenticROS MCP for Codex, Hermes, and Claude
 agenticros up real      # bring up the real-robot stack
 agenticros up sim-amr   # bring up a simulated 2-wheel AMR
+agenticros up sim-amr --nav2   # AMR + Nav2 (map + AMCL + navigation)
 agenticros up sim-arm   # bring up a simulated 6-DOF arm
 agenticros doctor       # health check
 agenticros down         # stop everything we started
@@ -66,6 +67,7 @@ Three ways, listed easiest first:
 | `agenticros init` | First-time setup wizard. Idempotent. |
 | `agenticros up real` | Bring up the real-robot stack (RealSense + motors + MCP). |
 | `agenticros up sim-amr` | Bring up the simulated 2-wheel AMR. |
+| `agenticros up sim-amr --nav2` | Same + indoor map, AMCL, and Nav2 (`navigate_to_pose`). |
 | `agenticros up sim-arm` | Bring up the simulated 6-DOF arm (UR5e-shaped, per-joint position control). |
 | `agenticros down` | Stop everything we started. |
 | `agenticros doctor` | Coloured health-check table; `--json` for CI. |

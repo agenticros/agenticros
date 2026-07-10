@@ -6,7 +6,7 @@
 > Strategy answers *why* and *what phases*; this doc answers *what to
 > ship next* for advanced physical AI and for users/developers.
 
-**Last updated:** 2026-07-09
+**Last updated:** 2026-07-10
 
 ---
 
@@ -34,21 +34,23 @@ premium skills — never on the real-time control path.
 | Fleet list / find-for / heartbeat online / `fleet.json` | Shipped |
 | Dynamic mission bindings + Gemini find/follow | Shipped |
 | External ROS-node skill loader | Shipped |
-| Seed catalog — navigate / through-poses / detect / slam (+load) / follow-ros / moveit-pick / dock | Shipped (operator bringup; sim MoveIt/Nav2 CI still WIP) |
+| Seed catalog — navigate / through-poses / detect / slam (+load) / follow-ros / moveit-pick / dock | Shipped (operator bringup on real robots) |
+| Sim AMR + Nav2 (`agenticros up sim-amr --nav2`) | Shipped (`/odom` fixed; map + AMCL + Nav2; smoke script) |
+| Sim arm MoveIt2 / GHA mission CI | WIP (per-joint jogging works; MoveIt deferred) |
 | `skillRefs` + `~/.agenticros/skills-cache/` (git + npm) | Shipped |
 | Discoverable marketplace capabilities in `ros2_list_capabilities` | Shipped |
 | Marketplace npm `@agenticros/*` + CLI auto-restart | Shipped (true mid-session hot-reload still blocked on OpenClaw) |
 | Skills marketplace (metadata + git/npm install) | Live at [skills.agenticros.com](https://skills.agenticros.com) |
 | Cross-adapter memory (local / mem0) | Shipped, off by default |
 | Safety (velocity clamps, OpenClaw `/estop`) | Baseline shipped |
-| Published packages | `@agenticros/core` **0.8.1**, CLI `agenticros` **0.5.2** |
+| Published packages | `@agenticros/core` **0.8.1**, CLI `agenticros` **0.5.3** |
 | Parallel mission steps + true hot-reload + paid licenses | Planned |
 | Spatial memory | Planned |
 | ACP / A2A multi-agent mesh | Planned |
 
 **Highest-leverage gaps for advanced physical AI**
 
-1. Sim maturity — Nav2 in Gazebo AMR + MoveIt2 on sim-arm (seeds exist; CI demos still thin).
+1. MoveIt2 on sim-arm + headless GHA mission CI (Nav2 on sim-amr shipped).
 2. Missions are sequential — **parallel** step groups still deferred (retries + mid-step cancel shipped).
 3. Memory is flat facts, not spatial.
 4. Safety is mostly velocity clamps — no workspace bounds or cmd_vel arbitration.
@@ -94,7 +96,7 @@ embodied agents.
 - **Seeds (adjacent repos / npm `@agenticros/*`):** `navigate-to`,
   `navigate-through-poses`, `detect-humans`, `start-slam` (+ `load_map`),
   `follow-me-ros`, `moveit-pick`, `dock-to-charger`, plus in-process
-  `find` / `followme`. Operator bringup required; sim MoveIt/Nav2 CI still WIP.
+  `find` / `followme`. Nav2 on Gazebo AMR shipped (`--nav2`); sim MoveIt CI still WIP.
 - **Marketplace UX v1+v2:** `skillRefs` → `~/.agenticros/skills-cache/`
   (git **and** npm pack), discoverable caps, CLI install prefers npm when
   advertised, auto-restarts OpenClaw gateway (`--no-restart` to skip).
@@ -108,11 +110,11 @@ See [missions.md](missions.md), [skills.md](skills.md),
 
 | # | Deliverable | Why |
 |---|-------------|-----|
-| 1 | **Sim-backed demos** for MoveIt / Nav2 / docking seeds | Operator-bringup seeds shipped; CI still needs sim-arm MoveIt2 + sim-amr Nav2 |
+| 1 | **MoveIt2 on sim-arm** + headless GHA mission CI | Nav2 on sim-amr shipped; arm still per-joint jogging only |
 | 2 | **Mission parallel steps** — DAG / parallel groups where safe (`blocks_base` mutex) | Retries + mid-step cancel shipped; parallel still deferred |
 | 3 | **Optional LLM planner** behind the same `compileGoalToMission` contract | Rule-based planner stays default; LLM expands coverage without changing the API |
 | 4 | **Safety depth** — workspace/geofence checks, `blocks_base` cmd_vel mutex, MCP estop parity | Baseline for multi-agent / multi-skill contention |
-| 5 | **Sim maturity** — Nav2 in Gazebo AMR, `/odom` bridge fix, headless CI, “mission CI” recipe | Prerequisite for reliable physical-AI development loops |
+| 5 | **Sim polish** — docking sim bringup, richer mission CI recipes | Nav2 bringup + smoke script shipped; expand coverage |
 | 6 | **True OpenClaw hot-reload** — mid-session tool injection without gateway restart | npm + auto-restart shipped; needs OpenClaw upstream contract |
 | 7 | **Observability baseline** — structured mission JSONL, `mission_status` tool, simple local view of recent missions / heartbeats | Debuggability for users and skill authors |
 | 8 | **Doc / DX polish** — architecture drift, stronger `agenticros doctor`, keep published CLI free of `workspace:` deps | Trust and time-to-first-embodiment |
@@ -237,7 +239,7 @@ Hosted / spatial memory + multi-agent mesh
 
 ## If we only do five things next
 
-1. **Sim maturity** — Nav2 in Gazebo AMR + MoveIt2 on sim-arm (operator seeds already shipped).
+1. **MoveIt2 on sim-arm** + GHA mission CI (Nav2 on sim-amr already shipped).
 2. **Mission parallel steps** (retries + mid-step cancel already shipped).
 3. **True OpenClaw hot-reload** (npm + auto-restart already shipped).
 4. **Spatial memory** (OSS schema first; paid hosted later).

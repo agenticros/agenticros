@@ -24,6 +24,7 @@ export interface UpOptions {
   namespace?: string;
   rviz?: boolean;
   headless?: boolean;
+  nav2?: boolean;
   camera?: boolean;
   motors?: boolean;
 }
@@ -54,6 +55,7 @@ export async function upCommand(opts: UpOptions): Promise<void> {
         namespace: opts.namespace,
         useRviz: opts.rviz === true,
         headless: resolveHeadless(opts.headless),
+        nav2: opts.nav2 === true,
       });
       break;
     case "sim-arm":
@@ -157,8 +159,8 @@ async function resolveTarget(raw: string | undefined): Promise<UpTarget> {
     message: "What do you want to bring up?",
     choices: [
       { name: "Real robot (RealSense + MCP; motors if robotics CLI present)", value: "real" },
-      { name: "Sim AMR (Gazebo + 2-wheel diff-drive)", value: "sim-amr" },
-      { name: "Sim Arm (Gazebo + UR5e + MoveIt2)", value: "sim-arm" },
+      { name: "Sim AMR (Gazebo + 2-wheel diff-drive; add --nav2 for Nav2)", value: "sim-amr" },
+      { name: "Sim Arm (Gazebo + UR5e; MoveIt2 WIP)", value: "sim-arm" },
     ],
     default: "real",
   });

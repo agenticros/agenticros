@@ -3,13 +3,16 @@
 AgenticROS ships a simulation track so contributors without a physical robot
 can still drive every MCP tool end-to-end against a virtual robot. The first
 shipped sim is a **2-wheel AMR** powered by Gazebo Harmonic + ROS-GZ bridges,
-in the `agenticros_sim` ROS 2 package.
+in the `agenticros_sim` ROS 2 package. **Nav2** is available on the same AMR
+via `agenticros up sim-amr --nav2`.
 
 ## Quick start (CLI)
 
 ```bash
 agenticros up sim-amr            # gzsim with GUI, namespace=sim_robot
 agenticros up sim-amr --rviz     # add RViz with sensible defaults
+agenticros up sim-amr --nav2     # Gazebo AMR + map + AMCL + Nav2
+agenticros up sim-amr --nav2 --headless
 ```
 
 Stop everything with:
@@ -30,6 +33,33 @@ namespace), switch it for sim with:
 This drops in `ros2_ws/src/agenticros_sim/config/agenticros-sim.config.json`
 and keeps your old config at `~/.agenticros/config.json.real.<ts>.bak`.
 
+## Nav2 on sim-amr
+
+Requires `sudo apt install ros-$ROS_DISTRO-nav2-bringup` (Humble or Jazzy).
+
+```bash
+agenticros up sim-amr --nav2 --headless
+npx agenticros skills install @agenticros/navigate-to
+# MCP / OpenClaw: run_mission navigate_to → { x: 2.0, y: 1.0 }
+```
+
+What `--nav2` launches:
+
+| Piece | Source |
+|-------|--------|
+| Gazebo + bridge + RSP | `sim_amr.launch.py` |
+| Indoor occupancy map | `maps/agenticros_indoor.{yaml,pgm}` |
+| AMCL + Nav2 stack | `nav2_bringup` via `sim_amr_nav2.launch.py` |
+| Params | `config/nav2_params.yaml` (`base_footprint`, `/scan`, `/cmd_vel`, `use_sim_time`) |
+
+Smoke script (sim + Nav2 + skill already up):
+
+```bash
+node scripts/test-navigate-sim.mjs
+```
+
+See [examples/navigate-to](../examples/navigate-to/README.md).
+
 ## Layout
 
 | Layer | Where | What |
@@ -37,9 +67,10 @@ and keeps your old config at `~/.agenticros/config.json.real.<ts>.bak`.
 | World     | `agenticros_sim/worlds/agenticros_indoor.sdf` | 12 m × 12 m indoor room, three obstacles, one "person" cylinder for follow-me. |
 | AMR model | `agenticros_sim/models/agenticros_amr/`       | Diff-drive base + RGBD camera (87° HFOV, D435-like) + 2D GPU lidar + IMU. |
 | Bridge    | `agenticros_sim/config/amr_bridge.yaml`       | gz ↔ ROS 2 topic mapping, renaming gz defaults to RealSense paths. |
+| Map / Nav2 | `maps/`, `config/nav2_params.yaml`, `launch/sim_amr_nav2.launch.py` | Static map + AMCL + Nav2. |
 | Launch    | `agenticros_sim/launch/sim_amr.launch.py`     | One-shot `ros2 launch` entry point. |
 | Worker    | `scripts/sim/run_sim.sh`                       | Bash wrapper the CLI uses (sources ROS, sets PIDs, logs to /tmp). |
-| CLI       | `agenticros up sim-amr [--rviz]`              | Interactive + scripted entry. |
+| CLI       | `agenticros up sim-amr [--rviz] [--nav2] [--headless]` | Interactive + scripted entry. |
 
 ## Available tools in sim
 
@@ -55,8 +86,8 @@ against the sim AMR. Specifically:
 | `ros2_depth_distance`      | `/camera/camera/depth/image_rect_raw`       | ✓ |
 | `ros2_follow_me_start` mode='depth' | depth blob in front of AMR         | ✓ (person cylinder at +2.5 m) |
 | `ros2_follow_me_start` mode='local' (YOLO) | RGB image                  | works if YOLO model is available |
-| `ros2_action_goal`         | none yet                                    | will work once sim-arm lands |
-| `ros2_service_call`        | various                                     | basic services only — no nav stack yet |
+| `ros2_action_goal` / `navigate_to` | Nav2 `navigate_to_pose`              | ✓ with `agenticros up sim-amr --nav2` |
+| `ros2_service_call`        | various                                     | basic services; Nav2 lifecycle via bringup |
 
 ## Sensor formats
 
@@ -66,20 +97,23 @@ against the sim AMR. Specifically:
 | Depth  | `32FC1` (float metres) | `16UC1` (mm)  | ✓ — depth-loop normaliser handles both |
 | Lidar  | `LaserScan` | (n/a real robot)  | ✓ |
 | IMU    | `Imu` (low noise) | `Imu` (noisier) | ✓ |
-| Odom   | `Odometry`        | `Odometry` from base controller | ✓ |
-| `tf`   | from diff-drive plugin  | from robot_state_publisher | ✓ |
+| Odom   | `Odometry` (via `OdometryWithCovariance` bridge) | `Odometry` from base controller | ✓ |
+| `tf`   | DiffDrive `odom` → `base_footprint` + RSP | from robot_state_publisher | ✓ |
 
 ## Headless / CI
 
 ```bash
-agenticros up sim-amr     # not yet wired for headless via the CLI
+agenticros up sim-amr --headless
+agenticros up sim-amr --nav2 --headless
 # Equivalent direct invocation:
 ros2 launch agenticros_sim sim_amr.launch.py gui:=false
+ros2 launch agenticros_sim sim_amr_nav2.launch.py gui:=false
 ```
 
-The `gui:=false` flag adds `-s --headless-rendering` to `gz sim`, which still
-runs physics but suppresses the OpenGL window. Sensors continue to produce
-data, so MCP tools and the topic bridge keep working.
+The `gui:=false` / `--headless` flag adds `-s --headless-rendering` to `gz sim`,
+which still runs physics but suppresses the OpenGL window. Sensors continue to
+produce data, so MCP tools and the topic bridge keep working. On Jetson (or when
+`$DISPLAY` is unset) the CLI auto-enables headless.
 
 ## Performance notes
 
@@ -89,6 +123,7 @@ On a Jetson Orin Nano running Gazebo Harmonic 8.x:
 |-----------------------------------|------------|
 | gz sim + scene broadcaster + sensors | 80–110 % (i.e. 1 core saturated) |
 | ros_gz_bridge                     | 5–10 %     |
+| Nav2 (with `--nav2`)              | 20–40 %    |
 | MCP server (idle)                 | <1 %       |
 | MCP server (follow-me running)    | 5–15 %     |
 | RViz                              | 30–60 %    |
@@ -110,8 +145,9 @@ When CPU-bound, drop the depth camera update rate from 30 → 15 Hz in
 | `/tf` (when AMR moves)                                   | ✅ 43 Hz    |
 | `/camera/camera/depth/image_rect_raw` (16UC1 mm)         | ✅ 24 Hz    |
 | `ros2 topic pub /cmd_vel` → AMR drives                   | ✅ (verified via /tf updates) |
+| `/odom` (OdometryWithCovariance bridge)                  | ✅ (fixed; was type-mismatch) |
 | `/camera/camera/color/image_raw` (headless)              | ❌ blocked by EGL / DRI2 (see `Known sharp edges`) |
-| `/odom`                                                  | ❌ type-mismatch in the bridge mapping (see `Known sharp edges`) |
+| Nav2 `navigate_to_pose` via `--nav2`                     | ✅ bringup shipped; run `scripts/test-navigate-sim.mjs` on a ROS host |
 
 ## Troubleshooting
 
@@ -156,6 +192,16 @@ You're running an older sim build. The launch file now includes
 ```bash
 cd ros2_ws && colcon build --packages-select agenticros_sim --symlink-install
 ```
+
+### Nav2 / `--nav2` fails to start
+
+```bash
+sudo apt install ros-$ROS_DISTRO-nav2-bringup
+cd ros2_ws && colcon build --packages-select agenticros_sim --symlink-install
+```
+
+Confirm `/navigate_to_pose` exists after launch (`ros2 action list`). AMCL
+initial pose is set in `nav2_params.yaml` to the default spawn `(0, 0)`.
 
 ### Other
 

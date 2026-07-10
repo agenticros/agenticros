@@ -23,6 +23,8 @@ export interface SimRunOptions {
   useRviz?: boolean;
   /** True = headless gz (-s --headless-rendering). Auto-detected from $DISPLAY upstream. */
   headless?: boolean;
+  /** AMR only: launch Nav2 (map + AMCL + navigation) via sim_amr_nav2.launch.py. */
+  nav2?: boolean;
 }
 
 async function runSim(robot: "amr" | "arm", opts: SimRunOptions): Promise<void> {
@@ -46,6 +48,13 @@ async function runSim(robot: "amr" | "arm", opts: SimRunOptions): Promise<void> 
   const args = ["--robot", robot, "--namespace", ns];
   if (opts.useRviz) args.push("--rviz");
   if (opts.headless) args.push("--no-gui");
+  if (opts.nav2) {
+    if (robot !== "amr") {
+      err("--nav2 is only supported with sim-amr.");
+      process.exit(2);
+    }
+    args.push("--nav2");
+  }
 
   info(`Invoking ${script} ${args.join(" ")}…`);
   try {

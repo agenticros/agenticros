@@ -23,12 +23,14 @@
   direction: ROS_TO_GZ
 
 # ---------------- odometry (GZ -> ROS) ----------------
-# Note: the gz-sim diff-drive system publishes <odom_topic> as a bare topic
-# (no /model/<name>/ prefix), unlike <topic> which DOES get prefixed.
+# Prefer OdometryWithCovariance from the OdometryPublisher system (see
+# model.sdf). Humble ros_gz_bridge historically failed to convert bare
+# gz.msgs.Odometry from DiffDrive; covariance messages map cleanly to
+# nav_msgs/Odometry. DiffDrive still publishes /odometry + /tf for TF.
 - ros_topic_name: "/odom"
-  gz_topic_name: "/odometry"
+  gz_topic_name: "/odometry_with_covariance"
   ros_type_name: "nav_msgs/msg/Odometry"
-  gz_type_name: "gz.msgs.Odometry"
+  gz_type_name: "gz.msgs.OdometryWithCovariance"
   direction: GZ_TO_ROS
 
 # ---------------- /tf  (GZ -> ROS) ----------------

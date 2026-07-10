@@ -8,8 +8,8 @@ This directory contains example AgenticROS workflows that show how AI agents can
 |---|---:|---|
 | [TurtleBot3 chat control](turtlebot-chat/README.md) | Ready | Control a TurtleBot3 in Gazebo through OpenClaw messaging channels. |
 | [Find and approach](find-and-approach/README.md) | Ready | Mission chaining: Find Object → approach via `run_mission`. |
-| [Navigate To (Nav2)](navigate-to/README.md) | Ready | `@agenticros/navigate-to` — Nav2 NavigateToPose. |
-| [Navigate Through Poses](navigate-through-poses/README.md) | Ready | `@agenticros/navigate-through-poses` — Nav2 waypoint chains. |
+| [Navigate To (Nav2)](navigate-to/README.md) | Ready | `@agenticros/navigate-to` — Nav2 NavigateToPose (sim: `up sim-amr --nav2`). |
+| [Navigate Through Poses](navigate-through-poses/README.md) | Ready | `@agenticros/navigate-through-poses` — Nav2 waypoint chains (same `--nav2`). |
 | [Detect Humans](detect-humans/README.md) | Ready | `@agenticros/detect-humans` — on-robot detections. |
 | [Start SLAM](start-slam/README.md) | Ready | `@agenticros/start-slam` — start / stop / save / load map. |
 | [Follow Me (ROS)](follow-me-ros/README.md) | Ready | `@agenticros/follow-me-ros` — on-robot follow_me services. |

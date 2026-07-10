@@ -7,13 +7,14 @@
 # tees output to /tmp/agenticros-sim.log so `agenticros logs sim` works.
 #
 # Usage:
-#   run_sim.sh --robot amr [--namespace sim_robot] [--rviz] [--no-gui]
+#   run_sim.sh --robot amr [--namespace sim_robot] [--rviz] [--no-gui] [--nav2]
 #
 # Flags:
 #   --robot amr|arm        Which sim launch to start (default: amr).
 #   --namespace <ns>       Robot namespace; exported as AGENTICROS_ROBOT_NAMESPACE.
 #   --rviz                 Bring up RViz alongside Gazebo.
 #   --no-gui               Run gz-sim headless (CI / docker).
+#   --nav2                 AMR only: also launch Nav2 (map + AMCL + navigation).
 #   --ros-distro <distro>  Override ROS 2 distro (auto-detect by default).
 #   --colcon-ws <path>     Override the colcon workspace (default: <repo>/ros2_ws).
 #   --help                 Print this help and exit.
@@ -34,6 +35,7 @@ ROBOT="amr"
 NAMESPACE=""
 USE_RVIZ="false"
 GUI="true"
+USE_NAV2="false"
 ROS_DISTRO_OVERRIDE=""
 COLCON_WS=""
 
@@ -43,10 +45,11 @@ while [[ $# -gt 0 ]]; do
     --namespace)    NAMESPACE="$2"; shift 2 ;;
     --rviz)         USE_RVIZ="true"; shift ;;
     --no-gui)       GUI="false"; shift ;;
+    --nav2)         USE_NAV2="true"; shift ;;
     --ros-distro)   ROS_DISTRO_OVERRIDE="$2"; shift 2 ;;
     --colcon-ws)    COLCON_WS="$2"; shift 2 ;;
     -h|--help)
-      sed -n '2,24p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+      sed -n '2,26p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
       exit 0 ;;
     *) echo "Unknown arg: $1" >&2; exit 2 ;;
   esac
@@ -54,6 +57,11 @@ done
 
 if [[ "$ROBOT" != "amr" && "$ROBOT" != "arm" ]]; then
   echo "--robot must be 'amr' or 'arm' (got '$ROBOT')" >&2
+  exit 2
+fi
+
+if [[ "$USE_NAV2" == "true" && "$ROBOT" != "amr" ]]; then
+  echo "--nav2 is only supported with --robot amr" >&2
   exit 2
 fi
 
@@ -85,7 +93,7 @@ fi
 
 log "ROS_DISTRO=$ROS_DISTRO"
 log "COLCON_WS=$COLCON_WS"
-log "robot=$ROBOT  namespace=${NAMESPACE:-<none>}  rviz=$USE_RVIZ  gui=$GUI"
+log "robot=$ROBOT  namespace=${NAMESPACE:-<none>}  rviz=$USE_RVIZ  gui=$GUI  nav2=$USE_NAV2"
 
 # shellcheck disable=SC1090
 source "/opt/ros/$ROS_DISTRO/setup.bash"
@@ -145,9 +153,22 @@ LAUNCH_ARGS=(
 
 # ---------- Pick launch file ----------
 case "$ROBOT" in
-  amr) LAUNCH_FILE="sim_amr.launch.py" ;;
-  arm) LAUNCH_FILE="sim_arm.launch.py" ;;  # Phase 3
+  amr)
+    if [[ "$USE_NAV2" == "true" ]]; then
+      LAUNCH_FILE="sim_amr_nav2.launch.py"
+    else
+      LAUNCH_FILE="sim_amr.launch.py"
+    fi
+    ;;
+  arm) LAUNCH_FILE="sim_arm.launch.py" ;;
 esac
+
+if [[ "$USE_NAV2" == "true" ]]; then
+  if ! ros2 pkg prefix nav2_bringup >/dev/null 2>&1; then
+    err "nav2_bringup not found. Install: sudo apt install ros-\$ROS_DISTRO-nav2-bringup"
+    exit 1
+  fi
+fi
 
 if ! ros2 launch --help >/dev/null 2>&1; then
   err "ros2 launch not available — is ROS sourced properly?"

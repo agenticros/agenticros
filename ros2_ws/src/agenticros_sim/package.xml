@@ -6,8 +6,9 @@
   <description>
     AgenticROS Gazebo Harmonic simulation assets: indoor world, 2-wheel AMR
     model (depth camera + GPU lidar + IMU), ros_gz_bridge config that exposes
-    topics on AgenticROS' real-robot topic names, and a launch file that wires
-    it all together. Use with the agenticros CLI:  agenticros up sim-amr.
+    topics on AgenticROS real-robot topic names, Nav2 bringup for the indoor
+    map (sim_amr_nav2.launch.py), and launch files that wire it all together.
+    Use with the agenticros CLI: agenticros up sim-amr [--nav2].
   </description>
   <maintainer email="hello@plaipin.com">PlaiPin</maintainer>
   <license>Apache-2.0</license>
@@ -20,6 +21,18 @@
   <exec_depend>robot_state_publisher</exec_depend>
   <exec_depend>xacro</exec_depend>
   <exec_depend>rviz2</exec_depend>
+  <!-- Optional Nav2 stack for `sim_amr_nav2.launch.py` / `agenticros up sim-amr --nav2` -->
+  <exec_depend>nav2_bringup</exec_depend>
+  <exec_depend>nav2_bt_navigator</exec_depend>
+  <exec_depend>nav2_amcl</exec_depend>
+  <exec_depend>nav2_map_server</exec_depend>
+  <exec_depend>nav2_controller</exec_depend>
+  <exec_depend>nav2_planner</exec_depend>
+  <exec_depend>nav2_behaviors</exec_depend>
+  <exec_depend>nav2_smoother</exec_depend>
+  <exec_depend>nav2_waypoint_follower</exec_depend>
+  <exec_depend>nav2_velocity_smoother</exec_depend>
+  <exec_depend>nav2_lifecycle_manager</exec_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

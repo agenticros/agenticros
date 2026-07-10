@@ -195,6 +195,8 @@ agenticros hermes setup         # register AgenticROS MCP for Hermes Agent
 agenticros hermes doctor        # validate ~/.hermes/config.yaml
 agenticros up real              # real robot stack
 agenticros up sim-amr           # simulated AMR (Gazebo + RViz, headless on Jetson)
+agenticros up sim-amr --nav2    # AMR + Nav2 for navigate_to missions
+agenticros up sim-arm           # simulated 6-DOF arm (per-joint; MoveIt WIP)
 agenticros up sim-arm           # simulated 6-DOF arm
 agenticros mode <real|sim>      # swap the active config profile (namespace, transport)
 agenticros robots               # list / add / remove robots in the fleet (kind, sensors, capabilities)

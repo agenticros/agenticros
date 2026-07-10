@@ -1,5 +1,5 @@
 {
-  "$comment": "AgenticROS config template tuned for sim-amr. Drop this in ~/.agenticros/config.json (or run `agenticros init` and answer 'simulation') to point the MCP server + OpenClaw plugin at the sim's topics. All values match agenticros_sim/config/amr_bridge.yaml. NOTE: robot.namespace is intentionally empty - the sim bridge publishes /cmd_vel, /scan, /imu/data, etc. at the graph root (no robot prefix), so AgenticROS must NOT namespace topics. For multi-robot sim, prefix the topics in amr_bridge.yaml and set namespace here to match.",
+  "$comment": "AgenticROS config template tuned for sim-amr. Drop this in ~/.agenticros/config.json (or run `agenticros init` and answer 'simulation') to point the MCP server + OpenClaw plugin at the sim's topics. All values match agenticros_sim/config/amr_bridge.yaml. NOTE: robot.namespace is intentionally empty - the sim bridge publishes /cmd_vel, /scan, /imu/data, etc. at the graph root (no robot prefix), so AgenticROS must NOT namespace topics. For multi-robot sim, prefix the topics in amr_bridge.yaml and set namespace here to match. For Nav2 demos: `agenticros up sim-amr --nav2` then install @agenticros/navigate-to (or pin skillRefs below).",
   "transport": {
     "mode": "local"
   },
@@ -24,5 +24,6 @@
     "followme": {
       "depthTopic": "/camera/camera/depth/image_rect_raw"
     }
-  }
+  },
+  "skillRefs": []
 }

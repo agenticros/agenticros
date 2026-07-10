@@ -38,13 +38,15 @@ Bring up a robot stack. Targets:
 | Target    | What it does |
 |-----------|-----|
 | `real`    | Runs `scripts/start_demo.sh`: RealSense camera (unless `--no-camera`), MCP build, and motor controller only when the `robotics` CLI is installed (or unless `--no-motors`). |
-| `sim-amr` | Launches the simulated 2-wheel AMR (Phase 2 - WIP). |
-| `sim-arm` | Launches the simulated UR5e arm + MoveIt2 (Phase 3 - WIP). |
+| `sim-amr` | Launches the simulated 2-wheel AMR (`scripts/sim/run_sim.sh`). Add `--nav2` for map + AMCL + Nav2. |
+| `sim-arm` | Launches the simulated UR5e-shaped arm (per-joint position control; MoveIt2 WIP). |
 
 Flags:
 - `--ros-distro humble|jazzy|…` override ROS distro detection
 - `--namespace <ns>` override the robot namespace
 - `--rviz` open RViz alongside the sim
+- `--headless` / `--no-headless` control gz GUI (auto-headless on Jetson / no `$DISPLAY`)
+- `--nav2` sim-amr only: also launch Nav2 (`sim_amr_nav2.launch.py`)
 - `--no-camera` skip starting the RealSense camera (real target)
 - `--no-motors` skip starting the motor controller (real target)
 
