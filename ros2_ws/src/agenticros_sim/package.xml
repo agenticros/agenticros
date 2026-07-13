@@ -21,7 +21,7 @@
   <exec_depend>robot_state_publisher</exec_depend>
   <exec_depend>xacro</exec_depend>
   <exec_depend>rviz2</exec_depend>
-  <!-- Optional Nav2 stack for `sim_amr_nav2.launch.py` / `agenticros up sim-amr --nav2` -->
+  <!-- Optional Nav2 stack (sim_amr_nav2.launch.py / agenticros up sim-amr with nav2) -->
   <exec_depend>nav2_bringup</exec_depend>
   <exec_depend>nav2_bt_navigator</exec_depend>
   <exec_depend>nav2_amcl</exec_depend>
