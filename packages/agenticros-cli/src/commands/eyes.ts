@@ -5,7 +5,7 @@
  * records /tmp/agenticros-eyes.pid, and logs to /tmp/agenticros-eyes.log.
  */
 
-import { openSync } from "node:fs";
+import { openSync, readFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { join } from "node:path";
 
@@ -17,6 +17,7 @@ import {
   writePid,
 } from "../util/pidfile.js";
 import {
+  areEyesDepsInstalled,
   resolveCmdVelTopic,
   resolveEyesEntry,
   resolveEyesPkgDir,
@@ -24,6 +25,7 @@ import {
 } from "../util/eyes.js";
 import { buildRosSourcedShellCmd, detectRosDistro } from "../util/env.js";
 import { getCliPaths } from "../util/paths.js";
+import { ensureWorkspaceReady } from "../util/workspace.js";
 import { err, info, ok, warn } from "../util/logger.js";
 
 export interface EyesOptions {
@@ -35,6 +37,37 @@ export interface EyesOptions {
   topic?: string;
   /** When true, do not exit the process on launch failure (used by `up --eyes`). */
   softFail?: boolean;
+}
+
+const EYES_READY_MARK = "robot-eyes listening on";
+const EYES_READY_TIMEOUT_MS = 12_000;
+
+function lastLogLines(n = 20): string {
+  try {
+    const text = readFileSync(logPath("eyes"), "utf8").trimEnd();
+    if (!text) return "(log empty)";
+    const lines = text.split("\n");
+    return lines.slice(-n).join("\n");
+  } catch {
+    return "(no log yet)";
+  }
+}
+
+async function waitForEyesReady(
+  timeoutMs = EYES_READY_TIMEOUT_MS,
+): Promise<"ready" | "dead" | "timeout"> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (!isPidAlive("eyes")) return "dead";
+    try {
+      const text = readFileSync(logPath("eyes"), "utf8");
+      if (text.includes(EYES_READY_MARK)) return "ready";
+    } catch {
+      // log not written yet
+    }
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  return isPidAlive("eyes") ? "timeout" : "dead";
 }
 
 export async function eyesCommand(opts: EyesOptions = {}): Promise<void> {
@@ -49,7 +82,7 @@ export async function eyesCommand(opts: EyesOptions = {}): Promise<void> {
   if (readPid("eyes") !== undefined) clearPid("eyes");
 
   const entry = resolveEyesEntry();
-  const pkgDir = resolveEyesPkgDir();
+  let pkgDir = resolveEyesPkgDir();
   if (!entry || !pkgDir) {
     const msg =
       "Eyes package not found (packages/robot-eyes). Run `agenticros init` or use a full workspace clone.";
@@ -59,6 +92,39 @@ export async function eyesCommand(opts: EyesOptions = {}): Promise<void> {
     }
     err(msg);
     process.exit(1);
+  }
+
+  const paths = getCliPaths();
+  if (paths.repoRoot && !areEyesDepsInstalled(pkgDir)) {
+    warn(
+      "Eyes dependencies missing (ws not linked). Healing workspace with pnpm install…",
+    );
+    try {
+      await ensureWorkspaceReady(paths.repoRoot, "robot eyes");
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : String(e);
+      const msg =
+        `Failed to install eyes dependencies: ${detail}. ` +
+        `Try: cd ${paths.repoRoot} && pnpm install`;
+      if (opts.softFail) {
+        warn(msg);
+        return;
+      }
+      err(msg);
+      process.exit(1);
+    }
+    pkgDir = resolveEyesPkgDir() ?? pkgDir;
+    if (!areEyesDepsInstalled(pkgDir)) {
+      const msg =
+        `Eyes still missing node_modules/ws after install. ` +
+        `Try: cd ${paths.repoRoot} && pnpm install`;
+      if (opts.softFail) {
+        warn(msg);
+        return;
+      }
+      err(msg);
+      process.exit(1);
+    }
   }
 
   const ros = detectRosDistro();
@@ -77,7 +143,6 @@ export async function eyesCommand(opts: EyesOptions = {}): Promise<void> {
   const safety = resolveSafetyLimits();
   const port = Number(opts.port ?? process.env["PORT"] ?? 8765);
 
-  const paths = getCliPaths();
   const overlay = paths.repoRoot
     ? join(paths.repoRoot, "ros2_ws", "install", "setup.bash")
     : undefined;
@@ -126,11 +191,16 @@ export async function eyesCommand(opts: EyesOptions = {}): Promise<void> {
 
   writePid("eyes", child.pid);
 
-  // Brief settle so a fast crash shows up in the log / pid check.
-  await new Promise((r) => setTimeout(r, 400));
-  if (!isPidAlive("eyes")) {
-    clearPid("eyes");
-    const msg = `Eyes exited immediately. Check ${logPath("eyes")} (ROS sourced? rclnodejs built?).`;
+  // Wait for the Node process to finish sourcing ROS and print the listen line.
+  // A short "pid alive" check is not enough: bash stays up while sourcing, then
+  // node can crash on missing deps before the HTTP server binds.
+  const ready = await waitForEyesReady();
+  if (ready !== "ready") {
+    if (ready === "dead") clearPid("eyes");
+    const msg =
+      ready === "dead"
+        ? `Eyes exited before listening. Last log lines from ${logPath("eyes")}:\n${lastLogLines()}`
+        : `Eyes did not report ready within ${EYES_READY_TIMEOUT_MS / 1000}s (pid still alive). Check ${logPath("eyes")}.`;
     if (opts.softFail) {
       warn(msg);
       return;

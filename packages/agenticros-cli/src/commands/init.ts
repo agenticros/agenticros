@@ -543,6 +543,12 @@ const ALWAYS_REFRESH_FROM_BUNDLE = [
   "ros2_ws/src",     // ROS 2 package sources (msgs, sim, follow_me, ...)
   "tsconfig.base.json",
   "pnpm-workspace.yaml",
+  // Keep lockfile/root package.json in lockstep with packages/. Otherwise a
+  // CLI upgrade can drop a new workspace package (e.g. robot-eyes) into
+  // packages/ while leaving an older lockfile — pnpm install is then skipped
+  // (node_modules looks healthy) and the new package has no linked deps.
+  "package.json",
+  "pnpm-lock.yaml",
 ];
 
 function findMissingBundleFiles(installDir: string): string[] {

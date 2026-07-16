@@ -44,6 +44,23 @@ export function isWorkspaceInstalled(repoRoot: string): boolean {
     "tsc",
   );
   if (!existsSync(tsc)) return false;
+
+  // robot-eyes is often added by refreshShippedCode after an older install.
+  // Root node_modules can look healthy while packages/robot-eyes/node_modules/ws
+  // was never linked — eyes then crashes with ERR_MODULE_NOT_FOUND.
+  const eyesPkg = join(repoRoot, "packages", "robot-eyes", "package.json");
+  if (existsSync(eyesPkg)) {
+    const eyesWs = join(
+      repoRoot,
+      "packages",
+      "robot-eyes",
+      "node_modules",
+      "ws",
+      "package.json",
+    );
+    if (!existsSync(eyesWs)) return false;
+  }
+
   return true;
 }
 

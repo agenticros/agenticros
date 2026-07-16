@@ -531,6 +531,17 @@ export async function runDoctorChecks(): Promise<DoctorReport> {
     ? join(paths.repoRoot, "packages", "robot-eyes", "src", "index.js")
     : "";
   if (eyesEntry && existsSync(eyesEntry)) {
+    const eyesPkgDir = join(paths.repoRoot!, "packages", "robot-eyes");
+    const eyesWs = join(eyesPkgDir, "node_modules", "ws", "package.json");
+    if (!existsSync(eyesWs)) {
+      checks.push({
+        id: "eyes-deps",
+        label: "Robot eyes package present but deps not installed (ws)",
+        severity: "red",
+        hint: `Run: cd ${paths.repoRoot} && pnpm install   (or: agenticros init)`,
+      });
+    }
+
     const display = (process.env["DISPLAY"] ?? "").trim();
     let browserFound = false;
     for (const bin of ["firefox", "chromium-browser", "chromium", "google-chrome"]) {

@@ -1,7 +1,11 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 import {
+  areEyesDepsInstalled,
   cmdVelTopicFromConfig,
   safetyLimitsFromConfig,
 } from "../util/eyes.js";
@@ -46,5 +50,17 @@ describe("eyes config helpers", () => {
       }),
       { maxLinearVelocity: 0.4, maxAngularVelocity: 0.8 },
     );
+  });
+
+  it("areEyesDepsInstalled requires node_modules/ws", () => {
+    const dir = mkdtempSync(join(tmpdir(), "eyes-deps-"));
+    try {
+      assert.equal(areEyesDepsInstalled(dir), false);
+      mkdirSync(join(dir, "node_modules", "ws"), { recursive: true });
+      writeFileSync(join(dir, "node_modules", "ws", "package.json"), "{}");
+      assert.equal(areEyesDepsInstalled(dir), true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

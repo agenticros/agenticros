@@ -65,3 +65,12 @@ export function resolveEyesPkgDir(): string | undefined {
   const dir = join(paths.repoRoot, "packages", "robot-eyes");
   return existsSync(dir) ? dir : undefined;
 }
+
+/**
+ * True when pnpm has linked `ws` into packages/robot-eyes/node_modules.
+ * Fresh installs after a CLI upgrade can ship robot-eyes source without
+ * re-running pnpm install; Node then dies with ERR_MODULE_NOT_FOUND.
+ */
+export function areEyesDepsInstalled(pkgDir: string): boolean {
+  return existsSync(join(pkgDir, "node_modules", "ws", "package.json"));
+}
