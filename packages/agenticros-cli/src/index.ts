@@ -80,34 +80,39 @@ program
   .option("--eyes", "Also start robot eyes on the local display (tablets / face screens)", false)
   .option("--eyes-no-teleop", "With --eyes: gaze only (do not publish WASD cmd_vel)", false)
   .option("--eyes-no-browser", "With --eyes: serve UI but do not open a kiosk browser", false)
+  .option("--eyes-no-sound", "With --eyes: mute R2D2 idle/excited chirps", false)
   .action(async (target: string | undefined, opts) => {
     await upCommand({
       target,
       ...opts,
       eyesNoTeleop: opts.eyesNoTeleop === true,
       eyesNoBrowser: opts.eyesNoBrowser === true,
+      eyesNoSound: opts.eyesNoSound === true,
     });
   });
 
 program
   .command("eyes")
   .description(
-    "Start fullscreen robot eyes on a local display (cmd_vel gaze + optional WASD teleop). See docs/eyes.md.",
+    "Start fullscreen robot eyes on a local display (cmd_vel gaze + optional WASD teleop + R2D2 sounds). See docs/eyes.md.",
   )
-  // Commander maps `--no-browser` / `--no-teleop` to `browser: false` / `teleop: false`.
+  // Commander maps `--no-browser` / `--no-teleop` / `--no-sound` to `browser|teleop|sound: false`.
   .option("--no-browser", "Serve the UI but do not open a kiosk browser")
   .option("--no-teleop", "Gaze only — do not publish WASD cmd_vel")
+  .option("--no-sound", "Mute R2D2 idle/excited chirps")
   .option("--port <n>", "HTTP / WebSocket port (default 8765)")
   .option("--topic <path>", "Override cmd_vel topic (default from ~/.agenticros/config.json)")
   .action(async (opts: {
     browser?: boolean;
     teleop?: boolean;
+    sound?: boolean;
     port?: string;
     topic?: string;
   }) => {
     await eyesCommand({
       noBrowser: opts.browser === false,
       noTeleop: opts.teleop === false,
+      noSound: opts.sound === false,
       port: opts.port,
       topic: opts.topic,
     });

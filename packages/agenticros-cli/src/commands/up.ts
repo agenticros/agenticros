@@ -34,6 +34,8 @@ export interface UpOptions {
   eyesNoTeleop?: boolean;
   /** With --eyes: do not open a kiosk browser. */
   eyesNoBrowser?: boolean;
+  /** With --eyes: mute R2D2 sounds. */
+  eyesNoSound?: boolean;
 }
 
 type UpTarget = "real" | "sim-amr" | "sim-arm";
@@ -79,6 +81,7 @@ export async function upCommand(opts: UpOptions): Promise<void> {
       softFail: true,
       noTeleop: opts.eyesNoTeleop === true,
       noBrowser: opts.eyesNoBrowser === true,
+      noSound: opts.eyesNoSound === true,
     });
   }
 }

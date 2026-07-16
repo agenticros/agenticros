@@ -52,13 +52,15 @@ Flags:
 - `--eyes` also start robot eyes on the local display (see [eyes.md](eyes.md))
 - `--eyes-no-teleop` with `--eyes`: gaze only (no WASD publish)
 - `--eyes-no-browser` with `--eyes`: serve UI without opening a kiosk browser
+- `--eyes-no-sound` with `--eyes`: mute R2D2 idle/excited chirps
 
-### `agenticros eyes [--no-browser] [--no-teleop] [--port <n>] [--topic <path>]`
+### `agenticros eyes [--no-browser] [--no-teleop] [--no-sound] [--port <n>] [--topic <path>]`
 
 Start fullscreen robot eyes on a tablet / face display. Subscribes to the
 configured `cmd_vel` topic for left/right gaze; optionally publishes WASD
-keyboard teleop. Runs over local DDS on the robot — not the OpenClaw remote
-teleop page. Full details: [eyes.md](eyes.md).
+keyboard teleop; plays R2D2-style chirps (mute with `--no-sound`). Runs over
+local DDS on the robot — not the OpenClaw remote teleop page. Full details:
+[eyes.md](eyes.md).
 
 ### `agenticros down [--keep-camera] [--stop-gateway]`
 

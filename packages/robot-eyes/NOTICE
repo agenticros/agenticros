@@ -1,0 +1,2 @@
+@agenticros/eyes includes a procedural R2D2-style synthesizer adapted from
+https://github.com/chrismatthieu/r2d2 (Apache License 2.0). See lib/synth.js.

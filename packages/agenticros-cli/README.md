@@ -71,7 +71,7 @@ Three ways, listed easiest first:
 | `agenticros up sim-amr --nav2` | Same + indoor map, AMCL, and Nav2 (`navigate_to_pose`). |
 | `agenticros up sim-arm` | Bring up the simulated 6-DOF arm (UR5e-shaped, per-joint position control). |
 | `agenticros up … --eyes` | Also start robot eyes on the local display after the stack comes up. |
-| `agenticros eyes` | Fullscreen robot eyes (cmd_vel gaze + optional WASD). See [docs/eyes.md](../../docs/eyes.md). |
+| `agenticros eyes` | Fullscreen robot eyes (cmd_vel gaze + optional WASD + R2D2 sounds). See [docs/eyes.md](../../docs/eyes.md). |
 | `agenticros down` | Stop everything we started (including eyes). |
 | `agenticros doctor` | Coloured health-check table; `--json` for CI. |
 | `agenticros mcp setup` | Register AgenticROS MCP for Codex, Hermes, and Claude (primary). |

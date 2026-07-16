@@ -4,6 +4,8 @@
  *
  * Subscribes to CMD_VEL_TOPIC for gaze (left/right turns). Optionally publishes
  * the same topic from invisible WASD keyboard teleop (disabled with --no-teleop).
+ * Plays procedural R2D2 chirps (idle) and excited bursts on active cmd_vel
+ * (disabled with --no-sound).
  *
  * Env (set by `agenticros eyes` from ~/.agenticros/config.json):
  *   CMD_VEL_TOPIC, MAX_LINEAR_VELOCITY, MAX_ANGULAR_VELOCITY, PORT, …
@@ -15,6 +17,12 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { spawn, execFileSync } from "child_process";
 import { WebSocketServer } from "ws";
+
+import {
+  exciteFromTwist,
+  startSoundLoop,
+  stopSoundLoop,
+} from "../lib/sounds.js";
 
 const require = createRequire(import.meta.url);
 let rclnodejs;
@@ -41,6 +49,9 @@ const NO_BROWSER = process.argv.includes("--no-browser");
 const NO_TELEOP =
   process.argv.includes("--no-teleop") ||
   process.env.AGENTICROS_EYES_NO_TELEOP === "1";
+const NO_SOUND =
+  process.argv.includes("--no-sound") ||
+  process.env.AGENTICROS_EYES_NO_SOUND === "1";
 
 const MAX_LINEAR = Number(process.env.MAX_LINEAR_VELOCITY || 1.0);
 const MAX_ANGULAR = Number(process.env.MAX_ANGULAR_VELOCITY || 1.5);
@@ -348,6 +359,9 @@ async function main() {
       gazeX: state.gazeX,
       driving: state.driving,
     });
+    if (!NO_SOUND) {
+      exciteFromTwist(msg, ANGULAR_DEADZONE);
+    }
   });
 
   setInterval(() => {
@@ -377,6 +391,11 @@ async function main() {
           `(base linear=${TELOP_LINEAR}, angular=${TELOP_ANGULAR})`,
       );
     }
+    if (NO_SOUND) {
+      console.log("R2D2 sounds disabled (--no-sound)");
+    } else {
+      startSoundLoop();
+    }
     if (!NO_BROWSER) {
       launchKiosk(url);
     } else {
@@ -389,6 +408,7 @@ async function main() {
   const shutdown = async () => {
     console.log("\nShutting down…");
     try {
+      await stopSoundLoop();
       publishStop();
       wss.close();
       server.close();

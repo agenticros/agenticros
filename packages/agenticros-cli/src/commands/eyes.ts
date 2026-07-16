@@ -29,6 +29,8 @@ import { err, info, ok, warn } from "../util/logger.js";
 export interface EyesOptions {
   noBrowser?: boolean;
   noTeleop?: boolean;
+  /** Mute R2D2 idle/excited chirps. */
+  noSound?: boolean;
   port?: string | number;
   topic?: string;
   /** When true, do not exit the process on launch failure (used by `up --eyes`). */
@@ -83,6 +85,7 @@ export async function eyesCommand(opts: EyesOptions = {}): Promise<void> {
   const nodeArgs = [entry];
   if (opts.noBrowser) nodeArgs.push("--no-browser");
   if (opts.noTeleop) nodeArgs.push("--no-teleop");
+  if (opts.noSound) nodeArgs.push("--no-sound");
 
   // Quote for bash -c
   const nodeCmd = `node ${nodeArgs.map((a) => JSON.stringify(a)).join(" ")}`;
@@ -99,6 +102,7 @@ export async function eyesCommand(opts: EyesOptions = {}): Promise<void> {
     MAX_ANGULAR_VELOCITY: String(safety.maxAngularVelocity),
   };
   if (opts.noTeleop) env["AGENTICROS_EYES_NO_TELEOP"] = "1";
+  if (opts.noSound) env["AGENTICROS_EYES_NO_SOUND"] = "1";
   if (!env["DISPLAY"]) env["DISPLAY"] = ":0";
 
   const logFd = openSync(logPath("eyes"), "a");
@@ -139,6 +143,7 @@ export async function eyesCommand(opts: EyesOptions = {}): Promise<void> {
   info(`  topic:  ${topic}`);
   info(`  URL:    http://127.0.0.1:${port}/`);
   info(`  teleop: ${opts.noTeleop ? "off (gaze only)" : "WASD enabled"}`);
+  info(`  sound:  ${opts.noSound ? "off" : "R2D2 chirps on"}`);
   info(`  logs:   ${logPath("eyes")}`);
   info("Stop with: agenticros down");
 }
