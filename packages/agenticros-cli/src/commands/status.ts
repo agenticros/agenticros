@@ -12,7 +12,7 @@ import { clearPid, isPidAlive, readPid, type ManagedProcess } from "../util/pidf
 import { colors, header, info } from "../util/logger.js";
 import { readState } from "../util/state.js";
 
-const COMPONENTS: ManagedProcess[] = ["camera", "sim", "mcp", "rosbridge"];
+const COMPONENTS: ManagedProcess[] = ["camera", "sim", "mcp", "rosbridge", "eyes"];
 
 export interface StatusOptions {
   json?: boolean;

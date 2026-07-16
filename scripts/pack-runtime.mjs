@@ -14,8 +14,8 @@
  * What ships:
  *   - scripts/                      shell helpers, install scripts, sim entrypoints
  *   - ros2_ws/src/agenticros_*      our ROS 2 packages (msgs + Python nodes)
- *   - packages/{core,ros-camera,agenticros,agenticros-claude-code,agenticros-gemini}
- *                                   TypeScript sources for the workspace, NO dist or node_modules
+ *   - packages/{core,ros-camera,agenticros,agenticros-claude-code,agenticros-gemini,robot-eyes}
+ *                                   TypeScript/JS sources for the workspace, NO dist or node_modules
  *   - packages/agenticros-claude-code/dist  (pre-built so `npx agenticros` works without colcon)
  *   - package.json / pnpm-workspace.yaml / tsconfig.base.json   monorepo manifests
  *   - patches/                      pnpm patchedDependencies (zenoh-ts, ...)
@@ -53,6 +53,7 @@ const INCLUDED_PACKAGES = [
   "agenticros",
   "agenticros-claude-code",
   "agenticros-gemini",
+  "robot-eyes",
 ];
 
 // NOTE: .npmrc is deliberately absent here. npm pack strips .npmrc from
@@ -67,7 +68,7 @@ const TOP_LEVEL_FILES = [
   "README.md",
 ];
 
-const DOCS_FILES = ["cli.md", "architecture.md", "robot-setup.md", "memory.md"];
+const DOCS_FILES = ["cli.md", "architecture.md", "robot-setup.md", "memory.md", "eyes.md"];
 
 const EXCLUDED_DIR_NAMES = new Set([
   "node_modules",

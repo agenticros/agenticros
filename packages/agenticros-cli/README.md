@@ -16,6 +16,7 @@ agenticros up real      # bring up the real-robot stack
 agenticros up sim-amr   # bring up a simulated 2-wheel AMR
 agenticros up sim-amr --nav2   # AMR + Nav2 (map + AMCL + navigation)
 agenticros up sim-arm   # bring up a simulated 6-DOF arm
+agenticros eyes         # on-robot face display (tablet / head unit)
 agenticros doctor       # health check
 agenticros down         # stop everything we started
 ```
@@ -69,7 +70,9 @@ Three ways, listed easiest first:
 | `agenticros up sim-amr` | Bring up the simulated 2-wheel AMR. |
 | `agenticros up sim-amr --nav2` | Same + indoor map, AMCL, and Nav2 (`navigate_to_pose`). |
 | `agenticros up sim-arm` | Bring up the simulated 6-DOF arm (UR5e-shaped, per-joint position control). |
-| `agenticros down` | Stop everything we started. |
+| `agenticros up … --eyes` | Also start robot eyes on the local display after the stack comes up. |
+| `agenticros eyes` | Fullscreen robot eyes (cmd_vel gaze + optional WASD). See [docs/eyes.md](../../docs/eyes.md). |
+| `agenticros down` | Stop everything we started (including eyes). |
 | `agenticros doctor` | Coloured health-check table; `--json` for CI. |
 | `agenticros mcp setup` | Register AgenticROS MCP for Codex, Hermes, and Claude (primary). |
 | `agenticros mcp doctor` | Validate all MCP client configs. |
@@ -80,7 +83,7 @@ Three ways, listed easiest first:
 | `agenticros claude setup` | Claude only — Desktop + project `.mcp.json`. |
 | `agenticros claude doctor` | Validate Claude MCP config paths and namespace policy. |
 | `agenticros status` | Snapshot of running components + last mode. |
-| `agenticros logs [target]` | Tail `camera` / `mcp` / `sim` / `rosbridge` / `gateway`. |
+| `agenticros logs [target]` | Tail `camera` / `mcp` / `sim` / `rosbridge` / `eyes` / `gateway`. |
 | `agenticros config [show\|set\|edit\|reset]` | Read or edit `~/.agenticros/config.json`. |
 | `agenticros create-skill <slug>` | Scaffold a new skill package in cwd. |
 | `agenticros publish` | Publish skill in cwd to skills.agenticros.com. |

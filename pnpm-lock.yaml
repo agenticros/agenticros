@@ -157,6 +157,16 @@ importers:
         specifier: ^5.7.0
         version: 5.9.3
 
+  packages/robot-eyes:
+    dependencies:
+      ws:
+        specifier: ^8.18.0
+        version: 8.19.0
+    optionalDependencies:
+      rclnodejs:
+        specifier: ^1.9.0
+        version: 1.9.0
+
   packages/ros-camera:
     dependencies:
       fzstd:
@@ -1687,6 +1697,11 @@ packages:
     engines: {node: '>= 16.13.0'}
     hasBin: true
 
+  rclnodejs@1.9.0:
+    resolution: {integrity: sha512-5nQ39WCnfzYoC1nppBaJR5bzfMHWrRRLGltsS6WqGb8KFJnguOCDMC9tZSxK4YU0oAtciG3/GZqDgZmfAxgUDQ==}
+    engines: {node: '>= 16.13.0'}
+    hasBin: true
+
   readable-stream@3.6.2:
     resolution: {integrity: sha512-9u/sniCrY3D5WdsERHzHE4G2YCXqoG5FTHUiCC4SIbr6XcLZBY05ya9EKjYek9O5xOAwjGq+1JdGBAS7Q9ScoA==}
     engines: {node: '>= 6'}
@@ -1991,7 +2006,7 @@ snapshots:
       zod: 3.25.76
     optionalDependencies:
       node-datachannel: 0.12.0
-      rclnodejs: 1.8.2
+      rclnodejs: 1.9.0
     transitivePeerDependencies:
       - bufferutil
       - jiti
@@ -3497,6 +3512,20 @@ snapshots:
     optional: true
 
   rclnodejs@1.8.2:
+    dependencies:
+      '@rclnodejs/ref-array-di': 1.2.2
+      '@rclnodejs/ref-struct-di': 1.1.1
+      bindings: 1.5.0
+      debug: 4.4.3
+      json-bigint: 1.0.0
+      node-addon-api: 8.6.0
+      rxjs: 7.8.2
+      walk: 2.3.15
+    transitivePeerDependencies:
+      - supports-color
+    optional: true
+
+  rclnodejs@1.9.0:
     dependencies:
       '@rclnodejs/ref-array-di': 1.2.2
       '@rclnodejs/ref-struct-di': 1.1.1

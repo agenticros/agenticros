@@ -14,6 +14,8 @@ Then open **`http://127.0.0.1:18790/plugins/agenticros/`** in your browser. Do n
 
 ---
 
+For an **on-robot face display** (animated eyes + optional WASD on a tablet), see [eyes.md](eyes.md) (`agenticros eyes`). That feature is separate from this remote teleop page.
+
 The AgenticROS plugin can serve a **remote teleop web page** (Phase 3) when the OpenClaw gateway exposes HTTP route registration. The page provides:
 
 - **Live camera** — stream from a ROS2 Image/CompressedImage topic (2D webcam or RealSense)

@@ -49,11 +49,21 @@ Flags:
 - `--nav2` sim-amr only: also launch Nav2 (`sim_amr_nav2.launch.py`)
 - `--no-camera` skip starting the RealSense camera (real target)
 - `--no-motors` skip starting the motor controller (real target)
+- `--eyes` also start robot eyes on the local display (see [eyes.md](eyes.md))
+- `--eyes-no-teleop` with `--eyes`: gaze only (no WASD publish)
+- `--eyes-no-browser` with `--eyes`: serve UI without opening a kiosk browser
 
-### `agenticros down [--keep-camera] [--keep-gateway]`
+### `agenticros eyes [--no-browser] [--no-teleop] [--port <n>] [--topic <path>]`
 
-SIGTERMs every process recorded in `/tmp/agenticros-*.pid` and stops the
-`openclaw-gateway.service` user unit (unless `--keep-gateway`). Also cleans
+Start fullscreen robot eyes on a tablet / face display. Subscribes to the
+configured `cmd_vel` topic for left/right gaze; optionally publishes WASD
+keyboard teleop. Runs over local DDS on the robot — not the OpenClaw remote
+teleop page. Full details: [eyes.md](eyes.md).
+
+### `agenticros down [--keep-camera] [--stop-gateway]`
+
+SIGTERMs every process recorded in `/tmp/agenticros-*.pid` (including eyes)
+and leaves the OpenClaw gateway running unless `--stop-gateway`. Also cleans
 up stray `gz sim`, `rviz2`, and `parameter_bridge` processes.
 
 ### `agenticros init [--force] [--install-dir <path>]`
@@ -163,12 +173,12 @@ Validate Claude MCP configuration (desktop + project `.mcp.json`). Exits non-zer
 
 ### `agenticros status [--json]`
 
-Shows running components (camera / sim / mcp / rosbridge / openclaw-gateway)
+Shows running components (camera / sim / mcp / rosbridge / eyes / openclaw-gateway)
 and the last-used mode/namespace from `~/.agenticros/cli-state.json`.
 
 ### `agenticros logs [target]`
 
-Tails one of: `camera`, `mcp`, `sim`, `rosbridge`, `gateway`. Without a
+Tails one of: `camera`, `mcp`, `sim`, `rosbridge`, `eyes`, `gateway`. Without a
 target, prints the list of available log targets. Defaults to follow mode
 (`-f`); pass `--no-follow` to disable.
 

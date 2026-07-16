@@ -14,6 +14,7 @@ import { select } from "@inquirer/prompts";
 
 import { runRealRobot } from "../runners/real-robot.js";
 import { runSimAmr, runSimArm } from "../runners/sim.js";
+import { eyesCommand } from "./eyes.js";
 import { err, info, ok, warn } from "../util/logger.js";
 import { ensureProfilesExist, readActiveMode, switchMode, type Mode } from "../util/profiles.js";
 import { writeState } from "../util/state.js";
@@ -27,6 +28,12 @@ export interface UpOptions {
   nav2?: boolean;
   camera?: boolean;
   motors?: boolean;
+  /** Start @agenticros/eyes after the stack comes up (real / sim). */
+  eyes?: boolean;
+  /** With --eyes: gaze-only, no WASD publish. */
+  eyesNoTeleop?: boolean;
+  /** With --eyes: do not open a kiosk browser. */
+  eyesNoBrowser?: boolean;
 }
 
 type UpTarget = "real" | "sim-amr" | "sim-arm";
@@ -65,6 +72,14 @@ export async function upCommand(opts: UpOptions): Promise<void> {
         headless: resolveHeadless(opts.headless),
       });
       break;
+  }
+
+  if (opts.eyes) {
+    await eyesCommand({
+      softFail: true,
+      noTeleop: opts.eyesNoTeleop === true,
+      noBrowser: opts.eyesNoBrowser === true,
+    });
   }
 }
 

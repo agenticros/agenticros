@@ -12,7 +12,8 @@ export type ManagedProcess =
   | "camera"
   | "sim"
   | "mcp"
-  | "rosbridge";
+  | "rosbridge"
+  | "eyes";
 
 function pidPath(name: ManagedProcess): string {
   return `${PID_DIR}/agenticros-${name}.pid`;

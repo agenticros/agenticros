@@ -18,6 +18,7 @@ import { doctorCommand } from "./commands/doctor.js";
 import { statusCommand } from "./commands/status.js";
 import { logsCommand } from "./commands/logs.js";
 import { configCommand } from "./commands/config.js";
+import { eyesCommand } from "./commands/eyes.js";
 import { skillsCommand } from "./commands/skills.js";
 import { createSkillCommand } from "./commands/create-skill.js";
 import { publishSkillCommand } from "./commands/publish-skill.js";
@@ -76,14 +77,46 @@ program
   .option("--nav2", "sim-amr only: also launch Nav2 (map + AMCL + navigation)", false)
   .option("--no-camera", "Skip starting the RealSense camera (real target only)")
   .option("--no-motors", "Skip starting the motor controller (real target only)")
+  .option("--eyes", "Also start robot eyes on the local display (tablets / face screens)", false)
+  .option("--eyes-no-teleop", "With --eyes: gaze only (do not publish WASD cmd_vel)", false)
+  .option("--eyes-no-browser", "With --eyes: serve UI but do not open a kiosk browser", false)
   .action(async (target: string | undefined, opts) => {
-    await upCommand({ target, ...opts });
+    await upCommand({
+      target,
+      ...opts,
+      eyesNoTeleop: opts.eyesNoTeleop === true,
+      eyesNoBrowser: opts.eyesNoBrowser === true,
+    });
+  });
+
+program
+  .command("eyes")
+  .description(
+    "Start fullscreen robot eyes on a local display (cmd_vel gaze + optional WASD teleop). See docs/eyes.md.",
+  )
+  // Commander maps `--no-browser` / `--no-teleop` to `browser: false` / `teleop: false`.
+  .option("--no-browser", "Serve the UI but do not open a kiosk browser")
+  .option("--no-teleop", "Gaze only — do not publish WASD cmd_vel")
+  .option("--port <n>", "HTTP / WebSocket port (default 8765)")
+  .option("--topic <path>", "Override cmd_vel topic (default from ~/.agenticros/config.json)")
+  .action(async (opts: {
+    browser?: boolean;
+    teleop?: boolean;
+    port?: string;
+    topic?: string;
+  }) => {
+    await eyesCommand({
+      noBrowser: opts.browser === false,
+      noTeleop: opts.teleop === false,
+      port: opts.port,
+      topic: opts.topic,
+    });
   });
 
 program
   .command("down")
   .description(
-    "Stop AgenticROS processes (sim, camera, mcp, rosbridge). Leaves the OpenClaw gateway running by default.",
+    "Stop AgenticROS processes (sim, camera, mcp, rosbridge, eyes). Leaves the OpenClaw gateway running by default.",
   )
   .option("--keep-camera", "Leave the RealSense camera running", false)
   .option("--stop-gateway", "Also stop the openclaw-gateway service (default: keep it running)", false)
@@ -127,7 +160,7 @@ program
 program
   .command("logs [target]")
   .description(
-    "Tail logs. target = camera | mcp | gateway | sim (default: print available logs).",
+    "Tail logs. target = camera | mcp | gateway | sim | eyes (default: print available logs).",
   )
   .option("-f, --follow", "Tail the log (tail -F). Default prints last N lines and exits.", false)
   .option("-n, --lines <n>", "Number of lines from the end to start at", "200")

@@ -35,6 +35,8 @@ packages/
   agenticros/              # @agenticros/agenticros — OpenClaw plugin
   agenticros-claude-code/  # @agenticros/claude-code — MCP server (stdio, used by Codex CLI + Claude Code / Desktop / Dispatch)
   agenticros-gemini/       # @agenticros/gemini — Gemini CLI
+  agenticros-cli/          # agenticros — orchestrator CLI
+  robot-eyes/              # @agenticros/eyes — on-robot face display + WASD (local DDS)
 ros2_ws/src/
   agenticros_msgs/         # Custom ROS2 messages & services
   agenticros_discovery/    # Capability discovery node (Python)
@@ -246,3 +248,4 @@ Clamps are enforced in `packages/agenticros-claude-code/src/safety.ts` and `pack
 | `docs/codex-setup.md` | OpenAI Codex CLI setup (`agenticros codex setup`) |
 | `docs/local-vlm.md` | Local Ollama VLM setup for OpenClaw / Hermes (no cloud API keys) |
 | `docs/teleop.md` | Teleop web app setup |
+| `docs/eyes.md` | On-robot eyes display (`agenticros eyes`) |

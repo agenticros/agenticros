@@ -525,6 +525,56 @@ export async function runDoctorChecks(): Promise<DoctorReport> {
     // lsusb missing - skip
   }
 
+  // Robot eyes (optional on-robot face display). Yellow when the package is
+  // present but there is no graphical display / browser for kiosk mode.
+  const eyesEntry = paths.repoRoot
+    ? join(paths.repoRoot, "packages", "robot-eyes", "src", "index.js")
+    : "";
+  if (eyesEntry && existsSync(eyesEntry)) {
+    const display = (process.env["DISPLAY"] ?? "").trim();
+    let browserFound = false;
+    for (const bin of ["firefox", "chromium-browser", "chromium", "google-chrome"]) {
+      try {
+        const { exitCode } = await execa("which", [bin], { reject: false });
+        if (exitCode === 0) {
+          browserFound = true;
+          break;
+        }
+      } catch {
+        // ignore
+      }
+    }
+    if (!display) {
+      checks.push({
+        id: "eyes-display",
+        label: "Robot eyes available but no $DISPLAY",
+        severity: "yellow",
+        hint: "Set DISPLAY (e.g. :0) on a tablet/head unit, or run `agenticros eyes --no-browser` and open the URL yourself.",
+      });
+    } else if (!browserFound) {
+      checks.push({
+        id: "eyes-display",
+        label: `Robot eyes available (DISPLAY=${display}, no kiosk browser)`,
+        severity: "yellow",
+        hint: "Install Firefox or Chromium for kiosk mode, or use `agenticros eyes --no-browser`.",
+      });
+    } else {
+      checks.push({
+        id: "eyes-display",
+        label: `Robot eyes ready (DISPLAY=${display})`,
+        severity: "green",
+        detail: "agenticros eyes",
+      });
+    }
+  } else if (paths.mode !== "bundle") {
+    checks.push({
+      id: "eyes-display",
+      label: "Robot eyes package missing",
+      severity: "yellow",
+      hint: "Expected packages/robot-eyes — re-run `agenticros init` or pull the latest monorepo.",
+    });
+  }
+
   const summary = checks.reduce(
     (acc, c) => {
       acc[c.severity] += 1;

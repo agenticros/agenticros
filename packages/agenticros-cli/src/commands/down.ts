@@ -2,9 +2,9 @@
  * `agenticros down` - stop AgenticROS components this CLI brought up.
  *
  * Kills processes recorded in /tmp/agenticros-*.pid (sim, camera, mcp,
- * rosbridge) plus stray gz / rviz / parameter_bridge.  The OpenClaw gateway
- * service is a persistent host service used by Claude Code / MCP - leave it
- * running unless the user explicitly passes --stop-gateway.
+ * rosbridge, eyes) plus stray gz / rviz / parameter_bridge.  The OpenClaw
+ * gateway service is a persistent host service used by Claude Code / MCP -
+ * leave it running unless the user explicitly passes --stop-gateway.
  */
 
 import { execa } from "execa";
@@ -18,7 +18,7 @@ export interface DownOptions {
   stopGateway?: boolean;
 }
 
-const STOPPABLE: ManagedProcess[] = ["sim", "mcp", "rosbridge", "camera"];
+const STOPPABLE: ManagedProcess[] = ["sim", "mcp", "rosbridge", "camera", "eyes"];
 
 export async function downCommand(opts: DownOptions): Promise<void> {
   header("AgenticROS - shutting down");

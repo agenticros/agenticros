@@ -24,6 +24,7 @@ import { doctorCommand, hasRedChecks } from "./commands/doctor.js";
 import { statusCommand } from "./commands/status.js";
 import { logsCommand } from "./commands/logs.js";
 import { configCommand } from "./commands/config.js";
+import { eyesCommand } from "./commands/eyes.js";
 import { createSkillCommand } from "./commands/create-skill.js";
 import { publishSkillCommand } from "./commands/publish-skill.js";
 import { skillsCommand } from "./commands/skills.js";
@@ -76,6 +77,7 @@ async function runMenuOnce(): Promise<boolean> {
   const baseChoices: MenuChoice[] = [
     { name: "Launch with real robot", value: "real" },
     { name: "Launch with simulation", value: "sim" },
+    { name: "Start robot eyes (local display)", value: "eyes" },
     { name: "First-time setup (workspace + OpenClaw plugin + API key)", value: "init" },
     { name: `Manage skills${skillsSuffix}`, value: "skills" },
     { name: "Stop everything", value: "down" },
@@ -113,6 +115,9 @@ async function runMenuOnce(): Promise<boolean> {
       // launched === true ⇒ upCommand has taken over; otherwise back to main.
       return launched;
     }
+    case "eyes":
+      await eyesCommand({});
+      return false;
     case "init":
       await initCommand({});
       return false;

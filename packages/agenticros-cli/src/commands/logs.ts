@@ -5,6 +5,7 @@
  *   camera   /tmp/agenticros-camera.log  (started by start_demo.sh)
  *   mcp      /tmp/agenticros-mcp.log     (the MCP server)
  *   sim      /tmp/agenticros-sim.log     (the sim launcher)
+ *   eyes     /tmp/agenticros-eyes.log    (robot face display)
  *   gateway  journalctl --user-unit openclaw-gateway.service
  *
  * Without a target, prints the list of available log targets.
@@ -17,9 +18,9 @@ import { execa } from "execa";
 import { logPath, type ManagedProcess } from "../util/pidfile.js";
 import { colors, header, info, warn } from "../util/logger.js";
 
-type LogTarget = "camera" | "mcp" | "sim" | "rosbridge" | "gateway";
+type LogTarget = "camera" | "mcp" | "sim" | "rosbridge" | "eyes" | "gateway";
 
-const TARGETS: LogTarget[] = ["camera", "mcp", "sim", "rosbridge", "gateway"];
+const TARGETS: LogTarget[] = ["camera", "mcp", "sim", "rosbridge", "eyes", "gateway"];
 
 export interface LogsOptions {
   target?: string;

@@ -136,8 +136,9 @@ Full architecture + design trade-offs: **[docs/strategy-ai-agents-plus-ros.md](d
 - `**packages/agenticros**` — OpenClaw plugin: tools, commands, config page, teleop routes.
 - `**packages/agenticros-claude-code**` — MCP server for Claude Code + Claude desktop / Dispatch (tools only; no config UI).
 - `**packages/agenticros-gemini**` — Gemini CLI (function calling; no MCP).
+- `**packages/robot-eyes**` — On-robot face display (`agenticros eyes`): animated eyes follow `cmd_vel` turns; optional WASD. See [docs/eyes.md](docs/eyes.md).
 - `**ros2_ws/**` — ROS2 workspace: `agenticros_msgs`, `agenticros_bringup` (Gazebo + RViz + rosbridge launches), `agenticros_discovery`, `agenticros_agent`, `agenticros_follow_me`.
-- `**docs/**` — Architecture, skills, robot setup, Zenoh, teleop, **[local VLM / Ollama](docs/local-vlm.md)**.
+- `**docs/**` — Architecture, skills, robot setup, Zenoh, teleop, eyes, **[local VLM / Ollama](docs/local-vlm.md)**.
 - `**scripts/**` — Workspace setup, gateway plugin config, run demos.
 - `**docker/**` — Docker Compose and Dockerfiles for ROS2 + plugin images.
 - `**examples/**` — Example projects.
@@ -194,10 +195,11 @@ agenticros codex doctor         # validate ~/.codex/config.toml
 agenticros hermes setup         # register AgenticROS MCP for Hermes Agent
 agenticros hermes doctor        # validate ~/.hermes/config.yaml
 agenticros up real              # real robot stack
+agenticros up real --eyes       # real robot + on-display robot eyes
 agenticros up sim-amr           # simulated AMR (Gazebo + RViz, headless on Jetson)
 agenticros up sim-amr --nav2    # AMR + Nav2 for navigate_to missions
 agenticros up sim-arm           # simulated 6-DOF arm (per-joint; MoveIt WIP)
-agenticros up sim-arm           # simulated 6-DOF arm
+agenticros eyes                 # fullscreen robot eyes on a tablet / head unit
 agenticros mode <real|sim>      # swap the active config profile (namespace, transport)
 agenticros robots               # list / add / remove robots in the fleet (kind, sensors, capabilities)
 agenticros skills               # list / add / remove AgenticROS skills (see below)
