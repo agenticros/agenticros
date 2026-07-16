@@ -24,7 +24,7 @@ import { execa } from "execa";
 
 import { runDoctorChecks } from "./doctor.js";
 import { claudeOnPath, codexOnPath, hermesOnPath, mcpSetupCommand } from "../util/mcp-setup.js";
-import { isWindows } from "../util/env.js";
+import { detectRosDistro, isWindows } from "../util/env.js";
 import { getCliPaths, isAgenticrosMonorepo, resetPathsCache } from "../util/paths.js";
 import { header, info, ok, warn, err, dim, withSpinner } from "../util/logger.js";
 import {
@@ -135,22 +135,31 @@ export async function initCommand(opts: InitOptions): Promise<void> {
   // colconBuilt() saw install/setup.bash from 0.1.9 and skipped the
   // rebuild).
   //
-  // The colcon step is Linux-only: it sources /opt/ros/<distro>/setup.bash
-  // which doesn't exist on macOS or Windows. macOS users typically run a
-  // robotics stack remotely; Windows users need WSL 2. In both cases we
-  // skip the step with a friendly note instead of failing the whole wizard.
+  // The colcon step needs a local ROS 2 install under /opt/ros/<distro>.
+  // Skip with a friendly note when:
+  //   - native Windows (use WSL 2 for a full robot-side install)
+  //   - no ROS distro detected (typical macOS laptop / headless CI without ROS)
+  // Agents can still talk to a remote robot via Zenoh/rosbridge/MCP without
+  // building ros2_ws on this machine.
   const ros2WsRoot = join(repoRoot, "ros2_ws");
+  const ros = detectRosDistro();
   if (isWindows) {
     warn(
       "Skipping ROS 2 colcon build: not supported on native Windows. " +
         "Use WSL 2 (Ubuntu) for a full robot-side install, or keep " +
         "running this CLI on Windows for config / sim-client tasks only.",
     );
+  } else if (!ros.setupBash) {
+    warn(
+      "Skipping ROS 2 colcon build: no ROS 2 install under /opt/ros/. " +
+        "Install Humble or Jazzy on this machine if you need local sim / " +
+        "colcon, or continue — MCP/OpenClaw can still drive a remote robot.",
+    );
   } else if (opts.force || !colconBuiltForCurrentCli(ros2WsRoot)) {
     await runStep("Building ROS 2 workspace (colcon)", async () => {
       await runShell(
         `mkdir -p "${ros2WsRoot}" && cd "${ros2WsRoot}" && \
-         . /opt/ros/$(ls /opt/ros 2>/dev/null | head -1)/setup.bash && \
+         . "${ros.setupBash}" && \
          colcon build --symlink-install`,
       );
       writeRos2WsBuildStamp(ros2WsRoot);
