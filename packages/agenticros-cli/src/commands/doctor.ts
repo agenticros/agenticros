@@ -509,16 +509,48 @@ export async function runDoctorChecks(): Promise<DoctorReport> {
 
   // RealSense (informational).
   try {
-    const { stdout, exitCode } = await execa("lsusb", { reject: false });
-    if (exitCode === 0) {
-      const hit = /Intel.*RealSense|8086:0b/i.test(stdout);
+    const { stdout: lsusbOut, exitCode: lsusbRc } = await execa("lsusb", { reject: false });
+    const usbHit =
+      lsusbRc === 0 && /Intel.*RealSense|8086:0b/i.test(lsusbOut);
+    let recoveryMode = false;
+    let enumerateDetail: string | undefined;
+    try {
+      const { stdout: rsOut, exitCode: rsRc } = await execa("rs-enumerate-devices", {
+        reject: false,
+      });
+      if (rsRc === 0) {
+        recoveryMode = /recovery/i.test(rsOut);
+        const serial = rsOut.match(/Serial Number\s*:\s*(\S+)/i)?.[1];
+        const name = rsOut.match(/Name\s*:\s*(.+)/i)?.[1]?.trim();
+        if (name) enumerateDetail = name;
+        if (serial && serial !== "n/a") enumerateDetail = `${enumerateDetail ?? "RealSense"} (${serial})`;
+      }
+    } catch {
+      // rs-enumerate-devices missing - lsusb-only check below
+    }
+
+    if (recoveryMode) {
       checks.push({
         id: "realsense",
-        label: hit ? "Intel RealSense detected" : "No Intel RealSense detected",
-        severity: hit ? "green" : "yellow",
-        hint: hit
-          ? undefined
-          : "Only required for `agenticros up real` with the default camera setup.",
+        label: "Intel RealSense in firmware RECOVERY mode",
+        severity: "red",
+        detail: enumerateDetail,
+        hint:
+          "Camera topics will have no publishers until firmware is recovered. " +
+          "Run: agenticros down && rs-fw-update -r && rs-enumerate-devices -s",
+      });
+    } else if (usbHit || enumerateDetail) {
+      checks.push({
+        id: "realsense",
+        label: enumerateDetail ?? "Intel RealSense detected",
+        severity: "green",
+      });
+    } else if (lsusbRc === 0) {
+      checks.push({
+        id: "realsense",
+        label: "No Intel RealSense detected",
+        severity: "yellow",
+        hint: "Only required for `agenticros up real` with the default camera setup.",
       });
     }
   } catch {

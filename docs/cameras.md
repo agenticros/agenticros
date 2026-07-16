@@ -30,6 +30,26 @@ Default namespace/name in realsense-ros is `camera`/`camera`; if you launch with
 
 Discovery: use **ros2_list_topics** to list available topics, then choose the correct topic and message type for the snapshot.
 
+### RealSense stuck in recovery mode
+
+If `realsense2_camera_node` is running but topics have **no publishers** (e.g. `ros2 topic hz /camera/camera/color/image_raw` prints nothing), check firmware state:
+
+```bash
+rs-enumerate-devices
+```
+
+When the camera is in **D4XX Recovery** mode, the ROS node retries forever and logs `Serial Number not supported by the device!` to `/tmp/agenticros-camera.log`. `agenticros up real` / `start_demo.sh` now detect this and skip the launch with recovery steps.
+
+Recover firmware (stop the camera node first):
+
+```bash
+agenticros down
+rs-fw-update -r
+rs-enumerate-devices -s    # should show your D4xx model + real serial
+```
+
+Then re-launch the real-robot demo. If recovery fails, unplug USB for 10 seconds and use a USB 3.0 data cable.
+
 ### Zenoh + robot namespace
 
 When using Zenoh with **robot.namespace** set (e.g. for cmd_vel), camera topics are usually **not** under that namespace—they stay under `/camera/...`. The plugin now includes camera topics in discovery and defaults **ros2_camera_snapshot** to `/camera/camera/color/image_raw/compressed` (RealSense). To override, set **robot.cameraTopic** in the plugin config to your camera topic (e.g. `/camera/camera/color/image_raw/compressed`).
