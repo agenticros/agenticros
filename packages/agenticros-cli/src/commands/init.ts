@@ -29,6 +29,7 @@ import { getCliPaths, isAgenticrosMonorepo, resetPathsCache } from "../util/path
 import { header, info, ok, warn, err, dim, withSpinner } from "../util/logger.js";
 import {
   ensureToolsAlsoAllow,
+  isAgenticrosOpenclawPluginInstalled,
   openclawConfigExists,
   readAgenticrosContractTools,
 } from "../util/openclaw-config.js";
@@ -178,7 +179,11 @@ export async function initCommand(opts: InitOptions): Promise<void> {
       "Skipping OpenClaw plugin install: setup_gateway_plugin.sh requires " +
         "bash + OpenClaw CLI. Run it from WSL 2 or a Linux/macOS host.",
     );
-  } else if (opts.force || !openclawPluginInstalled()) {
+  } else if (opts.force || !isAgenticrosOpenclawPluginInstalled()) {
+    // OpenClaw onboard creates ~/.openclaw/openclaw.json before AgenticROS is
+    // linked. Only skip when the flattened deploy dir is registered — otherwise
+    // first-time users who installed OpenClaw first silently skip this step and
+    // hit /plugins/agenticros 404s / "plugin not properly installed" later.
     const wantPlugin = await confirm({
       message: "Install the OpenClaw plugin now? (recommended)",
       default: true,
@@ -194,7 +199,7 @@ export async function initCommand(opts: InitOptions): Promise<void> {
       }
     }
   } else {
-    ok("OpenClaw plugin already installed (skip).");
+    ok("OpenClaw plugin already installed via ~/.agenticros/plugin-deploy (skip).");
   }
 
   // Step: keep `tools.alsoAllow` in sync with the plugin manifest.
@@ -342,11 +347,6 @@ function colconBuiltForCurrentCli(ws: string): boolean {
     // logic and force a fresh build so we end up in a known-good state.
     return false;
   }
-}
-
-function openclawPluginInstalled(): boolean {
-  const home = process.env["HOME"] ?? "";
-  return existsSync(join(home, ".openclaw", "openclaw.json"));
 }
 
 /**

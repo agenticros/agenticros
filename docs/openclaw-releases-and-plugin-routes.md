@@ -169,7 +169,11 @@ Run `openclaw dashboard` and open the URL it prints (it includes the token in th
 
 ### 6. Verify plugin path in OpenClaw config
 
-The gateway must load the AgenticROS plugin. In `~/.openclaw/openclaw.json`, under `plugins.entries.agenticros`, ensure the plugin **path** points at this repo’s `packages/agenticros` (absolute path or correct relative path). If the plugin never loads, no routes are registered.
+The gateway must load the AgenticROS plugin. On **OpenClaw 2026.6+**, the linked path must be the flattened deploy tree **`~/.agenticros/plugin-deploy`** (created by `scripts/setup_gateway_plugin.sh` / `agenticros init`), not the workspace `packages/agenticros` tree — pnpm workspace symlinks fail the install-time code safety scan.
+
+In `~/.openclaw/openclaw.json`, check `plugins.installs.agenticros.sourcePath` (or `plugins.entries.agenticros`) points at that deploy dir. If the plugin never loads, no routes are registered. `agenticros doctor` reports a red `openclaw-plugin-deploy` check when this is wrong.
+
+**Landing URL:** use `http://127.0.0.1:18789/plugins/agenticros/` (trailing slash) or `/plugins/agenticros` — both are registered. If you still get 404, the plugin is not loaded (path/deploy issue above), not a slash typo.
 
 ### 7. Use OpenClaw 2026.2.26 (recommended when 2026.3.2 rejects routes)
 

@@ -20,6 +20,8 @@ import { colors, header, ok, warn, err, info } from "../util/logger.js";
 import { activeConfigPath, profilesDir, readActiveMode } from "../util/profiles.js";
 import {
   ensureToolsAlsoAllow,
+  getAgenticrosOpenclawPluginInstallStatus,
+  pluginDeployDir,
   readAgenticrosContractTools,
   readOpenclawConfig,
 } from "../util/openclaw-config.js";
@@ -308,6 +310,36 @@ export async function runDoctorChecks(): Promise<DoctorReport> {
     severity: existsSync(ocConfig) ? "green" : "red",
     hint: existsSync(ocConfig) ? undefined : "Run `agenticros init` to install the OpenClaw plugin.",
   });
+
+  // Deployed + linked plugin (OpenClaw 2026.6+ requires ~/.agenticros/plugin-deploy).
+  // Having openclaw.json alone is not enough — that file is created by OpenClaw
+  // onboard before AgenticROS is installed.
+  const pluginInstall = getAgenticrosOpenclawPluginInstallStatus();
+  if (pluginInstall.ok) {
+    checks.push({
+      id: "openclaw-plugin-deploy",
+      label: "AgenticROS OpenClaw plugin linked via plugin-deploy",
+      severity: "green",
+      detail: pluginInstall.sourcePath ?? pluginDeployDir(),
+    });
+  } else {
+    const hints: Record<typeof pluginInstall.reason, string> = {
+      "no-openclaw-config": "Run `agenticros init` (or install OpenClaw, then re-run init).",
+      "no-deploy":
+        "Run `agenticros init` or `bash scripts/setup_gateway_plugin.sh` to build ~/.agenticros/plugin-deploy.",
+      "not-registered":
+        "OpenClaw config exists but AgenticROS is not registered. Run `bash scripts/setup_gateway_plugin.sh`.",
+      "wrong-path":
+        "Plugin path must be ~/.agenticros/plugin-deploy (not packages/agenticros). Re-run `bash scripts/setup_gateway_plugin.sh`.",
+    };
+    checks.push({
+      id: "openclaw-plugin-deploy",
+      label: "AgenticROS OpenClaw plugin not properly installed",
+      severity: "red",
+      detail: pluginInstall.detail ?? pluginInstall.reason,
+      hint: hints[pluginInstall.reason],
+    });
+  }
 
   // tools.alsoAllow vs plugin contracts.tools. OpenClaw 2026.6+ tool profiles
   // ("coding", "standard", …) are strict allowlists applied BEFORE plugin tools

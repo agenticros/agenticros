@@ -31,6 +31,130 @@ export function openclawConfigExists(): boolean {
   return existsSync(openclawConfigPath());
 }
 
+/** Flattened plugin tree OpenClaw 2026.6+ accepts (`pnpm deploy --prod`). */
+export function pluginDeployDir(): string {
+  return join(homedir(), ".agenticros", "plugin-deploy");
+}
+
+/** True when `setup_gateway_plugin.sh` has produced a usable deploy tree. */
+export function pluginDeployManifestExists(): boolean {
+  return existsSync(join(pluginDeployDir(), "openclaw.plugin.json"));
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return undefined;
+}
+
+function normalizePath(p: string): string {
+  return p.replace(/\/+$/, "");
+}
+
+/** True when `path` is the deploy dir or a file inside it. */
+export function pathIsPluginDeploy(path: string, deployDir = pluginDeployDir()): boolean {
+  const resolved = normalizePath(path);
+  const deploy = normalizePath(deployDir);
+  return resolved === deploy || resolved.startsWith(`${deploy}/`);
+}
+
+/**
+ * Paths OpenClaw 2026.6+ rejects for linked installs (workspace source trees
+ * with pnpm symlinks escaping the plugin root).
+ */
+export function pathLooksLikeWorkspacePluginSource(path: string): boolean {
+  const n = normalizePath(path);
+  return (
+    n.includes("/packages/agenticros") &&
+    !n.includes("/plugin-deploy") &&
+    !n.endsWith("/plugin-deploy")
+  );
+}
+
+export type AgenticrosPluginInstallStatus =
+  | { ok: true; sourcePath?: string }
+  | {
+      ok: false;
+      reason:
+        | "no-openclaw-config"
+        | "no-deploy"
+        | "not-registered"
+        | "wrong-path";
+      sourcePath?: string;
+      detail?: string;
+    };
+
+/**
+ * Whether AgenticROS is registered with OpenClaw via the flattened deploy dir.
+ *
+ * Merely having `~/.openclaw/openclaw.json` (from OpenClaw onboard) is not
+ * enough — that was wrongly treated as "plugin already installed" and skipped
+ * `setup_gateway_plugin.sh` on machines that installed OpenClaw first.
+ */
+export function getAgenticrosOpenclawPluginInstallStatus(
+  opts: { cfg?: Record<string, unknown> | null; deployDir?: string } = {},
+): AgenticrosPluginInstallStatus {
+  const deployDir = opts.deployDir ?? pluginDeployDir();
+  // Honor explicit `cfg: null` / `cfg: undefined` when the key is present so
+  // tests (and callers that already loaded config) don't re-read disk.
+  const cfg = "cfg" in opts ? opts.cfg ?? undefined : readOpenclawConfig();
+  if (!cfg) {
+    return { ok: false, reason: "no-openclaw-config" };
+  }
+  if (!existsSync(join(deployDir, "openclaw.plugin.json"))) {
+    return { ok: false, reason: "no-deploy" };
+  }
+
+  const plugins = asRecord(cfg["plugins"]);
+  if (!plugins) {
+    return { ok: false, reason: "not-registered" };
+  }
+
+  const installs = asRecord(plugins["installs"]);
+  const installEntry = installs ? asRecord(installs["agenticros"]) : undefined;
+  const entries = asRecord(plugins["entries"]);
+  const entry = entries ? asRecord(entries["agenticros"]) : undefined;
+
+  const sourcePathCandidates = [
+    installEntry?.["sourcePath"],
+    installEntry?.["source"],
+    installEntry?.["path"],
+    entry?.["path"],
+    entry?.["dir"],
+  ].filter((v): v is string => typeof v === "string" && v.trim().length > 0);
+
+  if (sourcePathCandidates.length > 0) {
+    const sourcePath = sourcePathCandidates[0]!;
+    if (pathLooksLikeWorkspacePluginSource(sourcePath) || !pathIsPluginDeploy(sourcePath, deployDir)) {
+      return {
+        ok: false,
+        reason: "wrong-path",
+        sourcePath,
+        detail: `OpenClaw points at ${sourcePath}; expected ${deployDir}`,
+      };
+    }
+    if (entry && entry["enabled"] === false) {
+      return { ok: false, reason: "not-registered", sourcePath };
+    }
+    return { ok: true, sourcePath };
+  }
+
+  // Older layouts: entry enabled (or present) + deploy dir on disk, no path field.
+  if (entry && entry["enabled"] !== false) {
+    return { ok: true };
+  }
+
+  return { ok: false, reason: "not-registered" };
+}
+
+/** Convenience predicate for init skip / menu logic. */
+export function isAgenticrosOpenclawPluginInstalled(
+  opts?: { cfg?: Record<string, unknown>; deployDir?: string },
+): boolean {
+  return getAgenticrosOpenclawPluginInstallStatus(opts).ok;
+}
+
 /**
  * Read the OpenClaw config or return `undefined` if it doesn't exist / is
  * not valid JSON. We never throw — callers can decide how loudly to fail.

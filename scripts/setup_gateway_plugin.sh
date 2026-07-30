@@ -170,30 +170,79 @@ echo ""
 
 # 4. Register with OpenClaw. We background the install because the CLI also
 #    boots the plugin lifecycle to validate it (which sits in a reconnect
-#    loop forever if ROS isn't reachable). We wait for the "Linked plugin
-#    path" log line, then kill the supervisor.
+#    loop forever if ROS isn't reachable). We wait for a success log line,
+#    then kill the supervisor. OpenClaw 2026.3–2026.7 wording varies slightly.
 echo "[4/5] Registering plugin with OpenClaw..."
 LOG="$(mktemp -t agenticros-install.XXXX.log)"
+# Match common success strings across OpenClaw releases (case-insensitive).
+SUCCESS_RE='Linked plugin path|Successfully linked|Plugin linked|linked plugin|already (installed|linked)|Installed plugin|plugin install(ed|ation) (complete|succeeded)'
+FAIL_RE='installation blocked|Plugin .* installation blocked|Invalid path:|must stay within extensions|code safety scan|symlink.*outside'
 ( openclaw plugins install -l "$DEPLOY_DIR" >"$LOG" 2>&1 ) &
 INSTALL_PID=$!
-for _ in $(seq 1 60); do
-  if grep -q "Linked plugin path" "$LOG" 2>/dev/null; then break; fi
+# ARM / Jetson deploys are slower; allow up to 90s before we stop waiting for logs.
+INSTALL_WAIT_SECS="${AGENTICROS_PLUGIN_INSTALL_WAIT_SECS:-90}"
+SAW_SUCCESS=false
+SAW_FAIL=false
+for _ in $(seq 1 "$INSTALL_WAIT_SECS"); do
+  if grep -Eiq "$SUCCESS_RE" "$LOG" 2>/dev/null; then SAW_SUCCESS=true; break; fi
+  if grep -Eiq "$FAIL_RE" "$LOG" 2>/dev/null; then SAW_FAIL=true; break; fi
   if ! kill -0 "$INSTALL_PID" 2>/dev/null; then break; fi
   sleep 1
 done
-# If still running, the install succeeded and we just need to stop the watchdog.
+# If still running after success (or timeout), stop the ROS reconnect watchdog.
 if kill -0 "$INSTALL_PID" 2>/dev/null; then
   kill -TERM "$INSTALL_PID" 2>/dev/null || true
   sleep 1
   kill -KILL "$INSTALL_PID" 2>/dev/null || true
 fi
-if grep -q "installation blocked\|Plugin .* installation blocked" "$LOG"; then
-  echo "Plugin install FAILED. Last log lines:"
-  tail -20 "$LOG"
+# Re-scan after the process exits — late lines may have been buffered.
+if grep -Eiq "$FAIL_RE" "$LOG" 2>/dev/null; then SAW_FAIL=true; fi
+if grep -Eiq "$SUCCESS_RE" "$LOG" 2>/dev/null; then SAW_SUCCESS=true; fi
+
+plugin_config_points_at_deploy() {
+  local oc_json="${OPENCLAW_CONFIG:-$HOME/.openclaw/openclaw.json}"
+  [[ -f "$oc_json" ]] || return 1
+  if command -v jq &>/dev/null; then
+    local p
+    p=$(jq -r '
+      .plugins.installs.agenticros.sourcePath
+      // .plugins.installs.agenticros.source
+      // .plugins.installs.agenticros.path
+      // .plugins.entries.agenticros.path
+      // empty
+    ' "$oc_json" 2>/dev/null || true)
+    [[ -n "$p" && "$p" == "$DEPLOY_DIR"* ]] && return 0
+    # Entry enabled + no path field (older layouts) — accept if deploy exists.
+    local enabled
+    enabled=$(jq -r '.plugins.entries.agenticros.enabled // empty' "$oc_json" 2>/dev/null || true)
+    [[ "$enabled" == "true" && -f "$DEPLOY_DIR/openclaw.plugin.json" && -z "$p" ]] && return 0
+    return 1
+  fi
+  # Fallback without jq: require deploy dir + "agenticros" mentioned near install path.
+  grep -q 'plugin-deploy' "$oc_json" 2>/dev/null && grep -q 'agenticros' "$oc_json" 2>/dev/null
+}
+
+if [[ "$SAW_FAIL" == true ]]; then
+  echo "Plugin install FAILED (OpenClaw rejected the path or safety scan). Last log lines:"
+  tail -40 "$LOG"
+  rm -f "$LOG"
+  exit 1
+fi
+if [[ "$SAW_SUCCESS" != true ]] && ! plugin_config_points_at_deploy; then
+  echo "Plugin install FAILED: did not see a link/install success message and"
+  echo "OpenClaw config does not point at $DEPLOY_DIR."
+  echo "Last log lines:"
+  tail -40 "$LOG"
+  echo ""
+  echo "Tip: on OpenClaw 2026.6+, the plugin must be linked from the flattened"
+  echo "deploy dir (this script's -l target), not packages/agenticros."
   rm -f "$LOG"
   exit 1
 fi
 echo "  Plugin registered (log: $LOG)."
+if [[ "$SAW_SUCCESS" != true ]]; then
+  echo "  (Success inferred from OpenClaw config pointing at $DEPLOY_DIR.)"
+fi
 echo ""
 
 # 5. Optionally patch plugin config block in ~/.openclaw/openclaw.json.
@@ -348,7 +397,10 @@ echo ""
 echo "Gateway plugin setup complete."
 echo ""
 echo "Verify with:  openclaw plugins list | grep -i agenticros"
+echo "              agenticros doctor   # red openclaw-plugin-deploy = path/deploy issue"
 echo "Logs:         tail -f /tmp/openclaw/openclaw-$(date +%Y-%m-%d).log"
+echo ""
+echo "Plugin UI:    http://127.0.0.1:18789/plugins/agenticros/  (trailing slash optional)"
 echo ""
 echo "Next time the plugin source changes, re-run this script (with --skip-build"
 echo "if you've already run pnpm build) to refresh the deployment in $DEPLOY_DIR."

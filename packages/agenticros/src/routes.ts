@@ -137,7 +137,11 @@ export function registerRoutes(api: OpenClawPluginApi, config: AgenticROSConfig)
   const route = (opts: { path: string; method?: string; handler: HttpRouteHandler }) =>
     register({ ...opts, requireAuth: false, auth: "plugin" });
   for (const base of ["/agenticros", "/api/agenticros", "/plugins/agenticros"]) {
-    route({ path: `${base}/`, method: "GET", handler: makeLandingHandler(base) });
+    // Register with and without trailing slash — browsers and bookmarks often
+    // hit `/plugins/agenticros` (no slash), which otherwise 404s while tools work.
+    const landing = makeLandingHandler(base);
+    route({ path: `${base}/`, method: "GET", handler: landing });
+    route({ path: base, method: "GET", handler: landing });
     route({ path: `${base}/config`, method: "GET", handler: configPageHandler });
     route({ path: `${base}/config.js`, method: "GET", handler: configScriptHandler });
     route({ path: `${base}/config.json`, method: "GET", handler: configJsonHandler });
