@@ -19,6 +19,7 @@ import { statusCommand } from "./commands/status.js";
 import { logsCommand } from "./commands/logs.js";
 import { configCommand } from "./commands/config.js";
 import { eyesCommand } from "./commands/eyes.js";
+import { webCommand } from "./commands/web.js";
 import { skillsCommand } from "./commands/skills.js";
 import { createSkillCommand } from "./commands/create-skill.js";
 import { publishSkillCommand } from "./commands/publish-skill.js";
@@ -116,6 +117,16 @@ program
       port: opts.port,
       topic: opts.topic,
     });
+  });
+
+program
+  .command("web")
+  .description(
+    "Open the AgenticROS config/teleop page (OpenClaw plugin web dashboard) in a browser.",
+  )
+  .option("--no-open", "Print the URL(s) without launching a browser")
+  .action(async (opts: { open?: boolean }) => {
+    await webCommand({ open: opts.open });
   });
 
 program

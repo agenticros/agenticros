@@ -62,6 +62,16 @@ keyboard teleop; plays R2D2-style chirps (mute with `--no-sound`). Runs over
 local DDS on the robot — not the OpenClaw remote teleop page. Full details:
 [eyes.md](eyes.md).
 
+### `agenticros web [--no-open]`
+
+Prints the AgenticROS config/teleop page URL served by the OpenClaw plugin's
+web dashboard (`/plugins/agenticros/`) and opens it in a browser (best-effort,
+cross-platform `xdg-open` / `open` / `start`; `--no-open` just prints the
+URL(s)). Reads `gateway.port`/`gateway.bind` from `~/.openclaw/openclaw.json`
+to also print a LAN-reachable URL when the gateway is bound to `lan`. If the
+page 404s/401s with gateway auth enabled, see
+[openclaw-releases-and-plugin-routes.md](openclaw-releases-and-plugin-routes.md).
+
 ### `agenticros down [--keep-camera] [--stop-gateway]`
 
 SIGTERMs every process recorded in `/tmp/agenticros-*.pid` (including eyes)

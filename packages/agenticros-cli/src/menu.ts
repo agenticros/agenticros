@@ -25,6 +25,7 @@ import { statusCommand } from "./commands/status.js";
 import { logsCommand } from "./commands/logs.js";
 import { configCommand } from "./commands/config.js";
 import { eyesCommand } from "./commands/eyes.js";
+import { webCommand } from "./commands/web.js";
 import { createSkillCommand } from "./commands/create-skill.js";
 import { publishSkillCommand } from "./commands/publish-skill.js";
 import { skillsCommand } from "./commands/skills.js";
@@ -83,6 +84,7 @@ async function runMenuOnce(): Promise<boolean> {
     { name: "Stop everything", value: "down" },
     { name: "Doctor (health check)", value: "doctor" },
     { name: "Configure (API keys, namespace, transport)", value: "config" },
+    { name: "Open web dashboard (config + teleop)", value: "web" },
     { name: "Tail logs", value: "logs" },
     { name: "Show status", value: "status" },
     { name: "Quit", value: "quit" },
@@ -129,6 +131,9 @@ async function runMenuOnce(): Promise<boolean> {
       return false;
     case "config":
       await configCommand({ action: "show" });
+      return false;
+    case "web":
+      await webCommand({});
       return false;
     case "skills":
       await skillsSubmenu();
