@@ -37,6 +37,8 @@
 #                       silently disappear from the chat agent's tool list).
 #   --no-systemd        Skip systemd service tweaks
 #   --no-restart        Don't restart the gateway at the end
+#   --skip-vision-deps  Skip installing pyrealsense2/mediapipe for
+#                       agenticros_follow_me (see below)
 #   -h, --help          Show this help
 
 set -e
@@ -52,6 +54,7 @@ SKIP_BUILD=false
 SKIP_REFRESH_SKILLS=false
 NO_SYSTEMD=false
 NO_RESTART=false
+SKIP_VISION_DEPS=false
 
 source "$REPO_ROOT/scripts/lib/agenticros-banner.sh" 2>/dev/null || true
 
@@ -68,6 +71,7 @@ while [[ $# -gt 0 ]]; do
     --skip-refresh-skills) SKIP_REFRESH_SKILLS=true; shift ;;
     --no-systemd)       NO_SYSTEMD=true; shift ;;
     --no-restart)       NO_RESTART=true; shift ;;
+    --skip-vision-deps) SKIP_VISION_DEPS=true; shift ;;
     -h|--help)          sed -n '2,45p' "$0"; exit 0 ;;
     *) echo "Unknown option: $1"; exit 1 ;;
   esac
@@ -129,6 +133,16 @@ fi
 # the plugin install root. `pnpm deploy --prod` materialises every dep inside
 # the deploy directory, so all symlinks are safely contained.
 #
+# This also triggers rclnodejs's `postinstall` (generate-messages), which
+# bakes in JS bindings for every ROS2 message/service type visible on
+# AMENT_PREFIX_PATH at that moment. We source the ROS distro + any ros2_ws
+# overlay right here, into the same subshell that runs the deploy, so this
+# always includes custom types (e.g. agenticros_msgs/srv/FollowMeStart)
+# regardless of what the invoking shell happened to have sourced. Skipping
+# this was exactly how a skill needing a custom service type broke silently
+# on 2026-07-31 — the workspace was built, but the deploy step ran without
+# the overlay, so rclnodejs only generated bindings for stock ROS2 messages.
+#
 # --config.strict-peer-dependencies=false: mem0ai has unmet peer ranges for
 # pg / redis / @qdrant/js-client-rest that don't affect us (we only use the
 # in-memory + JSON local backends and ship our own pinned mem0ai). Without
@@ -136,7 +150,29 @@ fi
 echo "[3/5] Building flat plugin deployment at $DEPLOY_DIR ..."
 mkdir -p "$(dirname "$DEPLOY_DIR")"
 rm -rf "$DEPLOY_DIR"
-(cd "$REPO_ROOT" && pnpm --config.strict-peer-dependencies=false --filter ./packages/agenticros deploy --prod "$DEPLOY_DIR")
+DEPLOY_ROS_SETUP=""
+if [[ -n "$ROS_DISTRO" && -f "/opt/ros/$ROS_DISTRO/setup.bash" ]]; then
+  DEPLOY_ROS_SETUP="/opt/ros/$ROS_DISTRO/setup.bash"
+else
+  for d in /opt/ros/*/setup.bash; do
+    [[ -f "$d" ]] && DEPLOY_ROS_SETUP="$d" && break
+  done
+fi
+DEPLOY_ROS_OVERLAY=""
+for cand in "$REPO_ROOT/ros2_ws/install/setup.bash" "$HOME/ros2_ws/install/setup.bash"; do
+  [[ -f "$cand" ]] && DEPLOY_ROS_OVERLAY="$cand" && break
+done
+if [[ -z "$DEPLOY_ROS_SETUP" ]]; then
+  echo "  WARN: no ROS installation found under /opt/ros/<distro>; rclnodejs will only see stock ROS2 messages." >&2
+elif [[ -z "$DEPLOY_ROS_OVERLAY" ]]; then
+  echo "  Note: no ros2_ws/install overlay found — rclnodejs will only generate bindings for stock $ROS_DISTRO messages (run \`colcon build\` in ros2_ws/ first if a skill needs custom message types)."
+fi
+(
+  set +u
+  [[ -n "$DEPLOY_ROS_SETUP" ]] && source "$DEPLOY_ROS_SETUP"
+  [[ -n "$DEPLOY_ROS_OVERLAY" ]] && source "$DEPLOY_ROS_OVERLAY"
+  cd "$REPO_ROOT" && pnpm --config.strict-peer-dependencies=false --filter ./packages/agenticros deploy --prod "$DEPLOY_DIR"
+)
 # pnpm leaves a self-reference symlink (.pnpm/node_modules/<pkg> → the source
 # path) that OpenClaw's safety scan will reject. The plugin's npm name is
 # `@agenticros/openclaw` (scoped), so the symlink lives under @agenticros/.
@@ -146,21 +182,52 @@ rm -f  "$DEPLOY_DIR/node_modules/.pnpm/node_modules/agenticros"
 
 # `pnpm deploy --prod` skips lifecycle scripts, so rclnodejs's postinstall
 # (which runs `node scripts/generate_messages.js` to materialise ROS message
-# bindings under `generated/`) never runs. Without that folder, the local
-# transport fails on first connect with ENOENT. Reuse the workspace copy when
-# available (fast, no ROS env needed in this script); otherwise regenerate in
-# place against the active ROS env.
+# bindings under `generated/`) never runs inside $DEPLOY_DIR. Without that
+# folder, the local transport fails on first connect with ENOENT.
+#
+# The actual source of truth is the *workspace's own* rclnodejs install
+# (packages/core's dependency, hoisted to $REPO_ROOT/node_modules/.pnpm) — we
+# copy its `generated/` folder into the deploy dir. That copy is only as
+# complete as whatever bindings the workspace copy already has, so we
+# regenerate it here first, against the same ROS env (distro + ros2_ws
+# overlay) resolved above, rather than trusting whatever was last generated
+# by some earlier `pnpm install`. This is also the exact rclnodejs copy the
+# Claude Code MCP server (`packages/agenticros-claude-code`) resolves via
+# `@agenticros/core` — regenerating it here keeps that in sync too, though
+# the MCP server process needs a restart (`pnpm mcp:kill`, or `/mcp` reload
+# in Claude Code) to pick up newly-added message types.
 RCLN_DEPLOY=$(find "$DEPLOY_DIR/node_modules/.pnpm" -maxdepth 3 -type d -name rclnodejs 2>/dev/null | head -1)
 if [[ -n "$RCLN_DEPLOY" ]]; then
-  RCLN_WS=$(find "$REPO_ROOT/node_modules/.pnpm" -maxdepth 3 -type d -name rclnodejs 2>/dev/null | head -1)
+  # Resolve specifically through packages/core's own node_modules symlink —
+  # the workspace can have more than one rclnodejs version hoisted (e.g.
+  # robot-eyes pins a different one than core), and a bare `find | head -1`
+  # picks whichever the filesystem lists first, non-deterministically. Core's
+  # copy is the one that actually matters: the plugin and the Claude Code MCP
+  # server both resolve rclnodejs through @agenticros/core.
+  if [[ -e "$REPO_ROOT/packages/core/node_modules/rclnodejs" ]]; then
+    RCLN_WS=$(cd "$REPO_ROOT/packages/core/node_modules/rclnodejs" && pwd -P)
+  else
+    RCLN_WS=$(find "$REPO_ROOT/node_modules/.pnpm" -maxdepth 3 -type d -name rclnodejs 2>/dev/null | head -1)
+  fi
+  if [[ -n "$RCLN_WS" && -n "$DEPLOY_ROS_SETUP" ]]; then
+    (
+      set +u
+      source "$DEPLOY_ROS_SETUP"
+      [[ -n "$DEPLOY_ROS_OVERLAY" ]] && source "$DEPLOY_ROS_OVERLAY"
+      cd "$RCLN_WS" && npm run generate-messages
+    ) >/dev/null 2>&1 || echo "  WARNING: failed to regenerate workspace rclnodejs bindings; copying whatever is already there." >&2
+  fi
   if [[ -n "$RCLN_WS" && -d "$RCLN_WS/generated" ]]; then
     cp -a "$RCLN_WS/generated" "$RCLN_DEPLOY/"
     echo "  rclnodejs/generated copied from workspace ($(find "$RCLN_DEPLOY/generated" -type f | wc -l) files)."
-  elif [[ -n "$ROS_DISTRO" ]] || [[ -f /opt/ros/humble/setup.bash ]]; then
+  elif [[ -n "$DEPLOY_ROS_SETUP" ]]; then
     echo "  rclnodejs/generated missing from workspace — regenerating in place against ROS..."
-    DISTRO="${ROS_DISTRO:-humble}"
-    ( cd "$RCLN_DEPLOY" && bash -c "source /opt/ros/$DISTRO/setup.bash && node scripts/generate_messages.js" ) || \
-      echo "  WARNING: rclnodejs message generation failed; the 'local' transport may not work."
+    (
+      set +u
+      source "$DEPLOY_ROS_SETUP"
+      [[ -n "$DEPLOY_ROS_OVERLAY" ]] && source "$DEPLOY_ROS_OVERLAY"
+      cd "$RCLN_DEPLOY" && node scripts/generate_messages.js
+    ) || echo "  WARNING: rclnodejs message generation failed; the 'local' transport may not work."
   else
     echo "  WARNING: no rclnodejs/generated in workspace and no ROS distro found; the 'local' transport may not work."
   fi
@@ -393,6 +460,44 @@ EOF
   fi
 fi
 echo ""
+
+# Optional: install Python deps needed for real (non-mock) sensing in
+# on-robot ROS2 skills that ship in this workspace. Currently just
+# agenticros_follow_me (RealSense depth + MediaPipe pose) — its README lists
+# pyrealsense2/mediapipe as "optional", but a fresh setup should still try to
+# get them so the skill works out of the box instead of silently degrading
+# to mock detection.
+if [[ "$SKIP_VISION_DEPS" != true && -d "$REPO_ROOT/ros2_ws/src/agenticros_follow_me" ]]; then
+  echo "Checking optional vision deps for agenticros_follow_me (RealSense + MediaPipe)..."
+  if ! python3 -m pip --version &>/dev/null; then
+    echo "  WARN: python3 -m pip not available. Install it, then re-run:"
+    echo "    sudo apt install -y python3-pip python3-venv librealsense2-dev"
+    echo "    bash scripts/setup_gateway_plugin.sh --skip-build --no-restart"
+  else
+    NEED_INSTALL=false
+    python3 -c "import pyrealsense2" 2>/dev/null || NEED_INSTALL=true
+    python3 -c "import mediapipe" 2>/dev/null || NEED_INSTALL=true
+    if [[ "$NEED_INSTALL" == true ]]; then
+      echo "  Installing pyrealsense2 + mediapipe (pip --break-system-packages)..."
+      python3 -m pip install --break-system-packages pyrealsense2 mediapipe || \
+        echo "  WARN: pip install failed; agenticros_follow_me will fall back to mock detection. See ros2_ws/src/agenticros_follow_me/README.md." >&2
+      # mediapipe pulls in opencv-contrib-python, which on some platforms
+      # drags numpy to 2.x. That breaks anything on this system still built
+      # against numpy 1.x's ABI (apt's scipy/matplotlib, in particular) —
+      # pin back down to match so existing tools keep working.
+      python3 -c "import numpy,sys; sys.exit(0 if int(numpy.__version__.split('.')[0])<2 else 1)" 2>/dev/null || \
+        python3 -m pip install --break-system-packages "numpy<2" || true
+    else
+      echo "  pyrealsense2 + mediapipe already installed."
+    fi
+    if python3 -c "import pyrealsense2, mediapipe" 2>/dev/null; then
+      echo "  OK: agenticros_follow_me can use real RealSense + MediaPipe detection."
+    else
+      echo "  WARN: pyrealsense2/mediapipe still not importable; agenticros_follow_me will use mock detection."
+    fi
+  fi
+  echo ""
+fi
 
 echo "Gateway plugin setup complete."
 echo ""
