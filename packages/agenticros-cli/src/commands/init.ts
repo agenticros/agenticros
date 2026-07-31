@@ -417,10 +417,10 @@ async function promptAndWriteRobotConfig(): Promise<void> {
     default: "sim",
   })) === "sim";
 
-  const defaultNs = isSim ? "sim_robot" : "my_robot";
   const namespace = await input({
-    message: "Robot namespace (used as topic prefix, e.g. /<namespace>/cmd_vel)",
-    default: defaultNs,
+    message:
+      "Robot namespace (used as topic prefix, e.g. /<namespace>/cmd_vel). Leave empty if your robot/sim doesn't use a ROS namespace (plain /cmd_vel).",
+    default: "",
   });
 
   const userData = getCliPaths().userDataDir;

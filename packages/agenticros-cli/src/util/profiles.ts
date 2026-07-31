@@ -57,16 +57,18 @@ export function readActiveMode(): Mode | null {
 }
 
 /**
- * Canonical real-robot profile. The namespace is intentionally a placeholder
- * - users edit it once after `init` (or `config set robot.namespace=...`) to
- * match their robot. We DO NOT bake in the workspace's example UUID because
- * that gets shared in repos.
+ * Canonical real-robot profile. The namespace defaults to empty (no ROS
+ * namespace, topics at the graph root e.g. plain /cmd_vel) because most
+ * real robots aren't namespaced. Users only need to set
+ * robot.namespace (via `init` prompts or `config set robot.namespace=...`)
+ * if their robot actually runs under one. We DO NOT bake in the workspace's
+ * example UUID because that gets shared in repos.
  */
 function realProfileDefaults(namespaceFallback?: string): Record<string, unknown> {
   return {
     transport: { mode: "local" },
     robot: {
-      namespace: namespaceFallback ?? "my_robot",
+      namespace: namespaceFallback ?? "",
       name: "Real Robot",
       cameraTopic: "/camera/camera/color/image_raw",
     },

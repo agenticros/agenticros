@@ -27,8 +27,8 @@ agenticros eyes --no-sound
 # Serve UI without opening a browser
 agenticros eyes --no-browser
 
-# Override topic / port
-agenticros eyes --topic /my_robot/cmd_vel --port 8765
+# Override topic / port (only needed if your robot namespaces cmd_vel)
+agenticros eyes --topic /cmd_vel --port 8765
 
 # With the real-robot stack
 agenticros up real --eyes

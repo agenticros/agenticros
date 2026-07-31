@@ -23,8 +23,8 @@ Available MCP tools:
 - `ros2_depth_distance` — sample depth at the center of the depth image
 - `memory_remember` / `memory_recall` / `memory_forget` / `memory_status` — cross-adapter long-term memory (only when `config.memory.enabled` is true). Shared with OpenClaw, Claude Desktop, Codex CLI, and Gemini for the same robot via `~/.mem0/vector_store.db` (mem0 backend) or `~/.agenticros/memory.json` (local backend). See `docs/memory.md`.
 
-**Robot namespace**: `3946b404-c33e-4aa3-9a8d-16deb1c5c593`
-**cmd_vel topic**: `/3946b404-c33e-4aa3-9a8d-16deb1c5c593/cmd_vel`
+**Robot namespace**: none (default `""`) — check `~/.agenticros/config.json` `robot.namespace` if this changes
+**cmd_vel topic**: `/cmd_vel`
 
 ## Architecture
 
@@ -171,11 +171,12 @@ Key config fields (all have defaults in `packages/core/src/config.ts`):
       "type": "stdio",
       "command": "sh",
       "args": ["-c", "node packages/agenticros-claude-code/dist/index.js 2>>/tmp/agenticros-mcp.log"],
-      "env": { "AGENTICROS_ROBOT_NAMESPACE": "robot3946b404c33e4aa39a8d16deb1c5c593" }
+      "env": { "AGENTICROS_ROBOT_NAMESPACE": "" }
     }
   }
 }
 ```
+Namespace is left empty here on purpose — it's driven by `~/.agenticros/config.json` (`robot.namespace`), swappable per-mode via `agenticros config use <real|sim>` / `agenticros mode <real|sim>`. Setting it in `.mcp.json` would force the same namespace for both real-robot and sim runs.
 
 **Desktop app**: `~/Library/Application Support/Claude/claude_desktop_config.json` — use absolute path to `dist/index.js`.
 
