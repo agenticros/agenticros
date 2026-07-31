@@ -532,6 +532,14 @@
           "type": "string"
         },
         "default": []
+      },
+      "skillRefs": {
+        "type": "array",
+        "description": "Marketplace refs (owner/skill) installed via `agenticros skills install`, used to re-resolve skillPaths/skillPackages from the skills cache.",
+        "items": {
+          "type": "string"
+        },
+        "default": []
       }
     }
   },

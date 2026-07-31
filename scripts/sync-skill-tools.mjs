@@ -296,7 +296,16 @@ async function main() {
 
   for (const pkg of skillPackages) {
     const entry = resolvePackageEntry(pkg);
-    if (!entry) continue;
+    if (!entry) {
+      // require.resolve() only sees packages linked into REPO_ROOT's
+      // node_modules. Marketplace skills installed into
+      // ~/.agenticros/skills-cache are never there, so this is the common
+      // case, not an edge case — treat it like an import failure so the
+      // preservation logic below keeps this skill's previously-known tools
+      // instead of silently dropping them from contracts.tools.
+      importFailures.push({ name: pkg, cascadeSuspected: false });
+      continue;
+    }
     vlog(`Resolving package "${pkg}" → ${entry}`);
     const result = await discoverSkillTools(entry, pkg);
     if (result.importFailed) {
@@ -310,7 +319,12 @@ async function main() {
   for (const dir of skillPaths) {
     const absDir = isAbsolute(dir) ? dir : resolve(REPO_ROOT, dir);
     const resolved = findSkillEntryFromPath(absDir);
-    if (!resolved) continue;
+    if (!resolved) {
+      // Same reasoning as the skillPackages branch above: an unresolvable
+      // entry must not silently drop this skill's previously-known tools.
+      importFailures.push({ name: absDir, cascadeSuspected: false });
+      continue;
+    }
     vlog(`Resolving path "${absDir}" → ${resolved.entry} (${resolved.packageName})`);
     const result = await discoverSkillTools(resolved.entry, resolved.packageName);
     if (result.importFailed) {
