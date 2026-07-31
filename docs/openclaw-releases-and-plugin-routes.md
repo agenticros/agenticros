@@ -77,10 +77,15 @@ If you see **“not found”** for `/plugins/agenticros/` even when using the pr
 
 OpenClaw defaults to **`gateway.bind: loopback`**, so the Control UI / web chat only accepts connections from the robot itself (`127.0.0.1`). AgenticROS developers often SSH into a Jetson (or other robot), run OpenClaw there, and want to use a **laptop browser** on the same Wi‑Fi / LAN — for example `http://192.168.8.148:18789/chat`.
 
-That requires two OpenClaw settings (the Control UI origin allowlist is the security gate for non-loopback binds):
+### What you need (plain HTTP on a trusted LAN)
 
-1. Bind the gateway to the LAN.
-2. Allow the exact browser origin you will open (scheme + host + port).
+`gateway.bind lan` and `gateway.controlUi.allowedOrigins` are **necessary but not sufficient**. The Control UI also enforces a **device-identity** check that browsers can only satisfy in a [secure context](https://developer.mozilla.org/en-US/docs/Web/Security/Secure_Contexts) (HTTPS or `localhost`). A remote LAN browser on plain HTTP can present a valid gateway token and still get the WebSocket closed immediately:
+
+```text
+WS code 1008 — control ui requires device identity
+```
+
+`gateway.controlUi.allowInsecureAuth` does **not** bypass that check. For short-lived / trusted-LAN debugging over plain HTTP, you must also set **`gateway.controlUi.dangerouslyDisableDeviceAuth true`** (token becomes the sole auth factor). Keep `http://127.0.0.1:18789` and `http://localhost:18789` in `allowedOrigins` so the robot’s own localhost dashboard still works.
 
 On the **robot** (where OpenClaw runs):
 
@@ -92,11 +97,15 @@ openclaw config set gateway.bind lan
 openclaw config set gateway.controlUi.allowedOrigins \
   "[\"http://${ROBOT_LAN_IP}:18789\",\"http://127.0.0.1:18789\",\"http://localhost:18789\"]"
 
+# Required for plain-HTTP LAN browsers (not a secure context).
+# Treat as short-lived / trusted-network only — the gateway token is then the sole auth factor.
+openclaw config set gateway.controlUi.dangerouslyDisableDeviceAuth true
+
 systemctl --user restart openclaw-gateway.service
 # or: openclaw gateway
 ```
 
-Then on your **laptop** browser:
+Then on your **laptop** browser (use the token URL from `openclaw dashboard` if prompted):
 
 - Web chat: `http://<ROBOT_LAN_IP>:18789/chat` (or `http://<ROBOT_LAN_IP>:18789/`)
 - AgenticROS config / teleop: `http://<ROBOT_LAN_IP>:18789/plugins/agenticros/`
@@ -108,17 +117,17 @@ ss -ltnp | grep 18789
 # expect 0.0.0.0:18789 (or the LAN IP), not only 127.0.0.1:18789
 ```
 
-### Auth and security notes
+### Prefer HTTPS / Tailscale for anything lasting
 
-- Prefer an explicit `gateway.controlUi.allowedOrigins` list. Avoid `gateway.controlUi.dangerouslyAllowHostHeaderOriginFallback=true` unless you are debugging — it loosens origin checks.
-- If the page loads but the WebSocket fails with unauthorized, open the URL from `openclaw dashboard` (includes `#token=...`), or keep token auth and use that hash. Over plain HTTP on a LAN you may also need:
-  ```bash
-  openclaw config set gateway.controlUi.allowInsecureAuth true
-  ```
+The supported way to get a persistent remote Control UI is a **secure context** (HTTPS) so device identity works without `dangerouslyDisableDeviceAuth`. Prefer **Tailscale Serve** (or another HTTPS front door) over leaving the break-glass flag on. See OpenClaw’s [Gateway](https://docs.openclaw.ai/gateway) and [Control UI](https://docs.openclaw.ai/web/control-ui) docs.
+
+### Pitfalls (do not do these)
+
+- **Do not set `gateway.controlUi.enabled: false`.** That key **fully disables** the Control UI dashboard everywhere — including localhost on the robot. It is easy to confuse with the auth-related flags when troubleshooting LAN access; leave it enabled (or omit the key).
+- Do **not** rely on `gateway.controlUi.allowInsecureAuth true` alone for remote LAN chat — it does not clear the device-identity requirement that causes WS `1008`.
+- Avoid `gateway.controlUi.dangerouslyAllowHostHeaderOriginFallback=true` unless you are debugging origin allowlist mismatches — it loosens origin checks.
 - Do **not** run `node scripts/setup-openclaw-local.cjs` (`gateway.auth.mode: "none"`) on a LAN-facing gateway — that helper is for localhost-only development.
-- Restrict who can reach port **18789** (firewall / trusted Wi‑Fi). Binding `lan` exposes the Control UI to every host that can reach the robot on that port.
-
-Official OpenClaw reference: [Gateway bind](https://docs.openclaw.ai/gateway) and Control UI `allowedOrigins` for non-loopback deployments.
+- Restrict who can reach port **18789** (firewall / trusted Wi‑Fi). Binding `lan` plus `dangerouslyDisableDeviceAuth` exposes the Control UI to every host that can reach the robot on that port and knows (or can guess) the token.
 
 ---
 
