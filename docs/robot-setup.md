@@ -202,6 +202,8 @@ If you prefer rosbridge on localhost instead (e.g. for debugging), you can still
 
 **Re-deploying after a code change.** The deploy directory is a snapshot, not a symlink to the workspace. After editing the plugin source, re-run `scripts/setup_gateway_plugin.sh` (it's idempotent), or repeat the `pnpm --filter ./packages/agenticros build` + `pnpm deploy --prod ~/.agenticros/plugin-deploy` + gateway-restart steps.
 
+**Laptop browser → robot OpenClaw.** By default the gateway binds loopback only, so `http://<robot-ip>:18789/chat` from another machine will not work until you set `gateway.bind lan` and `gateway.controlUi.allowedOrigins`. See [Open OpenClaw web chat from another machine on the LAN](openclaw-releases-and-plugin-routes.md#open-openclaw-web-chat-from-another-machine-on-the-lan).
+
 ### If OpenClaw is on another machine (Mode B)
 
 1. On your **laptop/server** where OpenClaw runs:

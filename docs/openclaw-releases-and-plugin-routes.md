@@ -73,6 +73,55 @@ If you see **“not found”** for `/plugins/agenticros/` even when using the pr
 
 ---
 
+## Open OpenClaw web chat from another machine on the LAN
+
+OpenClaw defaults to **`gateway.bind: loopback`**, so the Control UI / web chat only accepts connections from the robot itself (`127.0.0.1`). AgenticROS developers often SSH into a Jetson (or other robot), run OpenClaw there, and want to use a **laptop browser** on the same Wi‑Fi / LAN — for example `http://192.168.8.148:18789/chat`.
+
+That requires two OpenClaw settings (the Control UI origin allowlist is the security gate for non-loopback binds):
+
+1. Bind the gateway to the LAN.
+2. Allow the exact browser origin you will open (scheme + host + port).
+
+On the **robot** (where OpenClaw runs):
+
+```bash
+# Replace ROBOT_LAN_IP with the robot's address on your network (e.g. 192.168.8.148)
+ROBOT_LAN_IP=$(hostname -I | awk '{print $1}')
+
+openclaw config set gateway.bind lan
+openclaw config set gateway.controlUi.allowedOrigins \
+  "[\"http://${ROBOT_LAN_IP}:18789\",\"http://127.0.0.1:18789\",\"http://localhost:18789\"]"
+
+systemctl --user restart openclaw-gateway.service
+# or: openclaw gateway
+```
+
+Then on your **laptop** browser:
+
+- Web chat: `http://<ROBOT_LAN_IP>:18789/chat` (or `http://<ROBOT_LAN_IP>:18789/`)
+- AgenticROS config / teleop: `http://<ROBOT_LAN_IP>:18789/plugins/agenticros/`
+
+Confirm the gateway is listening on all interfaces (not only loopback):
+
+```bash
+ss -ltnp | grep 18789
+# expect 0.0.0.0:18789 (or the LAN IP), not only 127.0.0.1:18789
+```
+
+### Auth and security notes
+
+- Prefer an explicit `gateway.controlUi.allowedOrigins` list. Avoid `gateway.controlUi.dangerouslyAllowHostHeaderOriginFallback=true` unless you are debugging — it loosens origin checks.
+- If the page loads but the WebSocket fails with unauthorized, open the URL from `openclaw dashboard` (includes `#token=...`), or keep token auth and use that hash. Over plain HTTP on a LAN you may also need:
+  ```bash
+  openclaw config set gateway.controlUi.allowInsecureAuth true
+  ```
+- Do **not** run `node scripts/setup-openclaw-local.cjs` (`gateway.auth.mode: "none"`) on a LAN-facing gateway — that helper is for localhost-only development.
+- Restrict who can reach port **18789** (firewall / trusted Wi‑Fi). Binding `lan` exposes the Control UI to every host that can reach the robot on that port.
+
+Official OpenClaw reference: [Gateway bind](https://docs.openclaw.ai/gateway) and Control UI `allowedOrigins` for non-loopback deployments.
+
+---
+
 ## "Missing or invalid auth" at startup — routes never mounted
 
 In OpenClaw 2026.3.2 with token auth enabled, the gateway can **reject** every plugin HTTP route shortly after the plugin registers it. Logs look like:
