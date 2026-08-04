@@ -234,6 +234,15 @@ program
   .option("-r, --resolution <WxH>", "camera resolution (e.g. 672x672)")
   .option("-f, --fps <n>", "camera FPS")
   .option("--pointcloud", "realsense: enable pointcloud", false)
+  .option(
+    "--full",
+    "realsense: stock rs_launch.py defaults (higher res; slower WebRTC)",
+    false,
+  )
+  .option(
+    "--model <name>",
+    "realsense: camera model from cloud (e.g. D421); default teleop profile otherwise",
+  )
   .action(
     async (
       target: string,
@@ -245,6 +254,8 @@ program
         resolution?: string;
         fps?: string;
         pointcloud?: boolean;
+        full?: boolean;
+        model?: string;
       },
     ) => {
       // `agenticros start realsense -p` → pointcloud (boolean -p with no value)
@@ -260,6 +271,8 @@ program
         resolution: opts.resolution,
         fps: opts.fps,
         pointcloud,
+        full: opts.full === true,
+        model: opts.model,
       });
     },
   );
@@ -285,6 +298,8 @@ for (const service of ["motors", "realsense", "camera"] as const) {
     .option("-r, --resolution <WxH>", "camera resolution")
     .option("-f, --fps <n>", "camera FPS")
     .option("--pointcloud", "realsense pointcloud", false)
+    .option("--full", "realsense: stock high-res launch", false)
+    .option("--model <name>", "realsense: camera model (e.g. D421)")
     .action(
       async (opts: {
         backend?: string;
@@ -294,6 +309,8 @@ for (const service of ["motors", "realsense", "camera"] as const) {
         resolution?: string;
         fps?: string;
         pointcloud?: boolean;
+        full?: boolean;
+        model?: string;
       }) => {
         const pointcloud =
           opts.pointcloud === true ||
@@ -307,6 +324,8 @@ for (const service of ["motors", "realsense", "camera"] as const) {
           resolution: opts.resolution,
           fps: opts.fps,
           pointcloud,
+          full: opts.full === true,
+          model: opts.model,
         });
       },
     );

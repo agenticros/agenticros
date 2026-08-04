@@ -60,3 +60,30 @@ export async function ensureRobotId(): Promise<string> {
   }
   return setRobotId(data.id);
 }
+
+/** Fetch portal robot details (camera model, compute) when token+id are set. */
+export async function fetchRobotDetails(): Promise<{
+  camera?: string;
+  compute?: string;
+}> {
+  const robotId = getRobotId();
+  const apiToken = getApiToken();
+  if (!robotId || !apiToken) {
+    return {};
+  }
+  try {
+    const response = await fetch(`${CLOUD_REST}/robot/${robotId}`, {
+      headers: {
+        "Content-Type": "application/json",
+        api_token: apiToken,
+      },
+    });
+    const data = (await response.json()) as { camera?: string; compute?: string };
+    return {
+      camera: data.camera && data.camera !== "" ? data.camera : undefined,
+      compute: data.compute && data.compute !== "" ? data.compute : undefined,
+    };
+  } catch {
+    return {};
+  }
+}

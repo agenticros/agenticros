@@ -3,6 +3,11 @@
 # Callers must set (or accept defaults):
 #   ROS_DISTRO, CAMERA_LOG, CAMERA_PID_FILE
 # And should have sourced /opt/ros/$ROS_DISTRO/setup.bash before start_realsense_camera.
+#
+# Teleop-oriented profiles (same as robotics-npm) keep WebRTC streaming responsive:
+#   D421  → depth/infra 424x240@6
+#   else  → depth/infra 424x240@6 + RGB 320x180@6 (+ RGBD/IMU)
+# Escape hatch: AGENTICROS_REALSENSE_FULL=1 or arg "full" → stock rs_launch.py defaults.
 
 CAMERA_LOG="${CAMERA_LOG:-/tmp/agenticros-camera.log}"
 CAMERA_PID_FILE="${CAMERA_PID_FILE:-/tmp/agenticros-camera.pid}"
@@ -63,13 +68,68 @@ realsense_verify_started() {
     return 0
 }
 
-# Optional: AGENTICROS_REALSENSE_POINTCLOUD=1 or first arg "pointcloud" enables pointcloud.
-start_realsense_camera() {
+# Build ros2 launch args for teleop (low bandwidth) or full defaults.
+# Args / env:
+#   pointcloud | AGENTICROS_REALSENSE_POINTCLOUD=1
+#   full | AGENTICROS_REALSENSE_FULL=1
+#   AGENTICROS_REALSENSE_MODEL=D421|D435|… (portal camera field)
+realsense_launch_args() {
     local enable_pointcloud=0
-    if [[ "${1:-}" == "pointcloud" ]] || [[ "${AGENTICROS_REALSENSE_POINTCLOUD:-}" == "1" ]]; then
+    local use_full=0
+    local model="${AGENTICROS_REALSENSE_MODEL:-}"
+    local arg
+    for arg in "$@"; do
+        case "$arg" in
+            pointcloud) enable_pointcloud=1 ;;
+            full) use_full=1 ;;
+            model=*) model="${arg#model=}" ;;
+        esac
+    done
+    if [[ "${AGENTICROS_REALSENSE_POINTCLOUD:-}" == "1" ]]; then
         enable_pointcloud=1
     fi
+    if [[ "${AGENTICROS_REALSENSE_FULL:-}" == "1" ]]; then
+        use_full=1
+    fi
 
+    local launch_args=(launch realsense2_camera rs_launch.py)
+
+    if [[ "$use_full" == "1" ]]; then
+        echo "   Profile: full (stock rs_launch.py defaults)" >&2
+    elif [[ "${model^^}" == "D421" ]]; then
+        echo "   Profile: D421 teleop (depth/infra 424x240@6)" >&2
+        launch_args+=(
+            "depth_module.depth_profile:=424x240x6"
+            "depth_module.infra_profile:=424x240x6"
+            "enable_depth:=true"
+        )
+    else
+        echo "   Profile: teleop (RGB 320x180@6, depth/infra 424x240@6 — WebRTC-friendly)" >&2
+        launch_args+=(
+            "depth_module.depth_profile:=424x240x6"
+            "depth_module.infra_profile:=424x240x6"
+            "rgb_camera.color_profile:=320x180x6"
+            "enable_rgbd:=true"
+            "enable_color:=true"
+            "enable_depth:=true"
+            "enable_accel:=true"
+            "enable_gyro:=true"
+            "unite_imu_method:=2"
+        )
+    fi
+
+    if [[ "$enable_pointcloud" == "1" ]]; then
+        launch_args+=("pointcloud.enable:=true")
+        echo "   pointcloud.enabled:=true" >&2
+    fi
+
+    # Print space-separated for caller (bash array rebuild via eval is awkward;
+    # use a global REALSENSE_LAUNCH_ARGS instead).
+    REALSENSE_LAUNCH_ARGS=("${launch_args[@]}")
+}
+
+# Optional args: pointcloud, full, model=D421
+start_realsense_camera() {
     echo "==> Starting RealSense camera (logs: $CAMERA_LOG)"
     if [[ -f "$CAMERA_PID_FILE" ]] && kill -0 "$(cat "$CAMERA_PID_FILE")" 2>/dev/null; then
         echo "   Already running (pid $(cat "$CAMERA_PID_FILE")) — skipping"
@@ -103,13 +163,11 @@ start_realsense_camera() {
         return 0
     fi
 
-    local launch_args=(launch realsense2_camera rs_launch.py)
-    if [[ "$enable_pointcloud" == "1" ]]; then
-        launch_args+=("pointcloud.enable:=true")
-    fi
+    REALSENSE_LAUNCH_ARGS=()
+    realsense_launch_args "$@"
 
     : >"$CAMERA_LOG"
-    nohup ros2 "${launch_args[@]}" >"$CAMERA_LOG" 2>&1 &
+    nohup ros2 "${REALSENSE_LAUNCH_ARGS[@]}" >"$CAMERA_LOG" 2>&1 &
     local launch_pid=$!
     local node_pid=""
     for _ in 1 2 3 4 5 6 7 8 9 10; do

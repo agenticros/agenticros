@@ -1,16 +1,23 @@
 #!/bin/bash
 # Standalone RealSense start (used by `agenticros start realsense`).
-# Usage: ./scripts/start_realsense.sh [jazzy|humble] [--pointcloud]
+# Usage: ./scripts/start_realsense.sh [jazzy|humble] [--pointcloud] [--full] [--model=D421]
+#
+# Default: teleop profiles (low res/FPS for WebRTC), matching robotics-npm.
+# --full: stock rs_launch.py defaults (higher bandwidth).
 
 set -e
 
 ROS_DISTRO="${1:-jazzy}"
 shift || true
-POINTCLOUD=""
+
+EXTRA_ARGS=()
 for arg in "$@"; do
-  if [[ "$arg" == "--pointcloud" ]] || [[ "$arg" == "-p" ]]; then
-    POINTCLOUD="pointcloud"
-  fi
+  case "$arg" in
+    --pointcloud|-p) EXTRA_ARGS+=("pointcloud") ;;
+    --full) EXTRA_ARGS+=("full") ;;
+    --model=*) EXTRA_ARGS+=("model=${arg#--model=}") ;;
+    model=*) EXTRA_ARGS+=("$arg") ;;
+  esac
 done
 
 REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
@@ -29,4 +36,4 @@ if [[ -f "$REPO_ROOT/ros2_ws/install/setup.bash" ]]; then
   source "$REPO_ROOT/ros2_ws/install/setup.bash"
 fi
 
-start_realsense_camera "$POINTCLOUD"
+start_realsense_camera "${EXTRA_ARGS[@]}"

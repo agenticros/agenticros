@@ -17,6 +17,7 @@ import { detectRosDistro } from "../util/env.js";
 import {
   CLOUD_REST,
   ensureRobotId,
+  fetchRobotDetails,
   getRobotId,
   setApiToken,
   setRobotId,
@@ -200,7 +201,11 @@ export async function stopCameraCommand(): Promise<void> {
   ok("Robot camera stopped.");
 }
 
-export async function startRealsenseCommand(opts: { pointcloud?: boolean }): Promise<void> {
+export async function startRealsenseCommand(opts: {
+  pointcloud?: boolean;
+  full?: boolean;
+  model?: string;
+}): Promise<void> {
   const script = resolveScriptPath("start_realsense.sh");
   if (!existsSync(script)) {
     err(`start_realsense.sh not found at ${script}`);
@@ -211,6 +216,15 @@ export async function startRealsenseCommand(opts: { pointcloud?: boolean }): Pro
   const distro = ros.distro ?? "jazzy";
   const args = [script, distro];
   if (opts.pointcloud) args.push("--pointcloud");
+  if (opts.full) args.push("--full");
+
+  let model = opts.model;
+  if (!model && !opts.full) {
+    const details = await fetchRobotDetails();
+    model = details.camera;
+  }
+  if (model) args.push(`--model=${model}`);
+
   try {
     await execa("bash", args, { stdio: "inherit" });
     ok("Robot realsense started.");
@@ -236,6 +250,8 @@ export async function startServiceCommand(
   target: string,
   opts: MotorsStartOptions & {
     pointcloud?: boolean;
+    full?: boolean;
+    model?: string;
     device?: string;
     resolution?: string;
     fps?: string;
@@ -246,7 +262,11 @@ export async function startServiceCommand(
       await startMotorsCommand(opts);
       break;
     case "realsense":
-      await startRealsenseCommand({ pointcloud: opts.pointcloud });
+      await startRealsenseCommand({
+        pointcloud: opts.pointcloud,
+        full: opts.full,
+        model: opts.model,
+      });
       break;
     case "camera":
       await startCameraCommand(opts);

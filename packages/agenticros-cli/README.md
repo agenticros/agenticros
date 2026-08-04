@@ -143,10 +143,20 @@ agenticros start motors -b jetson -p 16,18,22,26
 
 | Command | Description |
 |---------|-------------|
-| `agenticros start realsense [-p\|--pointcloud]` | Launch `realsense2_camera` (recovery preflight + pidfile). |
+| `agenticros start realsense [-p\|--pointcloud]` | Launch `realsense2_camera` with **teleop profiles** (low res/FPS for WebRTC). |
+| `agenticros start realsense --full` | Stock `rs_launch.py` defaults (higher bandwidth). |
+| `agenticros start realsense --model=D421` | D421 depth-only teleop profile (also auto from cloud portal `camera`). |
 | `agenticros stop realsense` | Stop the camera node. |
 
+Default teleop profile (same as robotics-npm): RGB `320x180@6`, depth/infra `424x240@6`.  
 Requires `ros-<distro>-realsense2-camera`. Logs: `/tmp/agenticros-camera.log`.
+
+Restart after upgrading the CLI so an already-running high-res node is replaced:
+
+```bash
+agenticros stop realsense
+agenticros start realsense
+```
 
 ### 2D camera (V4L → `/camera2d`)
 
