@@ -130,7 +130,7 @@ program
 program
   .command("web")
   .description(
-    "Open the AgenticROS config/teleop page (OpenClaw plugin web dashboard) in a browser.",
+    "Open the OpenClaw web dashboard (AgenticROS config + teleop) in a browser.",
   )
   .option("--no-open", "Print the URL(s) without launching a browser")
   .action(async (opts: { open?: boolean }) => {

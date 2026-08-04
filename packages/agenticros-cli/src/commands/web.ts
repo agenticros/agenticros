@@ -57,7 +57,7 @@ function firstLanAddress(): string | undefined {
 }
 
 /** Best-effort, fire-and-forget browser launch. Never throws. */
-function openInBrowser(url: string): void {
+export function openInBrowser(url: string): void {
   try {
     const [cmd, args] =
       process.platform === "darwin"
@@ -81,7 +81,7 @@ export async function webCommand(opts: WebCommandOpts = {}): Promise<void> {
   const authMode = resolveAuthMode();
   const loopbackUrl = `http://127.0.0.1:${port}${PLUGIN_PATH}`;
 
-  info("AgenticROS web dashboard (config + teleop):");
+  info("OpenClaw web dashboard (config + teleop):");
   ok(`  ${loopbackUrl}`);
 
   if (bind === "lan") {

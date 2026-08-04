@@ -25,7 +25,7 @@ import { statusCommand } from "./commands/status.js";
 import { logsCommand } from "./commands/logs.js";
 import { configCommand } from "./commands/config.js";
 import { eyesCommand } from "./commands/eyes.js";
-import { webCommand } from "./commands/web.js";
+import { openInBrowser, webCommand } from "./commands/web.js";
 import { createSkillCommand } from "./commands/create-skill.js";
 import { publishSkillCommand } from "./commands/publish-skill.js";
 import { skillsCommand } from "./commands/skills.js";
@@ -37,7 +37,8 @@ import {
   startServiceCommand,
   stopServiceCommand,
 } from "./commands/robot-hw.js";
-import { header, info, isTty, dim } from "./util/logger.js";
+import { CLOUD_REST } from "./util/robot-cloud-config.js";
+import { header, info, isTty, dim, ok } from "./util/logger.js";
 import { readState, formatAge } from "./util/state.js";
 import { listSkills } from "./util/skills.js";
 
@@ -93,7 +94,8 @@ async function runMenuOnce(): Promise<boolean> {
     { name: "Stop everything", value: "down" },
     { name: "Doctor (health check)", value: "doctor" },
     { name: "Configure (API keys, namespace, transport)", value: "config" },
-    { name: "Open web dashboard (config + teleop)", value: "web" },
+    { name: "OpenClaw web dashboard (config + teleop)", value: "web" },
+    { name: "Open AgenticROS Cloud", value: "cloud" },
     { name: "Tail logs", value: "logs" },
     { name: "Show status", value: "status" },
     { name: "Quit", value: "quit" },
@@ -146,6 +148,11 @@ async function runMenuOnce(): Promise<boolean> {
       return false;
     case "web":
       await webCommand({});
+      return false;
+    case "cloud":
+      info("AgenticROS Cloud:");
+      ok(`  ${CLOUD_REST}`);
+      openInBrowser(CLOUD_REST);
       return false;
     case "skills":
       await skillsSubmenu();
