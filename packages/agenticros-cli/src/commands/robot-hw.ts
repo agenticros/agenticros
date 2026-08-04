@@ -6,12 +6,12 @@
  */
 
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, openSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { execa } from "execa";
 
-import { requireRobotPkgDir } from "../util/robot-pkg.js";
+import { requireRobotPkgDir, robotPkgHasRuntimeDeps } from "../util/robot-pkg.js";
 import { resolveScriptPath } from "../util/paths.js";
 import { detectRosDistro } from "../util/env.js";
 import {
@@ -23,16 +23,45 @@ import {
 } from "../util/robot-cloud-config.js";
 import { err, info, ok, warn } from "../util/logger.js";
 
+const COMMS_LOG = "/tmp/agenticros-comms.log";
+
 async function pkill(pattern: string): Promise<void> {
   await execa("pkill", ["-f", pattern], { reject: false });
 }
 
-function spawnDetached(command: string, args: string[]): void {
+function spawnDetached(
+  command: string,
+  args: string[],
+  opts?: { cwd?: string; logFile?: string },
+): number | undefined {
+  const stdio: ("ignore" | number)[] = opts?.logFile
+    ? ["ignore", openSync(opts.logFile, "a"), openSync(opts.logFile, "a")]
+    : ["ignore", "ignore", "ignore"];
   const child = spawn(command, args, {
     detached: true,
-    stdio: "ignore",
+    stdio,
+    cwd: opts?.cwd,
   });
   child.unref();
+  return child.pid;
+}
+
+function isPidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function tailLog(path: string, maxChars = 1200): string {
+  try {
+    const text = readFileSync(path, "utf8");
+    return text.length <= maxChars ? text : text.slice(-maxChars);
+  } catch {
+    return "(no log)";
+  }
 }
 
 export async function connectCommand(opts: { server?: string }): Promise<void> {
@@ -43,6 +72,17 @@ export async function connectCommand(opts: { server?: string }): Promise<void> {
     process.exit(1);
   }
 
+  if (!robotPkgHasRuntimeDeps(dir)) {
+    err(`Robot package at ${dir} has no installed deps (socket.io-client, …).`);
+    err("Fix: from a clone run `pnpm install`, or run `agenticros init` so ~/agenticros gets deps.");
+    err("The published npm tarball only ships sources — connect cannot run from runtime/ alone.");
+    process.exit(1);
+  }
+
+  // Avoid stacking multiple silent comms processes.
+  await pkill("comms.js");
+  await new Promise((r) => setTimeout(r, 300));
+
   const id = await ensureRobotId();
 
   const args = ["--max-old-space-size=1024", "--expose-gc", comms];
@@ -52,9 +92,25 @@ export async function connectCommand(opts: { server?: string }): Promise<void> {
     args.push("--server", s);
   }
 
-  spawnDetached("node", args);
+  info(`Starting ${comms}`);
+  info(`Logs: ${COMMS_LOG}`);
+  const pid = spawnDetached("node", args, { cwd: dir, logFile: COMMS_LOG });
+  if (pid === undefined) {
+    err("Failed to spawn comms.js");
+    process.exit(1);
+  }
+
+  // Give startup enough time to fail on missing native modules.
+  await new Promise((r) => setTimeout(r, 1500));
+  if (!isPidAlive(pid)) {
+    err("comms.js exited immediately — robot did not stay connected.");
+    err(`Last log output:\n${tailLog(COMMS_LOG)}`);
+    process.exit(1);
+  }
+
   ok("Robot connected.");
   info(`ROBOT ID: ${id}`);
+  info(`pid ${pid}`);
   info(`Cloud: ${CLOUD_REST} (override with -s)`);
 }
 

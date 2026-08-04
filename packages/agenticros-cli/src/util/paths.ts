@@ -110,7 +110,12 @@ export function getCliPaths(): CliPaths {
     pkgDir = dirname(pkgDir);
   }
 
-  const workspaceRoot = findRepoRoot(pkgDir);
+  // Prefer a monorepo found from cwd so `npx agenticros` / global installs
+  // still use a local clone or ~/agenticros when the user is sitting in it.
+  // Falling back to walking from the CLI package dir covers contributors who
+  // invoke the workspace-built binary.
+  const workspaceRoot =
+    findRepoRoot(process.cwd()) ?? findRepoRoot(pkgDir);
 
   const home = process.env["HOME"] ?? process.env["USERPROFILE"] ?? ".";
   const userDataDir = join(home, ".agenticros");
