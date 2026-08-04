@@ -95,7 +95,7 @@ async function runMenuOnce(): Promise<boolean> {
     { name: "Launch with simulation", value: "sim" },
     { name: "Robot hardware (connect, motors, camera, realsense)", value: "hardware" },
     { name: "Start robot eyes (local display)", value: "eyes" },
-    { name: "First-time setup (workspace + OpenClaw plugin + API key)", value: "init" },
+    { name: "First-time setup (workspace + OpenClaw + Cloud login)", value: "init" },
     { name: `Manage skills${skillsSuffix}`, value: "skills" },
     { name: "Stop everything", value: "down" },
     { name: "Doctor (health check)", value: "doctor" },
