@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { execa } from "execa";
 
 import { requireRobotPkgDir } from "../util/robot-pkg.js";
-import { getCliPaths } from "../util/paths.js";
+import { resolveScriptPath } from "../util/paths.js";
 import { detectRosDistro } from "../util/env.js";
 import {
   CLOUD_REST,
@@ -145,10 +145,10 @@ export async function stopCameraCommand(): Promise<void> {
 }
 
 export async function startRealsenseCommand(opts: { pointcloud?: boolean }): Promise<void> {
-  const paths = getCliPaths();
-  const script = join(paths.scriptsDir, "start_realsense.sh");
+  const script = resolveScriptPath("start_realsense.sh");
   if (!existsSync(script)) {
     err(`start_realsense.sh not found at ${script}`);
+    err("Upgrade the CLI (`npm i -g agenticros@latest`) or run `agenticros init --force` to refresh ~/agenticros/scripts.");
     process.exit(1);
   }
   const ros = detectRosDistro();
@@ -165,8 +165,7 @@ export async function startRealsenseCommand(opts: { pointcloud?: boolean }): Pro
 }
 
 export async function stopRealsenseCommand(): Promise<void> {
-  const paths = getCliPaths();
-  const script = join(paths.scriptsDir, "stop_realsense.sh");
+  const script = resolveScriptPath("stop_realsense.sh");
   if (existsSync(script)) {
     await execa("bash", [script], { stdio: "inherit", reject: false });
   } else {

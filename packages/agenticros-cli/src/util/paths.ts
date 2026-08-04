@@ -185,6 +185,25 @@ export function resetPathsCache(): void {
   cached = undefined;
 }
 
+/**
+ * Resolve a script under scripts/ (or a relative path like `sim/run_sim.sh`).
+ * Prefers the active workspace/install scriptsDir; if the file is missing
+ * there (stale ~/agenticros from before a CLI upgrade), falls back to the
+ * published package's runtime/scripts snapshot.
+ */
 export function resolveScriptPath(name: string): string {
-  return resolve(getCliPaths().scriptsDir, name);
+  const paths = getCliPaths();
+  const primary = resolve(paths.scriptsDir, name);
+  if (existsSync(primary)) return primary;
+
+  const fallbacks: string[] = [];
+  if (paths.bundleDir) {
+    fallbacks.push(resolve(paths.bundleDir, "scripts", name));
+  }
+  fallbacks.push(resolve(paths.pkgDir, "runtime", "scripts", name));
+
+  for (const candidate of fallbacks) {
+    if (existsSync(candidate)) return candidate;
+  }
+  return primary;
 }
