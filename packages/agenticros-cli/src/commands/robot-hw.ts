@@ -11,8 +11,12 @@ import { join } from "node:path";
 
 import { execa } from "execa";
 
-import { requireRobotPkgDir, robotPkgHasRuntimeDeps } from "../util/robot-pkg.js";
-import { resolveScriptPath } from "../util/paths.js";
+import {
+  isNpmRuntimeRobotPkg,
+  requireRobotPkgDir,
+  robotPkgHasRuntimeDeps,
+} from "../util/robot-pkg.js";
+import { getCliPaths, resolveScriptPath } from "../util/paths.js";
 import { detectRosDistro } from "../util/env.js";
 import {
   CLOUD_REST,
@@ -74,9 +78,16 @@ export async function connectCommand(opts: { server?: string }): Promise<void> {
   }
 
   if (!robotPkgHasRuntimeDeps(dir)) {
+    const installRobot = join(getCliPaths().installDir, "packages", "agenticros-robot");
     err(`Robot package at ${dir} has no installed deps (socket.io-client, …).`);
-    err("Fix: from a clone run `pnpm install`, or run `agenticros init` so ~/agenticros gets deps.");
-    err("The published npm tarball only ships sources — connect cannot run from runtime/ alone.");
+    if (isNpmRuntimeRobotPkg(dir)) {
+      err(
+        `CLI fell back to the npm runtime/ snapshot (sources only). Expected a deps-installed tree at ${installRobot}.`,
+      );
+    }
+    err(`Fix now:  cd ${getCliPaths().installDir} && pnpm install`);
+    err("Or:       agenticros init --force");
+    err("Then:     agenticros connect");
     process.exit(1);
   }
 

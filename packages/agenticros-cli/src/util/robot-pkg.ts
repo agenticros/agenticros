@@ -49,6 +49,10 @@ function findMonorepoFrom(startDir: string): string | undefined {
  *
  * Prefers a tree whose deps can actually be resolved so `npx agenticros connect`
  * does not silently spawn a dep-less runtime/ copy.
+ *
+ * Always considers ~/agenticros (installDir) even when getCliPaths() is still in
+ * bundle mode — e.g. a half-init left package.json missing at the root but the
+ * robot package tree is present after a partial copy.
  */
 export function getRobotPkgDir(): string | undefined {
   const paths = getCliPaths();
@@ -57,6 +61,9 @@ export function getRobotPkgDir(): string | undefined {
   if (paths.repoRoot) {
     candidates.push(join(paths.repoRoot, "packages", "agenticros-robot"));
   }
+  // Prefer the init install dir even when mode detection did not promote it to
+  // repoRoot (incomplete ~/agenticros, custom AGENTICROS_HOME, etc.).
+  candidates.push(join(paths.installDir, "packages", "agenticros-robot"));
   const cwdRoot = findMonorepoFrom(process.cwd());
   if (cwdRoot) {
     candidates.push(join(cwdRoot, "packages", "agenticros-robot"));
@@ -83,4 +90,9 @@ export function requireRobotPkgDir(): string {
     );
   }
   return dir;
+}
+
+/** True when `dir` is the published npm runtime/ snapshot (sources only, no deps). */
+export function isNpmRuntimeRobotPkg(dir: string): boolean {
+  return /[/\\]runtime[/\\]packages[/\\]agenticros-robot$/.test(dir);
 }

@@ -61,6 +61,23 @@ export function isWorkspaceInstalled(repoRoot: string): boolean {
     if (!existsSync(eyesWs)) return false;
   }
 
+  // Same trap for agenticros-robot (cloud connect / motors): CLI upgrade drops
+  // the package + refreshed lockfile, init skips pnpm install because root
+  // .modules.yaml exists, then `agenticros connect` fails resolving
+  // socket.io-client from a dep-less packages/agenticros-robot.
+  const robotPkg = join(repoRoot, "packages", "agenticros-robot", "package.json");
+  if (existsSync(robotPkg)) {
+    const robotSocket = join(
+      repoRoot,
+      "packages",
+      "agenticros-robot",
+      "node_modules",
+      "socket.io-client",
+      "package.json",
+    );
+    if (!existsSync(robotSocket)) return false;
+  }
+
   return true;
 }
 
