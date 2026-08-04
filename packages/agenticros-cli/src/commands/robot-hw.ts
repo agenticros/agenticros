@@ -8,29 +8,20 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
 
 import { execa } from "execa";
 
 import { requireRobotPkgDir } from "../util/robot-pkg.js";
 import { getCliPaths } from "../util/paths.js";
 import { detectRosDistro } from "../util/env.js";
+import {
+  CLOUD_REST,
+  ensureRobotId,
+  getRobotId,
+  setApiToken,
+  setRobotId,
+} from "../util/robot-cloud-config.js";
 import { err, info, ok, warn } from "../util/logger.js";
-
-const CLOUD_REST = "https://cloud.agenticros.com";
-
-interface RobotConfigModule {
-  getRobotId: () => string | undefined;
-  getApiToken: () => string | undefined;
-  setRobotId: (id: string) => string;
-  setApiToken: (token: string) => string;
-  ensureRobotId: () => Promise<string>;
-}
-
-async function loadRobotConfig(): Promise<RobotConfigModule> {
-  const dir = requireRobotPkgDir();
-  return import(pathToFileURL(join(dir, "robot-config.js")).href) as Promise<RobotConfigModule>;
-}
 
 async function pkill(pattern: string): Promise<void> {
   await execa("pkill", ["-f", pattern], { reject: false });
@@ -52,8 +43,7 @@ export async function connectCommand(opts: { server?: string }): Promise<void> {
     process.exit(1);
   }
 
-  const cfg = await loadRobotConfig();
-  const id = await cfg.ensureRobotId();
+  const id = await ensureRobotId();
 
   const args = ["--max-old-space-size=1024", "--expose-gc", comms];
   if (opts.server) {
@@ -74,8 +64,7 @@ export async function disconnectCommand(): Promise<void> {
 }
 
 export async function idCommand(): Promise<void> {
-  const cfg = await loadRobotConfig();
-  const id = (await cfg.ensureRobotId()) || cfg.getRobotId();
+  const id = (await ensureRobotId()) || getRobotId();
   process.stdout.write(`ROBOT ID: ${id ?? "(none)"}\n`);
 }
 
@@ -84,13 +73,12 @@ export async function setCommand(opts: { token?: string; id?: string }): Promise
     err("Provide --token and/or --id (API token from cloud.agenticros.com).");
     process.exit(1);
   }
-  const cfg = await loadRobotConfig();
   if (opts.token) {
-    cfg.setApiToken(opts.token);
+    setApiToken(opts.token);
     ok(`API token saved.`);
   }
   if (opts.id) {
-    cfg.setRobotId(opts.id);
+    setRobotId(opts.id);
     ok(`ROBOT ID: ${opts.id}`);
   }
 }
