@@ -38,6 +38,12 @@ import {
   startServiceCommand,
   stopServiceCommand,
 } from "./commands/robot-hw.js";
+import {
+  loginCommand,
+  logoutCommand,
+  whoamiCommand,
+} from "./commands/cloud-auth.js";
+import { registerCommand } from "./commands/register.js";
 import { err } from "./util/logger.js";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -199,6 +205,54 @@ program
   });
 
 program
+  .command("login")
+  .description(
+    "Log in to AgenticROS Cloud via browser (device code + GitHub). Saves API token like `set --token`.",
+  )
+  .option("--no-open", "Print the URL without launching a browser")
+  .action(async (opts: { open?: boolean }) => {
+    await loginCommand({ noOpen: opts.open === false });
+  });
+
+program
+  .command("logout")
+  .description("Clear the stored AgenticROS Cloud API token (keeps ROBOT ID).")
+  .action(async () => {
+    await logoutCommand();
+  });
+
+program
+  .command("whoami")
+  .description("Show AgenticROS Cloud login status and robot registration.")
+  .action(async () => {
+    await whoamiCommand();
+  });
+
+program
+  .command("register")
+  .description(
+    "Register this robot on AgenticROS Cloud (wizard: name, camera, compute). Uses the local ROBOT ID.",
+  )
+  .option("--name <name>", "Robot display name")
+  .option("--camera <camera>", "Camera model (e.g. None, 2D, D435i)")
+  .option("--compute <compute>", "Compute platform (e.g. Raspberry Pi)")
+  .option("--type <type>", "Robot type (AMR, AGV, Arm, Drone, Humanoid)")
+  .option("--defaults", "Skip advanced prompts (type/wheels/namespace)", false)
+  .option("-y, --yes", "Non-interactive where possible (no login prompt)", false)
+  .action(
+    async (opts: {
+      name?: string;
+      camera?: string;
+      compute?: string;
+      type?: string;
+      defaults?: boolean;
+      yes?: boolean;
+    }) => {
+      await registerCommand(opts);
+    },
+  );
+
+program
   .command("id")
   .description("Print this robot's cloud ROBOT ID (creates one if missing).")
   .action(async () => {
@@ -208,7 +262,7 @@ program
 program
   .command("set")
   .description(
-    "Save cloud credentials. Token from https://cloud.agenticros.com API docs.",
+    "Save cloud credentials manually. Prefer `agenticros login` when possible.",
   )
   .option("--token <token>", "Developer API token")
   .option("--id <robotId>", "Robot ID")

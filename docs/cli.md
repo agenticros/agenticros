@@ -87,10 +87,14 @@ live in `configstore('agenticros')` (`ROBOT_ID`, `API_TOKEN`); legacy
 
 | Command | Purpose |
 |---------|---------|
+| `agenticros login [--no-open]` | Device-code login (GitHub in browser); saves `API_TOKEN` like `set --token`. |
+| `agenticros logout` | Clear `API_TOKEN` (keeps `ROBOT_ID`). |
+| `agenticros whoami` | Show cloud account and whether this robot is registered. |
+| `agenticros register` | Interactive wizard (required: name, camera, compute). Mints/reuses local UUID and `POST /robots` to ARC. |
 | `agenticros connect [-s host]` | Start cloud P2P/ROS bridge (`comms.js`). Default `wss://cloud.agenticros.com`. |
 | `agenticros disconnect` | Stop `comms.js`. |
 | `agenticros id` | Print (or create) robot ID. |
-| `agenticros set --token=… [--id=…]` | Save AgenticROS Cloud API token (API key from the portal) and/or robot ID. Run `agenticros init` first so connect/motors deps are installed. |
+| `agenticros set --token=… [--id=…]` | Manual credential save (prefer `login`). Run `agenticros init` first so connect/motors deps are installed. |
 | `agenticros start motors [-b rpi\|firmata\|jetson] [-p pins] [-e enc] [-d device]` | Start motor controller. Jetson GPIO is **opt-in** (`-b jetson` only). |
 | `agenticros stop motors` | Stop all motor backends. |
 | `agenticros start realsense [-p\|--pointcloud]` | Start RealSense (recovery preflight + pidfile). |
@@ -100,7 +104,8 @@ live in `configstore('agenticros')` (`ROBOT_ID`, `API_TOKEN`); legacy
 
 Aliases: `agenticros motors start`, `agenticros camera stop`, etc.
 
-The interactive menu includes a **Robot hardware** submenu for the same actions.
+The interactive menu includes **AgenticROS Cloud** (login / register / whoami)
+and a **Robot hardware** submenu for connect/motors/camera.
 
 ### `agenticros init [--force] [--install-dir <path>]`
 
@@ -112,9 +117,10 @@ skipped (with a checkmark) when already done:
 3. ROS 2 workspace build (`colcon build --symlink-install`)
 4. OpenClaw plugin install (via `scripts/setup_gateway_plugin.sh`)
 5. Robot config (writes `~/.agenticros/config.json`)
-6. OpenAI API key (optional — skip when using local Ollama; see [local-vlm.md](local-vlm.md))
-7. MCP client config (optional — `agenticros mcp setup` for Codex, Hermes, and Claude)
-8. Final `agenticros doctor` summary
+6. AgenticROS Cloud login + register (optional — skip for local-only)
+7. OpenAI API key (optional — skip when using local Ollama; see [local-vlm.md](local-vlm.md))
+8. MCP client config (optional — `agenticros mcp setup` for Codex, Hermes, and Claude)
+9. Final `agenticros doctor` summary
 
 Pass `--force` to re-run every step regardless of state.
 
@@ -234,6 +240,7 @@ Read or edit `~/.agenticros/config.json`. Actions:
 | Path | Owner | Purpose |
 |---|---|---|
 | `~/.agenticros/config.json` | User | AgenticROS runtime config (transport mode, namespace, safety limits). |
+| `~/.config/configstore/agenticros.json` | CLI | Cloud `ROBOT_ID` + `API_TOKEN` (`login` / `set` / `id` / `register`). |
 | `~/.agenticros/cli-state.json` | CLI | Last-used mode/namespace for the menu's "(yesterday)" hint. |
 | `~/.hermes/config.yaml` | Hermes Agent | MCP server registrations (written by `agenticros mcp setup` or `agenticros hermes setup`). |
 | `~/.codex/config.toml` | Codex CLI | MCP server registrations (written by `agenticros mcp setup` or `agenticros codex setup`). |

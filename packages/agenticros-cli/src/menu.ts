@@ -37,7 +37,13 @@ import {
   startServiceCommand,
   stopServiceCommand,
 } from "./commands/robot-hw.js";
-import { CLOUD_REST } from "./util/robot-cloud-config.js";
+import {
+  loginCommand,
+  logoutCommand,
+  whoamiCommand,
+} from "./commands/cloud-auth.js";
+import { registerCommand } from "./commands/register.js";
+import { CLOUD_REST, getApiToken } from "./util/robot-cloud-config.js";
 import { header, info, isTty, dim, ok } from "./util/logger.js";
 import { readState, formatAge } from "./util/state.js";
 import { listSkills } from "./util/skills.js";
@@ -95,7 +101,8 @@ async function runMenuOnce(): Promise<boolean> {
     { name: "Doctor (health check)", value: "doctor" },
     { name: "Configure (API keys, namespace, transport)", value: "config" },
     { name: "OpenClaw web dashboard (config + teleop)", value: "web" },
-    { name: "Open AgenticROS Cloud", value: "cloud" },
+    { name: "AgenticROS Cloud (login, register, account)", value: "account" },
+    { name: "Open AgenticROS Cloud in browser", value: "cloud" },
     { name: "Tail logs", value: "logs" },
     { name: "Show status", value: "status" },
     { name: "Quit", value: "quit" },
@@ -148,6 +155,9 @@ async function runMenuOnce(): Promise<boolean> {
       return false;
     case "web":
       await webCommand({});
+      return false;
+    case "account":
+      await accountSubmenu();
       return false;
     case "cloud":
       info("AgenticROS Cloud:");
@@ -222,7 +232,7 @@ async function hardwareSubmenu(): Promise<void> {
         { name: "Start 2D camera", value: "start-camera" },
         { name: "Stop 2D camera", value: "stop-camera" },
         { name: "Show robot ID", value: "id" },
-        { name: "Set API token / robot ID", value: "set" },
+        { name: "Advanced: set API token / robot ID manually", value: "set" },
         { name: "Back to main menu", value: BACK },
       ],
       default: "connect",
@@ -272,6 +282,72 @@ async function hardwareSubmenu(): Promise<void> {
           });
           break;
         }
+        default:
+          break;
+      }
+    } catch (e) {
+      info(e instanceof Error ? e.message : String(e));
+    }
+  }
+}
+
+/**
+ * Cloud account submenu: login / register / whoami / logout, plus manual token set.
+ */
+async function accountSubmenu(): Promise<void> {
+  while (true) {
+    const loggedIn = Boolean(getApiToken());
+    const action = await select<string>({
+      message: "AgenticROS Cloud:",
+      choices: [
+        {
+          name: loggedIn
+            ? "Log in again (device code + GitHub)"
+            : "Log in (device code + GitHub)",
+          value: "login",
+        },
+        { name: "Register this robot", value: "register" },
+        { name: "Who am I?", value: "whoami" },
+        { name: "Log out (clear API token)", value: "logout" },
+        { name: "Advanced: set API token / robot ID manually", value: "set" },
+        { name: "Open cloud portal in browser", value: "open" },
+        { name: "Back to main menu", value: BACK },
+      ],
+      default: loggedIn ? "register" : "login",
+    });
+    if (action === BACK) return;
+    try {
+      switch (action) {
+        case "login":
+          await loginCommand({});
+          break;
+        case "register":
+          await registerCommand({});
+          break;
+        case "whoami":
+          await whoamiCommand();
+          break;
+        case "logout":
+          await logoutCommand();
+          break;
+        case "set": {
+          const token = await input({
+            message: "API token from cloud.agenticros.com (empty to skip):",
+            validate: () => true,
+          });
+          const id = await input({
+            message: "Robot ID (empty to skip):",
+            validate: () => true,
+          });
+          await setCommand({
+            token: token.trim() || undefined,
+            id: id.trim() || undefined,
+          });
+          break;
+        }
+        case "open":
+          openInBrowser(CLOUD_REST);
+          break;
         default:
           break;
       }

@@ -650,6 +650,54 @@ export async function runDoctorChecks(): Promise<DoctorReport> {
     });
   }
 
+  // AgenticROS Cloud credentials (warn-only — local-only users may skip).
+  try {
+    const {
+      getApiToken,
+      getRobotId,
+      isCloudRobotRegistered,
+    } = await import("../util/robot-cloud-config.js");
+    const token = getApiToken();
+    const robotId = getRobotId();
+    if (!token) {
+      checks.push({
+        id: "cloud-token",
+        label: "AgenticROS Cloud API token not set",
+        severity: "yellow",
+        hint: "Run `agenticros login` (or `agenticros set --token=…`) for cloud connect / register.",
+      });
+    } else {
+      checks.push({
+        id: "cloud-token",
+        label: "AgenticROS Cloud API token set",
+        severity: "green",
+      });
+      if (!robotId) {
+        checks.push({
+          id: "cloud-robot",
+          label: "Cloud ROBOT ID not set",
+          severity: "yellow",
+          hint: "Run `agenticros register` or `agenticros id`.",
+        });
+      } else {
+        const registered = await isCloudRobotRegistered();
+        checks.push({
+          id: "cloud-robot",
+          label: registered
+            ? "Cloud robot registered"
+            : "Cloud robot not registered on account",
+          severity: registered ? "green" : "yellow",
+          detail: robotId,
+          hint: registered
+            ? undefined
+            : "Run `agenticros register` to claim this ROBOT ID on AgenticROS Cloud.",
+        });
+      }
+    }
+  } catch {
+    // configstore unavailable — skip
+  }
+
   const summary = checks.reduce(
     (acc, c) => {
       acc[c.severity] += 1;

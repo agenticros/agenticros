@@ -11,9 +11,10 @@ healthy from a single binary.
 ```bash
 # On the robot (recommended first-time path)
 npm install -g agenticros          # or: npx agenticros …
-agenticros init                    # workspace + deps (required for connect/motors)
-agenticros set --token=<API_TOKEN> # AgenticROS Cloud API key (see below)
-agenticros id                      # print robot UUID; add it in the cloud portal
+agenticros init                    # workspace + deps + optional cloud login/register
+# Or separately:
+agenticros login                   # browser device-code + GitHub → saves API token
+agenticros register                # wizard (name, camera, compute) → claims ROBOT ID on ARC
 agenticros connect                 # P2P + ROS bridge → wss://cloud.agenticros.com
 agenticros start motors            # /cmd_vel → GPIO / Firmata
 agenticros start realsense         # or: agenticros start camera
@@ -52,22 +53,32 @@ agenticros init --force
 or `start motors`.** The published npm package ships sources; native deps are
 installed into the workspace by init.
 
-### 2. AgenticROS Cloud API token (`set --token`)
+### 2. AgenticROS Cloud (`login` + `register`)
 
-1. Sign in at **[https://cloud.agenticros.com](https://cloud.agenticros.com)**
-2. Open **API** docs (or your account settings) and copy your **API token**
-   (also called API key)
-3. On the robot:
+Preferred — stay in the CLI (also offered during `agenticros init`):
+
+```bash
+agenticros login                   # opens /device; approve with GitHub
+agenticros whoami                  # confirm account + token
+agenticros register                # required: name, camera, compute
+                                   # auto-assigns one UUID to local + ARC
+```
+
+`login` uses an OAuth device-code flow: the CLI prints a short code, opens the
+browser when possible, and saves your existing developer API token (it is
+**not** rotated). `register` mints/reuses `ROBOT_ID` via `POST /new` and claims
+it with `POST /robots` so the robot and the portal share the same UUID.
+
+**Manual fallback** (copy token from the API page):
 
 ```bash
 agenticros set --token=<your-api-token-from-cloud>
-agenticros id                         # UUID for this robot
-# Optional: pin a specific robot UUID from the portal
-agenticros set --id=<robot-uuid>
+agenticros id
+agenticros set --id=<robot-uuid>   # optional pin
 ```
 
-Add that robot ID to your fleet in the cloud UI. Token and ID are stored in
-`configstore('agenticros')` (legacy `robotics` store is migrated automatically).
+Token and ID are stored in `configstore('agenticros')` (legacy `robotics`
+store is migrated automatically) — the same store `connect` / motors read.
 
 ### 3. Connect and start hardware
 
@@ -91,10 +102,14 @@ Default cloud host: **`cloud.agenticros.com`** (REST + WebSocket).
 
 | Command | Description |
 |---------|-------------|
+| `agenticros login [--no-open]` | Device-code GitHub login; saves API token. |
+| `agenticros logout` | Clear stored API token (keeps ROBOT ID). |
+| `agenticros whoami` | Show cloud account + registration status. |
+| `agenticros register` | Wizard to register this robot on ARC (name, camera, compute). |
 | `agenticros connect [-s host]` | Start cloud P2P + ROS bridge (`comms.js`). Default `wss://cloud.agenticros.com`. |
 | `agenticros disconnect` | Stop `comms.js`. |
 | `agenticros id` | Print (or create) robot UUID. |
-| `agenticros set --token=<t> [--id=<uuid>]` | Save Cloud API token and/or robot ID. |
+| `agenticros set --token=<t> [--id=<uuid>]` | Manual credential save (prefer `login`). |
 
 ### Motors
 
@@ -179,7 +194,8 @@ agenticros start camera -d /dev/video4
 |---|---|
 | `agenticros` | Interactive top-level menu (includes **Robot hardware** submenu). |
 | `agenticros init` | First-time setup wizard. Idempotent. |
-| `agenticros set --token` / `--id` | Cloud API token + robot ID. |
+| `agenticros login` / `logout` / `whoami` / `register` | Cloud auth + robot claim. |
+| `agenticros set --token` / `--id` | Manual cloud credentials (prefer `login`). |
 | `agenticros id` | Print robot UUID. |
 | `agenticros connect` / `disconnect` | Cloud P2P bridge. |
 | `agenticros start\|stop motors` | Local motor controller. |
@@ -218,15 +234,16 @@ See [docs/local-vlm.md](https://github.com/agenticros/agenticros/blob/main/docs/
 3. ROS 2 workspace build (`colcon`)
 4. OpenClaw plugin install
 5. Robot config (`~/.agenticros/config.json`)
-6. Optional OpenAI key / MCP client setup
-7. Final `agenticros doctor`
+6. Optional AgenticROS Cloud login + register
+7. Optional OpenAI key / MCP client setup
+8. Final `agenticros doctor`
 
 Use `agenticros init --force` to refresh after upgrading the CLI.
 
 ## Where state lives
 
 - `~/.agenticros/config.json` — transport, namespace, safety, teleop
-- Configstore `agenticros` — Cloud `ROBOT_ID` + `API_TOKEN` (`agenticros set` / `id`)
+- Configstore `agenticros` — Cloud `ROBOT_ID` + `API_TOKEN` (`login` / `register` / `set` / `id`)
 - `~/agenticros/` — install tree after `npx`/`npm` init
 - `/tmp/agenticros-*.pid`, `/tmp/agenticros-*.log`, `/tmp/agenticros-comms.log`
 

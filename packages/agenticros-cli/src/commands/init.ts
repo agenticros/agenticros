@@ -8,9 +8,10 @@
  *   3. colcon workspace  -> ros2_ws colcon build
  *   4. OpenClaw plugin   -> scripts/setup_gateway_plugin.sh
  *   5. Robot config      -> prompt namespace + transport, write ~/.agenticros/config.json
- *   6. OpenAI key        -> prompt + scripts/configure_agenticros.sh
- *   7. MCP clients       -> agenticros mcp setup (Codex, Hermes, Claude — optional)
- *   8. Doctor summary
+ *   6. AgenticROS Cloud  -> login (device code) + register robot (skippable)
+ *   7. OpenAI key        -> prompt + scripts/configure_agenticros.sh
+ *   8. MCP clients       -> agenticros mcp setup (Codex, Hermes, Claude — optional)
+ *   9. Doctor summary
  *
  * Reuses the existing shell scripts as subprocesses (no logic duplication).
  */
@@ -23,9 +24,15 @@ import { confirm, input, password, select } from "@inquirer/prompts";
 import { execa } from "execa";
 
 import { runDoctorChecks } from "./doctor.js";
+import { loginCommand } from "./cloud-auth.js";
+import { registerCommand } from "./register.js";
 import { claudeOnPath, codexOnPath, hermesOnPath, mcpSetupCommand } from "../util/mcp-setup.js";
 import { detectRosDistro, isWindows } from "../util/env.js";
 import { getCliPaths, isAgenticrosMonorepo, resetPathsCache } from "../util/paths.js";
+import {
+  getApiToken,
+  isCloudRobotRegistered,
+} from "../util/robot-cloud-config.js";
 import { header, info, ok, warn, err, dim, withSpinner } from "../util/logger.js";
 import {
   ensureToolsAlsoAllow,
@@ -217,6 +224,9 @@ export async function initCommand(opts: InitOptions): Promise<void> {
     ok("Robot config already exists at ~/.agenticros/config.json (skip).");
   }
 
+  // Step: AgenticROS Cloud login + register (skippable for local-only).
+  await promptCloudLoginAndRegister(opts.force === true);
+
   // Step: OpenAI key.
   if (opts.force || !openAiKeyConfigured(before)) {
     await promptAndConfigureOpenAi();
@@ -404,6 +414,46 @@ function openAiKeyConfigured(_before: { checks: { id: string; severity: string }
     return typeof cfg.openai?.apiKey === "string" && cfg.openai.apiKey.length > 0;
   } catch {
     return false;
+  }
+}
+
+async function promptCloudLoginAndRegister(force: boolean): Promise<void> {
+  const hasToken = Boolean(getApiToken());
+  if (hasToken && !force) {
+    ok("AgenticROS Cloud API token already set (skip login).");
+  } else {
+    const wantLogin = await confirm({
+      message:
+        "Log in to AgenticROS Cloud now? (opens browser for GitHub; skip for local-only)",
+      default: !hasToken,
+    });
+    if (wantLogin) {
+      await loginCommand({});
+    } else {
+      dim("Skipping cloud login. Run `agenticros login` later.");
+    }
+  }
+
+  if (!getApiToken()) {
+    return;
+  }
+
+  const registered = await isCloudRobotRegistered();
+  if (registered && !force) {
+    ok("This robot is already registered on AgenticROS Cloud (skip).");
+    return;
+  }
+
+  const wantRegister = await confirm({
+    message: registered
+      ? "Update this robot's cloud profile (name, camera, compute)?"
+      : "Register this robot on AgenticROS Cloud now?",
+    default: !registered,
+  });
+  if (wantRegister) {
+    await registerCommand({ defaults: true });
+  } else {
+    dim("Skipping register. Run `agenticros register` later.");
   }
 }
 
