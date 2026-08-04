@@ -5,134 +5,227 @@
 `agenticros` is the unified command-line tool for AgenticROS — bring up a real
 robot or a simulated one, drive it from Claude Code, OpenAI Codex, Hermes Agent, or OpenClaw
 (with **local Ollama VLMs** or cloud models),
-and keep your workspace healthy from a single binary.
+connect to [AgenticROS Cloud](https://cloud.agenticros.com), and keep your workspace
+healthy from a single binary.
 
 ```bash
-# Brand new machine: one command end-to-end
-npx agenticros init     # workspace + plugin + MCP clients + optional API key + doctor
-agenticros              # interactive menu
-agenticros mcp setup    # register AgenticROS MCP for Codex, Hermes, and Claude
-agenticros up real      # bring up the real-robot stack
-agenticros up sim-amr   # bring up a simulated 2-wheel AMR
-agenticros up sim-amr --nav2   # AMR + Nav2 (map + AMCL + navigation)
-agenticros up sim-arm   # bring up a simulated 6-DOF arm
-agenticros eyes         # on-robot face display (tablet / head unit)
-agenticros doctor       # health check
-agenticros down         # stop everything we started
+# On the robot (recommended first-time path)
+npm install -g agenticros          # or: npx agenticros …
+agenticros init                    # workspace + deps (required for connect/motors)
+agenticros set --token=<API_TOKEN> # AgenticROS Cloud API key (see below)
+agenticros id                      # print robot UUID; add it in the cloud portal
+agenticros connect                 # P2P + ROS bridge → wss://cloud.agenticros.com
+agenticros start motors            # /cmd_vel → GPIO / Firmata
+agenticros start realsense         # or: agenticros start camera
+agenticros                         # interactive menu
+agenticros up real                 # RealSense + motors + MCP demo stack
+agenticros doctor
+agenticros down
 ```
-
-## Why this exists
-
-Before `agenticros`, the demo path was a chain of shell scripts:
-`start_demo.sh`, `setup_gateway_plugin.sh`, `configure_agenticros.sh`,
-`onboard_robot.sh`, … Each one solved a real problem but the cumulative
-surface area was a barrier for new users and a brittle handoff for demos.
-
-The CLI is the single entry point. It **orchestrates** the existing scripts
-rather than replacing them, so they remain usable on their own. The published
-npm tarball bundles those scripts plus the ROS 2 source packages and the
-pre-built MCP server, so `npx agenticros init` works on a fresh machine with
-no `git clone` step.
-
-## Local VLM (Ollama)
-
-Run **without cloud LLM API keys** by pointing OpenClaw or Hermes at Ollama:
-
-```bash
-ollama pull qwen3-vl:8b-instruct   # or qwen3-vl:2b on smaller hardware
-npx agenticros init                # skip OpenAI key when prompted
-# Point OpenClaw primary model at Ollama (see docs/local-vlm.md)
-agenticros up sim-amr
-```
-
-OpenClaw: web chat, teleop, messaging, skills. Hermes: terminal + Ollama. Full guide:
-**[docs/local-vlm.md](../../docs/local-vlm.md)** (model picks, multimodal catalog patch, describer, Follow Me).
 
 ## Install
 
-Three ways, listed easiest first:
+| Method | Command |
+|--------|---------|
+| One-off | `npx agenticros …` |
+| Global | `npm install -g agenticros` (or `pnpm add -g agenticros`) |
+| Contributor | Clone the monorepo, `pnpm install && pnpm build`, run `./agenticros` |
 
-1. **`npx agenticros`** — one command on any machine with Node ≥ 20. Pulls
-   the latest published tarball, no local checkout required.
-2. **Per-user global** — `npm install -g agenticros` (or `pnpm add -g agenticros`).
-   Then `agenticros` is on your PATH from any working directory.
-3. **Repo checkout (contributors)** — `git clone … && pnpm install && pnpm build`,
-   then run the root `./agenticros` shim. The CLI auto-detects the workspace
-   and uses live scripts / sources instead of the bundled snapshots.
+Requires **Node.js ≥ 20**. Real robot / sim also need **ROS 2** Humble or Jazzy.
 
-## Commands
+## First-time robot setup (`init` + Cloud token)
+
+### 1. `agenticros init`
+
+Idempotent wizard. Creates/refreshes `~/agenticros` (when using npm/npx), installs
+JS deps (including on-robot helpers for connect/motors/camera), builds the MCP
+server, optionally configures OpenClaw / MCP clients, and writes
+`~/.agenticros/config.json`.
+
+```bash
+agenticros init
+# Refresh scripts/deps after a CLI upgrade:
+agenticros init --force
+```
+
+**You need `init` (or a full monorepo `pnpm install`) before `agenticros connect`
+or `start motors`.** The published npm package ships sources; native deps are
+installed into the workspace by init.
+
+### 2. AgenticROS Cloud API token (`set --token`)
+
+1. Sign in at **[https://cloud.agenticros.com](https://cloud.agenticros.com)**
+2. Open **API** docs (or your account settings) and copy your **API token**
+   (also called API key)
+3. On the robot:
+
+```bash
+agenticros set --token=<your-api-token-from-cloud>
+agenticros id                         # UUID for this robot
+# Optional: pin a specific robot UUID from the portal
+agenticros set --id=<robot-uuid>
+```
+
+Add that robot ID to your fleet in the cloud UI. Token and ID are stored in
+`configstore('agenticros')` (legacy `robotics` store is migrated automatically).
+
+### 3. Connect and start hardware
+
+```bash
+agenticros connect                 # default wss://cloud.agenticros.com
+# agenticros connect -s wss://robotics.dev   # legacy host (same app)
+agenticros start motors
+agenticros start realsense         # depth + RGB via realsense2_camera
+# or: agenticros start camera -d /dev/video0
+```
+
+Logs for connect: `/tmp/agenticros-comms.log`. Status: `agenticros status`.
+
+---
+
+## On-robot hardware commands
+
+Default cloud host: **`cloud.agenticros.com`** (REST + WebSocket).
+
+### Connect / disconnect
+
+| Command | Description |
+|---------|-------------|
+| `agenticros connect [-s host]` | Start cloud P2P + ROS bridge (`comms.js`). Default `wss://cloud.agenticros.com`. |
+| `agenticros disconnect` | Stop `comms.js`. |
+| `agenticros id` | Print (or create) robot UUID. |
+| `agenticros set --token=<t> [--id=<uuid>]` | Save Cloud API token and/or robot ID. |
+
+### Motors
+
+Subscribes to `/cmd_vel` (or the namespaced topic from the portal) and drives
+differential-drive PWM.
+
+| Command | Description |
+|---------|-------------|
+| `agenticros start motors [options]` | Start motor controller (detached). |
+| `agenticros stop motors` | Stop all motor backends. |
+| `agenticros motors start` / `motors stop` | Same (alias word order). |
+
+**Backend selection** (`-b`):
+
+| Backend | When | Hardware |
+|---------|------|----------|
+| `rpi` | Default when portal `compute` is Raspberry Pi | Pi GPIO via `@iiot2k/gpiox` |
+| `firmata` | Default for everything else (Radxa, LattePanda, Jetson+Arduino, NUC) | Arduino Firmata serial |
+| `jetson` | **Opt-in only** — never auto-selected | Jetson BOARD pins via JETGPIO + `koffi` |
+
+**Options:**
+
+| Flag | Meaning | Examples |
+|------|---------|----------|
+| `-b, --backend` | `rpi` \| `firmata` \| `jetson` | `-b firmata` |
+| `-p, --pins` | Pin list left-to-right | Pi default `27,22,17,18`; Firmata `3,4,5,7,8,9`; Jetson BOARD `16,18,22,26` |
+| `-e, --encoderpins` | Firmata encoder pins | default `13,2,12,11` |
+| `-d, --device` | Firmata serial device | `-d /dev/ttyACM0` |
+
+```bash
+# Raspberry Pi (GPIO)
+agenticros start motors -b rpi -p 27,22,17,18
+
+# Arduino Firmata (Radxa / LattePanda / Jetson+Arduino / NUC)
+sudo usermod -aG dialout $USER   # once, then reboot
+agenticros start motors -b firmata -d /dev/ttyACM0 -p 3,4,5,7,8,9
+
+# Jetson native GPIO (manual; requires system JETGPIO)
+agenticros start motors -b jetson -p 16,18,22,26
+```
+
+`agenticros up real` starts motors via the same local helper (skip with `--no-motors`).
+`agenticros down` stops motor processes (not cloud `comms.js` — use `disconnect`).
+
+### RealSense (3D)
+
+| Command | Description |
+|---------|-------------|
+| `agenticros start realsense [-p\|--pointcloud]` | Launch `realsense2_camera` (recovery preflight + pidfile). |
+| `agenticros stop realsense` | Stop the camera node. |
+
+Requires `ros-<distro>-realsense2-camera`. Logs: `/tmp/agenticros-camera.log`.
+
+### 2D camera (V4L → `/camera2d`)
+
+| Command | Description |
+|---------|-------------|
+| `agenticros start camera [-d device] [-r WxH] [-f fps]` | Start `camera-2d-ros.js`. |
+| `agenticros stop camera` | Stop 2D camera. |
+
+```bash
+agenticros start camera -d /dev/video0 -r 320x240 -f 15
+# RealSense RGB as 2D often appears as /dev/video4
+agenticros start camera -d /dev/video4
+```
+
+---
+
+## Commands (full list)
 
 | Command | Purpose |
 |---|---|
-| `agenticros` | Interactive top-level menu. |
+| `agenticros` | Interactive top-level menu (includes **Robot hardware** submenu). |
 | `agenticros init` | First-time setup wizard. Idempotent. |
-| `agenticros up real` | Bring up the real-robot stack (RealSense + local motors + MCP). |
-| `agenticros up sim-amr` | Bring up the simulated 2-wheel AMR. |
-| `agenticros up sim-amr --nav2` | Same + indoor map, AMCL, and Nav2 (`navigate_to_pose`). |
-| `agenticros up sim-arm` | Bring up the simulated 6-DOF arm (UR5e-shaped, per-joint position control). |
-| `agenticros up … --eyes` | Also start robot eyes on the local display after the stack comes up. |
-| `agenticros eyes` | Fullscreen robot eyes (cmd_vel gaze + optional WASD + R2D2 sounds). See [docs/eyes.md](../../docs/eyes.md). |
-| `agenticros connect` / `disconnect` | Cloud P2P bridge (`wss://cloud.agenticros.com`). |
-| `agenticros id` / `set --token` | Robot ID + API token for cloud.agenticros.com. |
-| `agenticros start\|stop motors` | Local motor controller (`-b rpi\|firmata\|jetson`; jetson opt-in only). |
-| `agenticros start\|stop realsense` | RealSense camera node. |
-| `agenticros start\|stop camera` | 2D V4L camera → `/camera2d`. |
-| `agenticros down` | Stop everything we started (including eyes + motors). |
-| `agenticros doctor` | Coloured health-check table; `--json` for CI. |
-| `agenticros mcp setup` | Register AgenticROS MCP for Codex, Hermes, and Claude (primary). |
-| `agenticros mcp doctor` | Validate all MCP client configs. |
-| `agenticros codex setup` | Codex only — `~/.codex/config.toml` (or `--project`). |
-| `agenticros codex doctor` | Validate Codex MCP config paths and namespace policy. |
-| `agenticros hermes setup` | Hermes only — `~/.hermes/config.yaml`. |
-| `agenticros hermes doctor` | Validate Hermes MCP config paths and namespace policy. |
-| `agenticros claude setup` | Claude only — Desktop + project `.mcp.json`. |
-| `agenticros claude doctor` | Validate Claude MCP config paths and namespace policy. |
-| `agenticros status` | Snapshot of running components + last mode. |
-| `agenticros logs [target]` | Tail `camera` / `mcp` / `sim` / `rosbridge` / `eyes` / `gateway`. |
-| `agenticros config [show\|set\|edit\|reset]` | Read or edit `~/.agenticros/config.json`. |
-| `agenticros create-skill <slug>` | Scaffold a new skill package in cwd. |
-| `agenticros publish` | Publish skill in cwd to skills.agenticros.com. |
-| `agenticros skills dev` | Local skill dev harness (`npm run dev` in skill repos). |
-| `agenticros skills install <owner/skill>` | Install from the marketplace (e.g. `chrismatthieu/followme`). |
-| `agenticros --help` | Full help text. |
+| `agenticros set --token` / `--id` | Cloud API token + robot ID. |
+| `agenticros id` | Print robot UUID. |
+| `agenticros connect` / `disconnect` | Cloud P2P bridge. |
+| `agenticros start\|stop motors` | Local motor controller. |
+| `agenticros start\|stop realsense` | RealSense ROS node. |
+| `agenticros start\|stop camera` | 2D V4L → `/camera2d`. |
+| `agenticros up real` | RealSense + motors + MCP demo stack. |
+| `agenticros up sim-amr` | Simulated 2-wheel AMR. |
+| `agenticros up sim-amr --nav2` | AMR + Nav2. |
+| `agenticros up sim-arm` | Simulated 6-DOF arm. |
+| `agenticros up … --eyes` | Also start robot eyes. |
+| `agenticros eyes` | Fullscreen eyes display. |
+| `agenticros down` | Stop sim/camera/mcp/eyes/motors. |
+| `agenticros doctor` | Health-check table. |
+| `agenticros status` | Running components (+ comms/motors/camera/realsense). |
+| `agenticros logs [target]` | Tail logs. |
+| `agenticros config` / `mode` | Edit `~/.agenticros/config.json`. |
+| `agenticros mcp setup` | Codex + Hermes + Claude MCP. |
+| `agenticros web` | Open cloud config/teleop dashboard URL. |
+| `agenticros skills …` | Skill marketplace / local skills. |
+| `agenticros --help` | Full help. |
+
+## Local VLM (Ollama)
+
+```bash
+ollama pull qwen3-vl:8b-instruct
+npx agenticros init                # skip OpenAI key when prompted
+agenticros up sim-amr
+```
+
+See [docs/local-vlm.md](https://github.com/agenticros/agenticros/blob/main/docs/local-vlm.md).
 
 ## How `init` works
 
-`agenticros init` is the wizard the menu's "First-time setup" entry runs. It
-walks through:
+1. JS workspace deps (`pnpm install`) — includes `@agenticros/robot` for connect/motors
+2. JS workspace build
+3. ROS 2 workspace build (`colcon`)
+4. OpenClaw plugin install
+5. Robot config (`~/.agenticros/config.json`)
+6. Optional OpenAI key / MCP client setup
+7. Final `agenticros doctor`
 
-1. JS workspace deps (`pnpm install`)
-2. JS workspace build (`pnpm build`)
-3. ROS 2 workspace build (`colcon build --symlink-install`)
-4. OpenClaw plugin install (`scripts/setup_gateway_plugin.sh`)
-5. Robot config (namespace, transport mode, sample `~/.agenticros/config.json`)
-6. OpenAI API key (optional — skip when using local Ollama; see [docs/local-vlm.md](../../docs/local-vlm.md))
-7. Codex MCP config (optional — `~/.codex/config.toml` and project `.codex/config.toml`)
-8. Hermes MCP config (optional — `~/.hermes/config.yaml`)
-9. Final `agenticros doctor` summary
-
-Every step is **idempotent**: it checks doctor first and skips the work if
-nothing is missing. Use `agenticros init --force` to redo everything.
+Use `agenticros init --force` to refresh after upgrading the CLI.
 
 ## Where state lives
 
-- `~/.agenticros/config.json` — AgenticROS runtime config (transport mode,
-  robot namespace, safety limits, teleop defaults). Edited via `agenticros config`.
-- `~/.codex/config.toml` — OpenAI Codex CLI MCP servers (written by `agenticros codex setup`).
-- `~/.hermes/config.yaml` — Hermes Agent MCP servers (written by `agenticros hermes setup`).
-- `~/.agenticros/cli-state.json` — CLI's own state (last mode, last namespace,
-  for the menu's "(yesterday)" hint).
-- `~/agenticros/` — the install dir when invoked via `npx`. Contains a copy of
-  `scripts/`, `ros2_ws/src/agenticros_*`, the pre-built MCP, and sample configs.
-  Skipped in repo-checkout mode.
-- `/tmp/agenticros-*.pid` and `/tmp/agenticros-*.log` — pidfiles and logs for
-  the background processes the CLI spawns (camera, sim, MCP, …). Same convention
-  as the legacy `scripts/start_demo.sh`.
+- `~/.agenticros/config.json` — transport, namespace, safety, teleop
+- Configstore `agenticros` — Cloud `ROBOT_ID` + `API_TOKEN` (`agenticros set` / `id`)
+- `~/agenticros/` — install tree after `npx`/`npm` init
+- `/tmp/agenticros-*.pid`, `/tmp/agenticros-*.log`, `/tmp/agenticros-comms.log`
+
+## Links
+
+- Cloud portal: [https://cloud.agenticros.com](https://cloud.agenticros.com)
+- Docs: [https://github.com/agenticros/agenticros](https://github.com/agenticros/agenticros)
+- Site: [https://agenticros.com](https://agenticros.com)
 
 ## Contributing
 
-See the monorepo `README.md` and `CLAUDE.md` at the repository root for the
-architecture overview. The CLI source lives at
-[`packages/agenticros-cli/`](.); per-command sources are under `src/commands/`,
-shared helpers under `src/util/`, and runners (the subprocess glue around the
-existing shell scripts) under `src/runners/`.
+CLI source: [`packages/agenticros-cli/`](.). On-robot helpers: [`packages/agenticros-robot/`](../agenticros-robot/).

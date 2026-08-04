@@ -90,7 +90,7 @@ live in `configstore('agenticros')` (`ROBOT_ID`, `API_TOKEN`); legacy
 | `agenticros connect [-s host]` | Start cloud P2P/ROS bridge (`comms.js`). Default `wss://cloud.agenticros.com`. |
 | `agenticros disconnect` | Stop `comms.js`. |
 | `agenticros id` | Print (or create) robot ID. |
-| `agenticros set --token=… [--id=…]` | Save API token / robot ID (token from cloud.agenticros.com API docs). |
+| `agenticros set --token=… [--id=…]` | Save AgenticROS Cloud API token (API key from the portal) and/or robot ID. Run `agenticros init` first so connect/motors deps are installed. |
 | `agenticros start motors [-b rpi\|firmata\|jetson] [-p pins] [-e enc] [-d device]` | Start motor controller. Jetson GPIO is **opt-in** (`-b jetson` only). |
 | `agenticros stop motors` | Stop all motor backends. |
 | `agenticros start realsense [-p\|--pointcloud]` | Start RealSense (recovery preflight + pidfile). |
