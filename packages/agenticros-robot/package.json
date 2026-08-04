@@ -1,0 +1,47 @@
+{
+  "name": "@agenticros/robot",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "description": "On-robot hardware helpers for AgenticROS — cloud connect, motors, and 2D camera (spawned by the agenticros CLI).",
+  "homepage": "https://agenticros.com",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/agenticros/agenticros.git",
+    "directory": "packages/agenticros-robot"
+  },
+  "exports": {
+    "./ros-topics.js": "./ros-topics.js",
+    "./robot-config.js": "./robot-config.js"
+  },
+  "files": [
+    "*.js",
+    "lib/**/*.js",
+    "README.md"
+  ],
+  "dependencies": {
+    "canvas": "^3.1.2",
+    "configstore": "7.0.0",
+    "ffmpeg-static": "^5.2.0",
+    "firmata": "^2.3.0",
+    "jimp": "^1.6.0",
+    "mathjs": "^11.8.0",
+    "minimist": "^1.2.8",
+    "node-datachannel": "^0.25.0",
+    "node-webcam": "^0.8.2",
+    "rclnodejs": "^1.1.0",
+    "rimraf": "^6.0.1",
+    "sharp": "^0.34.3",
+    "socket.io-client": "^4.8.1",
+    "stream-split": "^1.1.0",
+    "uuid": "^11.1.0"
+  },
+  "optionalDependencies": {
+    "@iiot2k/gpiox": "^3.0.5",
+    "koffi": "^2.16.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

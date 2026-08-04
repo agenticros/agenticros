@@ -30,6 +30,14 @@ import { codexDoctorCommand, codexSetupCommand } from "./commands/codex.js";
 import { hermesDoctorCommand, hermesSetupCommand } from "./commands/hermes.js";
 import { mcpDoctorCliCommand, mcpSetupCliCommand } from "./commands/mcp.js";
 import { runMenu } from "./menu.js";
+import {
+  connectCommand,
+  disconnectCommand,
+  idCommand,
+  setCommand,
+  startServiceCommand,
+  stopServiceCommand,
+} from "./commands/robot-hw.js";
 import { err } from "./util/logger.js";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -172,6 +180,140 @@ program
   .action(async (opts) => {
     await statusCommand(opts);
   });
+
+program
+  .command("connect")
+  .description(
+    "Connect the robot to AgenticROS cloud (default wss://cloud.agenticros.com).",
+  )
+  .option("-s, --server <host>", "Override signaling server (ws:// or host:port)")
+  .action(async (opts: { server?: string }) => {
+    await connectCommand({ server: opts.server });
+  });
+
+program
+  .command("disconnect")
+  .description("Disconnect the robot from cloud/edge (stops comms.js).")
+  .action(async () => {
+    await disconnectCommand();
+  });
+
+program
+  .command("id")
+  .description("Print this robot's cloud ROBOT ID (creates one if missing).")
+  .action(async () => {
+    await idCommand();
+  });
+
+program
+  .command("set")
+  .description(
+    "Save cloud credentials. Token from https://cloud.agenticros.com API docs.",
+  )
+  .option("--token <token>", "Developer API token")
+  .option("--id <robotId>", "Robot ID")
+  .action(async (opts: { token?: string; id?: string }) => {
+    await setCommand(opts);
+  });
+
+program
+  .command("start <target>")
+  .description(
+    "Start an on-robot service. target = motors | realsense | camera",
+  )
+  .option(
+    "-b, --backend <name>",
+    "motors only: rpi | firmata | jetson (jetson is opt-in; never auto-selected)",
+  )
+  .option(
+    "-p, --pins [list]",
+    "motors: pin list; realsense: -p with no value enables pointcloud",
+  )
+  .option("-e, --encoderpins <list>", "motors (firmata): encoder pins")
+  .option("-d, --device <path>", "motors firmata device or camera /dev/videoN")
+  .option("-r, --resolution <WxH>", "camera resolution (e.g. 672x672)")
+  .option("-f, --fps <n>", "camera FPS")
+  .option("--pointcloud", "realsense: enable pointcloud", false)
+  .action(
+    async (
+      target: string,
+      opts: {
+        backend?: string;
+        pins?: string | boolean;
+        encoderpins?: string;
+        device?: string;
+        resolution?: string;
+        fps?: string;
+        pointcloud?: boolean;
+      },
+    ) => {
+      // `agenticros start realsense -p` → pointcloud (boolean -p with no value)
+      const pointcloud =
+        opts.pointcloud === true ||
+        (target.toLowerCase() === "realsense" && opts.pins === true);
+      const pins = typeof opts.pins === "string" ? opts.pins : undefined;
+      await startServiceCommand(target, {
+        backend: opts.backend,
+        pins,
+        encoderpins: opts.encoderpins,
+        device: opts.device,
+        resolution: opts.resolution,
+        fps: opts.fps,
+        pointcloud,
+      });
+    },
+  );
+
+program
+  .command("stop <target>")
+  .description(
+    "Stop an on-robot service. target = motors | realsense | camera",
+  )
+  .action(async (target: string) => {
+    await stopServiceCommand(target);
+  });
+
+// robotics-style aliases: `agenticros motors start` / `agenticros camera stop`
+for (const service of ["motors", "realsense", "camera"] as const) {
+  const svc = program.command(service).description(`Alias for start/stop ${service}`);
+  svc
+    .command("start")
+    .option("-b, --backend <name>", "rpi | firmata | jetson")
+    .option("-p, --pins [list]", "pin list or realsense -p for pointcloud")
+    .option("-e, --encoderpins <list>", "encoder pins")
+    .option("-d, --device <path>", "device path")
+    .option("-r, --resolution <WxH>", "camera resolution")
+    .option("-f, --fps <n>", "camera FPS")
+    .option("--pointcloud", "realsense pointcloud", false)
+    .action(
+      async (opts: {
+        backend?: string;
+        pins?: string | boolean;
+        encoderpins?: string;
+        device?: string;
+        resolution?: string;
+        fps?: string;
+        pointcloud?: boolean;
+      }) => {
+        const pointcloud =
+          opts.pointcloud === true ||
+          (service === "realsense" && opts.pins === true);
+        const pins = typeof opts.pins === "string" ? opts.pins : undefined;
+        await startServiceCommand(service, {
+          backend: opts.backend,
+          pins,
+          encoderpins: opts.encoderpins,
+          device: opts.device,
+          resolution: opts.resolution,
+          fps: opts.fps,
+          pointcloud,
+        });
+      },
+    );
+  svc.command("stop").action(async () => {
+    await stopServiceCommand(service);
+  });
+}
 
 program
   .command("logs [target]")

@@ -37,7 +37,7 @@ Bring up a robot stack. Targets:
 
 | Target    | What it does |
 |-----------|-----|
-| `real`    | Runs `scripts/start_demo.sh`: RealSense camera (unless `--no-camera`), MCP build, and motor controller only when the `robotics` CLI is installed (or unless `--no-motors`). |
+| `real`    | Runs `scripts/start_demo.sh`: RealSense camera (unless `--no-camera`), MCP build, and local motor controller via `@agenticros/robot` (unless `--no-motors`). |
 | `sim-amr` | Launches the simulated 2-wheel AMR (`scripts/sim/run_sim.sh`). Add `--nav2` for map + AMCL + Nav2. |
 | `sim-arm` | Launches the simulated UR5e-shaped arm (per-joint position control; MoveIt2 WIP). |
 
@@ -76,7 +76,31 @@ page 404s/401s with gateway auth enabled, see
 
 SIGTERMs every process recorded in `/tmp/agenticros-*.pid` (including eyes)
 and leaves the OpenClaw gateway running unless `--stop-gateway`. Also cleans
-up stray `gz sim`, `rviz2`, and `parameter_bridge` processes.
+up stray `gz sim`, `rviz2`, `parameter_bridge`, and motor controller processes.
+Cloud `comms.js` is left running — use `agenticros disconnect` to stop it.
+
+### On-robot hardware (cloud + motors + cameras)
+
+Default cloud host is **`cloud.agenticros.com`** (REST + WebSocket). Credentials
+live in `configstore('agenticros')` (`ROBOT_ID`, `API_TOKEN`); legacy
+`configstore('robotics')` values are migrated on first read.
+
+| Command | Purpose |
+|---------|---------|
+| `agenticros connect [-s host]` | Start cloud P2P/ROS bridge (`comms.js`). Default `wss://cloud.agenticros.com`. |
+| `agenticros disconnect` | Stop `comms.js`. |
+| `agenticros id` | Print (or create) robot ID. |
+| `agenticros set --token=… [--id=…]` | Save API token / robot ID (token from cloud.agenticros.com API docs). |
+| `agenticros start motors [-b rpi\|firmata\|jetson] [-p pins] [-e enc] [-d device]` | Start motor controller. Jetson GPIO is **opt-in** (`-b jetson` only). |
+| `agenticros stop motors` | Stop all motor backends. |
+| `agenticros start realsense [-p\|--pointcloud]` | Start RealSense (recovery preflight + pidfile). |
+| `agenticros stop realsense` | Stop RealSense node. |
+| `agenticros start camera [-d /dev/videoN] [-r WxH] [-f fps]` | Start 2D V4L camera → `/camera2d`. |
+| `agenticros stop camera` | Stop 2D camera. |
+
+Aliases: `agenticros motors start`, `agenticros camera stop`, etc.
+
+The interactive menu includes a **Robot hardware** submenu for the same actions.
 
 ### `agenticros init [--force] [--install-dir <path>]`
 

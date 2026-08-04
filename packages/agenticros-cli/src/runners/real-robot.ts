@@ -3,7 +3,8 @@
  *
  * Spawns scripts/start_demo.sh as a child process and streams its output.
  * start_demo.sh always tries the RealSense camera (unless --no-camera) and
- * only starts the robotics motor controller when that CLI is installed.
+ * starts the local motor controller via packages/agenticros-robot
+ * (unless --no-motors).
  */
 
 import { existsSync } from "node:fs";

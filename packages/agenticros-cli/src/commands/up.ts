@@ -176,7 +176,7 @@ async function resolveTarget(raw: string | undefined): Promise<UpTarget> {
   return select<UpTarget>({
     message: "What do you want to bring up?",
     choices: [
-      { name: "Real robot (RealSense + MCP; motors if robotics CLI present)", value: "real" },
+      { name: "Real robot (RealSense + motors + MCP)", value: "real" },
       { name: "Sim AMR (Gazebo + 2-wheel diff-drive; add --nav2 for Nav2)", value: "sim-amr" },
       { name: "Sim Arm (Gazebo + UR5e; MoveIt2 WIP)", value: "sim-arm" },
     ],

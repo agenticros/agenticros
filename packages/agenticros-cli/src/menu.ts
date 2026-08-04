@@ -29,6 +29,14 @@ import { webCommand } from "./commands/web.js";
 import { createSkillCommand } from "./commands/create-skill.js";
 import { publishSkillCommand } from "./commands/publish-skill.js";
 import { skillsCommand } from "./commands/skills.js";
+import {
+  connectCommand,
+  disconnectCommand,
+  idCommand,
+  setCommand,
+  startServiceCommand,
+  stopServiceCommand,
+} from "./commands/robot-hw.js";
 import { header, info, isTty, dim } from "./util/logger.js";
 import { readState, formatAge } from "./util/state.js";
 import { listSkills } from "./util/skills.js";
@@ -78,6 +86,7 @@ async function runMenuOnce(): Promise<boolean> {
   const baseChoices: MenuChoice[] = [
     { name: "Launch with real robot", value: "real" },
     { name: "Launch with simulation", value: "sim" },
+    { name: "Robot hardware (connect, motors, camera, realsense)", value: "hardware" },
     { name: "Start robot eyes (local display)", value: "eyes" },
     { name: "First-time setup (workspace + OpenClaw plugin + API key)", value: "init" },
     { name: `Manage skills${skillsSuffix}`, value: "skills" },
@@ -117,6 +126,9 @@ async function runMenuOnce(): Promise<boolean> {
       // launched === true ⇒ upCommand has taken over; otherwise back to main.
       return launched;
     }
+    case "hardware":
+      await hardwareSubmenu();
+      return false;
     case "eyes":
       await eyesCommand({});
       return false;
@@ -184,6 +196,82 @@ async function runSimFlow(): Promise<boolean> {
 
   await upCommand({ target, rviz: rvizChoice === "yes" });
   return true;
+}
+
+/**
+ * On-robot hardware submenu (cloud connect, motors, cameras).
+ */
+async function hardwareSubmenu(): Promise<void> {
+  while (true) {
+    const action = await select<string>({
+      message: "Robot hardware:",
+      choices: [
+        { name: "Connect to cloud (cloud.agenticros.com)", value: "connect" },
+        { name: "Disconnect from cloud", value: "disconnect" },
+        { name: "Start motors", value: "start-motors" },
+        { name: "Stop motors", value: "stop-motors" },
+        { name: "Start RealSense", value: "start-realsense" },
+        { name: "Stop RealSense", value: "stop-realsense" },
+        { name: "Start 2D camera", value: "start-camera" },
+        { name: "Stop 2D camera", value: "stop-camera" },
+        { name: "Show robot ID", value: "id" },
+        { name: "Set API token / robot ID", value: "set" },
+        { name: "Back to main menu", value: BACK },
+      ],
+      default: "connect",
+    });
+    if (action === BACK) return;
+    try {
+      switch (action) {
+        case "connect":
+          await connectCommand({});
+          break;
+        case "disconnect":
+          await disconnectCommand();
+          break;
+        case "start-motors":
+          await startServiceCommand("motors", {});
+          break;
+        case "stop-motors":
+          await stopServiceCommand("motors");
+          break;
+        case "start-realsense":
+          await startServiceCommand("realsense", {});
+          break;
+        case "stop-realsense":
+          await stopServiceCommand("realsense");
+          break;
+        case "start-camera":
+          await startServiceCommand("camera", {});
+          break;
+        case "stop-camera":
+          await stopServiceCommand("camera");
+          break;
+        case "id":
+          await idCommand();
+          break;
+        case "set": {
+          const token = await input({
+            message: "API token from cloud.agenticros.com (empty to skip):",
+            validate: () => true,
+          });
+          const id = await input({
+            message: "Robot ID (empty to skip):",
+            validate: () => true,
+          });
+          await setCommand({
+            token: token.trim() || undefined,
+            id: id.trim() || undefined,
+          });
+          break;
+        }
+        default:
+          break;
+      }
+    } catch (e) {
+      info(e instanceof Error ? e.message : String(e));
+    }
+  }
 }
 
 /**

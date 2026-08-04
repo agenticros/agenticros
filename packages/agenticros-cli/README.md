@@ -66,13 +66,18 @@ Three ways, listed easiest first:
 |---|---|
 | `agenticros` | Interactive top-level menu. |
 | `agenticros init` | First-time setup wizard. Idempotent. |
-| `agenticros up real` | Bring up the real-robot stack (RealSense + motors + MCP). |
+| `agenticros up real` | Bring up the real-robot stack (RealSense + local motors + MCP). |
 | `agenticros up sim-amr` | Bring up the simulated 2-wheel AMR. |
 | `agenticros up sim-amr --nav2` | Same + indoor map, AMCL, and Nav2 (`navigate_to_pose`). |
 | `agenticros up sim-arm` | Bring up the simulated 6-DOF arm (UR5e-shaped, per-joint position control). |
 | `agenticros up … --eyes` | Also start robot eyes on the local display after the stack comes up. |
 | `agenticros eyes` | Fullscreen robot eyes (cmd_vel gaze + optional WASD + R2D2 sounds). See [docs/eyes.md](../../docs/eyes.md). |
-| `agenticros down` | Stop everything we started (including eyes). |
+| `agenticros connect` / `disconnect` | Cloud P2P bridge (`wss://cloud.agenticros.com`). |
+| `agenticros id` / `set --token` | Robot ID + API token for cloud.agenticros.com. |
+| `agenticros start\|stop motors` | Local motor controller (`-b rpi\|firmata\|jetson`; jetson opt-in only). |
+| `agenticros start\|stop realsense` | RealSense camera node. |
+| `agenticros start\|stop camera` | 2D V4L camera → `/camera2d`. |
+| `agenticros down` | Stop everything we started (including eyes + motors). |
 | `agenticros doctor` | Coloured health-check table; `--json` for CI. |
 | `agenticros mcp setup` | Register AgenticROS MCP for Codex, Hermes, and Claude (primary). |
 | `agenticros mcp doctor` | Validate all MCP client configs. |

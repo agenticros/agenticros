@@ -58,6 +58,14 @@ export async function downCommand(opts: DownOptions): Promise<void> {
   }
   await pkillAndWait(["gz sim", "ign gazebo", "rviz2", "parameter_bridge"]);
 
+  // Motor controllers started by `up real` / `agenticros start motors`.
+  // Leave cloud comms.js alone — use `agenticros disconnect` for that.
+  await pkillAndWait([
+    "motors-rpi5.js",
+    "motors-firmata.js",
+    "motors-jetson.js",
+  ]);
+
   if (opts.stopGateway) {
     await stopGatewayService();
   } else {

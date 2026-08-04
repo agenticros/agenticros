@@ -53,6 +53,7 @@ const INCLUDED_PACKAGES = [
   "agenticros",
   "agenticros-claude-code",
   "agenticros-gemini",
+  "agenticros-robot",
   "robot-eyes",
 ];
 
