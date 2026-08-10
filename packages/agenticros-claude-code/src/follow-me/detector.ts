@@ -54,7 +54,7 @@ async function loadDeps(): Promise<{ ort: OrtModule; sharp: SharpFn }> {
 }
 
 const DEFAULT_MODEL_URL =
-  "https://huggingface.co/Ultralytics/YOLOv8/resolve/main/yolov8n.onnx";
+  "https://huggingface.co/Kalray/yolov8/resolve/main/yolov8n.onnx";
 
 const INPUT_SIZE = 640;
 const PERSON_CLASS_ID = 0;

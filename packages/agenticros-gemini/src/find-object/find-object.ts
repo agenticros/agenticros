@@ -7,6 +7,7 @@ import type { AgenticROSConfig, ResolvedRobot, RosTransport } from "@agenticros/
 import { resolveCameraSubscribeTopic, toNamespacedTopic } from "@agenticros/core";
 import {
   ROS_MSG_COMPRESSED_IMAGE,
+  ROS_MSG_IMAGE,
   cameraSnapshotFromPlainMessage,
 } from "@agenticros/ros-camera";
 import { PersonDetector } from "../follow-me/detector.js";
@@ -16,8 +17,14 @@ const DEFAULT_COLOR_TOPIC = "/camera/camera/color/image_raw/compressed";
 const DEFAULT_ANGULAR_SPEED = 0.3; // rad/s
 const DEFAULT_TIMEOUT_SEC = 30;
 const DEFAULT_MIN_CONFIDENCE = 0.5;
-const POLL_INTERVAL_MS = 500;
 const SNAPSHOT_TIMEOUT_MS = 3000;
+// Rotation is done as discrete stop-and-look steps rather than continuous
+// spin-while-sampling: at typical robot rotation speeds, a frame grabbed
+// mid-turn is motion-blurred enough to crush YOLO confidence well below a
+// usable threshold, even for objects that score fine in a static frame.
+const STEP_DEGREES = 30;
+const BURST_REPUBLISH_MS = 150; // cmd_vel watchdogs on this robot expire quickly; keep resending during a turn
+const SETTLE_MS = 350; // let residual motion damp out before capturing
 
 export interface FindObjectOptions {
   target: string;
@@ -86,9 +93,14 @@ export async function findObject(
     robot.namespace,
     robot.cameraTopic.trim() || DEFAULT_COLOR_TOPIC,
   );
+  // robot.cameraTopic in config is often the *raw* topic (no /compressed
+  // suffix) — subscribing with a hardcoded CompressedImage type against a
+  // raw Image topic silently never receives a message (type mismatch), so
+  // every scan times out with zero frames captured. Detect from the topic
+  // name, same as the ros2_camera_snapshot tool does.
+  const isCompressed = colorTopic.toLowerCase().includes("compressed");
 
   const startedAt = Date.now();
-  let rotating = false;
   let result: FindObjectResult["detection"] | undefined;
 
   const publishTwist = async (linearX: number, angZ: number) => {
@@ -103,19 +115,30 @@ export async function findObject(
     }
   };
 
+  // Burst duration to cover STEP_DEGREES at the requested angular speed.
+  const stepBurstMs = ((STEP_DEGREES * Math.PI) / 180 / requestedSpeed) * 1000;
+
   try {
-    await publishTwist(0, angularZ);
-    rotating = true;
-
     const deadline = startedAt + timeoutMs;
+    // Look once at the current heading before turning anywhere.
+    let firstLook = true;
     while (Date.now() < deadline && !result) {
-      if (opts.signal?.aborted) {
-        break;
-      }
-      // Keep the rotation alive in case the robot times out cmd_vel commands.
-      await publishTwist(0, angularZ);
+      if (opts.signal?.aborted) break;
 
-      const frame = await snapshotOnce(transport, colorTopic).catch(() => null);
+      if (!firstLook) {
+        const stepDeadline = Date.now() + stepBurstMs;
+        while (Date.now() < stepDeadline) {
+          if (opts.signal?.aborted) break;
+          await publishTwist(0, angularZ);
+          await sleep(Math.min(BURST_REPUBLISH_MS, Math.max(0, stepDeadline - Date.now())));
+        }
+        await publishTwist(0, 0);
+        if (opts.signal?.aborted) break;
+        await sleep(SETTLE_MS);
+      }
+      firstLook = false;
+
+      const frame = await snapshotOnce(transport, colorTopic, isCompressed).catch(() => null);
       if (frame) {
         const det = await detector.detectClass(frame.buffer, classId);
         if (det.detections.length > 0) {
@@ -133,13 +156,9 @@ export async function findObject(
           break;
         }
       }
-
-      const remaining = deadline - Date.now();
-      if (remaining <= 0) break;
-      await sleep(Math.min(POLL_INTERVAL_MS, remaining));
     }
   } finally {
-    if (rotating) await publishTwist(0, 0);
+    await publishTwist(0, 0);
     await detector.dispose().catch(() => {});
   }
 
@@ -169,15 +188,18 @@ export async function findObject(
 async function snapshotOnce(
   transport: RosTransport,
   topic: string,
+  isCompressed: boolean,
 ): Promise<{ buffer: Buffer } | null> {
+  const rosType = isCompressed ? ROS_MSG_COMPRESSED_IMAGE : ROS_MSG_IMAGE;
+  const messageType = isCompressed ? "CompressedImage" : "Image";
   return new Promise((resolve) => {
     const sub = transport.subscribe(
-      { topic, type: ROS_MSG_COMPRESSED_IMAGE },
+      { topic, type: rosType },
       (msg: Record<string, unknown>) => {
         clearTimeout(timer);
         sub.unsubscribe();
         try {
-          const payload = cameraSnapshotFromPlainMessage("CompressedImage", msg);
+          const payload = cameraSnapshotFromPlainMessage(messageType, msg);
           resolve({ buffer: Buffer.from(payload.dataBase64, "base64") });
         } catch {
           resolve(null);
