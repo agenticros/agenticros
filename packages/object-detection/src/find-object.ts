@@ -10,7 +10,7 @@ import {
   ROS_MSG_IMAGE,
   cameraSnapshotFromPlainMessage,
 } from "@agenticros/ros-camera";
-import { PersonDetector } from "../follow-me/detector.js";
+import { PersonDetector } from "./detector.js";
 import { resolveCocoClassId, COCO_CLASSES } from "./coco-classes.js";
 
 const DEFAULT_COLOR_TOPIC = "/camera/camera/color/image_raw/compressed";

@@ -8,6 +8,7 @@ import { registerParamTools } from "./ros2-param.js";
 import { registerIntrospectTool } from "./ros2-introspect.js";
 import { registerCameraTool } from "./ros2-camera.js";
 import { registerDepthDistanceTool } from "./ros2-depth-distance.js";
+import { registerFindObjectTool } from "./ros2-find-object.js";
 import { registerCapabilitiesTool } from "./ros2-capabilities.js";
 import { registerRobotsTool } from "./ros2-robots.js";
 import { registerDiscoverRobotsTool } from "./ros2-discover.js";
@@ -56,6 +57,7 @@ export function registerTools(api: OpenClawPluginApi, config: AgenticROSConfig):
   registerIntrospectTool(wrappedApi);
   registerCameraTool(wrappedApi, config);
   registerDepthDistanceTool(wrappedApi, config);
+  registerFindObjectTool(wrappedApi, config);
   registerCapabilitiesTool(wrappedApi, config);
   registerRobotsTool(wrappedApi, config);
   registerDiscoverRobotsTool(wrappedApi, config);

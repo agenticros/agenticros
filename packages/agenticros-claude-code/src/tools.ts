@@ -45,7 +45,7 @@ import { checkPublishSafety } from "./safety.js";
 import { getDepthDistance } from "./depth.js";
 import { getFollowMeLocal } from "./follow-me/loop.js";
 import { getFollowMeDepth } from "./follow-me/depth-loop.js";
-import { findObject } from "./find-object/find-object.js";
+import { findObject } from "@agenticros/object-detection";
 import { ensureMemory } from "./memory.js";
 
 const DEFAULT_DEPTH_TOPIC = "/camera/camera/depth/image_rect_raw";

@@ -25,6 +25,7 @@
       "mission_resume",
       "ros2_camera_snapshot",
       "ros2_depth_distance",
+      "ros2_find_object",
       "memory_remember",
       "memory_recall",
       "memory_forget",

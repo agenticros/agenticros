@@ -107,10 +107,11 @@ if [[ "$SKIP_BUILD" != true ]]; then
   echo "[1/5] Installing workspace deps..."
   (cd "$REPO_ROOT" && pnpm install --frozen-lockfile 2>/dev/null || pnpm install)
   echo ""
-  echo "[2/5] Building required packages (core, ros-camera, agenticros)..."
+  echo "[2/5] Building required packages (core, ros-camera, object-detection, agenticros)..."
   (cd "$REPO_ROOT" && \
     pnpm --filter @agenticros/core build && \
     pnpm --filter @agenticros/ros-camera build && \
+    pnpm --filter @agenticros/object-detection build && \
     pnpm --filter ./packages/agenticros build)
 else
   echo "[1-2/5] Skipping install + build (--skip-build)."

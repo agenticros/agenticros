@@ -47,7 +47,7 @@ import { getDepthDistance } from "./depth.js";
 import { ensureMemory } from "./memory.js";
 import { getFollowMeLocal } from "./follow-me/loop.js";
 import { getFollowMeDepth } from "./follow-me/depth-loop.js";
-import { findObject } from "./find-object/find-object.js";
+import { findObject } from "@agenticros/object-detection";
 
 const MEMORY_TOOL_NAMES = new Set([
   "memory_remember",

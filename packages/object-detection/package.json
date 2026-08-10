@@ -1,0 +1,31 @@
+{
+  "name": "@agenticros/object-detection",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "Shared YOLOv8n COCO-class object detector and rotate-and-scan find-object routine for AgenticROS adapters",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@agenticros/core": "workspace:*",
+    "@agenticros/ros-camera": "workspace:*",
+    "onnxruntime-node": "^1.20.0",
+    "sharp": "^0.33.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "typescript": "^5.7.0"
+  },
+  "author": "PlaiPin",
+  "license": "Apache-2.0"
+}

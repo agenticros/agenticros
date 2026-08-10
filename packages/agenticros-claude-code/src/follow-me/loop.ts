@@ -22,7 +22,7 @@ import {
   rosNumericField,
   rosStringField,
 } from "@agenticros/ros-camera";
-import { PersonDetector, type PersonDetection } from "./detector.js";
+import { PersonDetector, type PersonDetection } from "@agenticros/object-detection";
 import { FollowerController, type Twist } from "./controller.js";
 
 const DEFAULT_COLOR_TOPIC = "/camera/camera/color/image_raw/compressed";

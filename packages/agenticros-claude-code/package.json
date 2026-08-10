@@ -24,10 +24,10 @@
   },
   "dependencies": {
     "@agenticros/core": "workspace:*",
+    "@agenticros/object-detection": "workspace:*",
     "@agenticros/ros-camera": "workspace:*",
     "@huggingface/transformers": "^3.0.0",
     "@modelcontextprotocol/sdk": "^1.0.0",
-    "onnxruntime-node": "^1.20.0",
     "sharp": "^0.33.0",
     "zod": "^3.24.0"
   },

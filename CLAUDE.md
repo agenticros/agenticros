@@ -32,6 +32,7 @@ Available MCP tools:
 packages/
   core/                    # @agenticros/core — transport, types, Zod config (no platform deps)
   ros-camera/              # @agenticros/ros-camera — shared camera snapshot encoding (Image / CompressedImage)
+  object-detection/        # @agenticros/object-detection — shared YOLOv8n COCO detector + find-object scan routine
   agenticros/              # @agenticros/agenticros — OpenClaw plugin
   agenticros-claude-code/  # @agenticros/claude-code — MCP server (stdio; Claude Code, Desktop, Dispatch, Codex CLI)
   agenticros-gemini/       # @agenticros/gemini — Gemini CLI
@@ -66,6 +67,9 @@ docker/                    # Docker Compose and Dockerfiles
 ### Camera package (`packages/ros-camera/src/`)
 Shared camera snapshot encoding used by all adapters — handles both `sensor_msgs/Image` and `sensor_msgs/CompressedImage`.
 
+### Object detection package (`packages/object-detection/src/`)
+Shared YOLOv8n COCO-class detector (`detector.ts` — ONNX model load/download, letterbox resize, inference, NMS) and the rotate-in-place `findObject()` scan routine (`find-object.ts`) used by every adapter's `ros2_find_object` tool. Extracted here after the same three bugs (dead model URL, motion-blur-inducing continuous rotation, raw/compressed topic mismatch) had to be fixed twice in duplicated per-adapter copies.
+
 ### Claude Code MCP server (`packages/agenticros-claude-code/src/`)
 | File | Purpose |
 |------|---------|
@@ -80,10 +84,11 @@ Shared camera snapshot encoding used by all adapters — handles both `sensor_ms
 | File | Purpose |
 |------|---------|
 | `index.ts` | Plugin registration, config loading |
-| `tools/index.ts` | Register all 9 tools with OpenClaw |
+| `tools/index.ts` | Register all 10 tools with OpenClaw |
 | `tools/ros2-publish.ts` | Publish tool |
 | `tools/ros2-camera.ts` | Camera snapshot tool |
 | `tools/ros2-depth-distance.ts` | Depth distance tool |
+| `tools/ros2-find-object.ts` | Find-object (YOLO rotate-and-scan) tool |
 | `service.ts` | Transport lifecycle for the plugin |
 | `safety/validator.ts` | Velocity safety guard |
 | `skill-loader.ts` | Dynamic skill package loading |
@@ -123,6 +128,7 @@ pnpm deploy:plugin                                # Redeploy the OpenClaw plugin
 # Per-package (filter syntax)
 pnpm --filter @agenticros/core build
 pnpm --filter @agenticros/ros-camera build
+pnpm --filter @agenticros/object-detection build
 pnpm --filter @agenticros/claude-code typecheck
 pnpm --filter @agenticros/claude-code build       # Required after editing claude-code src
 ```
@@ -189,6 +195,7 @@ MCP server logs: `/tmp/agenticros-mcp.log`
 Tools are mirrored across three adapters. Add to all three:
 
 1. **Core** — no changes needed (transport handles arbitrary topics/services)
+   - If the tool needs local ML inference shared across adapters, put the model/inference logic in a new or existing shared package (e.g. `@agenticros/object-detection`) instead of duplicating it — see that package for the precedent.
 2. **Claude Code** (`packages/agenticros-claude-code/src/tools.ts`):
    - Add tool definition to the `tools` array (name, description, inputSchema)
    - Add handler in the `switch` in `callTool`
@@ -206,7 +213,7 @@ Tools are mirrored across three adapters. Add to all three:
 
 ## Adding a new adapter (agent platform)
 
-1. Create `packages/agenticros-<platform>/` with `package.json` depending on `@agenticros/core` (and `@agenticros/ros-camera` if you need `ros2_camera_snapshot`)
+1. Create `packages/agenticros-<platform>/` with `package.json` depending on `@agenticros/core` (and `@agenticros/ros-camera` if you need `ros2_camera_snapshot`, `@agenticros/object-detection` if you need `ros2_find_object`)
 2. Implement that platform's plugin/extension contract
 3. Use `createTransport(config)` from core
 4. Mirror the tool set from `packages/agenticros-claude-code/src/tools.ts` as a reference
