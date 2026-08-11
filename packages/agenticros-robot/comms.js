@@ -220,8 +220,9 @@ class P2PServer {
         this.serverId = robotId;
         this.isReconnecting = false;
         this.reconnectAttempts = 0;
-        this.maxReconnectAttempts = 5;
+        this.maxReconnectAttempts = Infinity;
         this.reconnectDelay = 2000;
+        this.nextReconnectAt = 0; // honor server cooldown / retryAfter
         this.pendingReconnections = new Map();
         this.connectionAttempts = new Map(); // Track connection attempts per peer
         
@@ -233,13 +234,14 @@ class P2PServer {
         console.log(formatLog('Starting P2P server...'));
         await this.connect();
 
-        // Keep connection alive with exponential backoff
+        // Slow watchdog only — socket.io + handleReconnect do the real work.
+        // A 2s poll previously caused reconnect storms against ARC cooldowns.
         setInterval(() => {
-            if (!this.socket?.connected) {
-                console.log(formatLog('Server disconnected, attempting to reconnect...'));
-                this.connect();
-            }
-        }, 2000);
+            if (this.socket?.connected || this.isReconnecting) return;
+            if (Date.now() < this.nextReconnectAt) return;
+            console.log(formatLog('Server disconnected (watchdog), attempting to reconnect...'));
+            this.handleReconnect();
+        }, 15000);
     }
 
     // Initialize ROS camera subscriptions independently of P2P connections
@@ -256,85 +258,70 @@ class P2PServer {
                 console.log(formatLog('ROS node created for standalone camera subscriptions'));
             }
 
-            // Set up camera topic subscriptions immediately
+            // Prefer compressed JPEG only — dual raw+compressed was CPU-spiking the
+            // event loop (Sharp raw on CompressedImage → undefinedxundefined failures)
+            // and contributing to ARC disconnect storms.
             const cameraTopics = [
                 { topic: camera2dTopic, type: 'std_msgs/msg/String' },
-                { topic: '/camera/camera/color/image_raw', type: 'sensor_msgs/msg/Image' },
                 { topic: '/camera/camera/color/image_raw/compressed', type: 'sensor_msgs/msg/CompressedImage' }
             ];
 
             console.log(formatLog('Setting up standalone camera subscriptions...'));
+            this._lastStandaloneCameraLog = 0;
             
             cameraTopics.forEach(({ topic, type }) => {
                 try {
                     console.log(formatLog(`Setting up standalone subscription for ${topic} with type ${type}`));
                     
                     const subscriber = rosNode.createSubscription(type, topic, async (msg) => {
-                        console.log(formatLog(`📸 Standalone ROS camera message received on topic: ${topic}`));
+                        const now = Date.now();
+                        const shouldLog = now - (this._lastStandaloneCameraLog || 0) > 5000;
+                        if (shouldLog) {
+                            this._lastStandaloneCameraLog = now;
+                            console.log(formatLog(`📸 Standalone ROS camera message received on topic: ${topic}`));
+                        }
                         
                         try {
                             let modTopic = toClientTopic(topic, robotId, rosNamespace);
 
-                            // Handle different camera topic types
-                            if (topic === '/camera/camera/color/image_raw/compressed' || topic === '/camera/camera/color/image_raw') {
-                                // Convert image to base64
+                            if (topic === '/camera/camera/color/image_raw/compressed') {
                                 try {
-                                    let imageData;
-                                    
-                                    if (topic === '/camera/camera/color/image_raw/compressed') {
-                                        imageData = msg.data || msg;
-                                    } else {
-                                        if (msg.data && msg.encoding) {
-                                            console.log(formatLog(`Processing standalone raw image: ${msg.width}x${msg.height}, encoding: ${msg.encoding}`));
-                                            imageData = msg.data;
-                                        } else {
-                                            console.warn(formatLog('Invalid standalone raw image message format'));
-                                            return;
-                                        }
-                                    }
-                                    
-                                    // Convert to base64 using Sharp
+                                    const imageData = msg.data || msg;
                                     let base64Image;
+                                    // CompressedImage is already JPEG/PNG — do not pass raw width/height
                                     try {
-                                        console.log(formatLog(`🔄 Starting standalone Sharp conversion for ${msg.width}x${msg.height} image`));
-                                        
-                                        const sharpPromise = sharp(imageData, {
-                                            raw: {
-                                                width: msg.width,
-                                                height: msg.height,
-                                                channels: 3
-                                            }
-                                        }).jpeg({ quality: 80 }).toBuffer();
-                                        
+                                        const input = Buffer.isBuffer(imageData)
+                                            ? imageData
+                                            : Buffer.from(imageData);
                                         const jpegBuffer = await Promise.race([
-                                            sharpPromise,
-                                            new Promise((_, reject) => 
+                                            sharp(input).jpeg({ quality: 80 }).toBuffer(),
+                                            new Promise((_, reject) =>
                                                 setTimeout(() => reject(new Error('Sharp conversion timeout')), 5000)
-                                            )
+                                            ),
                                         ]);
-                                        
                                         base64Image = jpegBuffer.toString('base64');
-                                        console.log(formatLog(`✅ Standalone Sharp conversion successful: ${jpegBuffer.length} bytes -> ${base64Image.length} chars base64`));
-                                    } catch (sharpError) {
-                                        console.error(formatLog(`❌ Standalone Sharp conversion failed: ${sharpError}`));
-                                        // Fallback conversion
-                                        if (imageData instanceof Uint8Array) {
-                                            base64Image = Buffer.from(imageData).toString('base64');
-                                        } else if (Buffer.isBuffer(imageData)) {
-                                            base64Image = imageData.toString('base64');
-                                        } else {
-                                            base64Image = Buffer.from(imageData).toString('base64');
+                                        if (shouldLog) {
+                                            console.log(formatLog(`✅ Standalone compressed→JPEG: ${jpegBuffer.length} bytes`));
                                         }
-                                        console.log(formatLog(`🔄 Using standalone fallback conversion: ${base64Image.length} chars`));
+                                    } catch (sharpError) {
+                                        if (shouldLog) {
+                                            console.warn(formatLog(`Sharp re-encode skipped, using raw bytes: ${sharpError.message || sharpError}`));
+                                        }
+                                        base64Image = Buffer.isBuffer(imageData)
+                                            ? imageData.toString('base64')
+                                            : Buffer.from(imageData).toString('base64');
                                     }
-                                    
-                                    // Store in global camera data
+
                                     globalCameraData.set(modTopic, {
                                         data: base64Image,
                                         timestamp: Date.now()
                                     });
-                                    console.log(formatLog(`💾 Stored standalone camera data in global storage for topic: ${modTopic} (${base64Image.length} chars)`));
-                                    
+                                    // Also alias under the raw topic name so photo-request lookups still work
+                                    const rawAlias = toClientTopic('/camera/camera/color/image_raw', robotId, rosNamespace);
+                                    globalCameraData.set(rawAlias, {
+                                        data: base64Image,
+                                        timestamp: Date.now()
+                                    });
                                 } catch (error) {
                                     console.error(formatLog(`Error in standalone image conversion: ${error}`));
                                 }
@@ -345,7 +332,9 @@ class P2PServer {
                                         data: msg,
                                         timestamp: Date.now()
                                     });
-                                    console.log(formatLog(`💾 Stored standalone camera2d data in global storage (${msg.length} chars)`));
+                                    if (shouldLog) {
+                                        console.log(formatLog(`💾 Stored standalone camera2d data (${msg.length} chars)`));
+                                    }
                                 }
                             }
                         } catch (error) {
@@ -379,10 +368,16 @@ class P2PServer {
 
     async connect() {
         if (this.isReconnecting) return;
+        if (this.socket?.connected) return;
+        if (Date.now() < this.nextReconnectAt) {
+            console.log(formatLog(`Skipping connect — cooldown until ${new Date(this.nextReconnectAt).toISOString()}`));
+            return;
+        }
         this.isReconnecting = true;
 
         try {
             if (this.socket) {
+                this.socket.removeAllListeners();
                 this.socket.disconnect();
             }
 
@@ -393,10 +388,8 @@ class P2PServer {
                     token: apiToken
                 },
                 auth: { id: this.serverId },
-                reconnection: true,
-                reconnectionAttempts: Infinity,
-                reconnectionDelay: this.reconnectDelay,
-                reconnectionDelayMax: 10000,
+                // Manual reconnect only — built-in + custom + watchdog used to storm ARC.
+                reconnection: false,
                 timeout: 20000
             });
 
@@ -405,6 +398,7 @@ class P2PServer {
                 speak("Robot connected.");
                 this.reconnectAttempts = 0;
                 this.reconnectDelay = 2000;
+                this.nextReconnectAt = 0;
 
                 loadRobotDetails().catch(err => {
                     console.error('Error refreshing robot config on connect:', err);
@@ -740,7 +734,14 @@ class P2PServer {
             });
 
             this.socket.on('connect_error', (error) => {
-                console.error(formatLog(`Connection error: ${error}`));
+                const msg = error?.message || String(error);
+                console.error(formatLog(`Connection error: ${msg}`));
+                // ARC returns cooldown / blocklist — wait before burning attempts
+                if (/cooldown|blocklist|Too many|restart cooldown|Rapid/i.test(msg)) {
+                    const waitMs = 5000;
+                    this.nextReconnectAt = Date.now() + waitMs;
+                    console.log(formatLog(`Server asked us to back off — next try in ${waitMs}ms`));
+                }
                 this.handleReconnect();
             });
 
@@ -753,14 +754,18 @@ class P2PServer {
     }
 
     handleReconnect() {
-        if (this.reconnectAttempts < this.maxReconnectAttempts) {
-            this.reconnectAttempts++;
-            this.reconnectDelay = Math.min(this.reconnectDelay * 1.5, 10000); // Exponential backoff with max 10s
-            console.log(formatLog(`Attempting reconnect in ${this.reconnectDelay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`));
-            setTimeout(() => this.connect(), this.reconnectDelay);
-        } else {
-            console.error(formatLog('Max reconnection attempts reached. Please check server status.'));
-        }
+        if (this.socket?.connected) return;
+        if (this._reconnectTimer) return;
+
+        this.reconnectAttempts++;
+        const cooldownWait = Math.max(0, this.nextReconnectAt - Date.now());
+        this.reconnectDelay = Math.min(Math.max(this.reconnectDelay, 2000) * 1.5, 15000);
+        const delay = Math.max(this.reconnectDelay, cooldownWait);
+        console.log(formatLog(`Attempting reconnect in ${delay}ms (attempt ${this.reconnectAttempts})`));
+        this._reconnectTimer = setTimeout(() => {
+            this._reconnectTimer = null;
+            this.connect();
+        }, delay);
     }
 
     cleanup() {
@@ -2173,19 +2178,23 @@ class P2PConnection {
                                                 }
                                             }
                                             
-                                            // Convert raw RGB8 data to JPEG using Sharp
+                                            // CompressedImage is already JPEG — do not pass raw width/height.
+                                            // Raw Image needs sharp({ raw: { width, height, channels } }).
+                                            const isCompressed = topic.endsWith('/compressed');
                                             let base64Image;
                                             try {
-                                                console.log(formatLog(`🔄 Starting Sharp conversion for ${msg.width}x${msg.height} image`));
-                                                
-                                                // Add timeout to Sharp conversion
-                                                const sharpPromise = sharp(imageData, {
-                                                    raw: {
-                                                        width: msg.width,
-                                                        height: msg.height,
-                                                        channels: 3
-                                                    }
-                                                }).jpeg({ quality: 80 }).toBuffer();
+                                                const input = Buffer.isBuffer(imageData)
+                                                    ? imageData
+                                                    : Buffer.from(imageData);
+                                                const sharpPromise = isCompressed
+                                                    ? sharp(input).jpeg({ quality: 80 }).toBuffer()
+                                                    : sharp(input, {
+                                                        raw: {
+                                                            width: msg.width,
+                                                            height: msg.height,
+                                                            channels: 3
+                                                        }
+                                                    }).jpeg({ quality: 80 }).toBuffer();
                                                 
                                                 const jpegBuffer = await Promise.race([
                                                     sharpPromise,
@@ -2195,19 +2204,8 @@ class P2PConnection {
                                                 ]);
                                                 
                                                 base64Image = jpegBuffer.toString('base64');
-                                                
-                                                console.log(formatLog(`✅ Sharp conversion successful: ${jpegBuffer.length} bytes -> ${base64Image.length} chars base64`));
-                                                
-                                                // Debug: Check if the base64 starts with /9j/ (JPEG signature)
-                                                console.log(formatLog(`🔍 JPEG base64 starts with: ${base64Image.substring(0, 4)}`));
-                                                if (base64Image.startsWith('/9j/')) {
-                                                    console.log(formatLog(`✅ Valid JPEG base64 signature confirmed`));
-                                                } else {
-                                                    console.warn(formatLog(`⚠️ Base64 does not start with JPEG signature /9j/`));
-                                                }
                                             } catch (sharpError) {
                                                 console.error(formatLog(`❌ Sharp conversion failed: ${sharpError}`));
-                                                // Fallback to raw data conversion
                                                 if (imageData instanceof Uint8Array) {
                                                     base64Image = Buffer.from(imageData).toString('base64');
                                                 } else if (Buffer.isBuffer(imageData)) {
@@ -2217,7 +2215,6 @@ class P2PConnection {
                                                 } else {
                                                     base64Image = Buffer.from(imageData).toString('base64');
                                                 }
-                                                console.log(formatLog(`🔄 Using fallback conversion: ${base64Image.length} chars`));
                                             }
                                             
                                             // Debug: Check if the base64 is valid
