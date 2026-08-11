@@ -443,26 +443,16 @@ class P2PServer {
 
                     // Every browser offer must get a fresh PeerConnection. Reusing a
                     // failed/closed PC (or one mid robot-side reconnect) yields no answer.
+                    // Also tear down *all* other peers — teleop is single-client; zombies
+                    // from a previous browser session block answers on Nano.
                     if (msgType === 'offer') {
-                        if (this.connections.has(sourcePeer)) {
-                            console.log(formatLog(`Replacing existing connection for peer: ${sourcePeer}`));
-                            try {
-                                this.connections.get(sourcePeer).cleanup();
-                            } catch (e) {
-                                console.warn(formatLog(`Error cleaning old connection: ${e.message}`));
+                        for (const [peerId, conn] of [...this.connections.entries()]) {
+                            console.log(formatLog(`Clearing peer ${peerId} before new offer from ${sourcePeer}`));
+                            try { conn.cleanup(); } catch (e) {
+                                console.warn(formatLog(`Error cleaning connection ${peerId}: ${e.message}`));
                             }
-                            this.connections.delete(sourcePeer);
-                        }
-                        // Drop other stale peers that are no longer connected (leak prevention)
-                        for (const [peerId, conn] of this.connections.entries()) {
-                            if (peerId !== sourcePeer &&
-                                (conn.connectionState === 'failed' ||
-                                 conn.connectionState === 'closed' ||
-                                 conn.connectionState === 'disconnected')) {
-                                try { conn.cleanup(); } catch (_) {}
-                                this.connections.delete(peerId);
-                                console.log(formatLog(`Pruned stale connection for peer: ${peerId}`));
-                            }
+                            this.connections.delete(peerId);
+                            this.connectionAttempts.delete(peerId);
                         }
                         console.log(formatLog(`Creating new connection for peer: ${sourcePeer}`));
                         const connection = new P2PConnection(sourcePeer, this.socket);
@@ -472,6 +462,15 @@ class P2PServer {
                         }
                         this.connections.set(sourcePeer, connection);
                         this.connectionAttempts.set(sourcePeer, 0);
+
+                        // Let the browser know the robot is handling the offer (vs silent drop)
+                        try {
+                            this.socket.emit('signal-status', {
+                                type: 'offer-received',
+                                sourcePeer,
+                                ok: true,
+                            });
+                        } catch (_) { /* ignore */ }
                     } else if (!this.connections.has(sourcePeer)) {
                         console.log(formatLog(`Creating new connection for peer: ${sourcePeer}`));
                         const connection = new P2PConnection(sourcePeer, this.socket);
@@ -1205,7 +1204,7 @@ class P2PConnection {
                     // Set remote description — node-datachannel then generates an
                     // answer via onLocalDescription (there is no createAnswer()).
                     const sdp = message.sdp;
-                    console.log(formatLog(`Setting remote SDP: ${sdp}`));
+                    console.log(formatLog(`Setting remote SDP (${String(sdp || '').length} chars)`));
                     this.pc.setRemoteDescription(sdp, 'offer');
                     this.hasRemoteDescription = true;
                     
@@ -1214,7 +1213,6 @@ class P2PConnection {
                         console.log(formatLog(`Processing ${this.candidateQueue.length} queued candidates`));
                         for (const candidate of this.candidateQueue) {
                             try {
-                                console.log(formatLog(`Adding queued candidate: ${candidate.candidate}`));
                                 await this.pc.addRemoteCandidate(candidate.candidate, candidate.mid || '0');
                             } catch (e) {
                                 console.warn(formatLog(`Error adding queued candidate: ${e.message}`));
