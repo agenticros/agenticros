@@ -58,12 +58,19 @@ export async function statusCommand(opts: StatusOptions): Promise<void> {
 
   let gatewayActive = false;
   try {
-    const { exitCode } = await execa("systemctl", ["--user", "is-active", "openclaw-gateway.service"], {
-      reject: false,
-    });
+    const { exitCode } = await execa(
+      "systemctl",
+      ["--user", "is-active", "openclaw-gateway.service"],
+      {
+        reject: false,
+        // Detached cloud agents often lack a user D-Bus session; systemctl
+        // --user can hang forever without a timeout.
+        timeout: 2000,
+      },
+    );
     gatewayActive = exitCode === 0;
   } catch {
-    // systemctl missing - leave false
+    // systemctl missing / timed out - leave false
   }
 
   if (opts.json) {

@@ -691,31 +691,46 @@ class P2PServer {
                 } else {
                   console.log(formatLog(`BASH: ok exit=0`));
                 }
+                const result = {
+                  requestId,
+                  stdout: stdout || '',
+                  stderr: stderr || (error && !stderr ? error.message : '') || '',
+                  exitCode,
+                };
                 if (requestId) {
-                  this.socket.emit('bash-response', {
-                    requestId,
-                    stdout: stdout || '',
-                    stderr: stderr || (error && !stderr ? error.message : '') || '',
-                    exitCode,
-                  });
+                  this.socket.emit('bash-response', result);
                 }
                 if (typeof callback === 'function') {
                   try {
-                    callback({ stdout: stdout || '', stderr: stderr || '', exitCode });
+                    callback(result);
                   } catch (_) { /* ignore */ }
                 }
+              };
+
+              // Ensure npm global bins are visible when comms.js was spawned detached.
+              const execEnv = {
+                ...process.env,
+                PATH: [
+                  process.env.PATH || '',
+                  '/usr/local/bin',
+                  `${process.env.HOME || ''}/.local/share/pnpm`,
+                  `${process.env.HOME || ''}/.npm-global/bin`,
+                  '/usr/bin',
+                ].filter(Boolean).join(':'),
               };
 
               if (DETACHED_CLI_COMMANDS.has(command)) {
                 // Shell backgrounds the CLI and exits; child keeps running.
                 const shellCmd = `${command} >>/tmp/agenticros-remote-cli.log 2>&1 &`;
-                exec(shellCmd, { timeout: 15000 }, (error, stdout, stderr) => {
+                exec(shellCmd, { timeout: 15000, env: execEnv }, (error, stdout, stderr) => {
                   respond(error, stdout || `Started: ${command}\n`, stderr);
                 });
                 return;
               }
 
-              exec(command, { timeout: 60000, maxBuffer: 2 * 1024 * 1024 }, respond);
+              // status / stop should finish quickly; keep under ARC's ~25s waiter.
+              const execTimeout = command.startsWith('agenticros status') ? 15000 : 20000;
+              exec(command, { timeout: execTimeout, maxBuffer: 2 * 1024 * 1024, env: execEnv }, respond);
             });
 
             this.socket.on('disconnect', (reason) => {
