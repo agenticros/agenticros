@@ -652,14 +652,16 @@ class P2PServer {
               }
               if (typeof content !== 'string') {
                 console.log(formatLog(`BASH: rejected non-string command`));
-                if (requestId) {
-                  this.socket.emit('bash-response', {
-                    requestId,
-                    stdout: '',
-                    stderr: 'Invalid bash-script payload',
-                    exitCode: 1,
-                    error: 'invalid_payload',
-                  });
+                const deny = {
+                  requestId,
+                  stdout: '',
+                  stderr: 'Invalid bash-script payload',
+                  exitCode: 1,
+                  error: 'invalid_payload',
+                };
+                if (requestId) this.socket.emit('bash-response', deny);
+                if (typeof callback === 'function') {
+                  try { callback(deny); } catch (_) { /* ignore */ }
                 }
                 return;
               }
@@ -669,18 +671,19 @@ class P2PServer {
 
               if (!ALLOWED_CLI_COMMANDS.has(command)) {
                 console.log(formatLog(`BASH: rejected (not allowlisted): ${command}`));
-                if (requestId) {
-                  this.socket.emit('bash-response', {
-                    requestId,
-                    stdout: '',
-                    stderr: `Command not allowlisted: ${command}`,
-                    exitCode: 126,
-                    error: 'not_allowlisted',
-                  });
+                const deny = {
+                  requestId,
+                  stdout: '',
+                  stderr: `Command not allowlisted: ${command}`,
+                  exitCode: 126,
+                  error: 'not_allowlisted',
+                };
+                if (requestId) this.socket.emit('bash-response', deny);
+                if (typeof callback === 'function') {
+                  try { callback(deny); } catch (_) { /* ignore */ }
                 }
                 return;
               }
-
               const respond = (error, stdout, stderr) => {
                 const exitCode = error && typeof error.code === 'number' ? error.code : (error ? 1 : 0);
                 if (error) {
