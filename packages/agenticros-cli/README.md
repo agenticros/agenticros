@@ -165,7 +165,7 @@ agenticros start motors -b jetson -p 16,18,22,26
 | `agenticros start realsense --model=D421` | D421 depth-only teleop profile (also auto from cloud portal `camera`). |
 | `agenticros stop realsense` | Stop the camera node. |
 
-Default teleop profile (same as robotics-npm): RGB `320x180@6`, depth/infra `424x240@6`.  
+Default teleop profile (same as robotics-npm): RGB+depth `424x240@6` (note: `320x180` is not valid on many D4xx RGB sensors and silently falls back to high-res).  
 Requires `ros-<distro>-realsense2-camera`. Logs: `/tmp/agenticros-camera.log`.
 
 Restart after upgrading the CLI so an already-running high-res node is replaced:
