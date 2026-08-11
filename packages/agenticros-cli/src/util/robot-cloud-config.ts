@@ -345,6 +345,8 @@ export interface RemoteCliResult {
   stderr: string;
   exitCode: number;
   error?: string;
+  /** Parsed JSON from stdout when the command printed JSON (e.g. status --json). */
+  result?: unknown;
 }
 
 /**
@@ -379,6 +381,7 @@ export async function runRemoteCli(
     stdout?: string;
     stderr?: string;
     exitCode?: number;
+    result?: unknown;
   };
 
   if (!response.ok) {
@@ -393,5 +396,6 @@ export async function runRemoteCli(
     stderr: data.stderr || "",
     exitCode: typeof data.exitCode === "number" ? data.exitCode : 0,
     error: data.error,
+    result: data.result,
   };
 }
