@@ -106,6 +106,8 @@ Default cloud host: **`cloud.agenticros.com`** (REST + WebSocket).
 | `agenticros logout` | Clear stored API token (keeps ROBOT ID). |
 | `agenticros whoami` | Show cloud account + registration status. |
 | `agenticros register` | Wizard to register this robot on ARC (name, camera, compute). |
+| `agenticros remote list` | List ARC account robots + online/offline. |
+| `agenticros remote <action> [--robot <id>]` | Preset remote CLI via `POST /robot/:id/cli` (`start_motors`, `stop_motors`, `start_realsense`, `stop_realsense`, `start_camera`, `stop_camera`, `status`). |
 | `agenticros connect [-s host]` | Start cloud P2P + ROS bridge (`comms.js`). Default `wss://cloud.agenticros.com`. |
 | `agenticros disconnect` | Stop `comms.js`. |
 | `agenticros id` | Print (or create) robot UUID. |

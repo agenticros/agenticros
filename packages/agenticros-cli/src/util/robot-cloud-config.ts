@@ -267,3 +267,131 @@ export function maskToken(token: string): string {
   if (token.length <= 12) return "••••••••";
   return `${token.slice(0, 8)}…${token.slice(-4)}`;
 }
+
+/** Preset remote CLI actions accepted by POST /robot/:id/cli */
+export const REMOTE_CLI_ACTIONS = [
+  "start_motors",
+  "stop_motors",
+  "start_realsense",
+  "stop_realsense",
+  "start_camera",
+  "stop_camera",
+  "status",
+] as const;
+
+export type RemoteCliAction = (typeof REMOTE_CLI_ACTIONS)[number];
+
+export function isRemoteCliAction(value: string): value is RemoteCliAction {
+  return (REMOTE_CLI_ACTIONS as readonly string[]).includes(value);
+}
+
+function authHeaders(apiToken: string): Record<string, string> {
+  return {
+    "Content-Type": "application/json",
+    api_token: apiToken,
+    Authorization: `Bearer ${apiToken}`,
+  };
+}
+
+/** List robot IDs registered to the current ARC account (`GET /myrobots`). */
+export async function listMyRobots(): Promise<string[]> {
+  const apiToken = getApiToken();
+  if (!apiToken) {
+    throw new Error("No API token set. Run `agenticros login` first.");
+  }
+  const response = await fetch(`${CLOUD_REST}/myrobots`, {
+    headers: authHeaders(apiToken),
+  });
+  if (response.status === 404) return [];
+  if (!response.ok) {
+    throw new Error(`Failed to list robots (HTTP ${response.status})`);
+  }
+  const data = (await response.json()) as unknown;
+  if (!Array.isArray(data)) {
+    throw new Error("Unexpected /myrobots response (expected array of ids)");
+  }
+  return data.map(String);
+}
+
+export interface RobotPresence {
+  online: boolean;
+  socketId?: string | null;
+  lastSeen?: string | null;
+}
+
+/** Live presence for a robot (`GET /presence/:id`). */
+export async function fetchRobotPresence(robotId: string): Promise<RobotPresence> {
+  const apiToken = getApiToken();
+  if (!apiToken) {
+    throw new Error("No API token set. Run `agenticros login` first.");
+  }
+  const response = await fetch(`${CLOUD_REST}/presence/${robotId}`, {
+    headers: authHeaders(apiToken),
+  });
+  if (!response.ok) {
+    return { online: false };
+  }
+  const data = (await response.json()) as { online?: boolean; socketId?: string | null };
+  return {
+    online: Boolean(data.online),
+    socketId: data.socketId,
+  };
+}
+
+export interface RemoteCliResult {
+  action: string;
+  command?: string;
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+  error?: string;
+}
+
+/**
+ * Run a preset CLI action on a remote online robot via
+ * `POST /robot/:id/cli` → `{ action }`.
+ */
+export async function runRemoteCli(
+  robotId: string,
+  action: RemoteCliAction,
+): Promise<RemoteCliResult> {
+  const apiToken = getApiToken();
+  if (!apiToken) {
+    throw new Error("No API token set. Run `agenticros login` first.");
+  }
+  if (!isRemoteCliAction(action)) {
+    throw new Error(
+      `Unknown action "${action}". Supported: ${REMOTE_CLI_ACTIONS.join(", ")}`,
+    );
+  }
+
+  const response = await fetch(`${CLOUD_REST}/robot/${robotId}/cli`, {
+    method: "POST",
+    headers: authHeaders(apiToken),
+    body: JSON.stringify({ action }),
+  });
+
+  const data = (await response.json().catch(() => ({}))) as {
+    error?: string;
+    message?: string;
+    action?: string;
+    command?: string;
+    stdout?: string;
+    stderr?: string;
+    exitCode?: number;
+  };
+
+  if (!response.ok) {
+    const detail = data.message || data.error || `HTTP ${response.status}`;
+    throw new Error(`Remote CLI failed: ${detail}`);
+  }
+
+  return {
+    action: data.action || action,
+    command: data.command,
+    stdout: data.stdout || "",
+    stderr: data.stderr || "",
+    exitCode: typeof data.exitCode === "number" ? data.exitCode : 0,
+    error: data.error,
+  };
+}

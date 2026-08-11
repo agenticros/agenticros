@@ -91,6 +91,8 @@ live in `configstore('agenticros')` (`ROBOT_ID`, `API_TOKEN`); legacy
 | `agenticros logout` | Clear `API_TOKEN` (keeps `ROBOT_ID`). |
 | `agenticros whoami` | Show cloud account and whether this robot is registered. |
 | `agenticros register` | Interactive wizard (required: name, camera, compute). Mints/reuses local UUID and `POST /robots` to ARC. |
+| `agenticros remote list` | List robots on your ARC account with online/offline presence. |
+| `agenticros remote <action> [--robot <id>]` | Run a preset CLI action on an online robot via `POST /robot/:id/cli`. Actions: `start_motors`, `stop_motors`, `start_realsense`, `stop_realsense`, `start_camera`, `stop_camera`, `status`. |
 | `agenticros connect [-s host]` | Start cloud P2P/ROS bridge (`comms.js`). Default `wss://cloud.agenticros.com`. |
 | `agenticros disconnect` | Stop `comms.js`. |
 | `agenticros id` | Print (or create) robot ID. |

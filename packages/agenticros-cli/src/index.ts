@@ -44,6 +44,7 @@ import {
   whoamiCommand,
 } from "./commands/cloud-auth.js";
 import { registerCommand } from "./commands/register.js";
+import { remoteCommand } from "./commands/remote.js";
 import { err } from "./util/logger.js";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -226,6 +227,21 @@ program
   .description("Show AgenticROS Cloud login status and robot registration.")
   .action(async () => {
     await whoamiCommand();
+  });
+
+program
+  .command("remote")
+  .description(
+    "Run a preset CLI action on an online AgenticROS Cloud robot (motors, realsense, camera, status).",
+  )
+  .argument(
+    "[action]",
+    "list | start_motors | stop_motors | start_realsense | stop_realsense | start_camera | stop_camera | status",
+  )
+  .option("--robot <id>", "Target robot UUID (default: prompt, or sole/local robot)")
+  .option("--json", "Emit JSON instead of human-readable output", false)
+  .action(async (action: string | undefined, opts: { robot?: string; json?: boolean }) => {
+    await remoteCommand({ action, robot: opts.robot, json: opts.json });
   });
 
 program

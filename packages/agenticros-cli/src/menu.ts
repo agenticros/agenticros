@@ -43,6 +43,7 @@ import {
   whoamiCommand,
 } from "./commands/cloud-auth.js";
 import { registerCommand } from "./commands/register.js";
+import { remoteControlInteractive } from "./commands/remote.js";
 import { CLOUD_REST, getApiToken } from "./util/robot-cloud-config.js";
 import { header, info, isTty, dim, ok } from "./util/logger.js";
 import { readState, formatAge } from "./util/state.js";
@@ -307,13 +308,17 @@ async function accountSubmenu(): Promise<void> {
           value: "login",
         },
         { name: "Register this robot", value: "register" },
+        {
+          name: "Control a remote robot (preset CLI actions)",
+          value: "remote",
+        },
         { name: "Who am I?", value: "whoami" },
         { name: "Log out (clear API token)", value: "logout" },
         { name: "Advanced: set API token / robot ID manually", value: "set" },
         { name: "Open cloud portal in browser", value: "open" },
         { name: "Back to main menu", value: BACK },
       ],
-      default: loggedIn ? "register" : "login",
+      default: loggedIn ? "remote" : "login",
     });
     if (action === BACK) return;
     try {
@@ -323,6 +328,9 @@ async function accountSubmenu(): Promise<void> {
           break;
         case "register":
           await registerCommand({});
+          break;
+        case "remote":
+          await remoteControlInteractive();
           break;
         case "whoami":
           await whoamiCommand();

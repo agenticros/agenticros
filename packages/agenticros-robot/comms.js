@@ -625,14 +625,94 @@ class P2PServer {
                 }
             });
             
+            // Preset remote CLI actions (ARC POST /robot/:id/cli). Exact match after trim.
+            const ALLOWED_CLI_COMMANDS = new Set([
+              'agenticros start motors',
+              'agenticros stop motors',
+              'agenticros start realsense',
+              'agenticros stop realsense',
+              'agenticros start camera',
+              'agenticros stop camera',
+              'agenticros status --json',
+            ]);
+            // Long-running starts: background so bash-response returns promptly.
+            const DETACHED_CLI_COMMANDS = new Set([
+              'agenticros start motors',
+              'agenticros start realsense',
+              'agenticros start camera',
+            ]);
+
             this.socket.on("bash-script", (data, callback) => {
-              console.log("BASH:", data);
-              try{
-            	exec(data);
-              } catch(error){
-              	exec(`ros2 topic pub --once ${cmdVel} geometry_msgs/Twist "{linear: {x: 0.0, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}"`);
-              	console.log('aborted');
+              // Accept legacy string payload or structured { requestId, content }.
+              let requestId = null;
+              let content = data;
+              if (data && typeof data === 'object') {
+                requestId = data.requestId || null;
+                content = data.content;
               }
+              if (typeof content !== 'string') {
+                console.log(formatLog(`BASH: rejected non-string command`));
+                if (requestId) {
+                  this.socket.emit('bash-response', {
+                    requestId,
+                    stdout: '',
+                    stderr: 'Invalid bash-script payload',
+                    exitCode: 1,
+                    error: 'invalid_payload',
+                  });
+                }
+                return;
+              }
+
+              const command = content.trim();
+              console.log(formatLog(`BASH: ${command}${requestId ? ` (requestId=${requestId})` : ''}`));
+
+              if (!ALLOWED_CLI_COMMANDS.has(command)) {
+                console.log(formatLog(`BASH: rejected (not allowlisted): ${command}`));
+                if (requestId) {
+                  this.socket.emit('bash-response', {
+                    requestId,
+                    stdout: '',
+                    stderr: `Command not allowlisted: ${command}`,
+                    exitCode: 126,
+                    error: 'not_allowlisted',
+                  });
+                }
+                return;
+              }
+
+              const respond = (error, stdout, stderr) => {
+                const exitCode = error && typeof error.code === 'number' ? error.code : (error ? 1 : 0);
+                if (error) {
+                  console.log(formatLog(`BASH: failed exit=${exitCode}: ${stderr || error.message}`));
+                } else {
+                  console.log(formatLog(`BASH: ok exit=0`));
+                }
+                if (requestId) {
+                  this.socket.emit('bash-response', {
+                    requestId,
+                    stdout: stdout || '',
+                    stderr: stderr || (error && !stderr ? error.message : '') || '',
+                    exitCode,
+                  });
+                }
+                if (typeof callback === 'function') {
+                  try {
+                    callback({ stdout: stdout || '', stderr: stderr || '', exitCode });
+                  } catch (_) { /* ignore */ }
+                }
+              };
+
+              if (DETACHED_CLI_COMMANDS.has(command)) {
+                // Shell backgrounds the CLI and exits; child keeps running.
+                const shellCmd = `${command} >>/tmp/agenticros-remote-cli.log 2>&1 &`;
+                exec(shellCmd, { timeout: 15000 }, (error, stdout, stderr) => {
+                  respond(error, stdout || `Started: ${command}\n`, stderr);
+                });
+                return;
+              }
+
+              exec(command, { timeout: 60000, maxBuffer: 2 * 1024 * 1024 }, respond);
             });
 
             this.socket.on('disconnect', (reason) => {
