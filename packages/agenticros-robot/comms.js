@@ -842,6 +842,10 @@ class P2PConnection {
         this.latestMessages = new Map();
         this.lastSentTime = new Map();
         this.minSendInterval = 33;
+        // Cap WebRTC color frames (~6 FPS). Full-rate high-res floods the datachannel.
+        this.cameraSendIntervalMs = 167;
+        this._lastCameraSendAt = 0;
+        this._lastCameraLogAt = 0;
         this.lastActivityTime = Date.now();
         this.keepAliveInterval = 30000;
         this.keepAliveTimer = null;
@@ -1404,29 +1408,18 @@ class P2PConnection {
             const openChannels = Array.from(this.dataChannels.values())
                 .filter(ch => ch.isOpen() && this.activeChannels.has(ch.getLabel()));
             
-            console.log(formatLog(`📤 Available open channels: ${openChannels.length}`));
-            openChannels.forEach((ch, i) => {
-                console.log(formatLog(`📤 Channel ${i}: ${ch.getLabel()}, open: ${ch.isOpen()}, active: ${this.activeChannels.has(ch.getLabel())}`));
-            });
-            
             if (openChannels.length === 0) {
-                console.warn(formatLog(`❌ No open channels available for sending message`));
                 return; // Silently fail if no channels available
             }
             
             // Always use chunked binary format for compatibility with browser client
-            // This ensures the browser receives messages in the expected format
-            console.log(formatLog(`📤 Using chunked binary format for message (${compressedSize} bytes) via ${openChannels.length} channels`));
             const actualChunkSize = Math.floor(config.maxMessageSize * 0.75); // Use 75% for data to ensure room for header
             const totalChunks = Math.ceil(compressedSize / actualChunkSize);
             const messageId = uuidv4();
             
-            console.log(formatLog(`📤 Message will be split into ${totalChunks} chunks of ~${actualChunkSize} bytes each`));
-            
-            // Send chunks immediately without queuing
+            // Send chunks immediately without per-chunk log spam
             for (let i = 0; i < totalChunks; i++) {
                 if (this.abortSend) {
-                    console.warn(formatLog(`📤 Send aborted at chunk ${i + 1}`));
                     return;
                 }
                 
@@ -1438,35 +1431,26 @@ class P2PConnection {
                     header.writeBigUInt64BE(BigInt(totalChunks), 8);
                     header.write(messageId.replace(/-/g, ''), 16, 'hex');
                     
-                    // Get chunk data
                     const chunkData = compressed.slice(i * actualChunkSize, (i + 1) * actualChunkSize);
                     const chunkBuffer = Buffer.from(chunkData);
-                    
-                    // Combine header and chunk
                     const messageBuffer = Buffer.concat([header, chunkBuffer]);
                     
                     if (messageBuffer.length > config.maxMessageSize) {
-                        console.warn(formatLog(`📤 Chunk ${i + 1} too large (${messageBuffer.length} bytes), skipping`));
-                        continue; // Skip oversized chunks
+                        continue;
                     }
                     
-                    console.log(formatLog(`📤 Sending chunk ${i + 1}/${totalChunks} (${messageBuffer.length} bytes) via channel: ${channel.getLabel()}`));
                     channel.sendMessageBinary(messageBuffer);
-                    console.log(formatLog(`✅ Chunk ${i + 1}/${totalChunks} sent successfully via channel: ${channel.getLabel()}`));
                 } catch (sendError) {
                     console.error(formatLog(`❌ Error sending chunk ${i + 1}/${totalChunks} via channel ${channel.getLabel()}: ${sendError}`));
                     this.channelErrors.set(channel.getLabel(), sendError);
                     this.activeChannels.delete(channel.getLabel());
                     
                     if (this.activeChannels.size === 0) {
-                        console.error(formatLog(`❌ All channels have errors, aborting send`));
                         this.abortSend = true;
                         return;
                     }
                 }
             }
-            
-            console.log(formatLog(`✅ All chunks sent successfully for message`));
         } catch (error) {
             console.error(formatLog(`❌ Error in sendMessageImmediate: ${error}`));
         }
@@ -1506,9 +1490,11 @@ class P2PConnection {
             return;
         }
         
-        console.log(formatLog(`📋 updateLatestMessage called for topic: ${topic}`));
-        
         const now = Date.now();
+        const isCameraTopic = topic.includes('camera') || topic === '/camera2d';
+        if (!isCameraTopic) {
+            console.log(formatLog(`📋 updateLatestMessage called for topic: ${topic}`));
+        }
         
         // Check if this is a high priority topic
         const isHighPriority = messageConfig.highPriorityTopics.includes(topic);
@@ -1527,7 +1513,9 @@ class P2PConnection {
             priority: isHighPriority ? 'high' : 'low'
         });
         
-        console.log(formatLog(`📋 Message queued for topic: ${topic} (${isHighPriority ? 'HIGH PRIORITY' : 'low priority'}), pending messages: ${this.pendingMessages.size}`));
+        if (!isCameraTopic) {
+            console.log(formatLog(`📋 Message queued for topic: ${topic} (${isHighPriority ? 'HIGH PRIORITY' : 'low priority'}), pending messages: ${this.pendingMessages.size}`));
+        }
         
         // Log performance metrics for high-frequency topics
         if (messageConfig.performanceLogging && (topic === '/camera2d' || topic === '/odom')) {
@@ -1543,7 +1531,9 @@ class P2PConnection {
         // If not currently sending this topic, send it immediately for high priority, or with delay for low priority
         if (!this.sendingMessages.has(topic)) {
             if (isHighPriority) {
-                console.log(formatLog(`📤 Sending HIGH PRIORITY message immediately for topic: ${topic}`));
+                if (!isCameraTopic) {
+                    console.log(formatLog(`📤 Sending HIGH PRIORITY message immediately for topic: ${topic}`));
+                }
                 this.sendLatestMessage(topic);
             } else {
                 // Low priority messages get a small delay to allow high priority messages to be processed first
@@ -1556,8 +1546,6 @@ class P2PConnection {
                     }
                 }, delay);
             }
-        } else {
-            console.log(formatLog(`📤 Topic ${topic} already being sent, skipping`));
         }
     }
     
@@ -1610,7 +1598,9 @@ class P2PConnection {
             
             // Send immediately for all messages (no priority delays)
             await this.sendMessageImmediate(messageData.message);
-            console.log(formatLog(`✅ Message sent successfully for topic: ${topic}`));
+            if (!(topic.includes('camera') || topic === '/camera2d')) {
+                console.log(formatLog(`✅ Message sent successfully for topic: ${topic}`));
+            }
             this.pendingMessages.delete(topic); // Remove after sending
             
         } catch (error) {
@@ -2127,190 +2117,108 @@ class P2PConnection {
                 try {
                     const subscriber = rosNode.createSubscription(type, topic, async (msg) => {
                         if (this.rosPaused) return;
-                        
-                        console.log(formatLog(`📥 Received ROS message on topic: ${topic}`));
-                        
-                        if (this.dataChannelOpen && dc.isOpen()) {
-                            console.log(formatLog(`✅ Data channel is open and ready for sending`));
-                            try {
-                                // console.log('=====>', topic);
-                                var modTopic = toClientTopic(topic, robotId, rosNamespace);
+                        if (!(this.dataChannelOpen && dc.isOpen())) return;
 
-                                // Check if this is a browser peer
-                                // Note: Robotics-web npm uses web- prefix for peerId
-                                const isBrowserPeer = this.peerId.startsWith('browser-');
-                                
-                                // Only send camera messages to browser peers
-                                const isCameraMessage = modTopic === '/camera2d' || 
-                                                      topic === '/camera/camera/color/image_raw/compressed' ||
-                                                      topic === '/camera/camera/color/image_raw';
-                                
-                                console.log(formatLog(`📤 Processing message: topic=${topic}, modTopic=${modTopic}, isBrowserPeer=${isBrowserPeer}, isCameraMessage=${isCameraMessage}`));
-                                
-                                // Send if it's a camera message to browser peer, or any message to non-browser peer
-                                if ((isBrowserPeer && isCameraMessage) || !isBrowserPeer) {
-                                    console.log(formatLog(`✅ Will send message: isBrowserPeer=${isBrowserPeer}, isCameraMessage=${isCameraMessage}`));
-                                    if(topic === '/camera/camera/color/image_raw/compressed' || topic === '/camera/camera/color/image_raw') {
-                                        // Convert image to base64 synchronously
-                                        try {
-                                            let imageData;
-                                            
-                                            if(topic === '/camera/camera/color/image_raw/compressed') {
-                                                // CompressedImage message format - data is in msg.data field
-                                                imageData = msg.data || msg;
-                                            } else {
-                                                // Raw Image message format (sensor_msgs/msg/Image) - data is in msg.data field
-                                                if (msg.data && msg.encoding) {
-                                                    console.log(formatLog(`Processing raw image: ${msg.width}x${msg.height}, encoding: ${msg.encoding}`));
-                                                    
-                                                    // For now, just use raw data without Sharp conversion to ensure message flow works
-                                                    imageData = msg.data;
-                                                    console.log(formatLog(`Using raw image data: ${imageData.length} bytes`));
-                                                } else {
-                                                    console.warn(formatLog('Invalid raw image message format'));
-                                                    // Fallback to original message
-                                            this.updateLatestMessage(modTopic, {
-                                                robotId: robotId,
-                                                topic: modTopic,
-                                                        data: msg
-                                                    });
-                                                    return;
-                                                }
-                                            }
-                                            
-                                            // CompressedImage is already JPEG — do not pass raw width/height.
-                                            // Raw Image needs sharp({ raw: { width, height, channels } }).
-                                            const isCompressed = topic.endsWith('/compressed');
-                                            let base64Image;
-                                            try {
-                                                const input = Buffer.isBuffer(imageData)
-                                                    ? imageData
-                                                    : Buffer.from(imageData);
-                                                const sharpPromise = isCompressed
-                                                    ? sharp(input).jpeg({ quality: 80 }).toBuffer()
-                                                    : sharp(input, {
-                                                        raw: {
-                                                            width: msg.width,
-                                                            height: msg.height,
-                                                            channels: 3
-                                                        }
-                                                    }).jpeg({ quality: 80 }).toBuffer();
-                                                
-                                                const jpegBuffer = await Promise.race([
-                                                    sharpPromise,
-                                                    new Promise((_, reject) => 
-                                                        setTimeout(() => reject(new Error('Sharp conversion timeout')), 5000)
-                                                    )
-                                                ]);
-                                                
-                                                base64Image = jpegBuffer.toString('base64');
-                                            } catch (sharpError) {
-                                                console.error(formatLog(`❌ Sharp conversion failed: ${sharpError}`));
-                                                if (imageData instanceof Uint8Array) {
-                                                    base64Image = Buffer.from(imageData).toString('base64');
-                                                } else if (Buffer.isBuffer(imageData)) {
-                                                    base64Image = imageData.toString('base64');
-                                                } else if (typeof imageData === 'string') {
-                                                    base64Image = Buffer.from(imageData, 'binary').toString('base64');
-                                                } else {
-                                                    base64Image = Buffer.from(imageData).toString('base64');
-                                                }
-                                            }
-                                            
-                                            // Debug: Check if the base64 is valid
-                                            console.log(formatLog(`🔍 Raw data type: ${typeof imageData}`));
-                                            console.log(formatLog(`🔍 Raw data length: ${imageData.length}`));
-                                            if (imageData instanceof Uint8Array) {
-                                                console.log(formatLog(`🔍 First 20 bytes: ${Array.from(imageData.slice(0, 20)).map(b => b.toString(16).padStart(2, '0')).join(' ')}`));
-                                            }
-                                            console.log(formatLog(`🔍 Base64 result: ${base64Image.substring(0, 50)}...`));
-                                            
-                                            // Validate base64 format
-                                            const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
-                                            if (!base64Regex.test(base64Image)) {
-                                                console.error(formatLog(`❌ Invalid base64 format detected!`));
-                                                console.error(formatLog(`❌ Contains invalid characters: ${base64Image.substring(0, 100)}`));
-                                            } else {
-                                                console.log(formatLog(`✅ Valid base64 format confirmed`));
-                                            }
-                                            
-                                            // Create message with base64 data directly in the data field
-                                            const messageWithBase64 = {
-                                                robotId: robotId,
-                                                topic: modTopic,
-                                                data: base64Image, // Removed data URL prefix - just send raw base64
-                                                encoding: 'base64',
-                                                width: msg.width,
-                                                height: msg.height,
-                                                timestamp: Date.now()
-                                            };
-                                            
-                                            console.log(formatLog(`📤 About to send message with ${base64Image.length} chars base64`));
-                                            
-                                            // Send the message with base64 data
-                                            this.updateLatestMessage(modTopic, messageWithBase64);
-                                            
-                                            // Store in global camera data for photo requests
-                                            globalCameraData.set(modTopic, {
-                                                data: base64Image,
-                                                timestamp: Date.now()
-                                            });
-                                            console.log(formatLog(`💾 Stored camera data in global storage for topic: ${modTopic}`));
-                                            
-                                            console.log(formatLog(`📸 Image converted to base64: ${topic} -> ${base64Image.length} chars`));
-                                            console.log(formatLog(`📤 Message queued for sending: ${modTopic}`));
-                                            console.log(formatLog(`📊 Base64 data preview: ${base64Image.substring(0, 50)}...`));
-                                        } catch (error) {
-                                            console.error('Error converting image to base64:', error);
-                                            // Fallback to original message
-                                            this.updateLatestMessage(modTopic, {
-                                                robotId: robotId,
-                                                topic: modTopic,
-                                                data: msg
-                                            });
-                                            
-                                            // Store original message in global camera data as fallback
-                                            globalCameraData.set(modTopic, {
-                                                data: msg,
-                                                timestamp: Date.now()
-                                            });
-                                            console.log(formatLog(`💾 Stored fallback camera data in global storage for topic: ${modTopic}`));
-                                        }
+                        try {
+                            var modTopic = toClientTopic(topic, robotId, rosNamespace);
+                            const isBrowserPeer = this.peerId.startsWith('browser-');
+                            const isCameraMessage = modTopic === '/camera2d' ||
+                                                  topic === '/camera/camera/color/image_raw/compressed' ||
+                                                  topic === '/camera/camera/color/image_raw';
+
+                            // Browser teleop only needs color/camera2d
+                            if (isBrowserPeer && !isCameraMessage) return;
+                            if (!((isBrowserPeer && isCameraMessage) || !isBrowserPeer)) return;
+
+                            if (topic === '/camera/camera/color/image_raw/compressed' || topic === '/camera/camera/color/image_raw') {
+                                try {
+                                    const now = Date.now();
+                                    if (now - this._lastCameraSendAt < this.cameraSendIntervalMs) {
+                                        return;
+                                    }
+
+                                    const isCompressed = topic.endsWith('/compressed');
+                                    let imageData;
+                                    if (isCompressed) {
+                                        imageData = msg.data || msg;
+                                    } else if (msg.data && msg.encoding) {
+                                        imageData = msg.data;
                                     } else {
-                                        // Original code for non-camera messages
-                                        this.updateLatestMessage(modTopic, {
-                                            robotId: robotId,
-                                            topic: modTopic,
-                                            data: msg
-                                        });
-                                        
-                                        // Store camera data in global storage if it's a camera topic
-                                        if (modTopic === '/camera2d' && msg && typeof msg === 'string' && msg.length > 100) {
-                                            globalCameraData.set(modTopic, {
-                                                data: msg,
-                                                timestamp: Date.now()
-                                            });
-                                            console.log(formatLog(`💾 Stored camera2d data in global storage (${msg.length} chars)`));
+                                        return;
+                                    }
+
+                                    let base64Image;
+                                    if (isCompressed) {
+                                        // Already JPEG — skip Sharp re-encode
+                                        base64Image = Buffer.isBuffer(imageData)
+                                            ? imageData.toString('base64')
+                                            : Buffer.from(imageData).toString('base64');
+                                    } else {
+                                        try {
+                                            const input = Buffer.isBuffer(imageData)
+                                                ? imageData
+                                                : Buffer.from(imageData);
+                                            const jpegBuffer = await Promise.race([
+                                                sharp(input, {
+                                                    raw: {
+                                                        width: msg.width,
+                                                        height: msg.height,
+                                                        channels: 3
+                                                    }
+                                                }).jpeg({ quality: 70 }).toBuffer(),
+                                                new Promise((_, reject) =>
+                                                    setTimeout(() => reject(new Error('Sharp conversion timeout')), 5000)
+                                                ),
+                                            ]);
+                                            base64Image = jpegBuffer.toString('base64');
+                                        } catch (_) {
+                                            base64Image = Buffer.isBuffer(imageData)
+                                                ? imageData.toString('base64')
+                                                : Buffer.from(imageData).toString('base64');
                                         }
                                     }
-                                } else {
-                                    console.log(formatLog(`📤 Skipping message: topic=${topic}, isBrowserPeer=${isBrowserPeer}, isCameraMessage=${isCameraMessage}`));
-                                }
-                            } catch (error) {
-                                console.warn(formatLog(`Failed to send message on topic ${topic}: ${error}`));
-                                // Fallback: try to send original message
-                                try {
-                                    this.updateLatestMessage(modTopic, {
+
+                                    this._lastCameraSendAt = now;
+                                    if (now - this._lastCameraLogAt > 5000) {
+                                        this._lastCameraLogAt = now;
+                                        console.log(formatLog(
+                                            `📸 Teleop frame ${topic}: ${base64Image.length} chars base64` +
+                                            (isCompressed ? '' : ` (${msg.width}x${msg.height})`)
+                                        ));
+                                    }
+
+                                    const messageWithBase64 = {
                                         robotId: robotId,
                                         topic: modTopic,
-                                        data: msg
+                                        data: base64Image,
+                                        encoding: 'base64',
+                                        width: msg.width,
+                                        height: msg.height,
+                                        timestamp: now
+                                    };
+                                    this.updateLatestMessage(modTopic, messageWithBase64);
+                                    globalCameraData.set(modTopic, {
+                                        data: base64Image,
+                                        timestamp: now
                                     });
-                                } catch (fallbackError) {
-                                    console.error(formatLog(`Fallback also failed for topic ${topic}: ${fallbackError}`));
+                                } catch (error) {
+                                    console.error('Error converting image to base64:', error);
+                                }
+                            } else {
+                                this.updateLatestMessage(modTopic, {
+                                    robotId: robotId,
+                                    topic: modTopic,
+                                    data: msg
+                                });
+                                if (modTopic === '/camera2d' && msg && typeof msg === 'string' && msg.length > 100) {
+                                    globalCameraData.set(modTopic, {
+                                        data: msg,
+                                        timestamp: Date.now()
+                                    });
                                 }
                             }
-                        } else {
-                            console.warn(formatLog(`Data channel not open for topic ${topic}`));
+                        } catch (error) {
+                            console.warn(formatLog(`Failed to send message on topic ${topic}: ${error}`));
                         }
                     });
                     this.subscribers.push(subscriber);

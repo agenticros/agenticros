@@ -129,26 +129,38 @@ realsense_launch_args() {
 }
 
 # Optional args: pointcloud, full, model=D421
+# Default teleop start always stop+relaunch so a leftover full-res node cannot stick.
+# Set AGENTICROS_REALSENSE_KEEP=1 to keep an already-running node (old adopt behavior).
 start_realsense_camera() {
     echo "==> Starting RealSense camera (logs: $CAMERA_LOG)"
+
+    local keep_existing="${AGENTICROS_REALSENSE_KEEP:-0}"
+    local already_running=0
     if [[ -f "$CAMERA_PID_FILE" ]] && kill -0 "$(cat "$CAMERA_PID_FILE")" 2>/dev/null; then
-        echo "   Already running (pid $(cat "$CAMERA_PID_FILE")) — skipping"
-        if realsense_in_recovery_mode; then
-            echo "   WARN: RealSense is in RECOVERY mode — no images will publish." >&2
-            realsense_print_recovery_help
-        fi
-        return 0
+        already_running=1
+    elif pgrep -f "realsense2_camera_node" >/dev/null; then
+        already_running=1
     fi
-    if pgrep -f "realsense2_camera_node" >/dev/null; then
-        local existing_pid
-        existing_pid=$(pgrep -f "realsense2_camera_node" | head -n 1)
-        echo "$existing_pid" >"$CAMERA_PID_FILE"
-        echo "   Detected an existing realsense2_camera_node (pid $existing_pid) — adopted into $CAMERA_PID_FILE"
-        if realsense_in_recovery_mode; then
-            echo "   WARN: camera node is running but RealSense is in RECOVERY mode — no images will publish." >&2
-            realsense_print_recovery_help
+
+    if [[ "$already_running" == "1" ]]; then
+        if [[ "$keep_existing" == "1" ]]; then
+            if [[ -f "$CAMERA_PID_FILE" ]] && kill -0 "$(cat "$CAMERA_PID_FILE")" 2>/dev/null; then
+                echo "   Already running (pid $(cat "$CAMERA_PID_FILE")) — keeping (AGENTICROS_REALSENSE_KEEP=1)"
+            else
+                local existing_pid
+                existing_pid=$(pgrep -f "realsense2_camera_node" | head -n 1)
+                echo "$existing_pid" >"$CAMERA_PID_FILE"
+                echo "   Detected existing realsense2_camera_node (pid $existing_pid) — adopted"
+            fi
+            if realsense_in_recovery_mode; then
+                echo "   WARN: RealSense is in RECOVERY mode — no images will publish." >&2
+                realsense_print_recovery_help
+            fi
+            return 0
         fi
-        return 0
+        echo "   Existing camera node found — restarting with requested profile"
+        stop_realsense_camera
+        sleep 1
     fi
 
     if ! ros2 pkg prefix realsense2_camera &>/dev/null; then
@@ -181,6 +193,9 @@ start_realsense_camera() {
             return 0
         fi
         echo "   Started (node pid $node_pid, launch pid $launch_pid)"
+        if grep -q "320x180x6\|424x240x6" <<<"${REALSENSE_LAUNCH_ARGS[*]}"; then
+            echo "   Teleop profile active (expect ~6 FPS / low-res on /camera/.../compressed)"
+        fi
     else
         echo "$launch_pid" >"$CAMERA_PID_FILE"
         echo "   Started (launch pid $launch_pid — node not yet visible; check $CAMERA_LOG if tools see no image)"
