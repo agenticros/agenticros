@@ -50,6 +50,7 @@ const RUNTIME_DIR = join(CLI_PKG_DIR, "runtime");
 const INCLUDED_PACKAGES = [
   "core",
   "ros-camera",
+  "object-detection",
   "agenticros",
   "agenticros-claude-code",
   "agenticros-gemini",
