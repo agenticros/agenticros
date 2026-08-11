@@ -173,6 +173,18 @@ async function loadRobotDetails() {
     rosTopics.push({ type: 'std_msgs/msg/String', topic: camera2dTopic });
   }
 
+  // Teleop always needs RealSense color compressed — portal configs often omit it.
+  const hasColorCompressed = rosTopics.some(
+    (t) => t.topic === '/camera/camera/color/image_raw/compressed' ||
+           t.topic?.endsWith('/camera/color/image_raw/compressed')
+  );
+  if (!hasColorCompressed) {
+    rosTopics.push({
+      type: 'sensor_msgs/msg/CompressedImage',
+      topic: '/camera/camera/color/image_raw/compressed',
+    });
+  }
+
   activeIceServers = await fetchIceServers(apiToken, portalServer);
 }
 
@@ -817,6 +829,8 @@ class P2PConnection {
         this.connectionState = 'new';
         this.abortSend = false;
         this.rosPaused = false;
+        this._browserMediaReady = false;
+        this._videoBridgeTimer = null;
         this.isWebSocketConnected = true;
         this.reconnectTimer = null;
         this.reconnectAttempts = 0;
@@ -1710,32 +1724,25 @@ class P2PConnection {
             const isBrowserPeer = this.peerId.startsWith('browser-');
             console.log(formatLog(`Peer ${this.peerId} is ${isBrowserPeer ? 'browser' : 'non-browser'}`));
             
-            // Initialize ROS first if this is the first run
-            if(firstRun){
+            // Initialize ROS / browser media once per peer (10 data channels otherwise
+            // race cleanupSubscriptions and leave video unbound).
+            if (firstRun) {
                 console.log(formatLog('First run detected, initializing ROS...'));
                 this.initRcl(dc);
-            } else if (rosNode) {
-                // ROS is already initialized, setup subscriptions immediately
-                console.log(formatLog('ROS already initialized, setting up subscriptions...'));
+            } else if (rosNode && !this._browserMediaReady) {
+                this._browserMediaReady = true;
+                console.log(formatLog('ROS already initialized — binding browser media once'));
                 try {
                     if (isBrowserPeer) {
-                        // For browser peers, prioritize video streaming
-                        console.log(formatLog('Setting up video streaming for browser peer'));
-                        this.setupVideoStreaming(dc);
-                        
-                        // Also setup other ROS topics for browser peers
-                        console.log(formatLog('Setting up additional ROS topics for browser peer'));
                         this.setupRosSubscriptions(dc);
+                        this.startBrowserVideoBridge();
                     } else {
-                        // For non-browser peers, setup regular ROS subscriptions
-                        console.log(formatLog('Setting up ROS subscriptions for non-browser peer'));
                         this.setupRosSubscriptions(dc);
                     }
                 } catch (setupError) {
                     console.error(formatLog(`Error in setup after channel open: ${setupError}`));
+                    this._browserMediaReady = false;
                 }
-            } else {
-                console.log(formatLog('ROS not initialized yet, subscriptions will be set up when ROS is ready'));
             }
             
             // NEW: Test non-queuing system on first connection
@@ -2259,18 +2266,19 @@ class P2PConnection {
 
                 const isBrowserPeer = this.peerId.startsWith('browser-');
                 if (isBrowserPeer) {
-                    this.setupVideoStreaming(dc);
+                    this._browserMediaReady = true;
+                    this.setupRosSubscriptions(dc);
+                    this.startBrowserVideoBridge();
+                } else {
+                    this.setupRosSubscriptions(dc);
                 }
-                this.setupRosSubscriptions(dc);
 
                 // Also setup subscriptions for any other open data channels
                 this.dataChannels.forEach((channel, label) => {
                     if (channel.isOpen() && label !== dc.getLabel()) {
                         console.log(formatLog(`Setting up subscriptions for existing channel: ${label}`));
-                        if (isBrowserPeer) {
-                            this.setupVideoStreaming(channel);
-                            this.setupRosSubscriptions(channel);
-                        } else {
+                        // Already bound once for browser; skip re-bind races
+                        if (!isBrowserPeer) {
                             this.setupRosSubscriptions(channel);
                         }
                     }
@@ -2289,21 +2297,11 @@ class P2PConnection {
 
                 // Setup subscriptions after ROS node is fully initialized
                 console.log(formatLog('Setting up ROS subscriptions...'));
+                this._browserMediaReady = true;
                 this.setupRosSubscriptions(dc);
-
-                // Also setup subscriptions for any other open data channels
-                this.dataChannels.forEach((channel, label) => {
-                    if (channel.isOpen() && label !== dc.getLabel()) {
-                        console.log(formatLog(`Setting up subscriptions for existing channel: ${label}`));
-                        const isBrowserPeer = this.peerId.startsWith('browser-');
-                        if (isBrowserPeer) {
-                            this.setupVideoStreaming(channel);
-                            this.setupRosSubscriptions(channel);
-                        } else {
-                            this.setupRosSubscriptions(channel);
-                        }
-                    }
-                });
+                if (this.peerId.startsWith('browser-')) {
+                    this.startBrowserVideoBridge();
+                }
 
                 console.log(formatLog('Starting ROS node spin...'));
                 rosNode.spin();
@@ -2313,6 +2311,61 @@ class P2PConnection {
             });
         } catch (error) {
             console.error(formatLog(`RCL error: ${error}`));
+        }
+    }
+
+    /**
+     * Push latest standalone camera frames over WebRTC at ~6 FPS.
+     * Survives P2P subscription races after re-peer (standalone already fills globalCameraData).
+     */
+    startBrowserVideoBridge() {
+        this.stopBrowserVideoBridge();
+        const topics = [
+            '/camera/camera/color/image_raw/compressed',
+            '/camera/camera/color/image_raw',
+            '/camera2d',
+        ];
+        console.log(formatLog('Starting browser video bridge from globalCameraData'));
+        this._videoBridgeTimer = setInterval(() => {
+            if (this.rosPaused || !this.dataChannelOpen) return;
+            if (this.connectionState !== 'connected') return;
+
+            let best = null;
+            let bestTopic = null;
+            for (const topic of topics) {
+                const entry = globalCameraData.get(topic);
+                if (!entry?.data || typeof entry.data !== 'string' || entry.data.length < 100) continue;
+                if (Date.now() - entry.timestamp > 3000) continue;
+                best = entry;
+                bestTopic = topic;
+                break;
+            }
+            if (!best) return;
+
+            // Prefer the compressed topic name the teleop UI expects
+            const sendTopic = bestTopic === '/camera2d'
+                ? '/camera/camera/color/image_raw/compressed'
+                : bestTopic;
+
+            if (this.sendingMessages.has(sendTopic)) return;
+            const now = Date.now();
+            if (now - this._lastCameraSendAt < this.cameraSendIntervalMs) return;
+            this._lastCameraSendAt = now;
+
+            this.updateLatestMessage(sendTopic, {
+                robotId: robotId,
+                topic: sendTopic,
+                data: best.data,
+                encoding: 'base64',
+                timestamp: best.timestamp,
+            });
+        }, this.cameraSendIntervalMs);
+    }
+
+    stopBrowserVideoBridge() {
+        if (this._videoBridgeTimer) {
+            clearInterval(this._videoBridgeTimer);
+            this._videoBridgeTimer = null;
         }
     }
 
@@ -2402,6 +2455,8 @@ class P2PConnection {
 
     cleanup() {
         this.clearAllTimers();
+        this.stopBrowserVideoBridge();
+        this._browserMediaReady = false;
         this.cleanupSubscriptions();
         this.dataChannels.forEach((channel, index) => {
             this.cleanupChannel(channel);
