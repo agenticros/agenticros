@@ -2133,6 +2133,8 @@ class P2PConnection {
                             if (topic === '/camera/camera/color/image_raw/compressed' || topic === '/camera/camera/color/image_raw') {
                                 try {
                                     const now = Date.now();
+                                    // Don't pile onto an in-flight WebRTC send (starves twist/status).
+                                    if (this.sendingMessages.has(modTopic)) return;
                                     if (now - this._lastCameraSendAt < this.cameraSendIntervalMs) {
                                         return;
                                     }
@@ -2147,43 +2149,59 @@ class P2PConnection {
                                         return;
                                     }
 
-                                    let base64Image;
-                                    if (isCompressed) {
-                                        // Already JPEG — skip Sharp re-encode
-                                        base64Image = Buffer.isBuffer(imageData)
-                                            ? imageData.toString('base64')
-                                            : Buffer.from(imageData).toString('base64');
-                                    } else {
+                                    const input = Buffer.isBuffer(imageData)
+                                        ? imageData
+                                        : Buffer.from(imageData);
+
+                                    // Hard cap: >40KB JPEG will choke datachannels. Downscale for teleop.
+                                    const MAX_JPEG_BYTES = 40 * 1024;
+                                    let jpegBuf = input;
+                                    let outW = msg.width;
+                                    let outH = msg.height;
+                                    if (!isCompressed || input.length > MAX_JPEG_BYTES) {
                                         try {
-                                            const input = Buffer.isBuffer(imageData)
-                                                ? imageData
-                                                : Buffer.from(imageData);
-                                            const jpegBuffer = await Promise.race([
-                                                sharp(input, {
+                                            let pipeline = isCompressed
+                                                ? sharp(input)
+                                                : sharp(input, {
                                                     raw: {
                                                         width: msg.width,
                                                         height: msg.height,
                                                         channels: 3
                                                     }
-                                                }).jpeg({ quality: 70 }).toBuffer(),
+                                                });
+                                            pipeline = pipeline.resize({
+                                                width: 424,
+                                                height: 240,
+                                                fit: 'inside',
+                                                withoutEnlargement: true
+                                            }).jpeg({ quality: 50 });
+                                            jpegBuf = await Promise.race([
+                                                pipeline.toBuffer(),
                                                 new Promise((_, reject) =>
-                                                    setTimeout(() => reject(new Error('Sharp conversion timeout')), 5000)
+                                                    setTimeout(() => reject(new Error('Sharp conversion timeout')), 3000)
                                                 ),
                                             ]);
-                                            base64Image = jpegBuffer.toString('base64');
-                                        } catch (_) {
-                                            base64Image = Buffer.isBuffer(imageData)
-                                                ? imageData.toString('base64')
-                                                : Buffer.from(imageData).toString('base64');
+                                            outW = 424;
+                                            outH = 240;
+                                        } catch (e) {
+                                            if (input.length > 120 * 1024) {
+                                                // Too large and can't downscale — drop frame
+                                                if (now - this._lastCameraLogAt > 5000) {
+                                                    this._lastCameraLogAt = now;
+                                                    console.warn(formatLog(`📸 Dropping oversized frame (${input.length} bytes): ${e.message || e}`));
+                                                }
+                                                return;
+                                            }
+                                            jpegBuf = input;
                                         }
                                     }
 
+                                    const base64Image = jpegBuf.toString('base64');
                                     this._lastCameraSendAt = now;
                                     if (now - this._lastCameraLogAt > 5000) {
                                         this._lastCameraLogAt = now;
                                         console.log(formatLog(
-                                            `📸 Teleop frame ${topic}: ${base64Image.length} chars base64` +
-                                            (isCompressed ? '' : ` (${msg.width}x${msg.height})`)
+                                            `📸 Teleop frame ${topic}: ${jpegBuf.length} bytes jpeg / ${base64Image.length} chars b64`
                                         ));
                                     }
 
@@ -2192,8 +2210,8 @@ class P2PConnection {
                                         topic: modTopic,
                                         data: base64Image,
                                         encoding: 'base64',
-                                        width: msg.width,
-                                        height: msg.height,
+                                        width: outW,
+                                        height: outH,
                                         timestamp: now
                                     };
                                     this.updateLatestMessage(modTopic, messageWithBase64);

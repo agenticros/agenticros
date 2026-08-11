@@ -6,7 +6,9 @@
 #
 # Teleop-oriented profiles (same as robotics-npm) keep WebRTC streaming responsive:
 #   D421  → depth/infra 424x240@6
-#   else  → depth/infra 424x240@6 + RGB 320x180@6 (+ RGBD/IMU)
+#   else  → depth/infra + RGB 424x240@6 (+ RGBD/IMU)
+# NOTE: 320x180 is NOT supported on many D4xx RGB sensors — the node silently
+# falls back to a high-res default (e.g. 1280x720) and floods WebRTC.
 # Escape hatch: AGENTICROS_REALSENSE_FULL=1 or arg "full" → stock rs_launch.py defaults.
 
 CAMERA_LOG="${CAMERA_LOG:-/tmp/agenticros-camera.log}"
@@ -101,15 +103,19 @@ realsense_launch_args() {
         launch_args+=(
             "depth_module.depth_profile:=424x240x6"
             "depth_module.infra_profile:=424x240x6"
+            "depth_module.profile:=424x240x6"
             "enable_depth:=true"
         )
     else
-        echo "   Profile: teleop (RGB 320x180@6, depth/infra 424x240@6 — WebRTC-friendly)" >&2
+        # 424x240@6 is a real D4xx RGB mode. Also set both .color_profile and
+        # .profile — realsense2_camera renamed the param across releases.
+        echo "   Profile: teleop (RGB+depth 424x240@6 — WebRTC-friendly)" >&2
         launch_args+=(
             "depth_module.depth_profile:=424x240x6"
             "depth_module.infra_profile:=424x240x6"
-            "rgb_camera.color_profile:=320x180x6"
-            "enable_rgbd:=true"
+            "depth_module.profile:=424x240x6"
+            "rgb_camera.color_profile:=424x240x6"
+            "rgb_camera.profile:=424x240x6"
             "enable_color:=true"
             "enable_depth:=true"
             "enable_accel:=true"
@@ -193,7 +199,7 @@ start_realsense_camera() {
             return 0
         fi
         echo "   Started (node pid $node_pid, launch pid $launch_pid)"
-        if grep -q "320x180x6\|424x240x6" <<<"${REALSENSE_LAUNCH_ARGS[*]}"; then
+        if grep -q "424x240x6\|320x180x6" <<<"${REALSENSE_LAUNCH_ARGS[*]}"; then
             echo "   Teleop profile active (expect ~6 FPS / low-res on /camera/.../compressed)"
         fi
     else
