@@ -82,12 +82,24 @@ export function isWorkspaceInstalled(repoRoot: string): boolean {
 }
 
 /**
- * `pnpm build` succeeded if @agenticros/core has been emitted. The
- * agenticros-claude-code adapter is pre-built in the published bundle so
- * we don't check that one.
+ * `pnpm build` succeeded if the shared packages that adapters import have
+ * been emitted. The agenticros-claude-code adapter is pre-built in the
+ * published bundle so we don't check that one — but `object-detection`
+ * (and ros-camera) are *not* prebuilt (pack-runtime drops their dist/),
+ * and claude-code's tsc fails with "Cannot find module
+ * '@agenticros/object-detection'" if those dist trees are missing.
+ *
+ * Checking only core/dist used to skip `pnpm -r build` on upgrade when
+ * core was already built from an older CLI, leaving object-detection
+ * unbuilt after refreshShippedCode dropped the new package.
  */
 export function isWorkspaceBuilt(repoRoot: string): boolean {
-  return existsSync(join(repoRoot, "packages", "core", "dist", "index.js"));
+  const required = [
+    join(repoRoot, "packages", "core", "dist", "index.js"),
+    join(repoRoot, "packages", "ros-camera", "dist", "index.js"),
+    join(repoRoot, "packages", "object-detection", "dist", "index.js"),
+  ];
+  return required.every((p) => existsSync(p));
 }
 
 const PNPM_INSTALL_BASE_ARGS = [

@@ -16,7 +16,16 @@
  * Reuses the existing shell scripts as subprocesses (no logic duplication).
  */
 
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -672,13 +681,18 @@ function copyTree(
  *
  * Overlay copy semantics:
  *   * Files present in both bundle and install -> OVERWRITTEN with bundle version
- *   * Files in install but NOT in bundle -> PRESERVED (so pnpm's per-package
- *     node_modules symlinks inside packages/<pkg>/ survive a refresh)
+ *   * Files in install but NOT in bundle -> PRESERVED under most paths (so
+ *     pnpm's per-package node_modules symlinks inside packages/<pkg>/ survive)
  *   * Files in bundle but NOT in install -> ADDED
+ *   * Exception: under each package's src/ (plus ros2_ws/src and scripts/) we
+ *     PRUNE install-only files. Overlay alone left deleted sources behind after
+ *     CLI upgrades (e.g. follow-me/detector.ts after YOLO moved to
+ *     @agenticros/object-detection), and tsc then failed on imports of deps
+ *     that are no longer in package.json.
  *
- * We deliberately do NOT remove the destination directory first: doing so
- * destroys pnpm's per-package node_modules/.bin symlinks and breaks subsequent
- * builds even though root node_modules looks healthy.
+ * We deliberately do NOT remove the destination package directory first:
+ * doing so destroys pnpm's per-package node_modules/.bin symlinks and breaks
+ * subsequent builds even though root node_modules looks healthy.
  */
 async function refreshShippedCode(installDir: string): Promise<void> {
   const paths = getCliPaths();
@@ -703,7 +717,59 @@ async function refreshShippedCode(installDir: string): Promise<void> {
       }
       copyTree(src, dst, { overwrite: true });
     }
+    pruneStaleShippedSources(source, installDir);
   });
+}
+
+/**
+ * After overlay-refreshing `packages/`, delete install-only files under each
+ * package's `src/` (and the top-level `scripts/` / `ros2_ws/src/` trees) that
+ * the new bundle no longer ships. Leaves `node_modules/`, `dist/`, and any
+ * other non-src paths alone so pnpm links survive.
+ */
+function pruneStaleShippedSources(bundleDir: string, installDir: string): void {
+  const pruneRoots = [
+    "scripts",
+    "ros2_ws/src",
+    ...listPackageSrcRoots(bundleDir),
+  ];
+  for (const rel of pruneRoots) {
+    const srcRoot = join(bundleDir, rel);
+    const dstRoot = join(installDir, rel);
+    if (!existsSync(srcRoot) || !existsSync(dstRoot)) continue;
+    pruneTreeToMatch(srcRoot, dstRoot);
+  }
+}
+
+function listPackageSrcRoots(bundleDir: string): string[] {
+  const packagesDir = join(bundleDir, "packages");
+  if (!existsSync(packagesDir)) return [];
+  return readdirSync(packagesDir, { withFileTypes: true })
+    .filter((d) => d.isDirectory())
+    .map((d) => join("packages", d.name, "src"))
+    .filter((rel) => existsSync(join(bundleDir, rel)));
+}
+
+/**
+ * Recursively delete entries under `dstRoot` that have no counterpart under
+ * `srcRoot`. Empty directories left behind after file deletion are removed.
+ */
+function pruneTreeToMatch(srcRoot: string, dstRoot: string): void {
+  for (const entry of readdirSync(dstRoot, { withFileTypes: true })) {
+    const dstPath = join(dstRoot, entry.name);
+    const srcPath = join(srcRoot, entry.name);
+    if (!existsSync(srcPath)) {
+      rmSync(dstPath, { recursive: true, force: true });
+      continue;
+    }
+    if (entry.isDirectory() && !entry.isSymbolicLink()) {
+      pruneTreeToMatch(srcPath, dstPath);
+      // Drop empty dirs that only held pruned files.
+      if (readdirSync(dstPath).length === 0) {
+        rmSync(dstPath, { recursive: true, force: true });
+      }
+    }
+  }
 }
 
 /**
