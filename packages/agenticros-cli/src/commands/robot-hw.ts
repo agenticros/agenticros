@@ -14,6 +14,7 @@ import { execa } from "execa";
 import {
   isNpmRuntimeRobotPkg,
   requireRobotPkgDir,
+  robotPkgHasInlineStatus,
   robotPkgHasRuntimeDeps,
 } from "../util/robot-pkg.js";
 import { getCliPaths, resolveScriptPath } from "../util/paths.js";
@@ -106,6 +107,13 @@ export async function connectCommand(opts: { server?: string }): Promise<void> {
 
   info(`Starting ${comms}`);
   info(`Logs: ${COMMS_LOG}`);
+  if (!robotPkgHasInlineStatus(dir)) {
+    warn(
+      "This comms.js is outdated (no in-process remote status). /remote hardware indicators will fail.",
+    );
+    warn("Fix: cd ~/Projects/agenticros && git pull origin main");
+    warn("  or: agenticros init --force && agenticros connect");
+  }
   const pid = spawnDetached("node", args, { cwd: dir, logFile: COMMS_LOG });
   if (pid === undefined) {
     err("Failed to spawn comms.js");

@@ -298,6 +298,8 @@ class P2PServer {
 
     async start() {
         console.log(formatLog('Starting P2P server...'));
+        console.log(formatLog(`comms.js path: ${__filename}`));
+        console.log(formatLog(`inline status: ${typeof buildInlineStatusJson === 'function' ? 'yes' : 'no'}`));
         await this.connect();
 
         // Slow watchdog only — socket.io + handleReconnect do the real work.

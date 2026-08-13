@@ -25,6 +25,16 @@ export function robotPkgHasRuntimeDeps(dir: string): boolean {
   }
 }
 
+/** True when this tree has the 0.7.5+ in-process remote status handler. */
+export function robotPkgHasInlineStatus(dir: string): boolean {
+  try {
+    const src = readFileSync(join(dir, "comms.js"), "utf8");
+    return src.includes("buildInlineStatusJson");
+  } catch {
+    return false;
+  }
+}
+
 function findMonorepoFrom(startDir: string): string | undefined {
   let dir = startDir;
   for (let i = 0; i < 8; i++) {
@@ -47,23 +57,20 @@ function findMonorepoFrom(startDir: string): string | undefined {
 /**
  * Absolute path to packages/agenticros-robot, or undefined if not available.
  *
- * Prefers a tree whose deps can actually be resolved so `npx agenticros connect`
- * does not silently spawn a dep-less runtime/ copy.
- *
- * Always considers ~/agenticros (installDir) even when getCliPaths() is still in
- * bundle mode — e.g. a half-init left package.json missing at the root but the
- * robot package tree is present after a partial copy.
+ * Prefers a tree that (1) has runtime deps and (2) includes the in-process
+ * remote status handler — a stale git clone with deps otherwise silently wins
+ * over a fresher npm/init install and breaks /remote status.
  */
 export function getRobotPkgDir(): string | undefined {
   const paths = getCliPaths();
   const candidates: string[] = [];
 
+  // installDir before repoRoot so `agenticros init` / npm upgrades win over a
+  // stale ~/Projects/agenticros checkout when both have deps.
+  candidates.push(join(paths.installDir, "packages", "agenticros-robot"));
   if (paths.repoRoot) {
     candidates.push(join(paths.repoRoot, "packages", "agenticros-robot"));
   }
-  // Prefer the init install dir even when mode detection did not promote it to
-  // repoRoot (incomplete ~/agenticros, custom AGENTICROS_HOME, etc.).
-  candidates.push(join(paths.installDir, "packages", "agenticros-robot"));
   const cwdRoot = findMonorepoFrom(process.cwd());
   if (cwdRoot) {
     candidates.push(join(cwdRoot, "packages", "agenticros-robot"));
@@ -78,8 +85,18 @@ export function getRobotPkgDir(): string | undefined {
   );
   if (existing.length === 0) return undefined;
 
-  const withDeps = existing.find((dir) => robotPkgHasRuntimeDeps(dir));
-  return withDeps ?? existing[0];
+  const scored = existing.map((dir) => ({
+    dir,
+    hasDeps: robotPkgHasRuntimeDeps(dir),
+    hasInline: robotPkgHasInlineStatus(dir),
+  }));
+
+  return (
+    scored.find((s) => s.hasDeps && s.hasInline)?.dir ??
+    scored.find((s) => s.hasDeps)?.dir ??
+    scored.find((s) => s.hasInline)?.dir ??
+    scored[0]?.dir
+  );
 }
 
 export function requireRobotPkgDir(): string {
