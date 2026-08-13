@@ -277,6 +277,45 @@ function formatLog(message) {
     return `[${timestamp}] ${message}`;
 }
 
+// When stdout is redirected to a file (agenticros connect), Node block-buffers
+// console.log so boot lines can stay invisible in /tmp/agenticros-comms.log.
+// Force synchronous line writes for operational logs.
+(function patchConsoleForFileLogs() {
+    const fs = require('fs');
+    const formatArgs = (args) =>
+        args
+            .map((a) => {
+                if (typeof a === 'string') return a;
+                try {
+                    return JSON.stringify(a);
+                } catch {
+                    return String(a);
+                }
+            })
+            .join(' ');
+    console.log = (...args) => {
+        try {
+            fs.writeSync(1, `${formatArgs(args)}\n`);
+        } catch {
+            /* ignore */
+        }
+    };
+    console.warn = (...args) => {
+        try {
+            fs.writeSync(2, `${formatArgs(args)}\n`);
+        } catch {
+            /* ignore */
+        }
+    };
+    console.error = (...args) => {
+        try {
+            fs.writeSync(2, `${formatArgs(args)}\n`);
+        } catch {
+            /* ignore */
+        }
+    };
+})();
+
 let rosNode; // Add this at the top level with other global variables
 
 class P2PServer {

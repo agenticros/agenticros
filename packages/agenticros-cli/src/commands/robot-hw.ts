@@ -6,7 +6,7 @@
  */
 
 import { spawn } from "node:child_process";
-import { existsSync, openSync, readFileSync } from "node:fs";
+import { existsSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { execa } from "execa";
@@ -33,6 +33,23 @@ const COMMS_LOG = "/tmp/agenticros-comms.log";
 
 async function pkill(pattern: string): Promise<void> {
   await execa("pkill", ["-f", pattern], { reject: false });
+  await new Promise((r) => setTimeout(r, 200));
+  // Escalate leftovers — stale comms.js processes keep cloud presence / sockets around.
+  await execa("pkill", ["-9", "-f", pattern], { reject: false });
+}
+
+async function listCommsPids(): Promise<string[]> {
+  try {
+    const { stdout, exitCode } = await execa("pgrep", ["-af", "comms.js"], { reject: false });
+    if (exitCode !== 0 || !stdout.trim()) return [];
+    return stdout
+      .trim()
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
 }
 
 function spawnDetached(
@@ -94,7 +111,14 @@ export async function connectCommand(opts: { server?: string }): Promise<void> {
 
   // Avoid stacking multiple silent comms processes.
   await pkill("comms.js");
-  await new Promise((r) => setTimeout(r, 300));
+  await new Promise((r) => setTimeout(r, 400));
+  const leftovers = await listCommsPids();
+  if (leftovers.length > 0) {
+    warn("comms.js still running after pkill — trying once more:");
+    for (const line of leftovers) warn(`  ${line}`);
+    await pkill("comms.js");
+    await new Promise((r) => setTimeout(r, 400));
+  }
 
   const id = await ensureRobotId();
 
@@ -107,12 +131,19 @@ export async function connectCommand(opts: { server?: string }): Promise<void> {
 
   info(`Starting ${comms}`);
   info(`Logs: ${COMMS_LOG}`);
+  info(`CLI: agenticros (inlineStatus=${robotPkgHasInlineStatus(dir) ? "yes" : "no"})`);
   if (!robotPkgHasInlineStatus(dir)) {
     warn(
       "This comms.js is outdated (no in-process remote status). /remote hardware indicators will fail.",
     );
     warn("Fix: cd ~/Projects/agenticros && git pull origin main");
     warn("  or: agenticros init --force && agenticros connect");
+  }
+  // Fresh log each connect so boot markers are easy to grep.
+  try {
+    writeFileSync(COMMS_LOG, "");
+  } catch {
+    /* ignore */
   }
   const pid = spawnDetached("node", args, { cwd: dir, logFile: COMMS_LOG });
   if (pid === undefined) {
@@ -128,10 +159,17 @@ export async function connectCommand(opts: { server?: string }): Promise<void> {
     process.exit(1);
   }
 
+  const running = await listCommsPids();
+  if (running.length > 1) {
+    warn(`Multiple comms.js processes running (${running.length}) — presence/status will be wrong:`);
+    for (const line of running) warn(`  ${line}`);
+  }
+
   ok("Robot connected.");
   info(`ROBOT ID: ${id}`);
   info(`pid ${pid}`);
   info(`Cloud: ${CLOUD_REST} (override with -s)`);
+  info("Verify: pgrep -af comms.js && tail -20 /tmp/agenticros-comms.log");
 }
 
 export async function disconnectCommand(): Promise<void> {
