@@ -36,6 +36,8 @@ export interface UpOptions {
   eyesNoBrowser?: boolean;
   /** With --eyes: mute R2D2 sounds. */
   eyesNoSound?: boolean;
+  /** With --eyes: skip idle person-follow gaze even if YOLO is already installed. */
+  eyesNoPersonGaze?: boolean;
 }
 
 type UpTarget = "real" | "sim-amr" | "sim-arm";
@@ -82,6 +84,7 @@ export async function upCommand(opts: UpOptions): Promise<void> {
       noTeleop: opts.eyesNoTeleop === true,
       noBrowser: opts.eyesNoBrowser === true,
       noSound: opts.eyesNoSound === true,
+      noPersonGaze: opts.eyesNoPersonGaze === true,
     });
   }
 }

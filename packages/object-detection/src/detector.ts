@@ -8,7 +8,8 @@
  *   1. AGENTICROS_YOLOV8_MODEL env var (absolute path)
  *   2. ~/.agenticros/models/yolov8n.onnx
  * If the file is missing it is downloaded from AGENTICROS_YOLOV8_URL (or a default
- * public mirror). 6 MB, one-time.
+ * public mirror). 6 MB, one-time. Pass `{ download: false }` to `load()` to refuse
+ * the download (used by robot eyes so it never fetches weights on its own).
  */
 
 import fs from "node:fs";
@@ -79,6 +80,14 @@ export interface DetectorOptions {
   iouThreshold?: number;
 }
 
+export interface LoadOptions {
+  /**
+   * When false, fail if the ONNX weights are not already on disk (no HuggingFace
+   * download). Default true so follow-me / find-object still fetch on first use.
+   */
+  download?: boolean;
+}
+
 function resolveModelPath(): string {
   const fromEnv = process.env["AGENTICROS_YOLOV8_MODEL"];
   if (fromEnv && fromEnv.trim().length > 0) return fromEnv.trim();
@@ -126,10 +135,16 @@ function downloadFile(url: string, dest: string, redirectsLeft = 5): Promise<voi
   });
 }
 
-async function ensureModel(): Promise<string> {
+async function ensureModel(download = true): Promise<string> {
   const modelPath = resolveModelPath();
   if (fs.existsSync(modelPath) && fs.statSync(modelPath).size > 1_000_000) {
     return modelPath;
+  }
+  if (!download) {
+    throw new Error(
+      `YOLOv8n model not found at ${modelPath}. ` +
+        `Set AGENTICROS_YOLOV8_MODEL to an existing file, or call load() without { download: false }.`,
+    );
   }
   const url = process.env["AGENTICROS_YOLOV8_URL"] || DEFAULT_MODEL_URL;
   process.stderr.write(`[AgenticROS] follow-me: downloading YOLOv8n ONNX → ${modelPath}\n`);
@@ -180,10 +195,11 @@ export class PersonDetector {
     this.iouThreshold = opts.iouThreshold ?? 0.5;
   }
 
-  async load(): Promise<void> {
+  async load(opts: LoadOptions = {}): Promise<void> {
     if (this.session) return;
+    const download = opts.download !== false;
+    const modelPath = await ensureModel(download);
     const { ort: ortMod } = await loadDeps();
-    const modelPath = await ensureModel();
     this.session = await ortMod.InferenceSession.create(modelPath, {
       executionProviders: ["cpu"],
       graphOptimizationLevel: "all",

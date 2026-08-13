@@ -19,6 +19,7 @@ import {
 import {
   areEyesDepsInstalled,
   resolveCmdVelTopic,
+  resolveCameraTopic,
   resolveEyesEntry,
   resolveEyesPkgDir,
   resolveSafetyLimits,
@@ -33,6 +34,8 @@ export interface EyesOptions {
   noTeleop?: boolean;
   /** Mute R2D2 idle/excited chirps. */
   noSound?: boolean;
+  /** Skip idle person-follow gaze even if YOLO is already installed. */
+  noPersonGaze?: boolean;
   port?: string | number;
   topic?: string;
   /** When true, do not exit the process on launch failure (used by `up --eyes`). */
@@ -140,6 +143,7 @@ export async function eyesCommand(opts: EyesOptions = {}): Promise<void> {
   }
 
   const topic = resolveCmdVelTopic(opts.topic);
+  const cameraTopic = resolveCameraTopic();
   const safety = resolveSafetyLimits();
   const port = Number(opts.port ?? process.env["PORT"] ?? 8765);
 
@@ -151,6 +155,7 @@ export async function eyesCommand(opts: EyesOptions = {}): Promise<void> {
   if (opts.noBrowser) nodeArgs.push("--no-browser");
   if (opts.noTeleop) nodeArgs.push("--no-teleop");
   if (opts.noSound) nodeArgs.push("--no-sound");
+  if (opts.noPersonGaze) nodeArgs.push("--no-person-gaze");
 
   // Quote for bash -c
   const nodeCmd = `node ${nodeArgs.map((a) => JSON.stringify(a)).join(" ")}`;
@@ -163,11 +168,13 @@ export async function eyesCommand(opts: EyesOptions = {}): Promise<void> {
     ...process.env,
     PORT: String(port),
     CMD_VEL_TOPIC: topic,
+    CAMERA_TOPIC: cameraTopic,
     MAX_LINEAR_VELOCITY: String(safety.maxLinearVelocity),
     MAX_ANGULAR_VELOCITY: String(safety.maxAngularVelocity),
   };
   if (opts.noTeleop) env["AGENTICROS_EYES_NO_TELEOP"] = "1";
   if (opts.noSound) env["AGENTICROS_EYES_NO_SOUND"] = "1";
+  if (opts.noPersonGaze) env["AGENTICROS_EYES_NO_PERSON_GAZE"] = "1";
   if (!env["DISPLAY"]) env["DISPLAY"] = ":0";
 
   const logFd = openSync(logPath("eyes"), "a");
@@ -211,9 +218,13 @@ export async function eyesCommand(opts: EyesOptions = {}): Promise<void> {
 
   ok(`Eyes started (pid ${child.pid})`);
   info(`  topic:  ${topic}`);
+  info(`  camera: ${cameraTopic}`);
   info(`  URL:    http://127.0.0.1:${port}/`);
   info(`  teleop: ${opts.noTeleop ? "off (gaze only)" : "WASD enabled"}`);
   info(`  sound:  ${opts.noSound ? "off" : "R2D2 chirps on"}`);
+  info(
+    `  person: ${opts.noPersonGaze ? "off (--no-person-gaze)" : "idle follow if YOLO already installed"}`,
+  );
   info(`  logs:   ${logPath("eyes")}`);
   info("Stop with: agenticros down");
 }

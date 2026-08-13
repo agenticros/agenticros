@@ -13,6 +13,10 @@ import { parseConfig, toNamespacedTopicFull } from "@agenticros/core";
 import { readConfigObject } from "./robot-config.js";
 import { getCliPaths } from "./paths.js";
 
+/** RealSense color compressed default (camera topics stay un-namespaced). */
+export const DEFAULT_CAMERA_COMPRESSED =
+  "/camera/camera/color/image_raw/compressed";
+
 /** Pure topic resolution (testable). Override → teleop.cmdVelTopic → namespaced /cmd_vel. */
 export function cmdVelTopicFromConfig(
   raw: Record<string, unknown>,
@@ -30,6 +34,34 @@ export function cmdVelTopicFromConfig(
 /** Resolve Twist topic from ~/.agenticros/config.json (+ optional CLI override). */
 export function resolveCmdVelTopic(topicOverride?: string): string {
   return cmdVelTopicFromConfig(readConfigObject(), topicOverride);
+}
+
+/** Prefer an existing /compressed suffix; otherwise append it for RealSense. */
+export function toCompressedCameraTopic(topic: string): string {
+  const trimmed = topic.trim();
+  if (!trimmed) return DEFAULT_CAMERA_COMPRESSED;
+  const withSlash = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+  if (withSlash.endsWith("/compressed") || withSlash.includes("/compressed/")) {
+    return withSlash;
+  }
+  return `${withSlash}/compressed`;
+}
+
+/** Override → robot.cameraTopic (as compressed) → RealSense compressed default. */
+export function cameraTopicFromConfig(
+  raw: Record<string, unknown>,
+  topicOverride?: string,
+): string {
+  const trimmed = (topicOverride ?? "").trim();
+  if (trimmed) return toCompressedCameraTopic(trimmed);
+  const config = parseConfig(raw);
+  const fromRobot = (config.robot?.cameraTopic ?? "").trim();
+  if (fromRobot) return toCompressedCameraTopic(fromRobot);
+  return DEFAULT_CAMERA_COMPRESSED;
+}
+
+export function resolveCameraTopic(topicOverride?: string): string {
+  return cameraTopicFromConfig(readConfigObject(), topicOverride);
 }
 
 export function safetyLimitsFromConfig(raw: Record<string, unknown>): {

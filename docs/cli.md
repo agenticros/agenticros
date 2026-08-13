@@ -53,14 +53,16 @@ Flags:
 - `--eyes-no-teleop` with `--eyes`: gaze only (no WASD publish)
 - `--eyes-no-browser` with `--eyes`: serve UI without opening a kiosk browser
 - `--eyes-no-sound` with `--eyes`: mute R2D2 idle/excited chirps
+- `--eyes-no-person-gaze` with `--eyes`: skip idle person-follow even if YOLO is already installed
 
-### `agenticros eyes [--no-browser] [--no-teleop] [--no-sound] [--port <n>] [--topic <path>]`
+### `agenticros eyes [--no-browser] [--no-teleop] [--no-sound] [--no-person-gaze] [--port <n>] [--topic <path>]`
 
 Start fullscreen robot eyes on a tablet / face display. Subscribes to the
-configured `cmd_vel` topic for left/right gaze; optionally publishes WASD
-keyboard teleop; plays R2D2-style chirps (mute with `--no-sound`). Runs over
-local DDS on the robot — not the OpenClaw remote teleop page. Full details:
-[eyes.md](eyes.md).
+configured `cmd_vel` topic for left/right gaze; when idle and YOLO is already
+installed, follows a person in the RealSense color frame (never downloads YOLO);
+optionally publishes WASD keyboard teleop; plays R2D2-style chirps (mute with
+`--no-sound`). Runs over local DDS on the robot — not the OpenClaw remote teleop
+page. Full details: [eyes.md](eyes.md).
 
 ### `agenticros web [--no-open]`
 

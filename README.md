@@ -136,7 +136,7 @@ Full architecture + design trade-offs: **[docs/strategy-ai-agents-plus-ros.md](d
 - `**packages/agenticros**` — OpenClaw plugin: tools, commands, config page, teleop routes.
 - `**packages/agenticros-claude-code**` — MCP server for Claude Code + Claude desktop / Dispatch (tools only; no config UI).
 - `**packages/agenticros-gemini**` — Gemini CLI (function calling; no MCP).
-- `**packages/robot-eyes**` — On-robot face display (`agenticros eyes`): animated eyes follow `cmd_vel` turns; optional WASD. See [docs/eyes.md](docs/eyes.md).
+- `**packages/robot-eyes**` — On-robot face display (`agenticros eyes`): animated eyes follow `cmd_vel` turns; when idle, follow a person in the RealSense camera if YOLO is already installed. Optional WASD. See [docs/eyes.md](docs/eyes.md).
 - `**ros2_ws/**` — ROS2 workspace: `agenticros_msgs`, `agenticros_bringup` (Gazebo + RViz + rosbridge launches), `agenticros_discovery`, `agenticros_agent`, `agenticros_follow_me`.
 - `**docs/**` — Architecture, skills, robot setup, Zenoh, teleop, eyes, **[local VLM / Ollama](docs/local-vlm.md)**.
 - `**scripts/**` — Workspace setup, gateway plugin config, run demos.

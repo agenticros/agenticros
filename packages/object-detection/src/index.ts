@@ -2,6 +2,7 @@ export {
   PersonDetector,
   type PersonDetection,
   type DetectorOptions,
+  type LoadOptions,
 } from "./detector.js";
 
 export {

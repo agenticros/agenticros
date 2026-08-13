@@ -1,6 +1,6 @@
 # Robot eyes (on-robot face display)
 
-`@agenticros/eyes` is a fullscreen “robot face” for tablets and head units. Canvas eyes idle-blink and look left/right when anything publishes a turning Twist on the robot’s `cmd_vel` topic. Optional invisible **WASD** keyboard teleop lets an operator drive from the same screen. Procedural **R2D2-style chirps** play from the eyes Node process (idle chatter; excited bursts on active `cmd_vel`).
+`@agenticros/eyes` is a fullscreen “robot face” for tablets and head units. Canvas eyes idle-blink and look left/right when anything publishes a turning Twist on the robot’s `cmd_vel` topic. When the robot is idle and YOLO is already installed (follow-me / `ros2_find_object`), the pupils follow a person in the RealSense color frame. Optional invisible **WASD** keyboard teleop lets an operator drive from the same screen. Procedural **R2D2-style chirps** play from the eyes Node process (idle chatter; excited bursts on active `cmd_vel`).
 
 This is **not** the OpenClaw remote teleop page ([teleop.md](teleop.md)). Eyes run **on the robot** over local DDS (`rclnodejs`). Remote camera + twist controls stay in the OpenClaw plugin.
 
@@ -21,6 +21,9 @@ agenticros eyes
 # Gaze only — do not publish WASD twists (agents/operators drive)
 agenticros eyes --no-teleop
 
+# Skip idle person-follow even if YOLO is already installed
+agenticros eyes --no-person-gaze
+
 # Mute R2D2 chirps
 agenticros eyes --no-sound
 
@@ -33,6 +36,7 @@ agenticros eyes --topic /cmd_vel --port 8765
 # With the real-robot stack
 agenticros up real --eyes
 agenticros up real --eyes --eyes-no-teleop --eyes-no-sound
+agenticros up real --eyes --eyes-no-person-gaze
 ```
 
 Stop with `agenticros down` (or kill the process recorded in `/tmp/agenticros-eyes.pid`).
@@ -50,9 +54,10 @@ Topic and safety limits come from `~/.agenticros/config.json` (same file as the 
 | `teleop.cmdVelTopic` | Used as-is when set |
 | else `robot.namespace` | Publishes/subscribes `/<namespace>/cmd_vel` |
 | else | `/cmd_vel` |
+| `robot.cameraTopic` | Color topic for idle person-follow (raw Image paths get `/compressed` appended). Default `/camera/camera/color/image_raw/compressed` |
 | `safety.maxLinearVelocity` / `maxAngularVelocity` | Clamp WASD publishes (defaults 1.0 m/s / 1.5 rad/s) |
 
-CLI `--topic` overrides the config topic. Env vars (`PORT`, `CMD_VEL_TOPIC`, `TELOP_*`, …) still work when running the package directly.
+CLI `--topic` overrides the config `cmd_vel` topic. Env vars (`PORT`, `CMD_VEL_TOPIC`, `CAMERA_TOPIC`, `TELOP_*`, …) still work when running the package directly.
 
 ## Sounds (R2D2)
 
@@ -91,10 +96,16 @@ Keys can be combined. Releasing all movement keys publishes a zero Twist. Multip
 
 ## Gaze behaviour
 
+Priority, highest first:
+
 - Turning left (`angular.z > 0`) → eyes look **right**
 - Turning right (`angular.z < 0`) → eyes look **left**
-- Idle: occasional blinks and subtle look-around
-- Recenters when `|angular.z|` is below the deadzone or commands stop
+- Driving straight (`|linear.x|` above the deadzone) → pupils recenter; person-follow does not run
+- Idle + YOLO already installed → pupils follow a person in the RealSense color frame (largest bbox, aimed at the head). Painted pupils only — does **not** drive the base. Eyes never download YOLO; if weights / native deps are missing, person-follow is skipped (`Person gaze disabled (YOLO not installed)`).
+- Idle + no person (or `--no-person-gaze`) → occasional blinks and subtle look-around
+- Recenters when motion commands stop (`|angular.z|` and `|linear.x|` below deadzone)
+
+Disable person-follow: `--no-person-gaze`, `up --eyes-no-person-gaze`, or `AGENTICROS_EYES_NO_PERSON_GAZE=1`.
 
 ## Architecture
 
@@ -104,6 +115,7 @@ Browser (canvas + optional WASD)
 @agenticros/eyes (rclnodejs node /robot_eyes)
     ↕ local DDS                          ↕ synth → afplay/paplay/aplay
 cmd_vel Twist  ← also written by MCP / OpenClaw / motors consumers
+color CompressedImage  ← RealSense (idle person-follow if YOLO already installed)
 ```
 
 Package path: [`packages/robot-eyes`](../packages/robot-eyes).

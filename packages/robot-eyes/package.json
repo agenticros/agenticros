@@ -1,7 +1,7 @@
 {
   "name": "@agenticros/eyes",
-  "version": "1.1.0",
-  "description": "Fullscreen robot eyes for tablet/display devices, driven by ROS 2 cmd_vel Twist, with R2D2-style sounds",
+  "version": "1.2.0",
+  "description": "Fullscreen robot eyes for tablet/display devices, driven by ROS 2 cmd_vel Twist, with optional idle person-follow gaze and R2D2-style sounds",
   "type": "module",
   "main": "./src/index.js",
   "bin": {
@@ -19,7 +19,7 @@
     "typecheck": "node -e \"process.exit(0)\"",
     "start": "node src/index.js",
     "start:no-browser": "node src/index.js --no-browser",
-    "test": "node -e \"process.exit(0)\""
+    "test": "node --test lib/*.test.js"
   },
   "engines": {
     "node": ">=18"

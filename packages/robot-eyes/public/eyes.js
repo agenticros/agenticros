@@ -4,7 +4,9 @@ const ctx = canvas.getContext('2d');
 const state = {
   // Target from ROS (+/-1); idle offsets applied on top when not driving
   rosGazeX: 0,
+  rosGazeY: 0,
   driving: false,
+  tracking: false,
   // Smoothed pupil position in [-1, 1]
   gazeX: 0,
   gazeY: 0,
@@ -24,6 +26,7 @@ const BLINK_CLOSE_MS = 90;
 const BLINK_OPEN_MS = 110;
 const BLINK_HOLD_MS = 40;
 const GAZE_LERP = 0.12;
+const TRACK_LERP = 0.08;
 const IDLE_LERP = 0.04;
 
 function rand(min, max) {
@@ -50,8 +53,10 @@ function connectWs() {
       const msg = JSON.parse(ev.data);
       if (msg.type !== 'gaze') return;
       state.rosGazeX = Number(msg.gazeX) || 0;
+      state.rosGazeY = Number(msg.gazeY) || 0;
       state.driving = Boolean(msg.driving);
-      if (state.driving) {
+      state.tracking = Boolean(msg.tracking) && !state.driving;
+      if (state.driving || state.tracking) {
         state.idleX = 0;
         state.idleY = 0;
       }
@@ -139,7 +144,7 @@ function updateBlink(now, dt) {
 }
 
 function updateIdle(now) {
-  if (state.driving) {
+  if (state.driving || state.tracking) {
     state.idleX = 0;
     state.idleY = 0;
     return;
@@ -160,9 +165,22 @@ function updateIdle(now) {
 }
 
 function updateGaze() {
-  const targetX = state.driving ? state.rosGazeX : state.idleX;
-  const targetY = state.driving ? 0 : state.idleY;
-  const lerp = state.driving ? GAZE_LERP : IDLE_LERP;
+  let targetX;
+  let targetY;
+  let lerp;
+  if (state.driving) {
+    targetX = state.rosGazeX;
+    targetY = 0;
+    lerp = GAZE_LERP;
+  } else if (state.tracking) {
+    targetX = state.rosGazeX;
+    targetY = state.rosGazeY;
+    lerp = TRACK_LERP;
+  } else {
+    targetX = state.idleX;
+    targetY = state.idleY;
+    lerp = IDLE_LERP;
+  }
   state.gazeX += (targetX - state.gazeX) * lerp;
   state.gazeY += (targetY - state.gazeY) * lerp;
 }

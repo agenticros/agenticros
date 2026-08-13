@@ -5,16 +5,18 @@
  * Subscribes to CMD_VEL_TOPIC for gaze (left/right turns). Optionally publishes
  * the same topic from invisible WASD keyboard teleop (disabled with --no-teleop).
  * Plays procedural R2D2 chirps (idle) and excited bursts on active cmd_vel
- * (disabled with --no-sound).
+ * (disabled with --no-sound). When idle, opportunistically follows a person in
+ * the RealSense color frame if YOLO is already installed (never downloads it;
+ * disable with --no-person-gaze).
  *
  * Env (set by `agenticros eyes` from ~/.agenticros/config.json):
- *   CMD_VEL_TOPIC, MAX_LINEAR_VELOCITY, MAX_ANGULAR_VELOCITY, PORT, …
+ *   CMD_VEL_TOPIC, CAMERA_TOPIC, MAX_LINEAR_VELOCITY, MAX_ANGULAR_VELOCITY, PORT, …
  */
 import { createRequire } from "module";
 import http from "http";
 import fs from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
+import { fileURLToPath, pathToFileURL } from "url";
 import { spawn, execFileSync } from "child_process";
 import { WebSocketServer } from "ws";
 
@@ -44,7 +46,10 @@ const PUBLIC_DIR = path.join(__dirname, "..", "public");
 const PORT = Number(process.env.PORT || 8765);
 const TOPIC = process.env.CMD_VEL_TOPIC || "/cmd_vel";
 const ANGULAR_DEADZONE = Number(process.env.ANGULAR_DEADZONE || 0.05);
+const LINEAR_DEADZONE = Number(process.env.LINEAR_DEADZONE || 0.02);
 const CMD_TIMEOUT_MS = Number(process.env.CMD_TIMEOUT_MS || 300);
+const PERSON_GAZE_HZ = Number(process.env.PERSON_GAZE_HZ || 4);
+const PERSON_TRACK_TIMEOUT_MS = Number(process.env.PERSON_TRACK_TIMEOUT_MS || 800);
 const NO_BROWSER = process.argv.includes("--no-browser");
 const NO_TELEOP =
   process.argv.includes("--no-teleop") ||
@@ -52,6 +57,12 @@ const NO_TELEOP =
 const NO_SOUND =
   process.argv.includes("--no-sound") ||
   process.env.AGENTICROS_EYES_NO_SOUND === "1";
+const NO_PERSON_GAZE =
+  process.argv.includes("--no-person-gaze") ||
+  process.env.AGENTICROS_EYES_NO_PERSON_GAZE === "1";
+const CAMERA_TOPIC =
+  process.env.CAMERA_TOPIC ||
+  "/camera/camera/color/image_raw/compressed";
 
 const MAX_LINEAR = Number(process.env.MAX_LINEAR_VELOCITY || 1.0);
 const MAX_ANGULAR = Number(process.env.MAX_ANGULAR_VELOCITY || 1.5);
@@ -69,11 +80,14 @@ const TELOP_SCALE_MIN = Number(process.env.TELOP_SCALE_MIN || 0.2);
 const TELOP_SCALE_MAX = Number(process.env.TELOP_SCALE_MAX || 3);
 const TELOP_RATE_HZ = Number(process.env.TELOP_RATE_HZ || 20);
 
-/** @type {{ gazeX: number, driving: boolean, lastCmdAt: number }} */
+/** @type {{ gazeX: number, gazeY: number, driving: boolean, tracking: boolean, lastCmdAt: number, lastPersonAt: number }} */
 const state = {
   gazeX: 0,
+  gazeY: 0,
   driving: false,
+  tracking: false,
   lastCmdAt: 0,
+  lastPersonAt: 0,
 };
 
 const teleop = {
@@ -149,13 +163,24 @@ function broadcast(wss, payload) {
   }
 }
 
+function broadcastGaze(wss) {
+  broadcast(wss, {
+    type: "gaze",
+    gazeX: state.gazeX,
+    gazeY: state.gazeY,
+    driving: state.driving,
+    tracking: state.tracking,
+  });
+}
+
 function gazeFromTwist(msg) {
   const z = msg?.angular?.z ?? 0;
-  if (Math.abs(z) < ANGULAR_DEADZONE) {
-    return { gazeX: 0, driving: false };
-  }
+  const x = msg?.linear?.x ?? 0;
+  const turning = Math.abs(z) >= ANGULAR_DEADZONE;
+  const translating = Math.abs(x) >= LINEAR_DEADZONE;
+  const driving = turning || translating;
   // +angular.z = left turn → eyes look right (screen +X)
-  return { gazeX: z > 0 ? 1 : -1, driving: true };
+  return { gazeX: turning ? (z > 0 ? 1 : -1) : 0, driving };
 }
 
 function mergedKeys() {
@@ -258,6 +283,130 @@ function launchKiosk(url) {
   return child;
 }
 
+function logPersonGazeDisabled() {
+  console.log("Person gaze disabled (YOLO not installed)");
+}
+
+/**
+ * Idle person-follow gaze. Never adds YOLO as a dependency or downloads
+ * weights — only runs if follow-me / find-object already installed them.
+ * @param {object} node
+ * @param {import("ws").WebSocketServer} wss
+ */
+async function tryStartPersonGaze(node, wss) {
+  if (NO_PERSON_GAZE) {
+    console.log("Person gaze disabled (--no-person-gaze)");
+    return;
+  }
+
+  const {
+    yolov8ModelExists,
+    jpegFromCompressed,
+    pickLargestPerson,
+    gazeFromPerson,
+  } = await import("../lib/person-gaze.js");
+
+  if (!yolov8ModelExists()) {
+    logPersonGazeDisabled();
+    return;
+  }
+
+  const detectorDist = path.join(
+    __dirname,
+    "..",
+    "..",
+    "object-detection",
+    "dist",
+    "index.js",
+  );
+  if (!fs.existsSync(detectorDist)) {
+    logPersonGazeDisabled();
+    return;
+  }
+
+  let PersonDetector;
+  try {
+    const mod = await import(pathToFileURL(detectorDist).href);
+    PersonDetector = mod.PersonDetector;
+  } catch {
+    logPersonGazeDisabled();
+    return;
+  }
+  if (typeof PersonDetector !== "function") {
+    logPersonGazeDisabled();
+    return;
+  }
+
+  const detector = new PersonDetector();
+  try {
+    await detector.load({ download: false });
+  } catch {
+    logPersonGazeDisabled();
+    return;
+  }
+
+  /** @type {{ buffer: Buffer, receivedAt: number } | null} */
+  let latestJpeg = null;
+  let inflight = false;
+
+  node.createSubscription(
+    "sensor_msgs/msg/CompressedImage",
+    CAMERA_TOPIC,
+    (msg) => {
+      const buf = jpegFromCompressed(msg);
+      if (buf) {
+        latestJpeg = { buffer: buf, receivedAt: Date.now() };
+      }
+    },
+  );
+
+  const dropTrackingIfStale = () => {
+    if (
+      state.tracking &&
+      Date.now() - state.lastPersonAt > PERSON_TRACK_TIMEOUT_MS
+    ) {
+      state.tracking = false;
+      broadcastGaze(wss);
+    }
+  };
+
+  const tick = async () => {
+    if (inflight || state.driving) return;
+    inflight = true;
+    try {
+      const frame = latestJpeg;
+      if (!frame || Date.now() - frame.receivedAt > 2000) {
+        dropTrackingIfStale();
+        return;
+      }
+      const det = await detector.detect(frame.buffer);
+      if (state.driving) return;
+      const person = pickLargestPerson(det.persons);
+      if (!person) {
+        dropTrackingIfStale();
+        return;
+      }
+      const gaze = gazeFromPerson(person, det.width, det.height);
+      if (!gaze || state.driving) return;
+      state.gazeX = gaze.gazeX;
+      state.gazeY = gaze.gazeY;
+      state.tracking = true;
+      state.lastPersonAt = Date.now();
+      broadcastGaze(wss);
+    } catch {
+      // skip a bad frame; twist + idle gaze still work
+    } finally {
+      inflight = false;
+    }
+  };
+
+  setInterval(() => {
+    void tick();
+  }, Math.max(50, Math.round(1000 / PERSON_GAZE_HZ)));
+
+  console.log(`Person gaze enabled (YOLO) on ${CAMERA_TOPIC}`);
+}
+
 async function main() {
   await rclnodejs.init();
   const node = rclnodejs.createNode("robot_eyes");
@@ -303,7 +452,9 @@ async function main() {
       JSON.stringify({
         type: "gaze",
         gazeX: state.gazeX,
+        gazeY: state.gazeY,
         driving: state.driving,
+        tracking: state.tracking,
       }),
     );
 
@@ -351,14 +502,16 @@ async function main() {
 
   node.createSubscription("geometry_msgs/msg/Twist", TOPIC, (msg) => {
     const next = gazeFromTwist(msg);
-    state.gazeX = next.gazeX;
-    state.driving = next.driving;
+    if (next.driving) {
+      state.gazeX = next.gazeX;
+      state.gazeY = 0;
+      state.driving = true;
+      state.tracking = false;
+    } else {
+      state.driving = false;
+    }
     state.lastCmdAt = Date.now();
-    broadcast(wss, {
-      type: "gaze",
-      gazeX: state.gazeX,
-      driving: state.driving,
-    });
+    broadcastGaze(wss);
     if (!NO_SOUND) {
       exciteFromTwist(msg, ANGULAR_DEADZONE);
     }
@@ -368,12 +521,10 @@ async function main() {
     if (!state.driving) return;
     if (Date.now() - state.lastCmdAt < CMD_TIMEOUT_MS) return;
     state.gazeX = 0;
+    state.gazeY = 0;
     state.driving = false;
-    broadcast(wss, {
-      type: "gaze",
-      gazeX: 0,
-      driving: false,
-    });
+    state.tracking = false;
+    broadcastGaze(wss);
   }, 50);
 
   server.listen(PORT, "127.0.0.1", () => {
@@ -396,6 +547,7 @@ async function main() {
     } else {
       startSoundLoop();
     }
+    void tryStartPersonGaze(node, wss);
     if (!NO_BROWSER) {
       launchKiosk(url);
     } else {

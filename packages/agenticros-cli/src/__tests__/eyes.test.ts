@@ -6,8 +6,10 @@ import { tmpdir } from "node:os";
 
 import {
   areEyesDepsInstalled,
+  cameraTopicFromConfig,
   cmdVelTopicFromConfig,
   safetyLimitsFromConfig,
+  toCompressedCameraTopic,
 } from "../util/eyes.js";
 
 describe("eyes config helpers", () => {
@@ -62,5 +64,40 @@ describe("eyes config helpers", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it("toCompressedCameraTopic appends /compressed for raw Image topics", () => {
+    assert.equal(
+      toCompressedCameraTopic("/camera/camera/color/image_raw"),
+      "/camera/camera/color/image_raw/compressed",
+    );
+    assert.equal(
+      toCompressedCameraTopic("/camera/camera/color/image_raw/compressed"),
+      "/camera/camera/color/image_raw/compressed",
+    );
+    assert.equal(
+      toCompressedCameraTopic(""),
+      "/camera/camera/color/image_raw/compressed",
+    );
+  });
+
+  it("cameraTopicFromConfig uses robot.cameraTopic then RealSense default", () => {
+    assert.equal(
+      cameraTopicFromConfig({}),
+      "/camera/camera/color/image_raw/compressed",
+    );
+    assert.equal(
+      cameraTopicFromConfig({
+        robot: { cameraTopic: "/camera/camera/color/image_raw" },
+      }),
+      "/camera/camera/color/image_raw/compressed",
+    );
+    assert.equal(
+      cameraTopicFromConfig(
+        { robot: { cameraTopic: "/other/cam" } },
+        "/override/image_raw",
+      ),
+      "/override/image_raw/compressed",
+    );
   });
 });
