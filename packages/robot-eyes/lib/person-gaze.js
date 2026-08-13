@@ -91,8 +91,10 @@ export function gazeFromPerson(person, imgW, imgH, opts = {}) {
   const faceX =
     typeof person.cx === "number" ? person.cx : person.x + person.width / 2;
   const faceY = person.y + person.height * faceFromTop;
+  // Camera faces the person, so image +X is the viewer's left. Negate X so the
+  // display looks toward the viewer; image +Y (down) already matches canvas +Y.
   return {
-    gazeX: clamp((faceX / imgW - 0.5) * 2 * gain, -1, 1),
+    gazeX: clamp(-(faceX / imgW - 0.5) * 2 * gain, -1, 1),
     gazeY: clamp((faceY / imgH - 0.5) * 2 * gain, -1, 1),
   };
 }

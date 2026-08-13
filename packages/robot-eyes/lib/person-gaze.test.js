@@ -44,11 +44,11 @@ describe("person-gaze", () => {
     assert.ok(Math.abs(gaze.gazeY) < 0.02);
   });
 
-  it("gazeFromPerson looks left when the person is on the left", () => {
+  it("gazeFromPerson looks right on the display when the person is on the left of the camera image", () => {
     const person = { x: 20, y: 100, width: 80, height: 200, cx: 60 };
     const gaze = gazeFromPerson(person, 640, 480);
     assert.ok(gaze);
-    assert.ok(gaze.gazeX < 0);
+    assert.ok(gaze.gazeX > 0);
   });
 
   it("gazeFromPerson looks up when the head is in the top of the frame", () => {
@@ -62,7 +62,7 @@ describe("person-gaze", () => {
     const person = { x: 0, y: 0, width: 40, height: 80, cx: 20 };
     const gaze = gazeFromPerson(person, 640, 480, { gain: 8 });
     assert.ok(gaze);
-    assert.equal(gaze.gazeX, -1);
+    assert.equal(gaze.gazeX, 1);
   });
 
   it("jpegFromCompressed reads Uint8Array, Buffer, and JSON Buffer", () => {
