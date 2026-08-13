@@ -85,7 +85,61 @@ import { fetchRobotConfig, resolveTopic, toClientTopic, getCmdVelTopic, fetchIce
 const robotId = getRobotId();
 const apiToken = getApiToken();
 
-const { exec } = require('child_process');
+const { exec, execFile } = require('child_process');
+
+/** Fast in-process status for remote CLI — avoids spawning `agenticros` under camera load. */
+const REMOTE_STATUS_HW = [
+  { name: 'comms', pattern: 'comms.js' },
+  { name: 'motors', pattern: 'motors-' },
+  { name: 'camera2d', pattern: 'camera-2d-ros.js' },
+  { name: 'realsense', pattern: 'realsense2_camera_node' },
+];
+
+function pgrepFirst(pattern) {
+  return new Promise((resolve) => {
+    execFile('pgrep', ['-f', pattern], { timeout: 2000 }, (err, stdout) => {
+      if (err || !stdout || !String(stdout).trim()) {
+        resolve({ running: false, pid: undefined });
+        return;
+      }
+      const pid = Number.parseInt(String(stdout).trim().split('\n')[0], 10);
+      resolve({
+        running: true,
+        pid: Number.isFinite(pid) ? pid : undefined,
+      });
+    });
+  });
+}
+
+async function buildInlineStatusJson() {
+  const hardware = [];
+  for (const hw of REMOTE_STATUS_HW) {
+    const result = await pgrepFirst(hw.pattern);
+    hardware.push({ name: hw.name, running: result.running, pid: result.pid });
+  }
+  let openclawGatewayActive = false;
+  try {
+    openclawGatewayActive = await new Promise((resolve) => {
+      execFile(
+        'systemctl',
+        ['--user', 'is-active', 'openclaw-gateway.service'],
+        { timeout: 1500 },
+        (err, stdout) => {
+          resolve(!err && String(stdout || '').trim() === 'active');
+        },
+      );
+    });
+  } catch {
+    openclawGatewayActive = false;
+  }
+  return {
+    components: [],
+    hardware,
+    openclawGatewayActive,
+    source: 'comms-inline',
+    commsPath: __filename,
+  };
+}
 const rclnodejs = require('rclnodejs');
 const sharp = require('sharp');
 
@@ -270,23 +324,29 @@ class P2PServer {
                 console.log(formatLog('ROS node created for standalone camera subscriptions'));
             }
 
-            // Prefer compressed JPEG only — dual raw+compressed was CPU-spiking the
-            // event loop (Sharp raw on CompressedImage → undefinedxundefined failures)
-            // and contributing to ARC disconnect storms.
+            // Prefer compressed JPEG only — never subscribe to raw image_raw here.
+            // Store JPEG bytes as-is (no Sharp) and throttle so photo/status RPCs
+            // are not starved by a 30fps encode loop.
             const cameraTopics = [
                 { topic: camera2dTopic, type: 'std_msgs/msg/String' },
                 { topic: '/camera/camera/color/image_raw/compressed', type: 'sensor_msgs/msg/CompressedImage' }
             ];
 
             console.log(formatLog('Setting up standalone camera subscriptions...'));
+            console.log(formatLog(`comms.js path: ${__filename}`));
             this._lastStandaloneCameraLog = 0;
+            this._lastStandaloneStoreAt = 0;
             
             cameraTopics.forEach(({ topic, type }) => {
                 try {
                     console.log(formatLog(`Setting up standalone subscription for ${topic} with type ${type}`));
                     
-                    const subscriber = rosNode.createSubscription(type, topic, async (msg) => {
+                    const subscriber = rosNode.createSubscription(type, topic, (msg) => {
                         const now = Date.now();
+                        // Keep at most ~2 FPS in globalCameraData for photo/teleop bridge.
+                        if (now - (this._lastStandaloneStoreAt || 0) < 500) return;
+                        this._lastStandaloneStoreAt = now;
+
                         const shouldLog = now - (this._lastStandaloneCameraLog || 0) > 5000;
                         if (shouldLog) {
                             this._lastStandaloneCameraLog = now;
@@ -299,40 +359,23 @@ class P2PServer {
                             if (topic === '/camera/camera/color/image_raw/compressed') {
                                 try {
                                     const imageData = msg.data || msg;
-                                    let base64Image;
-                                    // CompressedImage is already JPEG/PNG — do not pass raw width/height
-                                    try {
-                                        const input = Buffer.isBuffer(imageData)
-                                            ? imageData
-                                            : Buffer.from(imageData);
-                                        const jpegBuffer = await Promise.race([
-                                            sharp(input).jpeg({ quality: 80 }).toBuffer(),
-                                            new Promise((_, reject) =>
-                                                setTimeout(() => reject(new Error('Sharp conversion timeout')), 5000)
-                                            ),
-                                        ]);
-                                        base64Image = jpegBuffer.toString('base64');
-                                        if (shouldLog) {
-                                            console.log(formatLog(`✅ Standalone compressed→JPEG: ${jpegBuffer.length} bytes`));
-                                        }
-                                    } catch (sharpError) {
-                                        if (shouldLog) {
-                                            console.warn(formatLog(`Sharp re-encode skipped, using raw bytes: ${sharpError.message || sharpError}`));
-                                        }
-                                        base64Image = Buffer.isBuffer(imageData)
-                                            ? imageData.toString('base64')
-                                            : Buffer.from(imageData).toString('base64');
+                                    // Already JPEG — do not Sharp re-encode (starves bash-script / status).
+                                    const base64Image = Buffer.isBuffer(imageData)
+                                        ? imageData.toString('base64')
+                                        : Buffer.from(imageData).toString('base64');
+                                    if (shouldLog) {
+                                        console.log(formatLog(`💾 Stored standalone compressed JPEG (${base64Image.length} chars b64)`));
                                     }
 
                                     globalCameraData.set(modTopic, {
                                         data: base64Image,
-                                        timestamp: Date.now()
+                                        timestamp: now
                                     });
                                     // Also alias under the raw topic name so photo-request lookups still work
                                     const rawAlias = toClientTopic('/camera/camera/color/image_raw', robotId, rosNamespace);
                                     globalCameraData.set(rawAlias, {
                                         data: base64Image,
-                                        timestamp: Date.now()
+                                        timestamp: now
                                     });
                                 } catch (error) {
                                     console.error(formatLog(`Error in standalone image conversion: ${error}`));
@@ -342,7 +385,7 @@ class P2PServer {
                                 if (msg && typeof msg === 'string' && msg.length > 100) {
                                     globalCameraData.set(modTopic, {
                                         data: msg,
-                                        timestamp: Date.now()
+                                        timestamp: now
                                     });
                                     if (shouldLog) {
                                         console.log(formatLog(`💾 Stored standalone camera2d data (${msg.length} chars)`));
@@ -744,9 +787,22 @@ class P2PServer {
                 return;
               }
 
+              // Answer status in-process — spawning `agenticros status` under a
+              // heavy camera encode loop often misses ARC's 25s RPC deadline.
+              if (command === 'agenticros status --json') {
+                buildInlineStatusJson()
+                  .then((snap) => {
+                    respond(null, `${JSON.stringify(snap, null, 2)}\n`, '');
+                  })
+                  .catch((e) => {
+                    respond(e, '', e instanceof Error ? e.message : String(e));
+                  });
+                return;
+              }
+
               // Keep under ARC's ~25s waiter. Gateway restart / skills sync can be slower.
               let execTimeout = 20000;
-              if (command.startsWith('agenticros status') || command.startsWith('agenticros skills list')) {
+              if (command.startsWith('agenticros skills list')) {
                 execTimeout = 15000;
               } else if (
                 command.startsWith('agenticros gateway restart') ||
@@ -2154,7 +2210,11 @@ class P2PConnection {
                             if (isBrowserPeer && !isCameraMessage) return;
                             if (!((isBrowserPeer && isCameraMessage) || !isBrowserPeer)) return;
 
-                            if (topic === '/camera/camera/color/image_raw/compressed' || topic === '/camera/camera/color/image_raw') {
+                            // Prefer compressed; skip raw RGB encode (starves remote CLI / twist).
+                            if (topic === '/camera/camera/color/image_raw') {
+                                return;
+                            }
+                            if (topic === '/camera/camera/color/image_raw/compressed') {
                                 try {
                                     const now = Date.now();
                                     // Don't pile onto an in-flight WebRTC send (starves twist/status).
@@ -2163,15 +2223,8 @@ class P2PConnection {
                                         return;
                                     }
 
-                                    const isCompressed = topic.endsWith('/compressed');
-                                    let imageData;
-                                    if (isCompressed) {
-                                        imageData = msg.data || msg;
-                                    } else if (msg.data && msg.encoding) {
-                                        imageData = msg.data;
-                                    } else {
-                                        return;
-                                    }
+                                    let imageData = msg.data || msg;
+                                    if (!imageData) return;
 
                                     const input = Buffer.isBuffer(imageData)
                                         ? imageData
@@ -2182,25 +2235,18 @@ class P2PConnection {
                                     let jpegBuf = input;
                                     let outW = msg.width;
                                     let outH = msg.height;
-                                    if (!isCompressed || input.length > MAX_JPEG_BYTES) {
+                                    if (input.length > MAX_JPEG_BYTES) {
                                         try {
-                                            let pipeline = isCompressed
-                                                ? sharp(input)
-                                                : sharp(input, {
-                                                    raw: {
-                                                        width: msg.width,
-                                                        height: msg.height,
-                                                        channels: 3
-                                                    }
-                                                });
-                                            pipeline = pipeline.resize({
-                                                width: 424,
-                                                height: 240,
-                                                fit: 'inside',
-                                                withoutEnlargement: true
-                                            }).jpeg({ quality: 50 });
                                             jpegBuf = await Promise.race([
-                                                pipeline.toBuffer(),
+                                                sharp(input)
+                                                    .resize({
+                                                        width: 424,
+                                                        height: 240,
+                                                        fit: 'inside',
+                                                        withoutEnlargement: true
+                                                    })
+                                                    .jpeg({ quality: 50 })
+                                                    .toBuffer(),
                                                 new Promise((_, reject) =>
                                                     setTimeout(() => reject(new Error('Sharp conversion timeout')), 3000)
                                                 ),
