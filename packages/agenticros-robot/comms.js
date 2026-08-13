@@ -76,8 +76,10 @@ function stopMemoryMonitoring() {
     }
 }
 
-import {createRequire } from "module";
+import { createRequire } from "module";
+import { fileURLToPath } from "url";
 const require = createRequire(import.meta.url);
+const COMM_JS_PATH = fileURLToPath(import.meta.url);
 
 import { getRobotId, getApiToken } from './robot-config.js';
 import { fetchRobotConfig, resolveTopic, toClientTopic, getCmdVelTopic, fetchIceServers } from './ros-topics.js';
@@ -137,7 +139,7 @@ async function buildInlineStatusJson() {
     hardware,
     openclawGatewayActive,
     source: 'comms-inline',
-    commsPath: __filename,
+    commsPath: COMM_JS_PATH,
   };
 }
 const rclnodejs = require('rclnodejs');
@@ -337,7 +339,7 @@ class P2PServer {
 
     async start() {
         console.log(formatLog('Starting P2P server...'));
-        console.log(formatLog(`comms.js path: ${__filename}`));
+        console.log(formatLog(`comms.js path: ${COMM_JS_PATH}`));
         console.log(formatLog(`inline status: ${typeof buildInlineStatusJson === 'function' ? 'yes' : 'no'}`));
         await this.connect();
 
@@ -374,7 +376,7 @@ class P2PServer {
             ];
 
             console.log(formatLog('Setting up standalone camera subscriptions...'));
-            console.log(formatLog(`comms.js path: ${__filename}`));
+            console.log(formatLog(`comms.js path: ${COMM_JS_PATH}`));
             this._lastStandaloneCameraLog = 0;
             this._lastStandaloneStoreAt = 0;
             
