@@ -630,7 +630,8 @@ class P2PServer {
                 }
             });
             
-            // Preset remote CLI actions (ARC POST /robot/:id/cli). Exact match after trim.
+            // Preset remote CLI actions (ARC POST /robot/:id/cli). Exact match after trim,
+            // plus one parameterized pattern for skills_remove (server validates skillId).
             const ALLOWED_CLI_COMMANDS = new Set([
               'agenticros start motors',
               'agenticros stop motors',
@@ -639,7 +640,17 @@ class P2PServer {
               'agenticros start camera',
               'agenticros stop camera',
               'agenticros status --json',
+              'agenticros skills list --json',
+              'agenticros skills sync --no-restart',
+              'agenticros gateway restart --json',
             ]);
+            const ALLOWED_CLI_COMMAND_PATTERNS = [
+              /^agenticros skills remove [a-zA-Z0-9][a-zA-Z0-9._-]* --yes --no-restart$/,
+            ];
+            const isAllowedCliCommand = (command) => {
+              if (ALLOWED_CLI_COMMANDS.has(command)) return true;
+              return ALLOWED_CLI_COMMAND_PATTERNS.some((re) => re.test(command));
+            };
             // Long-running starts: background so bash-response returns promptly.
             const DETACHED_CLI_COMMANDS = new Set([
               'agenticros start motors',
@@ -674,7 +685,7 @@ class P2PServer {
               const command = content.trim();
               console.log(formatLog(`BASH: ${command}${requestId ? ` (requestId=${requestId})` : ''}`));
 
-              if (!ALLOWED_CLI_COMMANDS.has(command)) {
+              if (!isAllowedCliCommand(command)) {
                 console.log(formatLog(`BASH: rejected (not allowlisted): ${command}`));
                 const deny = {
                   requestId,
@@ -733,8 +744,16 @@ class P2PServer {
                 return;
               }
 
-              // status / stop should finish quickly; keep under ARC's ~25s waiter.
-              const execTimeout = command.startsWith('agenticros status') ? 15000 : 20000;
+              // Keep under ARC's ~25s waiter. Gateway restart / skills sync can be slower.
+              let execTimeout = 20000;
+              if (command.startsWith('agenticros status') || command.startsWith('agenticros skills list')) {
+                execTimeout = 15000;
+              } else if (
+                command.startsWith('agenticros gateway restart') ||
+                command.startsWith('agenticros skills sync')
+              ) {
+                execTimeout = 22000;
+              }
               exec(command, { timeout: execTimeout, maxBuffer: 2 * 1024 * 1024, env: execEnv }, respond);
             });
 

@@ -45,6 +45,7 @@ import {
 } from "./commands/cloud-auth.js";
 import { registerCommand } from "./commands/register.js";
 import { remoteCommand } from "./commands/remote.js";
+import { gatewayCommand } from "./commands/gateway.js";
 import { err } from "./util/logger.js";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -232,16 +233,35 @@ program
 program
   .command("remote")
   .description(
-    "Run a preset CLI action on an online AgenticROS Cloud robot (motors, realsense, camera, status).",
+    "Run a preset CLI action on an online AgenticROS Cloud robot (motors, cameras, skills, gateway).",
   )
   .argument(
     "[action]",
-    "list | start_motors | stop_motors | start_realsense | stop_realsense | start_camera | stop_camera | status",
+    "list | start_motors | stop_motors | start_realsense | stop_realsense | start_camera | stop_camera | status | skills_list | skills_sync | skills_remove | gateway_restart",
   )
   .option("--robot <id>", "Target robot UUID (default: prompt, or sole/local robot)")
+  .option("--skill <id>", "Skill id for skills_remove (e.g. followme)")
   .option("--json", "Emit JSON instead of human-readable output", false)
-  .action(async (action: string | undefined, opts: { robot?: string; json?: boolean }) => {
-    await remoteCommand({ action, robot: opts.robot, json: opts.json });
+  .action(
+    async (
+      action: string | undefined,
+      opts: { robot?: string; skill?: string; json?: boolean },
+    ) => {
+      await remoteCommand({
+        action,
+        robot: opts.robot,
+        skill: opts.skill,
+        json: opts.json,
+      });
+    },
+  );
+
+program
+  .command("gateway [action]")
+  .description("OpenClaw gateway helpers. Action: restart.")
+  .option("--json", "Emit JSON instead of human-readable output", false)
+  .action(async (action: string | undefined, opts: { json?: boolean }) => {
+    await gatewayCommand({ action, json: opts.json });
   });
 
 program
@@ -461,6 +481,8 @@ program
   .option("--invoke <tool>", "With `skills dev`: run a tool handler")
   .option("--live", "With `skills dev`: allow live transport", false)
   .option("--no-restart", "Skip automatic OpenClaw gateway restart after install/sync", false)
+  .option("-y, --yes", "Non-interactive; skip confirm prompts (install/remove)", false)
+  .option("--json", "With `skills list`: emit JSON", false)
   .action(async (action: string | undefined, arg: string | undefined, opts) => {
     const act = (action ?? "list").toLowerCase();
     if (act === "create") {
@@ -472,10 +494,16 @@ program
       return;
     }
     if (act === "publish") {
-      await publishSkillCommand({ graduate: opts.graduate, yes: false });
+      await publishSkillCommand({ graduate: opts.graduate, yes: opts.yes === true });
       return;
     }
-    await skillsCommand({ action, arg, noRestart: opts.restart === false });
+    await skillsCommand({
+      action,
+      arg,
+      noRestart: opts.restart === false,
+      yes: opts.yes === true,
+      json: opts.json === true,
+    });
   });
 
 const mcpCmd = program

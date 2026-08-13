@@ -92,7 +92,8 @@ live in `configstore('agenticros')` (`ROBOT_ID`, `API_TOKEN`); legacy
 | `agenticros whoami` | Show cloud account and whether this robot is registered. |
 | `agenticros register` | Interactive wizard (required: name, camera, compute). Mints/reuses local UUID and `POST /robots` to ARC. |
 | `agenticros remote list` | List robots on your ARC account with online/offline presence. |
-| `agenticros remote <action> [--robot <id>]` | Run a preset CLI action on an online robot via `POST /robot/:id/cli`. Actions: `start_motors`, `stop_motors`, `start_realsense`, `stop_realsense`, `start_camera`, `stop_camera`, `status`. |
+| `agenticros remote <action> [--robot <id>] [--skill <id>]` | Run a preset CLI action on an online robot via `POST /robot/:id/cli`. Actions: `start_motors`, `stop_motors`, `start_realsense`, `stop_realsense`, `start_camera`, `stop_camera`, `status`, `skills_list`, `skills_sync`, `skills_remove` (requires `--skill`), `gateway_restart`. |
+| `agenticros gateway restart [--json]` | Restart the local OpenClaw gateway (`systemctl --user` then `openclaw gateway restart`). Also available remotely as `agenticros remote gateway_restart`. |
 | `agenticros connect [-s host]` | Start cloud P2P/ROS bridge (`comms.js`). Default `wss://cloud.agenticros.com`. |
 | `agenticros disconnect` | Stop `comms.js`. |
 | `agenticros id` | Print (or create) robot ID. |
@@ -272,7 +273,10 @@ Read or edit `~/.agenticros/config.json`. Actions:
 | `agenticros create-skill <slug> [--template hello\|robot\|camera\|depth]` | Scaffold `./agenticros-skill-<slug>/` in cwd. |
 | `agenticros skills dev [--invoke <tool>] [--live]` | Load the skill locally without OpenClaw. |
 | `agenticros publish [--graduate]` | Validate, push to GitHub, submit to skills.agenticros.com; `npm publish` when name is `@agenticros/*`. |
-| `agenticros skills install <owner/skill\|@scope/pkg> [--no-restart]` | Install from marketplace or npm; prefers npm when advertised; auto-restarts OpenClaw gateway unless `--no-restart`. |
+| `agenticros skills list [--json]` | List registered / available / broken skills (JSON for remote/automation). |
+| `agenticros skills remove <id> [--yes] [--no-restart]` | Unregister a skill; `--yes` skips prompts (required for remote). |
+| `agenticros skills sync [--no-restart]` | Re-sync OpenClaw `contracts.tools` allowlist from registered skills. |
+| `agenticros skills install <owner/skill\|@scope/pkg> [--yes] [--no-restart]` | Install from marketplace or npm; prefers npm when advertised; auto-restarts OpenClaw gateway unless `--no-restart`. |
 | `agenticros skills search <q>` | Search the marketplace. |
 
 ## Troubleshooting

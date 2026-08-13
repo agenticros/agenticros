@@ -277,12 +277,24 @@ export const REMOTE_CLI_ACTIONS = [
   "start_camera",
   "stop_camera",
   "status",
+  "skills_list",
+  "skills_sync",
+  "skills_remove",
+  "gateway_restart",
 ] as const;
 
 export type RemoteCliAction = (typeof REMOTE_CLI_ACTIONS)[number];
 
+/** Strict skill id for remote skills_remove (no paths / URLs). */
+export const REMOTE_SKILL_ID_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
+
 export function isRemoteCliAction(value: string): value is RemoteCliAction {
   return (REMOTE_CLI_ACTIONS as readonly string[]).includes(value);
+}
+
+export interface RemoteCliParams {
+  /** Required for skills_remove. */
+  skillId?: string;
 }
 
 function authHeaders(apiToken: string): Record<string, string> {
@@ -351,11 +363,12 @@ export interface RemoteCliResult {
 
 /**
  * Run a preset CLI action on a remote online robot via
- * `POST /robot/:id/cli` → `{ action }`.
+ * `POST /robot/:id/cli` → `{ action, params? }`.
  */
 export async function runRemoteCli(
   robotId: string,
   action: RemoteCliAction,
+  params?: RemoteCliParams,
 ): Promise<RemoteCliResult> {
   const apiToken = getApiToken();
   if (!apiToken) {
@@ -367,10 +380,21 @@ export async function runRemoteCli(
     );
   }
 
+  const body: { action: string; params?: RemoteCliParams } = { action };
+  if (action === "skills_remove") {
+    const skillId = params?.skillId?.trim() ?? "";
+    if (!REMOTE_SKILL_ID_RE.test(skillId)) {
+      throw new Error(
+        "skills_remove requires --skill <id> (letters, digits, . _ - only).",
+      );
+    }
+    body.params = { skillId };
+  }
+
   const response = await fetch(`${CLOUD_REST}/robot/${robotId}/cli`, {
     method: "POST",
     headers: authHeaders(apiToken),
-    body: JSON.stringify({ action }),
+    body: JSON.stringify(body),
   });
 
   const data = (await response.json().catch(() => ({}))) as {

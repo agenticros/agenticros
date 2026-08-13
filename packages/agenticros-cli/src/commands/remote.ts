@@ -3,15 +3,18 @@
  *
  *   agenticros remote list
  *   agenticros remote status [--robot <id>]
- *   agenticros remote start_motors [--robot <id>]
+ *   agenticros remote skills_list [--robot <id>]
+ *   agenticros remote skills_remove --skill <id> [--robot <id>]
+ *   agenticros remote gateway_restart [--robot <id>]
  *
  * Uses POST /robot/:id/cli on cloud.agenticros.com. No free-form shell.
  */
 
-import { select } from "@inquirer/prompts";
+import { input, select } from "@inquirer/prompts";
 
 import {
   REMOTE_CLI_ACTIONS,
+  REMOTE_SKILL_ID_RE,
   fetchRobotPresence,
   getApiToken,
   getRobotId,
@@ -19,6 +22,7 @@ import {
   listMyRobots,
   runRemoteCli,
   type RemoteCliAction,
+  type RemoteCliParams,
 } from "../util/robot-cloud-config.js";
 import { colors, dim, err, header, info, isTty, ok, warn } from "../util/logger.js";
 
@@ -27,6 +31,8 @@ export interface RemoteOptions {
   action?: string;
   /** --robot <id> */
   robot?: string;
+  /** --skill <id> for skills_remove */
+  skill?: string;
   /** --json */
   json?: boolean;
 }
@@ -39,6 +45,10 @@ const ACTION_LABELS: Record<RemoteCliAction, string> = {
   start_camera: "Start 2D camera",
   stop_camera: "Stop 2D camera",
   status: "Show status (JSON)",
+  skills_list: "List skills (JSON)",
+  skills_sync: "Sync skill tools allowlist (no gateway restart)",
+  skills_remove: "Remove a skill (needs --skill)",
+  gateway_restart: "Restart OpenClaw gateway",
 };
 
 export async function remoteCommand(opts: RemoteOptions): Promise<void> {
@@ -60,7 +70,8 @@ export async function remoteCommand(opts: RemoteOptions): Promise<void> {
   }
 
   const robotId = await resolveRobotId(opts.robot);
-  await runAction(robotId, action, opts.json === true);
+  const params = await resolveParams(action, opts.skill);
+  await runAction(robotId, action, opts.json === true, params);
 }
 
 async function listRemoteRobots(asJson: boolean): Promise<void> {
@@ -158,12 +169,45 @@ async function resolveRobotId(explicit?: string): Promise<string> {
   });
 }
 
+async function resolveParams(
+  action: RemoteCliAction,
+  skillOpt?: string,
+): Promise<RemoteCliParams | undefined> {
+  if (action !== "skills_remove") return undefined;
+
+  let skillId = skillOpt?.trim() ?? "";
+  if (!skillId) {
+    if (!isTty) {
+      err("skills_remove requires --skill <id>.");
+      process.exit(2);
+    }
+    skillId = (
+      await input({
+        message: "Skill id to remove:",
+        validate: (v) =>
+          REMOTE_SKILL_ID_RE.test(v.trim()) ||
+          "Use a skill id (letters, digits, . _ - only — no paths)",
+      })
+    ).trim();
+  }
+  if (!REMOTE_SKILL_ID_RE.test(skillId)) {
+    err("Invalid --skill id (letters, digits, . _ - only — no paths).");
+    process.exit(2);
+  }
+  return { skillId };
+}
+
 async function runAction(
   robotId: string,
   action: RemoteCliAction,
   asJson: boolean,
+  params?: RemoteCliParams,
 ): Promise<void> {
-  info(`${ACTION_LABELS[action]} on ${robotId} …`);
+  const label =
+    action === "skills_remove" && params?.skillId
+      ? `${ACTION_LABELS[action]} (${params.skillId})`
+      : ACTION_LABELS[action];
+  info(`${label} on ${robotId} …`);
 
   try {
     const presence = await fetchRobotPresence(robotId);
@@ -178,7 +222,7 @@ async function runAction(
 
   let result;
   try {
-    result = await runRemoteCli(robotId, action);
+    result = await runRemoteCli(robotId, action, params);
   } catch (e) {
     err(e instanceof Error ? e.message : String(e));
     process.exit(1);
@@ -223,5 +267,6 @@ export async function remoteControlInteractive(): Promise<void> {
     ],
   });
   if (action === "__back__") return;
-  await runAction(robotId, action, false);
+  const params = await resolveParams(action);
+  await runAction(robotId, action, false, params);
 }

@@ -45,6 +45,10 @@ import { createSkillCommand } from "./create-skill.js";
 import { publishSkillCommand } from "./publish-skill.js";
 import { skillsDevCommand } from "./skills-dev.js";
 import { getCliPaths } from "../util/paths.js";
+import {
+  gatewayRestartHint,
+  restartOpenclawGateway,
+} from "../util/gateway-restart.js";
 import { colors, dim, err, header, info, isTty, ok, warn } from "../util/logger.js";
 import {
   ensureToolsAlsoAllow,
@@ -58,18 +62,24 @@ export interface SkillsOptions {
   arg?: string;
   /** Skip automatic OpenClaw gateway restart after install/sync. */
   noRestart?: boolean;
+  /** Non-interactive: skip confirm() prompts (required for remote CLI). */
+  yes?: boolean;
+  /** Emit JSON for list (and other machine-readable actions). */
+  json?: boolean;
 }
 
 let skipGatewayRestart = false;
+let assumeYes = false;
 
 export async function skillsCommand(opts: SkillsOptions): Promise<void> {
   skipGatewayRestart = opts.noRestart === true;
+  assumeYes = opts.yes === true;
   const action = (opts.action ?? "list").toLowerCase();
   switch (action) {
     case "list":
     case "ls":
     case "show":
-      return showList();
+      return showList(opts.json === true);
     case "discover":
     case "scan":
       return discoverInteractive();
@@ -102,9 +112,36 @@ export async function skillsCommand(opts: SkillsOptions): Promise<void> {
   }
 }
 
-function showList(): void {
-  header("AgenticROS skills");
+function showList(asJson: boolean): void {
   const listing = listSkills();
+
+  if (asJson) {
+    process.stdout.write(
+      `${JSON.stringify(
+        {
+          openclawConfig: openclawConfigPath(),
+          registered: listing.registered.map((s) => ({
+            id: s.id,
+            packageName: s.packageName,
+            dir: s.dir ?? null,
+            registeredAs: s.registeredAs,
+            built: s.built ?? null,
+          })),
+          available: listing.available.map((s) => ({
+            id: s.id,
+            packageName: s.packageName,
+            dir: s.dir ?? null,
+          })),
+          brokenPaths: listing.brokenPaths,
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    return;
+  }
+
+  header("AgenticROS skills");
   info(`OpenClaw config: ${openclawConfigPath()}`);
 
   if (listing.registered.length === 0) {
@@ -302,8 +339,8 @@ async function removeAction(arg: string | undefined): Promise<void> {
       info("No registered skills to remove.");
       return;
     }
-    if (!isTty) {
-      err("Usage: agenticros skills remove <id-or-name>");
+    if (!isTty || assumeYes) {
+      err("Usage: agenticros skills remove <id-or-name> [--yes] [--no-restart]");
       process.exit(2);
     }
     const choices = [
@@ -408,7 +445,7 @@ interface FollowupOpts {
  */
 async function postChangeFollowup(opts: FollowupOpts): Promise<void> {
   if (!opts.ranSync) {
-    if (isTty) {
+    if (isTty && !assumeYes) {
       const yes = await confirm({
         message:
           "Run `sync-skill-tools` now so OpenClaw's contracts.tools allowlist picks up the change?",
@@ -436,42 +473,15 @@ async function postChangeFollowup(opts: FollowupOpts): Promise<void> {
 async function restartGatewayIfPossible(): Promise<void> {
   if (skipGatewayRestart) {
     info("Skipping gateway restart (--no-restart). Restart manually when ready.");
-    hintRestartGateway();
+    info(gatewayRestartHint());
     return;
   }
-  const attempts: Array<{ label: string; cmd: string; args: string[] }> = [
-    {
-      label: "systemctl --user restart openclaw-gateway.service",
-      cmd: "systemctl",
-      args: ["--user", "restart", "openclaw-gateway.service"],
-    },
-    {
-      label: "openclaw gateway restart",
-      cmd: "openclaw",
-      args: ["gateway", "restart"],
-    },
-  ];
-  for (const a of attempts) {
-    try {
-      const { exitCode } = await execa(a.cmd, a.args, { reject: false });
-      if (exitCode === 0) {
-        ok(`Restarted OpenClaw gateway via: ${a.label}`);
-        return;
-      }
-    } catch {
-      /* try next */
-    }
+  const result = await restartOpenclawGateway();
+  if (result.ok) {
+    ok(result.message);
+    return;
   }
-  warn("Could not auto-restart the OpenClaw gateway.");
-  hintRestartGateway();
-}
-
-function hintRestartGateway(): void {
-  info(
-    "Restart the OpenClaw gateway to pick up the new skill list:\n" +
-      "    systemctl --user restart openclaw-gateway.service\n" +
-      "  (or: openclaw gateway restart)",
-  );
+  warn(result.message);
 }
 
 /**
@@ -604,7 +614,7 @@ async function installAction(rawRef: string | undefined): Promise<void> {
       (descriptor.packageName && String(descriptor.packageName).startsWith("@")),
   );
 
-  if (isTty) {
+  if (isTty && !assumeYes) {
     const yes = await confirm({
       message: preferNpm
         ? `Install from npm and register this skill locally?`
