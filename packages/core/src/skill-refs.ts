@@ -340,7 +340,7 @@ export async function ensureNpmPackageCached(
     }
   }
 
-  if (!hasBuiltEntry(dir)) {
+  if (needsSetup(dir)) {
     await buildInPlace(dir, log);
   }
   return dir;
@@ -376,7 +376,7 @@ export async function ensureSkillRefCached(
         log(`git pull failed (keeping cache): ${e instanceof Error ? e.message : String(e)}`);
       }
     }
-    if (!hasBuiltEntry(dir) && !opts.offline) {
+    if (needsSetup(dir) && !opts.offline) {
       await buildInPlace(dir, log);
     }
     return dir;
