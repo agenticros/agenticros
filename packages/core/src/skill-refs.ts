@@ -192,6 +192,24 @@ function hasBuiltEntry(dir: string): boolean {
   }
 }
 
+/**
+ * Whether `dir`'s runtime dependencies are actually installed. Distinct from
+ * `hasBuiltEntry`: a package published with a prebuilt `dist/` (the normal
+ * case for npm-installed skills) satisfies `hasBuiltEntry` immediately, which
+ * used to make `buildInPlace` skip `npm/pnpm install` altogether — silently
+ * leaving every declared dependency (e.g. `@sinclair/typebox`) unresolved at
+ * runtime. "Built" and "has its deps installed" are independent questions;
+ * check both.
+ */
+function hasInstalledDeps(dir: string): boolean {
+  return existsSync(join(dir, "node_modules"));
+}
+
+/** Whether `dir` still needs `buildInPlace` (missing build output or deps). */
+function needsSetup(dir: string): boolean {
+  return !hasBuiltEntry(dir) || !hasInstalledDeps(dir);
+}
+
 function run(cmd: string, args: string[], cwd: string, log: (m: string) => void): void {
   log(`$ ${cmd} ${args.join(" ")}  (in ${cwd})`);
   execFileSync(cmd, args, { cwd, stdio: "inherit" });
@@ -247,7 +265,7 @@ export async function ensureNpmPackageCached(
   if (pin !== "latest" && !pin.startsWith("^") && !pin.startsWith("~") && !pin.includes("*")) {
     const exactDir = cachePathForNpm(cacheRoot, npmPackage, pin);
     if (existsSync(join(exactDir, "package.json"))) {
-      if (!hasBuiltEntry(exactDir) && !opts.offline) {
+      if (needsSetup(exactDir) && !opts.offline) {
         await buildInPlace(exactDir, log);
       }
       return exactDir;
@@ -273,7 +291,7 @@ export async function ensureNpmPackageCached(
   const resolvedVersion = resolveNpmVersion(npmPackage, pin, log);
   const dir = cachePathForNpm(cacheRoot, npmPackage, resolvedVersion);
   if (existsSync(join(dir, "package.json"))) {
-    if (!hasBuiltEntry(dir)) {
+    if (needsSetup(dir)) {
       await buildInPlace(dir, log);
     }
     return dir;
@@ -436,15 +454,12 @@ export async function ensureSkillRefCached(
 }
 
 async function buildInPlace(dir: string, log: (m: string) => void): Promise<void> {
-  if (hasBuiltEntry(dir)) return;
-  const useNpm = !hasBin("pnpm");
-  if (useNpm) {
-    run("npm", ["install"], dir, log);
-    run("npm", ["run", "build"], dir, log);
-  } else {
-    run("pnpm", ["install"], dir, log);
-    run("pnpm", ["run", "build"], dir, log);
-  }
+  const needsInstall = !hasInstalledDeps(dir);
+  const needsBuild = !hasBuiltEntry(dir);
+  if (!needsInstall && !needsBuild) return;
+  const pm = hasBin("pnpm") ? "pnpm" : "npm";
+  if (needsInstall) run(pm, ["install"], dir, log);
+  if (needsBuild) run(pm, ["run", "build"], dir, log);
 }
 
 /**

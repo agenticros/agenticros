@@ -34,7 +34,9 @@
       "follow_me_see",
       "ollama_status",
       "find_object",
-      "scan_surroundings"
+      "scan_surroundings",
+      "jarvis_control",
+      "jarvis_speak"
     ]
   },
   "configSchema": {
