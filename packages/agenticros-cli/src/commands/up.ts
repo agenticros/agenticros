@@ -15,7 +15,8 @@ import { select } from "@inquirer/prompts";
 import { runRealRobot } from "../runners/real-robot.js";
 import { runSimAmr, runSimArm } from "../runners/sim.js";
 import { eyesCommand } from "./eyes.js";
-import { err, info, ok, warn } from "../util/logger.js";
+import { err, info, ok, warn, withSpinner } from "../util/logger.js";
+import { invokeGatewayTool, isGatewayActive } from "../util/gateway-tools.js";
 import { ensureProfilesExist, readActiveMode, switchMode, type Mode } from "../util/profiles.js";
 import { writeState } from "../util/state.js";
 
@@ -87,6 +88,24 @@ export async function upCommand(opts: UpOptions): Promise<void> {
       noPersonGaze: opts.eyesNoPersonGaze === true,
     });
   }
+
+  // `agenticros down` (without --stop-gateway) stops Jarvis's voice loop via
+  // the gateway RPC but leaves the gateway itself running, so autoStart never
+  // gets a chance to re-fire on the next `up`. Restore it explicitly here.
+  await startJarvisSkill();
+}
+
+/**
+ * Ask the running gateway to (re)start the Jarvis voice loop via its
+ * `tools.invoke` RPC. No-ops quietly if the gateway isn't running or has no
+ * auth token on file - e.g. OpenClaw not installed/onboarded yet.
+ */
+async function startJarvisSkill(): Promise<void> {
+  if (!(await isGatewayActive())) return;
+  await withSpinner("Starting Jarvis voice loop", async () => {
+    const res = await invokeGatewayTool("jarvis_control", { action: "start" });
+    if (!res.ok) warn(`Could not start Jarvis: ${res.message ?? "unknown error"}`);
+  });
 }
 
 /**

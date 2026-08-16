@@ -11,6 +11,7 @@ import { execa } from "execa";
 
 import { clearPid, isPidAlive, killPid, type ManagedProcess } from "../util/pidfile.js";
 import { err, header, info, ok, warn, withSpinner } from "../util/logger.js";
+import { invokeGatewayTool, isGatewayActive } from "../util/gateway-tools.js";
 
 export interface DownOptions {
   keepCamera?: boolean;
@@ -69,6 +70,10 @@ export async function downCommand(opts: DownOptions): Promise<void> {
   if (opts.stopGateway) {
     await stopGatewayService();
   } else {
+    // Gateway stays up (it also hosts Claude Code / MCP), but Jarvis's
+    // always-on mic + STT loop is what actually costs money while idle, so
+    // stop just that skill via the gateway's tools.invoke RPC.
+    await stopJarvisSkill();
     info("Leaving openclaw-gateway running (use --stop-gateway to also stop it).");
   }
 
@@ -145,14 +150,23 @@ async function pkillAndWait(
   }
 }
 
+/**
+ * Ask the running gateway to stop the Jarvis voice loop (mic capture, wake
+ * word, STT) via its `tools.invoke` RPC, without touching the gateway
+ * process itself. No-ops quietly if the gateway isn't running or has no
+ * auth token on file.
+ */
+async function stopJarvisSkill(): Promise<void> {
+  if (!(await isGatewayActive())) return;
+  await withSpinner("Stopping Jarvis voice loop", async () => {
+    const res = await invokeGatewayTool("jarvis_control", { action: "stop" });
+    if (!res.ok) warn(`Could not stop Jarvis: ${res.message ?? "unknown error"}`);
+  });
+}
+
 async function stopGatewayService(): Promise<void> {
   try {
-    const { exitCode } = await execa(
-      "systemctl",
-      ["--user", "is-active", "openclaw-gateway.service"],
-      { reject: false },
-    );
-    if (exitCode !== 0) return; // not active or doesn't exist
+    if (!(await isGatewayActive())) return; // not active or doesn't exist
     await withSpinner("Stopping openclaw-gateway.service", async () => {
       await execa("systemctl", ["--user", "stop", "openclaw-gateway.service"], {
         reject: false,
