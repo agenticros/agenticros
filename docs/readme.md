@@ -41,17 +41,16 @@ AgenticROS connects AI agent platforms to ROS2 robots through a shared core, tra
 
 ## Diagrams
 
-- [AgenticROS architecture PNG](agenticros-architecture.png)
-- [AgenticROS architecture SVG](agenticros-architecture.svg)
-- [AgenticROS system flow PNG](agenticros-system-flow.png)
-- [AgenticROS system flow SVG](agenticros-system-flow.svg)
+- [AgenticROS system flow](agenticros-system-flow.svg) — primary architecture / marketing flow ([PNG](agenticros-system-flow.png); also used in the root README and [architecture.md](architecture.md))
+- [Codebase package diagram](agenticros-architecture.svg) — adapter packages, shared TypeScript runtime, and ROS 2 nodes ([PNG](agenticros-architecture.png))
 
 ## Repository context
 
 The main packages are organized as:
 
-- `packages/core` - transport interfaces, config schema, shared types, and transport factories.
+- `packages/core` - transport interfaces, config schema, missions, memory, capabilities, and transport factories.
 - `packages/ros-camera` - shared camera snapshot encoding.
+- `packages/object-detection` - shared YOLOv8n detector and find-object scan.
 - `packages/agenticros` - OpenClaw plugin, config UI, tools, routes, and teleop.
 - `packages/agenticros-claude-code` - MCP server used by Codex, Hermes, and other MCP clients.
 - `packages/agenticros-gemini` - Gemini CLI adapter.

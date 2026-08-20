@@ -1,17 +1,19 @@
 # AgenticROS System Architecture
 
-![AgenticROS architecture: agent platforms → adapter packages → shared TypeScript runtime → transports → ROS 2 workspace and robot](images/agenticros-architecture.png)
+![AgenticROS system flow: conversation channels → agent platforms → AgenticROS tools, missions, transports, and skills → ROS robot sensing and actuation](images/agenticros-architecture.png)
 
 AgenticROS supports four deployment modes depending on where OpenClaw runs
 relative to the robot. The AI Gateway layer and ROS2 layer remain the same
 across all modes — only the transport between them changes.
 
-The diagram above shows how every agent platform (OpenClaw Gateway, Codex /
-Claude Code, Gemini CLI, and direct users/operators) funnels through adapter
-packages into the shared `@agenticros/core` runtime, then out across the
-configured transport (Zenoh, rosbridge, local DDS, or WebRTC) to the ROS 2
-workspace and robot hardware. The text diagrams below break out each
-deployment mode in more detail.
+The diagram above is the product flow: conversation channels and agent
+platforms (OpenClaw, NemoClaw, Claude, Codex, Gemini, Hermes) call into
+AgenticROS — tools and capabilities, missions and memory, transport and
+safety, skills and perception — then out to the ROS 2 graph and robot
+hardware. Source SVG: [agenticros-system-flow.svg](agenticros-system-flow.svg).
+The text diagrams below break out each deployment mode in more detail.
+A package-level diagram of adapters and `ros2_ws` nodes is in
+[agenticros-architecture.svg](agenticros-architecture.svg).
 
 ---
 

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1100" viewBox="0 0 1800 1100" role="img" aria-labelledby="title desc">
   <title id="title">AgenticROS system flow</title>
-  <desc id="desc">System flow showing chat channels and AI agent platforms connecting through AgenticROS to ROS, RealSense, NVIDIA VSLAM, robot skills, motors, batteries, and robot missions.</desc>
+  <desc id="desc">System flow showing chat channels and AI agent platforms connecting through AgenticROS tools, capabilities, missions, memory, transports, and skills to ROS, RealSense, Nav2, robot hardware, and mission feedback.</desc>
   <defs>
     <style>
       .bg { fill: #f5f7fb; }
@@ -48,7 +48,7 @@
 
   <rect class="bg" x="0" y="0" width="1800" height="1100"/>
   <text class="title" x="70" y="72">AgenticROS System Flow</text>
-  <text class="subtitle" x="70" y="104">Messages become agent plans; AgenticROS turns those plans into perception, skills, and safe ROS-powered robot action.</text>
+  <text class="subtitle" x="70" y="104">Messages become agent plans; AgenticROS turns those into capabilities, missions, and safe ROS-powered action.</text>
 
   <rect class="panel shadow" x="52" y="144" width="366" height="826" rx="18"/>
   <text class="section" x="84" y="184">Conversation Channels</text>
@@ -89,7 +89,7 @@
 
   <rect class="tile messaging" x="88" y="492" width="290" height="98" rx="14"/>
   <text class="label" x="116" y="526">Mission Inputs</text>
-  <text class="text" x="116" y="550">"Follow me", "inspect aisle three",</text>
+  <text class="text" x="116" y="550">"Follow me", "find a chair",</text>
   <text class="text" x="116" y="572">"what do you see?", "return home"</text>
 
   <rect class="panel shadow" x="468" y="144" width="414" height="826" rx="18"/>
@@ -102,7 +102,7 @@
   <path d="M 546 279 L 555 270 M 551 284 L 562 279 M 553 291 L 565 292" stroke="#f3d274" stroke-width="3" stroke-linecap="round"/>
   <circle cx="542" cy="290" r="6" fill="none" stroke="#ffffff" stroke-width="2"/>
   <text class="label" x="574" y="284">OpenClaw</text>
-  <text class="small" x="574" y="306">gateway</text>
+  <text class="small" x="574" y="306">gateway plugin</text>
 
   <rect class="tile agent" x="692" y="248" width="152" height="84" rx="14"/>
   <rect x="724" y="269" width="42" height="42" rx="10" fill="#76b900"/>
@@ -110,53 +110,55 @@
   <circle cx="746" cy="291" r="5" fill="#76b900"/>
   <path d="M 732 291 C 740 287 750 287 759 291" fill="none" stroke="#76b900" stroke-width="2"/>
   <text class="label" x="778" y="284">NemoClaw</text>
-  <text class="small" x="778" y="306">sandbox</text>
+  <text class="small" x="778" y="306">NVIDIA sandbox</text>
 
   <rect class="tile agent" x="508" y="370" width="152" height="84" rx="14"/>
-  <circle cx="542" cy="412" r="21" fill="#111827"/>
-  <g fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round">
-    <path d="M 542 395 C 552 397 557 408 552 417 C 548 426 535 429 528 421"/>
-    <path d="M 557 408 C 561 418 554 428 543 429 C 533 431 524 422 525 412"/>
-    <path d="M 554 425 C 546 433 533 431 528 421 C 523 412 528 400 538 397"/>
-    <path d="M 529 427 C 519 423 517 410 525 402 C 532 394 545 395 551 404"/>
-    <path d="M 522 407 C 520 397 531 390 541 394 C 551 397 556 410 551 419"/>
-    <path d="M 530 398 C 538 390 551 393 555 403 C 560 413 553 425 542 426"/>
-  </g>
-  <text class="label" x="574" y="404">OpenAI</text>
-  <text class="small" x="574" y="426">models</text>
+  <circle cx="542" cy="412" r="21" fill="#b86f52"/>
+  <path d="M 528 424 L 542 394 L 556 424 Z" fill="#ffffff"/>
+  <path d="M 536 418 L 542 405 L 548 418 Z" fill="#b86f52"/>
+  <text class="label" x="574" y="404">Claude</text>
+  <text class="small" x="574" y="426">Code / Desktop</text>
 
   <rect class="tile agent" x="692" y="370" width="152" height="84" rx="14"/>
-  <circle cx="726" cy="412" r="21" fill="#b86f52"/>
-  <path d="M 712 424 L 726 394 L 740 424 Z" fill="#ffffff"/>
-  <path d="M 720 418 L 726 405 L 732 418 Z" fill="#b86f52"/>
-  <text class="label" x="758" y="404">Claude</text>
-  <text class="small" x="758" y="426">reasoning</text>
+  <circle cx="726" cy="412" r="21" fill="#111827"/>
+  <text x="726" y="418" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15" font-weight="700" fill="#ffffff">&gt;_</text>
+  <text class="label" x="758" y="404">Codex</text>
+  <text class="small" x="758" y="426">MCP CLI</text>
 
-  <rect class="tile agent" x="600" y="492" width="152" height="84" rx="14"/>
-  <circle cx="634" cy="534" r="21" fill="#4285f4"/>
-  <path d="M 634 511 L 640 528 L 657 534 L 640 540 L 634 557 L 628 540 L 611 534 L 628 528 Z" fill="#ffffff"/>
-  <path d="M 652 515 L 655 523 L 663 526 L 655 529 L 652 537 L 649 529 L 641 526 L 649 523 Z" fill="#fbbc04"/>
-  <path d="M 615 516 L 618 523 L 625 526 L 618 529 L 615 536 L 612 529 L 605 526 L 612 523 Z" fill="#34a853"/>
-  <text class="label" x="666" y="526">Gemini</text>
-  <text class="small" x="666" y="548">multimodal</text>
+  <rect class="tile agent" x="508" y="492" width="152" height="84" rx="14"/>
+  <circle cx="542" cy="534" r="21" fill="#4285f4"/>
+  <path d="M 542 511 L 548 528 L 565 534 L 548 540 L 542 557 L 536 540 L 519 534 L 536 528 Z" fill="#ffffff"/>
+  <path d="M 560 515 L 563 523 L 571 526 L 563 529 L 560 537 L 557 529 L 549 526 L 557 523 Z" fill="#fbbc04"/>
+  <path d="M 523 516 L 526 523 L 533 526 L 526 529 L 523 536 L 520 529 L 513 526 L 520 523 Z" fill="#34a853"/>
+  <text class="label" x="574" y="526">Gemini</text>
+  <text class="small" x="574" y="548">function calling</text>
+
+  <rect class="tile agent" x="692" y="492" width="152" height="84" rx="14"/>
+  <circle cx="726" cy="534" r="21" fill="#0f766e"/>
+  <path d="M 714 534 C 718 524, 726 520, 734 524" fill="none" stroke="#f3d274" stroke-width="3" stroke-linecap="round"/>
+  <path d="M 714 534 C 718 544, 726 548, 734 544" fill="none" stroke="#f3d274" stroke-width="3" stroke-linecap="round"/>
+  <path d="M 726 524 L 726 544" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="726" cy="534" r="4" fill="#ffffff"/>
+  <text class="label" x="758" y="526">Hermes</text>
+  <text class="small" x="758" y="548">MCP client</text>
 
   <rect class="tile agent" x="508" y="636" width="336" height="128" rx="16"/>
   <text class="label" x="536" y="670">Agent Work Loop</text>
-  <text class="text" x="536" y="696">Interpret goal -> choose tools -> observe</text>
-  <text class="text" x="536" y="720">state -> revise plan -> issue safe actions</text>
-  <text class="small" x="536" y="748">Tool calls are routed through AgenticROS.</text>
+  <text class="text" x="536" y="696">Interpret goal → choose tools → observe</text>
+  <text class="text" x="536" y="720">state → run missions → issue safe actions</text>
+  <text class="small" x="536" y="748">Plugin, MCP, or function calling into AgenticROS.</text>
 
   <rect class="panel shadow" x="930" y="120" width="410" height="872" rx="22"/>
-  <rect x="980" y="185" width="310" height="236" rx="24" fill="url(#agenticrosGrad)" stroke="#d1a43b" stroke-width="2.2"/>
-  <circle cx="1080" cy="303" r="62" fill="#16212f"/>
-  <circle cx="1080" cy="303" r="42" fill="#f3d274"/>
-  <circle cx="1080" cy="303" r="19" fill="#16212f"/>
-  <path d="M 1080 241 L 1080 210 M 1080 396 L 1080 365 M 1018 303 L 987 303 M 1173 303 L 1142 303 M 1036 259 L 1013 236 M 1124 347 L 1147 370 M 1124 259 L 1147 236 M 1036 347 L 1013 370" stroke="#16212f" stroke-width="8" stroke-linecap="round"/>
-  <text class="label" x="1014" y="458" font-size="30">AgenticROS</text>
-  <text class="text" x="1003" y="486">Robotics runtime for agentic AI</text>
+  <rect x="980" y="148" width="310" height="168" rx="22" fill="url(#agenticrosGrad)" stroke="#d1a43b" stroke-width="2.2"/>
+  <circle cx="1135" cy="232" r="48" fill="#16212f"/>
+  <circle cx="1135" cy="232" r="32" fill="#f3d274"/>
+  <circle cx="1135" cy="232" r="14" fill="#16212f"/>
+  <path d="M 1135 184 L 1135 162 M 1135 302 L 1135 280 M 1087 232 L 1065 232 M 1183 232 L 1205 232 M 1101 198 L 1084 181 M 1169 266 L 1186 283 M 1169 198 L 1186 181 M 1101 266 L 1084 283" stroke="#16212f" stroke-width="7" stroke-linecap="round"/>
+  <text class="label" x="1014" y="348" font-size="30">AgenticROS</text>
+  <text class="text" x="1003" y="374">Robotics runtime for agentic AI</text>
 
-  <rect class="tile core" x="982" y="534" width="306" height="84" rx="14"/>
-  <g transform="translate(1240 576)">
+  <rect class="tile core" x="982" y="396" width="306" height="78" rx="14"/>
+  <g transform="translate(1246 435)">
     <circle cx="-18" cy="-10" r="5" fill="#22314a"/>
     <circle cx="0" cy="-10" r="5" fill="#22314a"/>
     <circle cx="18" cy="-10" r="5" fill="#22314a"/>
@@ -165,25 +167,34 @@
     <circle cx="18" cy="8" r="5" fill="#22314a"/>
     <path d="M -18 -10 L 0 -10 L 18 -10 M -18 8 L 0 8 L 18 8 M -18 -10 L -18 8 M 0 -10 L 0 8 M 18 -10 L 18 8" stroke="#22314a" stroke-width="2"/>
   </g>
-  <text class="label" x="1010" y="566">ROS Tool Layer</text>
-  <text class="text" x="1010" y="590">topics, services, actions, params</text>
+  <text class="label" x="1010" y="426">Tools + Capabilities</text>
+  <text class="text" x="1010" y="450">ros2_* tools, verbs, fleet lookup</text>
 
-  <rect class="tile core" x="982" y="646" width="306" height="84" rx="14"/>
-  <g transform="translate(1244 690)" fill="none" stroke="#d6a333" stroke-width="4" stroke-linecap="round">
+  <rect class="tile core" x="982" y="490" width="306" height="78" rx="14"/>
+  <g transform="translate(1246 529)" fill="none" stroke="#d6a333" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="-22" y="-14" width="18" height="14" rx="3"/>
+    <rect x="4" y="-6" width="18" height="14" rx="3"/>
+    <path d="M -4 -7 L 4 1"/>
+  </g>
+  <text class="label" x="1010" y="520">Missions + Memory</text>
+  <text class="text" x="1010" y="544">run_mission, cancel/pause, shared memory</text>
+
+  <rect class="tile core" x="982" y="584" width="306" height="78" rx="14"/>
+  <g transform="translate(1246 623)" fill="none" stroke="#d6a333" stroke-width="4" stroke-linecap="round">
     <path d="M -26 8 C -12 -14 12 -14 26 8"/>
     <path d="M -16 8 C -7 -4 7 -4 16 8"/>
     <path d="M -5 8 C -2 5 2 5 5 8"/>
   </g>
-  <text class="label" x="1010" y="678">Transport + Safety</text>
-  <text class="text" x="1010" y="702">Zenoh, rosbridge, DDS, WebRTC</text>
+  <text class="label" x="1010" y="614">Transport + Safety</text>
+  <text class="text" x="1010" y="638">Zenoh, rosbridge, DDS, WebRTC</text>
 
-  <rect class="tile skill" x="982" y="758" width="306" height="104" rx="14"/>
-  <path d="M 1236 788 C 1236 780 1243 773 1251 773 C 1256 773 1260 776 1262 780 C 1264 776 1268 773 1273 773 C 1281 773 1288 780 1288 788 C 1288 806 1262 821 1262 821 C 1262 821 1236 806 1236 788 Z" fill="#8d70ca"/>
-  <circle cx="1262" cy="794" r="9" fill="#f2ecff"/>
-  <path d="M 1256 794 L 1268 794 M 1262 788 L 1262 800" stroke="#8d70ca" stroke-width="3" stroke-linecap="round"/>
-  <text class="label" x="1010" y="790">AgenticROS Skills</text>
-  <text class="text" x="1010" y="814">mission packages: follow, inspect,</text>
-  <text class="text" x="1010" y="836">navigate, perceive, recover</text>
+  <rect class="tile skill" x="982" y="678" width="306" height="118" rx="14"/>
+  <path d="M 1236 718 C 1236 710 1243 703 1251 703 C 1256 703 1260 706 1262 710 C 1264 706 1268 703 1273 703 C 1281 703 1288 710 1288 718 C 1288 736 1262 751 1262 751 C 1262 751 1236 736 1236 718 Z" fill="#8d70ca"/>
+  <circle cx="1262" cy="724" r="9" fill="#f2ecff"/>
+  <path d="M 1256 724 L 1268 724 M 1262 718 L 1262 730" stroke="#8d70ca" stroke-width="3" stroke-linecap="round"/>
+  <text class="label" x="1010" y="714">Skills + Perception</text>
+  <text class="text" x="1010" y="738">skill packages, YOLO find-object,</text>
+  <text class="text" x="1010" y="760">camera snapshots, depth</text>
 
   <rect class="panel shadow" x="1388" y="144" width="360" height="826" rx="18"/>
   <text class="section" x="1420" y="184">Robot Sensing + Actuation</text>
@@ -201,7 +212,7 @@
   <circle cx="1454" cy="294" r="4" fill="#ffffff"/>
   <circle cx="1462" cy="294" r="4" fill="#ffffff"/>
   <text class="label" x="1488" y="280">Robot ROS Graph</text>
-  <text class="small" x="1488" y="302">topics, services, actions</text>
+  <text class="small" x="1488" y="302">discovery, Nav2, topics, actions</text>
 
   <rect class="tile device" x="1420" y="356" width="132" height="82" rx="14"/>
   <rect x="1449" y="377" width="42" height="42" rx="11" fill="#2379b5"/>
@@ -236,8 +247,8 @@
   <path d="M 1640 660 L 1655 646 L 1670 660 L 1670 692 L 1640 692 Z" fill="#4f9568"/>
   <path d="M 1648 674 L 1656 682 L 1668 668" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
   <text class="label" x="1448" y="644">Mission Execution</text>
-  <text class="text" x="1448" y="670">Follow, inspect, navigate, monitor,</text>
-  <text class="text" x="1448" y="694">report, recover, return</text>
+  <text class="text" x="1448" y="670">Follow, find-object, navigate,</text>
+  <text class="text" x="1448" y="694">inspect, recover, return</text>
 
   <rect class="tile skill" x="1420" y="774" width="280" height="104" rx="14"/>
   <path d="M 1642 823 C 1642 813 1650 805 1660 805 C 1670 805 1678 813 1678 823 C 1678 833 1670 841 1660 841 C 1650 841 1642 833 1642 823 Z" fill="#8d70ca"/>
@@ -248,21 +259,21 @@
   <text class="text" x="1448" y="856">battery, diagnostics</text>
 
   <path class="line-blue" d="M 378 291 C 430 291, 450 291, 508 291" marker-end="url(#arrowBlue)"/>
-  <path class="line-blue" d="M 378 411 C 430 435, 448 464, 600 534" marker-end="url(#arrowBlue)"/>
+  <path class="line-blue" d="M 378 411 C 430 435, 448 464, 508 412" marker-end="url(#arrowBlue)"/>
   <path class="line-blue" d="M 378 541 C 445 600, 480 656, 508 700" marker-end="url(#arrowBlue)"/>
 
-  <path class="line-blue" d="M 844 290 C 906 290, 926 292, 980 303" marker-end="url(#arrowBlue)"/>
-  <path class="line-blue" d="M 844 412 C 904 440, 930 486, 982 574" marker-end="url(#arrowBlue)"/>
-  <path class="line-blue" d="M 752 534 C 840 584, 900 658, 982 688" marker-end="url(#arrowBlue)"/>
-  <path class="line-blue" d="M 844 700 C 900 738, 928 784, 982 810" marker-end="url(#arrowBlue)"/>
+  <path class="line-blue" d="M 844 290 C 906 250, 940 220, 980 232" marker-end="url(#arrowBlue)"/>
+  <path class="line-blue" d="M 844 412 C 904 420, 940 430, 982 435" marker-end="url(#arrowBlue)"/>
+  <path class="line-blue" d="M 844 534 C 900 560, 940 600, 982 623" marker-end="url(#arrowBlue)"/>
+  <path class="line-blue" d="M 844 700 C 900 720, 940 730, 982 737" marker-end="url(#arrowBlue)"/>
 
-  <path class="line-green" d="M 1288 574 C 1346 560, 1370 306, 1420 286" marker-end="url(#arrowGreen)"/>
-  <path class="line-green" d="M 1288 688 C 1348 642, 1374 514, 1420 511" marker-end="url(#arrowGreen)"/>
-  <path class="line-purple" d="M 1288 810 C 1350 780, 1376 678, 1420 666" marker-end="url(#arrowPurple)"/>
+  <path class="line-green" d="M 1288 435 C 1346 380, 1370 306, 1420 286" marker-end="url(#arrowGreen)"/>
+  <path class="line-green" d="M 1288 623 C 1348 590, 1374 530, 1420 511" marker-end="url(#arrowGreen)"/>
+  <path class="line-purple" d="M 1288 737 C 1350 720, 1376 678, 1420 666" marker-end="url(#arrowPurple)"/>
 
-  <path class="line dash" d="M 1420 397 C 1350 400, 1315 516, 1288 574" marker-end="url(#arrow)"/>
-  <path class="line dash" d="M 1574 397 C 1395 410, 1360 600, 1288 688" marker-end="url(#arrow)"/>
-  <path class="line dash" d="M 1700 826 C 1580 934, 1250 930, 1135 862" marker-end="url(#arrow)"/>
+  <path class="line dash" d="M 1420 397 C 1350 400, 1315 420, 1288 435" marker-end="url(#arrow)"/>
+  <path class="line dash" d="M 1574 397 C 1395 430, 1360 540, 1288 623" marker-end="url(#arrow)"/>
+  <path class="line dash" d="M 1700 826 C 1580 934, 1250 900, 1135 796" marker-end="url(#arrow)"/>
 
   <rect class="tile" x="70" y="1004" width="1660" height="46" rx="12"/>
   <text class="small" x="96" y="1032">Brand names are shown as system tiles for architecture communication. Replace tiles with official logo artwork where required by partner brand guidelines.</text>

@@ -58,12 +58,11 @@ Then chat in OpenClaw web UI or Hermes: *"List ROS topics"*, *"drive forward slo
 
 ## Architecture
 
-![AgenticROS architecture: agent platforms → adapter packages → shared TypeScript runtime → transports → ROS 2 workspace and robot](docs/images/agenticros-architecture.png)
+![AgenticROS system flow: conversation channels → agent platforms → AgenticROS tools, missions, transports, and skills → ROS robot sensing and actuation](docs/images/agenticros-architecture.png)
 
-- **Core** (`packages/core`): Platform-agnostic ROS2 transport (rosbridge, Zenoh, local, WebRTC), config schema, and shared types. No dependency on any specific AI platform.
-- **Adapters** (`packages/agenticros`, and later others): Implement the contract for each AI platform. The OpenClaw adapter registers tools, commands, and HTTP routes with the OpenClaw gateway and uses the core for all ROS2 communication.
-- `**packages/agenticros-claude-code`** — MCP server for **Claude Code**, **Claude desktop**, **Dispatch**, **OpenAI Codex CLI**, and **Hermes Agent**. See [packages/agenticros-claude-code/README.md](packages/agenticros-claude-code/README.md), [docs/codex-setup.md](docs/codex-setup.md), and [docs/hermes-setup.md](docs/hermes-setup.md).
-- `**packages/agenticros-gemini`** — **Gemini CLI**: use Google Gemini to chat with your robot from the terminal (same ROS2 tools, no MCP). See [packages/agenticros-gemini/README.md](packages/agenticros-gemini/README.md).
+- **Core** (`packages/core`): Platform-agnostic ROS2 transport (Zenoh, rosbridge, local DDS, WebRTC), capability/mission runtime, shared memory, config schema, and types. No dependency on any specific AI platform.
+- **Adapters**: OpenClaw plugin (`packages/agenticros`, including [NemoClaw](docs/nemoclaw.md)); MCP server (`packages/agenticros-claude-code`) for **Claude Code / Desktop / Dispatch**, **Codex CLI**, and **Hermes Agent**; Gemini CLI (`packages/agenticros-gemini`) via function calling. See [packages/agenticros-claude-code/README.md](packages/agenticros-claude-code/README.md), [docs/codex-setup.md](docs/codex-setup.md), and [docs/hermes-setup.md](docs/hermes-setup.md).
+- **Perception**: `@agenticros/ros-camera` (Image / CompressedImage snapshots) and `@agenticros/object-detection` (YOLOv8n find-object), shared by every adapter.
 
 ```
 User (messaging app) → OpenClaw Gateway → AgenticROS OpenClaw plugin → Core → ROS2 robots
