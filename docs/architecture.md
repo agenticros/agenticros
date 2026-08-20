@@ -1,16 +1,19 @@
 # AgenticROS System Architecture
 
-![AgenticROS system flow: conversation channels → agent platforms → AgenticROS tools, missions, transports, and skills → ROS robot sensing and actuation](images/agenticros-architecture.png)
+![AgenticROS system flow: chat and Jarvis voice → agent platforms → AgenticROS tools, missions, transports, and skills → ROS robot sensing and actuation](images/agenticros-architecture.png)
 
 AgenticROS supports four deployment modes depending on where OpenClaw runs
 relative to the robot. The AI Gateway layer and ROS2 layer remain the same
 across all modes — only the transport between them changes.
 
-The diagram above is the product flow: conversation channels and agent
-platforms (OpenClaw, NemoClaw, Claude, Codex, Gemini, Hermes) call into
-AgenticROS — tools and capabilities, missions and memory, transport and
-safety, skills and perception — then out to the ROS 2 graph and robot
-hardware. Source SVG: [agenticros-system-flow.svg](agenticros-system-flow.svg).
+The diagram above is the product flow: conversation channels (including
+Jarvis voice in and spoken replies out) and agent platforms (OpenClaw,
+NemoClaw, Claude, Codex, Gemini, Hermes) call into AgenticROS — tools and
+capabilities, missions and memory, transport and safety, skills and
+perception — then out to the ROS 2 graph and robot hardware. Jarvis is
+the `chrismatthieu/jarvis` skill: wake-word speech becomes the same
+OpenClaw agent loop as chat, covering ordinary LLM conversation and
+AgenticROS tasks and missions. Source SVG: [agenticros-system-flow.svg](agenticros-system-flow.svg).
 The text diagrams below break out each deployment mode in more detail.
 A package-level diagram of adapters and `ros2_ws` nodes is in
 [agenticros-architecture.svg](agenticros-architecture.svg).

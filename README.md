@@ -58,7 +58,7 @@ Then chat in OpenClaw web UI or Hermes: *"List ROS topics"*, *"drive forward slo
 
 ## Architecture
 
-![AgenticROS system flow: conversation channels → agent platforms → AgenticROS tools, missions, transports, and skills → ROS robot sensing and actuation](docs/images/agenticros-architecture.png)
+![AgenticROS system flow: chat and Jarvis voice → agent platforms → AgenticROS tools, missions, transports, and skills → ROS robot sensing and actuation](docs/images/agenticros-architecture.png)
 
 - **Core** (`packages/core`): Platform-agnostic ROS2 transport (Zenoh, rosbridge, local DDS, WebRTC), capability/mission runtime, shared memory, config schema, and types. No dependency on any specific AI platform.
 - **Adapters**: OpenClaw plugin (`packages/agenticros`, including [NemoClaw](docs/nemoclaw.md)); MCP server (`packages/agenticros-claude-code`) for **Claude Code / Desktop / Dispatch**, **Codex CLI**, and **Hermes Agent**; Gemini CLI (`packages/agenticros-gemini`) via function calling. See [packages/agenticros-claude-code/README.md](packages/agenticros-claude-code/README.md), [docs/codex-setup.md](docs/codex-setup.md), and [docs/hermes-setup.md](docs/hermes-setup.md).

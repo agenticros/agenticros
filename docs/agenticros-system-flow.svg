@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1100" viewBox="0 0 1800 1100" role="img" aria-labelledby="title desc">
   <title id="title">AgenticROS system flow</title>
-  <desc id="desc">System flow showing chat channels and AI agent platforms connecting through AgenticROS tools, capabilities, missions, memory, transports, and skills to ROS, RealSense, Nav2, robot hardware, and mission feedback.</desc>
+  <desc id="desc">System flow showing chat channels and Jarvis voice (spoken input and spoken replies) connecting through AI agent platforms and AgenticROS tools, capabilities, missions, memory, transports, and skills to ROS, RealSense, Nav2, robot hardware, and mission feedback.</desc>
   <defs>
     <style>
       .bg { fill: #f5f7fb; }
@@ -20,6 +20,7 @@
       .device { fill: #fff0ec; stroke: #cd7a67; }
       .skill { fill: #f2ecff; stroke: #8d70ca; }
       .nvidia { fill: #eef9df; stroke: #76b900; }
+      .voice { fill: #fff8e8; stroke: #c89c32; }
       .line { fill: none; stroke: #657386; stroke-width: 2.3; }
       .line-blue { fill: none; stroke: #266d9f; stroke-width: 3; }
       .line-green { fill: none; stroke: #4f9568; stroke-width: 2.8; }
@@ -48,11 +49,11 @@
 
   <rect class="bg" x="0" y="0" width="1800" height="1100"/>
   <text class="title" x="70" y="72">AgenticROS System Flow</text>
-  <text class="subtitle" x="70" y="104">Messages become agent plans; AgenticROS turns those into capabilities, missions, and safe ROS-powered action.</text>
+  <text class="subtitle" x="70" y="104">Chat and voice become agent plans; AgenticROS turns those into capabilities, missions, and safe ROS-powered action.</text>
 
   <rect class="panel shadow" x="52" y="144" width="366" height="826" rx="18"/>
   <text class="section" x="84" y="184">Conversation Channels</text>
-  <text class="text" x="84" y="208">Operators assign missions, goals, and questions.</text>
+  <text class="text" x="84" y="208">Operators type, message, or speak to the robot.</text>
 
   <rect class="tile messaging" x="88" y="250" width="126" height="82" rx="14"/>
   <circle cx="119" cy="291" r="20" fill="#3a76f0"/>
@@ -87,10 +88,22 @@
   <text class="label" x="334" y="404">WebChat</text>
   <text class="small" x="334" y="426">browser UI</text>
 
-  <rect class="tile messaging" x="88" y="492" width="290" height="98" rx="14"/>
-  <text class="label" x="116" y="526">Mission Inputs</text>
-  <text class="text" x="116" y="550">"Follow me", "find a chair",</text>
-  <text class="text" x="116" y="572">"what do you see?", "return home"</text>
+  <rect class="tile messaging" x="88" y="492" width="290" height="86" rx="14"/>
+  <text class="label" x="116" y="522">Mission Inputs</text>
+  <text class="text" x="116" y="546">"Follow me", "find a chair",</text>
+  <text class="text" x="116" y="564">"what do you see?", "return home"</text>
+
+  <rect class="tile voice" x="88" y="598" width="290" height="148" rx="14"/>
+  <circle cx="128" cy="650" r="22" fill="#16212f"/>
+  <rect x="120" y="636" width="16" height="22" rx="8" fill="#f3d274"/>
+  <path d="M 114 650 C 114 658 120 664 128 664 C 136 664 142 658 142 650" fill="none" stroke="#f3d274" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M 128 664 L 128 672 M 120 672 L 136 672" stroke="#f3d274" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M 148 642 C 154 650 154 658 148 666" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round"/>
+  <text class="label" x="168" y="640">Jarvis Voice</text>
+  <text class="small" x="168" y="660">skill · mic in + spoken replies</text>
+  <text class="text" x="116" y="696">"Hey Jarvis" wake word → OpenClaw</text>
+  <text class="text" x="116" y="718">LLM chat, tasks, and missions</text>
+  <text class="small" x="116" y="738">Kokoro TTS replies out loud</text>
 
   <rect class="panel shadow" x="468" y="144" width="414" height="826" rx="18"/>
   <text class="section" x="500" y="184">AI Agent Platforms</text>
@@ -193,8 +206,8 @@
   <circle cx="1262" cy="724" r="9" fill="#f2ecff"/>
   <path d="M 1256 724 L 1268 724 M 1262 718 L 1262 730" stroke="#8d70ca" stroke-width="3" stroke-linecap="round"/>
   <text class="label" x="1010" y="714">Skills + Perception</text>
-  <text class="text" x="1010" y="738">skill packages, YOLO find-object,</text>
-  <text class="text" x="1010" y="760">camera snapshots, depth</text>
+  <text class="text" x="1010" y="738">YOLO find-object, camera, depth,</text>
+  <text class="text" x="1010" y="760">Jarvis voice (STT + TTS)</text>
 
   <rect class="panel shadow" x="1388" y="144" width="360" height="826" rx="18"/>
   <text class="section" x="1420" y="184">Robot Sensing + Actuation</text>
@@ -260,7 +273,9 @@
 
   <path class="line-blue" d="M 378 291 C 430 291, 450 291, 508 291" marker-end="url(#arrowBlue)"/>
   <path class="line-blue" d="M 378 411 C 430 435, 448 464, 508 412" marker-end="url(#arrowBlue)"/>
-  <path class="line-blue" d="M 378 541 C 445 600, 480 656, 508 700" marker-end="url(#arrowBlue)"/>
+  <path class="line-blue" d="M 378 535 C 430 580, 460 640, 508 670" marker-end="url(#arrowBlue)"/>
+  <path class="line-blue" d="M 378 655 C 430 655, 470 690, 508 700" marker-end="url(#arrowBlue)"/>
+  <path class="line dash" d="M 508 748 C 460 760, 420 730, 378 720" marker-end="url(#arrow)"/>
 
   <path class="line-blue" d="M 844 290 C 906 250, 940 220, 980 232" marker-end="url(#arrowBlue)"/>
   <path class="line-blue" d="M 844 412 C 904 420, 940 430, 982 435" marker-end="url(#arrowBlue)"/>
