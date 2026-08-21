@@ -26,7 +26,8 @@
       {
         "id": "{{toolName}}",
         "verb": "measure",
-        "description": "{{description}}"
+        "description": "{{description}}",
+        "requires": ["depth"]
       }
     ]
   },

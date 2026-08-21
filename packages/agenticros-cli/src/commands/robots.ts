@@ -9,10 +9,9 @@
  *                                        --transport=<shorthand>, --transport-json=<json>.
  *   remove / rm <id>              Remove a robot from config.robots[].
  *   set-default <id>              Mark a robot as the active default.
- *   set-transport <id> [shorthand] Apply a per-robot transport override (or use
- *                                  --transport / --transport-json instead of [shorthand]).
- *   clear-transport <id>          Drop the per-robot transport override so the robot
- *                                  inherits the global transport config.
+ *   profile show [id]             Print the hardware profile for a robot.
+ *   profile infer [id]            Draft a profile from kind/camera/sensors; print JSON.
+ *                                 Pass --apply to write it.
  *
  * All mutations target `~/.agenticros/config.json`. The legacy single-robot
  * `config.robot` is automatically promoted into `config.robots[]` on the first
@@ -35,11 +34,19 @@ import {
   removeRobot,
   robotConfigPath,
   setDefaultRobot,
+  setProfileForRobot,
   setTransportForRobot,
   writeConfigObject,
   type RobotEntry,
   type RobotSensors,
 } from "../util/robot-config.js";
+import {
+  inferProfileDraft,
+  parseBindingPairs,
+  parseFeaturesCsv,
+  PROFILE_SCHEMA_ID,
+  type RobotProfile,
+} from "../util/robot-profile.js";
 import {
   discoverViaMcp,
   type DetectedRobot,
@@ -54,6 +61,7 @@ import {
 export interface RobotsOptions {
   action?: string;
   arg?: string;
+  extra?: string;
   /** --name <name> (used by `add` to set the display name non-interactively) */
   name?: string;
   /** --namespace <ns> (used by `add` to set the ROS2 namespace non-interactively) */
@@ -76,6 +84,12 @@ export interface RobotsOptions {
    * gateway-wide registry.
    */
   capabilities?: string;
+  /** --features=<csv> (profile features, e.g. base,camera,depth) */
+  features?: string;
+  /** Repeatable --binding key=/topic */
+  bindings?: string[];
+  /** --apply (used by `profile infer` to write the draft) */
+  apply?: boolean;
   /** --transport=<shorthand> (used by `add` / `set-transport` to apply a per-robot override) */
   transport?: string;
   /** --transport-json=<raw json> (used by `add` / `set-transport` for non-shorthand overrides) */
@@ -169,10 +183,12 @@ export async function robotsCommand(opts: RobotsOptions): Promise<void> {
       return setTransportAction(opts);
     case "clear-transport":
       return clearTransportAction(opts.arg);
+    case "profile":
+      return profileAction(opts);
     default:
       err(`Unknown robots action '${opts.action}'.`);
       err(
-        "Use: list | discover | add [id] | remove <id> | set-default <id> | set-transport <id> [shorthand] | clear-transport <id>",
+        "Use: list | discover | add [id] | remove <id> | set-default <id> | set-transport <id> [shorthand] | clear-transport <id> | profile show [id] | profile infer [id]",
       );
       process.exit(2);
   }
@@ -260,6 +276,11 @@ async function listAction(): Promise<void> {
     if (r.capabilities && r.capabilities.length > 0) {
       process.stdout.write(
         `      capabilities: ${colors.cyan(r.capabilities.join(", "))}\n`,
+      );
+    }
+    if (r.profile) {
+      process.stdout.write(
+        `      profile: ${colors.cyan(r.profile.features.join(", ") || "(no features)")}\n`,
       );
     }
     if (r.transport) {
@@ -424,6 +445,15 @@ async function addAction(opts: RobotsOptions): Promise<void> {
     process.exit(2);
   }
   const capabilitiesFromFlag = parseCapabilitiesCsv(opts.capabilities);
+  let featuresFromFlag: string[] | undefined;
+  let bindingsFromFlag: Record<string, string> | undefined;
+  try {
+    featuresFromFlag = parseFeaturesCsv(opts.features);
+    bindingsFromFlag = parseBindingPairs(opts.bindings);
+  } catch (e) {
+    err(e instanceof Error ? e.message : String(e));
+    process.exit(2);
+  }
 
   // True when the user gave us any --flag, meaning "do not prompt".
   // We treat non-interactive mode as the *implicit* default once any
@@ -437,7 +467,9 @@ async function addAction(opts: RobotsOptions): Promise<void> {
     opts.default === true ||
     opts.kind !== undefined ||
     sensorsFromFlag !== undefined ||
-    capabilitiesFromFlag !== undefined;
+    capabilitiesFromFlag !== undefined ||
+    featuresFromFlag !== undefined ||
+    bindingsFromFlag !== undefined;
 
   // Try to fetch live discovery once so the prompts can pre-fill defaults
   // and so an interactive `add` (no id) lets the user pick from the wire.
@@ -522,6 +554,16 @@ async function addAction(opts: RobotsOptions): Promise<void> {
   // string already became []). Same semantics as --transport.
   const capabilitiesToApply = capabilitiesFromFlag;
 
+  let profileToApply: RobotProfile | undefined;
+  if (featuresFromFlag !== undefined || bindingsFromFlag !== undefined) {
+    const prev = existing?.profile;
+    profileToApply = {
+      schema: prev?.schema ?? PROFILE_SCHEMA_ID,
+      features: featuresFromFlag ?? prev?.features ?? [],
+      bindings: { ...(prev?.bindings ?? {}), ...(bindingsFromFlag ?? {}) },
+    };
+  }
+
   const result = addRobot(
     {
       id,
@@ -532,6 +574,7 @@ async function addAction(opts: RobotsOptions): Promise<void> {
       kind: opts.kind,
       sensors: mergedSensors,
       capabilities: capabilitiesToApply,
+      profile: profileToApply,
     },
     { obj, setDefault },
   );
@@ -560,8 +603,78 @@ async function addAction(opts: RobotsOptions): Promise<void> {
       ok(`Per-robot capability allowlist: ${capabilitiesToApply.join(", ")}.`);
     }
   }
+  if (profileToApply) {
+    ok(`Profile features: ${profileToApply.features.join(", ") || "(none)"}.`);
+  }
   if (setDefault) ok(`"${id}" is now the default robot.`);
   warn("Restart any running MCP servers so they re-read the config.");
+}
+
+function resolveRobotOrExit(id: string | undefined): { id: string; entry: RobotEntry; obj: Record<string, unknown> } {
+  const obj = readConfigObject();
+  const { robots } = readRobots(obj);
+  const target = (id ?? getActiveRobotId(obj) ?? "").trim();
+  if (!target) {
+    err("No robots configured. Add one with `agenticros robots add` first.");
+    process.exit(2);
+  }
+  const entry = robots.find((r) => r.id === target);
+  if (!entry) {
+    err(`Unknown robot id "${target}". Known: ${robots.map((r) => r.id).join(", ") || "(none)"}.`);
+    process.exit(2);
+  }
+  return { id: target, entry, obj };
+}
+
+function cmdVelFromConfig(obj: Record<string, unknown>): string | undefined {
+  const teleop = obj["teleop"];
+  if (teleop && typeof teleop === "object" && !Array.isArray(teleop)) {
+    const t = (teleop as Record<string, unknown>)["cmdVelTopic"];
+    if (typeof t === "string" && t.trim()) return t.trim();
+  }
+  return undefined;
+}
+
+async function profileAction(opts: RobotsOptions): Promise<void> {
+  const sub = (opts.arg ?? "show").toLowerCase();
+  const idArg = opts.extra;
+  if (sub === "show") {
+    const { id, entry } = resolveRobotOrExit(idArg);
+    header(`Profile: ${id}`);
+    if (!entry.profile) {
+      info("No profile set — advertised verbs are gateway-wide.");
+      info("Draft one with `agenticros robots profile infer --apply`.");
+      return;
+    }
+    process.stdout.write(`${JSON.stringify(entry.profile, null, 2)}\n`);
+    return;
+  }
+  if (sub === "infer") {
+    const { id, entry, obj } = resolveRobotOrExit(idArg);
+    const draft = inferProfileDraft({
+      namespace: entry.namespace,
+      cameraTopic: entry.cameraTopic,
+      kind: entry.kind,
+      sensors: entry.sensors,
+      cmdVelTopic: cmdVelFromConfig(obj),
+    });
+    header(`Inferred profile: ${id}`);
+    process.stdout.write(`${JSON.stringify(draft, null, 2)}\n`);
+    if (!opts.apply) {
+      info("Pass --apply to write this profile to config.");
+      return;
+    }
+    const result = setProfileForRobot(id, draft, obj);
+    writeConfigObject(obj);
+    if (result.promotedLegacy) {
+      info("Promoted legacy config.robot into config.robots[] so the profile can be stored.");
+    }
+    ok(`Wrote profile for "${id}" (${draft.features.join(", ") || "no features"}).`);
+    warn("Restart any running MCP servers so they re-read the config.");
+    return;
+  }
+  err(`Unknown profile action '${opts.arg}'. Use: show | infer`);
+  process.exit(2);
 }
 
 /**

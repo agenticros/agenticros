@@ -1,7 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import type { OpenClawPluginApi } from "../plugin-api.js";
 import type { AgenticROSConfig } from "@agenticros/core";
-import { resolveCameraSubscribeTopic } from "@agenticros/core";
+import { resolveCameraSubscribeTopic, resolveBinding } from "@agenticros/core";
 import {
   ROS_MSG_COMPRESSED_IMAGE,
   ROS_MSG_IMAGE,
@@ -74,7 +74,7 @@ export function registerCameraTool(api: OpenClawPluginApi, config: AgenticROSCon
       const { robot } = resolved;
 
       const defaultTopic =
-        (robot.cameraTopic ?? "").trim() || "/camera/camera/color/image_raw/compressed";
+        resolveBinding(robot, "camera.rgb") || "/camera/camera/color/image_raw/compressed";
       const rawTopic = (params["topic"] as string | undefined) ?? defaultTopic;
       const topic = resolveCameraSubscribeTopic(robot.namespace, rawTopic);
       const rawMsgType = params["message_type"] as string | undefined;

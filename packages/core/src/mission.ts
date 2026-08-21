@@ -418,6 +418,12 @@ export interface RunMissionOptions {
   transcript?: MissionTranscriptSink;
   /** Adapter label (e.g. "claude-code", "openclaw", "gemini") — copied into transcripts. */
   adapter?: string;
+  /**
+   * Optional override for the "capability not in registry" step error.
+   * Adapters use this to explain hardware-profile mismatches
+   * (`missing features: arm`) instead of a generic unknown-id message.
+   */
+  unavailableMessage?: (capabilityId: string) => string | undefined;
 }
 
 /**
@@ -539,7 +545,9 @@ export async function runMission(
         capability: step.capability,
         status: "error",
         inputs: step.inputs ?? {},
-        error: `Capability "${step.capability}" not found in registry. Use ros2_list_capabilities to see what's available.`,
+        error:
+          options?.unavailableMessage?.(step.capability) ??
+          `Capability "${step.capability}" not found in registry. Use ros2_list_capabilities to see what's available.`,
         duration_ms: Date.now() - t0,
       };
       results.push(result);

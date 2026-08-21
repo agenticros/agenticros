@@ -10,6 +10,28 @@ export {
   getTransportConfig,
 } from "./config.js";
 
+export {
+  FEATURE_VOCABULARY,
+  FEATURE_VOCABULARY_SET,
+  BINDING_KEYS,
+  BINDING_KEYS_SET,
+  FEATURE_REQUIRED_BINDING,
+  PROFILE_SCHEMA_ID,
+  RobotProfileSchema,
+  isKnownFeature,
+  isKnownBindingKey,
+  unknownFeatures,
+  unknownBindingKeys,
+  featuresMissingBindings,
+  resolveRobotProfile,
+  featuresFromDeprecatedSensors,
+  featuresSatisfied,
+  missingFeatures,
+  resolveBinding,
+  inferProfileDraft,
+} from "./robot-profile.js";
+export type { FeatureName, BindingKey, RobotProfile, ProfileRobot, InferProfileOptions } from "./robot-profile.js";
+
 export { createTransport } from "./transport/factory.js";
 export type { RosTransport } from "./transport/transport.js";
 export type {
@@ -58,6 +80,8 @@ export {
   BUILTIN_CAPABILITIES,
   readSkillCapabilities,
   listAllCapabilities,
+  listCapabilitiesForRobot,
+  capabilityUnavailableMessage,
 } from "./capabilities.js";
 export type {
   Capability,

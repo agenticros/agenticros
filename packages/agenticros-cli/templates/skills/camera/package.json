@@ -25,7 +25,8 @@
       {
         "id": "{{toolName}}",
         "verb": "capture",
-        "description": "{{description}}"
+        "description": "{{description}}",
+        "requires": ["camera"]
       }
     ]
   },

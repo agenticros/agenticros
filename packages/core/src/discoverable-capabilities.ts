@@ -5,11 +5,13 @@
 
 import type { AgenticROSConfig } from "./config.js";
 import {
-  listAllCapabilities,
+  listCapabilitiesForRobot,
   type Capability,
   type CapabilityField,
   type CapabilitySource,
 } from "./capabilities.js";
+import { resolveRobot } from "./robots.js";
+import { featuresSatisfied } from "./robot-profile.js";
 import { skillsApiBase } from "./skill-refs.js";
 
 export interface DiscoverableCapability extends Capability {
@@ -35,6 +37,8 @@ export interface ListCapabilitiesOptions {
   marketplaceLimit?: number;
   /** Soft-fail: on network error return installed-only. Default true. */
   softFail?: boolean;
+  /** Scope installed + discoverable verbs to this robot's profile. */
+  robotId?: string;
 }
 
 interface MarketplaceSkillDoc {
@@ -77,6 +81,12 @@ function fieldMap(
   return Object.keys(out).length ? out : undefined;
 }
 
+function stringList(raw: unknown): string[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out = raw.filter((x): x is string => typeof x === "string" && x.length > 0);
+  return out.length ? out : undefined;
+}
+
 function normalizeMarketplaceCap(
   raw: Record<string, unknown>,
   installRef: string,
@@ -100,6 +110,8 @@ function normalizeMarketplaceCap(
     outputs: fieldMap(raw.outputs),
     interruptible: raw.interruptible === true ? true : raw.interruptible === false ? false : undefined,
     blocks_base: raw.blocks_base === true ? true : undefined,
+    requires: stringList(raw.requires),
+    optional: stringList(raw.optional),
     source,
     discoverable: true,
     installed: false,
@@ -131,7 +143,7 @@ export async function listCapabilitiesWithDiscoverable(
   config: AgenticROSConfig,
   opts: ListCapabilitiesOptions = {},
 ): Promise<ListedCapability[]> {
-  const installed = listAllCapabilities(config).map((c) => {
+  const installed = listCapabilitiesForRobot(config, opts.robotId).map((c) => {
     const listed: ListedCapability = {
       ...c,
       installed: true,
@@ -142,6 +154,8 @@ export async function listCapabilitiesWithDiscoverable(
   if (opts.includeDiscoverable === false) {
     return installed;
   }
+
+  const robotProfile = resolveRobot(config, opts.robotId).profile;
 
   const installedIds = new Set(installed.map((c) => c.id));
   try {
@@ -166,6 +180,7 @@ export async function listCapabilitiesWithDiscoverable(
           s.slug ?? ref,
         );
         if (!norm) continue;
+        if (!featuresSatisfied(robotProfile, norm.requires)) continue;
         seenDiscoverable.add(id);
         extra.push(norm);
       }

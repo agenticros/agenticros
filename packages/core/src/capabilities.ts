@@ -22,6 +22,8 @@ import { createRequire } from "node:module";
 import { readFileSync, existsSync } from "node:fs";
 import { join, resolve as resolvePath } from "node:path";
 import type { AgenticROSConfig } from "./config.js";
+import { resolveRobot, type ResolvedRobot } from "./robots.js";
+import { featuresSatisfied, missingFeatures } from "./robot-profile.js";
 
 /** Where a capability came from. */
 export type CapabilitySource =
@@ -73,6 +75,17 @@ export interface Capability {
   interruptible?: boolean;
   /** Owns the robot base (cmd_vel); other base-owning skills should yield. */
   blocks_base?: boolean;
+  /**
+   * Hardware features this verb needs (ALL-OF). Empty / omitted → no
+   * hardware gate. Names come from the frozen profile vocabulary
+   * (`base`, `camera`, `depth`, …).
+   */
+  requires?: string[];
+  /**
+   * Features this verb can use but does not require. Unused for gating;
+   * surfaced in docs and the marketplace.
+   */
+  optional?: string[];
   /** How the capability is implemented. Defaults to `in_process` when unset. */
   implementation?: CapabilityImplementation;
   /** Set by the registry, not the skill author. */
@@ -98,6 +111,7 @@ export const BUILTIN_CAPABILITIES: readonly Capability[] = [
     },
     interruptible: true,
     blocks_base: true,
+    requires: ["base"],
     source: { kind: "builtin" },
   },
   {
@@ -114,6 +128,7 @@ export const BUILTIN_CAPABILITIES: readonly Capability[] = [
       height: { type: "number", description: "Image height in pixels." },
     },
     interruptible: true,
+    requires: ["camera"],
     source: { kind: "builtin" },
   },
   {
@@ -130,6 +145,7 @@ export const BUILTIN_CAPABILITIES: readonly Capability[] = [
       median_m: { type: "number", description: "Median distance across sampled pixels." },
     },
     interruptible: true,
+    requires: ["depth"],
     source: { kind: "builtin" },
   },
   {
@@ -188,6 +204,12 @@ function normalizeCapability(
     ...(raw.preconditions ? { preconditions: raw.preconditions } : {}),
     ...(typeof raw.interruptible === "boolean" ? { interruptible: raw.interruptible } : {}),
     ...(typeof raw.blocks_base === "boolean" ? { blocks_base: raw.blocks_base } : {}),
+    ...(Array.isArray(raw.requires) && raw.requires.every((x) => typeof x === "string")
+      ? { requires: raw.requires }
+      : {}),
+    ...(Array.isArray(raw.optional) && raw.optional.every((x) => typeof x === "string")
+      ? { optional: raw.optional }
+      : {}),
     ...(raw.implementation ? { implementation: raw.implementation } : { implementation: { kind: "in_process" } }),
     source,
   };
@@ -347,3 +369,64 @@ export function readSkillCapabilities(config: AgenticROSConfig): Capability[] {
 export function listAllCapabilities(config: AgenticROSConfig): Capability[] {
   return [...BUILTIN_CAPABILITIES, ...readSkillCapabilities(config)];
 }
+
+function filterCapabilitiesForRobot(
+  caps: Capability[],
+  robot: ResolvedRobot,
+): Capability[] {
+  let out = caps;
+  if (robot.capabilities) {
+    const allow = new Set(robot.capabilities);
+    out = out.filter((c) => allow.has(c.id));
+  }
+  if (robot.profile) {
+    out = out.filter((c) => featuresSatisfied(robot.profile, c.requires));
+  }
+  return out;
+}
+
+/**
+ * Capabilities advertised for one robot: gateway registry, then optional
+ * per-robot verb allowlist, then hardware-profile `requires` filter.
+ * `robotId` omitted → active robot. No profile → no hardware filter.
+ */
+export function listCapabilitiesForRobot(
+  config: AgenticROSConfig,
+  robotId?: string,
+): Capability[] {
+  const robot = resolveRobot(config, robotId);
+  return filterCapabilitiesForRobot(listAllCapabilities(config), robot);
+}
+
+/**
+ * Why a verb is not advertised on this robot, or undefined when it is
+ * simply unknown. Used by the mission runner for a clearer error than
+ * "not found in registry".
+ */
+export function capabilityUnavailableMessage(
+  config: AgenticROSConfig,
+  robotId: string | undefined,
+  capId: string,
+): string | undefined {
+  const all = listAllCapabilities(config);
+  const cap = all.find((c) => c.id === capId);
+  if (!cap) return undefined;
+  const robot = resolveRobot(config, robotId);
+  if (robot.capabilities && !robot.capabilities.includes(capId)) {
+    return (
+      `Capability "${capId}" is not on robot "${robot.id}"'s allowlist. ` +
+      `Use ros2_list_capabilities with robot_id="${robot.id}".`
+    );
+  }
+  if (robot.profile) {
+    const missing = missingFeatures(robot.profile, cap.requires);
+    if (missing.length > 0) {
+      return (
+        `Capability "${capId}" is not available on robot "${robot.id}" ` +
+        `(missing features: ${missing.join(", ")}).`
+      );
+    }
+  }
+  return undefined;
+}
+

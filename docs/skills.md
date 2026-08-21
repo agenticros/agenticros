@@ -175,11 +175,18 @@ The `agenticros.capabilities[]` array tells the **planner** what verbs the skill
   "inputs": { "target": "string" },
   "outputs": { "ok": "boolean" },
   "interruptible": true,           // can be stopped mid-execution
-  "blocks_base": true              // takes exclusive control of cmd_vel
+  "blocks_base": true,             // takes exclusive control of cmd_vel
+  "requires": ["base", "camera"],  // ALL-OF hardware features (see robot-profile.md)
+  "optional": ["depth"]            // unused for gating; docs + marketplace
 }
 ```
 
-`@agenticros/core`'s `listAllCapabilities(config)` merges the 6 built-in robot verbs (`drive_base`, `take_snapshot`, …) with every skill's declared capabilities, tagging each with its source.
+`requires` is optional. When omitted, the verb is advertised on every
+robot (including bodies with no profile). When a robot **has** a
+profile, the verb is advertised only if every required feature is in
+`profile.features`. See [robot-profile.md](robot-profile.md).
+
+`@agenticros/core`'s `listAllCapabilities(config)` merges the 6 built-in robot verbs (`drive_base`, `take_snapshot`, …) with every skill's declared capabilities, tagging each with its source. `listCapabilitiesForRobot(config, robotId)` then intersects that list with the robot's allowlist and hardware profile.
 
 ### Chaining your skill in missions
 

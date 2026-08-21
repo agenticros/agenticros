@@ -1,7 +1,12 @@
 import type { OpenClawPluginApi } from "../plugin-api.js";
 import type { AgenticROSConfig, MemoryRecord } from "@agenticros/core";
 import type { TopicInfo, ServiceInfo, ActionInfo } from "@agenticros/core";
-import { resolveMemoryNamespace } from "@agenticros/core";
+import {
+  resolveMemoryNamespace,
+  resolveRobot,
+  resolveBinding,
+  listCapabilitiesForRobot,
+} from "@agenticros/core";
 import { getTransport } from "../service.js";
 import { getLoadedSkillIds } from "../skill-loader.js";
 import { getMemory } from "../memory.js";
@@ -46,8 +51,17 @@ export function registerRobotContext(api: OpenClawPluginApi, config: AgenticROSC
 
   api.on("before_agent_start", async (_event, _ctx) => {
     const capabilities = await discoverCapabilities(api, robotNamespace);
-    const cameraTopicHint =
-      (config.robot?.cameraTopic ?? "").trim() || "/camera/camera/color/image_raw/compressed";
+    let cameraTopicHint = "/camera/camera/color/image_raw/compressed";
+    try {
+      const robot = resolveRobot(config);
+      cameraTopicHint =
+        resolveBinding(robot, "camera.rgb") ||
+        (config.robot?.cameraTopic ?? "").trim() ||
+        cameraTopicHint;
+    } catch {
+      const fallback = (config.robot?.cameraTopic ?? "").trim();
+      if (fallback) cameraTopicHint = fallback;
+    }
     const memorySection = await buildMemorySection(config);
     const context =
       buildRobotContext(config, robotName, robotNamespace, capabilities, cameraTopicHint) +
@@ -228,6 +242,35 @@ function imageTransportHint(config: AgenticROSConfig): string {
   return "AgenticROS supports `sensor_msgs/msg/Image` and `sensor_msgs/msg/CompressedImage` over **local DDS**, **Zenoh**, and **rosbridge**.";
 }
 
+function buildProfileSection(config: AgenticROSConfig): string {
+  let robot;
+  try {
+    robot = resolveRobot(config);
+  } catch {
+    return "";
+  }
+  const verbs = listCapabilitiesForRobot(config, robot.id).map((c) => c.id);
+  const lines: string[] = [
+    "### Robot body",
+    `- **kind:** ${robot.kind || "amr"}`,
+  ];
+  if (robot.profile) {
+    lines.push(
+      `- **features:** ${robot.profile.features.length ? robot.profile.features.join(", ") : "(none)"}`,
+    );
+    const bindings = Object.entries(robot.profile.bindings);
+    if (bindings.length > 0) {
+      lines.push(`- **bindings:** ${bindings.map(([k, v]) => `\`${k}\` → \`${v}\``).join(", ")}`);
+    }
+  } else {
+    lines.push(
+      "- **profile:** unset — advertised verbs are the gateway-wide skill list (no hardware gate)",
+    );
+  }
+  lines.push(`- **advertised verbs:** ${verbs.join(", ") || "(none)"}`);
+  return `${lines.join("\n")}\n\n`;
+}
+
 function buildDynamicContext(
   config: AgenticROSConfig,
   name: string,
@@ -238,6 +281,7 @@ function buildDynamicContext(
 ): string {
   let context = `## Robot: ${name}\n\n`;
   context += `You are connected to a ROS2 robot named "${name}". You can control it using the ros2_* tools.\n\n`;
+  context += buildProfileSection(config);
   context += `**Topics below** come from a **short live sample** when the session started. They are not guaranteed complete or up to date. If the user needs certainty—or says a topic is missing—call \`ros2_list_topics\` and answer from that result only.\n\n`;
   if (namespace) {
     context += `**Velocity commands:** Use \`ros2_publish\` with topic \`/cmd_vel\`; the plugin sends them to \`/${namespace}/cmd_vel\`.\n\n`;
@@ -344,7 +388,7 @@ function buildFallbackContext(
 
 You are connected to a ROS2 robot named "${name}". You can control it using the ros2_* tools.
 
-${buildUserInterfaceBlurb(config)}
+${buildProfileSection(config)}${buildUserInterfaceBlurb(config)}
 
 ### Topic discovery (read carefully)
 **No live topic list was available when this session started** (transport still connecting, Zenoh sampling saw no keys yet, or discovery failed). There is **no** "### Available Topics" section below because nothing was observed on the bus.

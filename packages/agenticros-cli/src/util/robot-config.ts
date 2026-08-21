@@ -31,6 +31,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 import { getCliPaths } from "./paths.js";
+import type { RobotProfile } from "./robot-profile.js";
+import { parseProfileObject } from "./robot-profile.js";
 
 /** Sensor/hardware tags on a robot — mirrors @agenticros/core's RobotSensors. */
 export interface RobotSensors {
@@ -63,6 +65,11 @@ export interface RobotEntry {
    * doesn't import the registry to validate against.
    */
   capabilities?: string[];
+  /**
+   * Hardware profile (features + ROS bindings). Optional. When unset,
+   * advertised verbs stay gateway-wide.
+   */
+  profile?: RobotProfile;
   /**
    * Optional per-robot transport override. Opaque JSON — the core's
    * `RobotTransportOverrideSchema` is the schema-of-truth and will Zod-
@@ -143,6 +150,7 @@ export function readRobots(
         capabilities: Array.isArray(r["capabilities"])
           ? (r["capabilities"] as unknown[]).filter((c): c is string => typeof c === "string")
           : undefined,
+        profile: parseProfileObject(r["profile"]),
         transport:
           r["transport"] && typeof r["transport"] === "object" && !Array.isArray(r["transport"])
             ? (r["transport"] as Record<string, unknown>)
@@ -253,6 +261,7 @@ export function addRobot(
   if (entry.kind !== undefined) next["kind"] = entry.kind;
   if (entry.sensors !== undefined) next["sensors"] = entry.sensors;
   if (entry.capabilities !== undefined) next["capabilities"] = entry.capabilities;
+  if (entry.profile !== undefined) next["profile"] = entry.profile;
 
   let added: boolean;
   if (existingIdx >= 0) {
@@ -281,6 +290,14 @@ export function addRobot(
     }
     if (entry.capabilities === undefined && Array.isArray(prev["capabilities"])) {
       next["capabilities"] = prev["capabilities"];
+    }
+    if (
+      entry.profile === undefined &&
+      prev["profile"] &&
+      typeof prev["profile"] === "object" &&
+      !Array.isArray(prev["profile"])
+    ) {
+      next["profile"] = prev["profile"];
     }
     explicit[existingIdx] = next;
     added = false;
@@ -489,3 +506,47 @@ export function clearTransportForRobot(
   obj["robots"] = explicit;
   return { cleared: hadOverride, robots: explicit as RobotEntry[], promotedLegacy };
 }
+
+/**
+ * Write (or replace) a hardware profile on an existing robot.
+ * Auto-promotes legacy `config.robot` into `robots[]` when needed.
+ */
+export function setProfileForRobot(
+  id: string,
+  profile: RobotProfile,
+  obj: Record<string, unknown> = readConfigObject(),
+): { robots: RobotEntry[]; promotedLegacy: boolean } {
+  const explicit = Array.isArray(obj["robots"]) ? [...(obj["robots"] as unknown[])] : [];
+  let promotedLegacy = false;
+
+  if (explicit.length === 0) {
+    const legacy = legacyToEntry(obj["robot"]);
+    if (legacy) {
+      explicit.push({ ...legacy, default: true });
+      promotedLegacy = true;
+    }
+  }
+
+  const idx = explicit.findIndex(
+    (r) =>
+      r != null &&
+      typeof r === "object" &&
+      !Array.isArray(r) &&
+      String((r as Record<string, unknown>)["id"] ?? "") === id,
+  );
+
+  if (idx < 0) {
+    const known = explicit
+      .map((r) => String((r as Record<string, unknown>)["id"] ?? ""))
+      .filter((s) => s.length > 0)
+      .join(", ");
+    throw new Error(
+      `Unknown robot id "${id}". Known: ${known || "(none — add it first with `agenticros robots add`)"}.`,
+    );
+  }
+
+  explicit[idx] = { ...(explicit[idx] as Record<string, unknown>), profile };
+  obj["robots"] = explicit;
+  return { robots: explicit as RobotEntry[], promotedLegacy };
+}
+

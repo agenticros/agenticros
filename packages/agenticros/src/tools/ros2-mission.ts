@@ -26,7 +26,8 @@ import type {
   MissionToolDispatcher,
 } from "@agenticros/core";
 import {
-  listAllCapabilities,
+  listCapabilitiesForRobot,
+  capabilityUnavailableMessage,
   runMission,
   generateMissionId,
   createMemoryTranscriptSink,
@@ -110,7 +111,16 @@ export function registerMissionTool(
     }),
 
     async execute(toolCallId, params, signal) {
-      const caps = listAllCapabilities(config);
+      const missionRaw = params["mission"];
+      const goalRaw = params["goal"];
+      const topLevelRobotId = typeof params["robot_id"] === "string" ? (params["robot_id"] as string) : undefined;
+      const missionRobotId =
+        missionRaw && typeof missionRaw === "object" && !Array.isArray(missionRaw)
+          ? typeof (missionRaw as Mission).robot_id === "string"
+            ? (missionRaw as Mission).robot_id
+            : undefined
+          : undefined;
+      const caps = listCapabilitiesForRobot(config, missionRobotId ?? topLevelRobotId);
       const missionBindings = buildMissionBindings(caps, {
         toolNameResolver: (cap) => {
           const preferred = `ros2_${cap.id}`;
@@ -118,9 +128,6 @@ export function registerMissionTool(
           return undefined;
         },
       });
-      const missionRaw = params["mission"];
-      const goalRaw = params["goal"];
-      const topLevelRobotId = typeof params["robot_id"] === "string" ? (params["robot_id"] as string) : undefined;
 
       // Phase 1.g — accept either an explicit mission OR a
       // natural-language goal. The planner is deterministic + rule-based,
@@ -228,6 +235,8 @@ export function registerMissionTool(
           cancellation: regEntry.cancellation,
           transcript,
           adapter: "openclaw",
+          unavailableMessage: (id) =>
+            capabilityUnavailableMessage(config, mission.robot_id ?? topLevelRobotId, id),
         });
       } finally {
         disposeRegistry();

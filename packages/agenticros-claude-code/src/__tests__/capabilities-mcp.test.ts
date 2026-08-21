@@ -115,6 +115,8 @@ interface StartMcpOptions {
    * shape — the mission step's transport error is incidental.
    */
   failFastTransport?: boolean;
+  /** Optional robots[] to plant in the hermetic config (profile / fleet tests). */
+  robots?: unknown[];
 }
 
 /**
@@ -173,6 +175,7 @@ async function startMcp(options: StartMcpOptions = {}): Promise<McpHarness> {
         // so we never need a live transport for ros2_list_capabilities.
         robot: { name: "Test Robot", namespace: "" },
         skillPaths: [skillDir],
+        ...(options.robots ? { robots: options.robots } : {}),
         ...(options.failFastTransport
           ? {
               transport: { mode: "rosbridge" },
@@ -279,6 +282,7 @@ test("mcp: tools/call ros2_list_capabilities returns the expected shape", async 
       total: number;
       intrinsic_count: number;
       skill_count: number;
+      discoverable_count?: number;
       capabilities: Array<{
         id: string;
         verb: string;
@@ -288,7 +292,10 @@ test("mcp: tools/call ros2_list_capabilities returns the expected shape", async 
     assert.equal(payload.success, true);
     assert.equal(payload.intrinsic_count, 6, "should report exactly 6 intrinsic verbs");
     assert.ok(payload.skill_count >= 1, "fixture skill should contribute at least one capability");
-    assert.equal(payload.total, payload.intrinsic_count + payload.skill_count);
+    assert.equal(
+      payload.total,
+      payload.intrinsic_count + payload.skill_count + (payload.discoverable_count ?? 0),
+    );
 
     // All 6 intrinsic verbs present.
     const intrinsicIds = payload.capabilities
@@ -607,6 +614,58 @@ test("mcp: ros2_list_capabilities with valid robot_id returns the same response 
     const payload = JSON.parse(result.content[0].text) as { success: boolean; total: number };
     assert.equal(payload.success, true);
     assert.ok(payload.total >= 6);
+  } finally {
+    await harness.cleanup();
+  }
+});
+
+test("mcp: ros2_list_capabilities robot_id filters verbs by hardware profile", async () => {
+  const harness = await startMcp({
+    robots: [
+      {
+        id: "amr",
+        default: true,
+        kind: "amr",
+        profile: {
+          schema: "agenticros.profile.v1",
+          features: ["base", "camera"],
+          bindings: { cmd_vel: "/cmd_vel", "camera.rgb": "/cam" },
+        },
+      },
+      {
+        id: "arm",
+        kind: "arm",
+        profile: {
+          schema: "agenticros.profile.v1",
+          features: ["arm"],
+          bindings: {},
+        },
+      },
+    ],
+  });
+  try {
+    await initialize(harness.client);
+    const amr = (await harness.client.rpc("tools/call", {
+      name: "ros2_list_capabilities",
+      arguments: { robot_id: "amr" },
+    })) as { content: Array<{ text: string }>; isError?: boolean };
+    const arm = (await harness.client.rpc("tools/call", {
+      name: "ros2_list_capabilities",
+      arguments: { robot_id: "arm" },
+    })) as { content: Array<{ text: string }>; isError?: boolean };
+    assert.notEqual(amr.isError, true);
+    assert.notEqual(arm.isError, true);
+    const amrIds = (
+      JSON.parse(amr.content[0].text) as { capabilities: Array<{ id: string }> }
+    ).capabilities.map((c) => c.id);
+    const armIds = (
+      JSON.parse(arm.content[0].text) as { capabilities: Array<{ id: string }> }
+    ).capabilities.map((c) => c.id);
+    assert.ok(amrIds.includes("drive_base"), "AMR with base should advertise drive_base");
+    assert.ok(amrIds.includes("take_snapshot"), "AMR with camera should advertise take_snapshot");
+    assert.ok(!armIds.includes("drive_base"), "arm cell without base must not advertise drive_base");
+    assert.ok(!armIds.includes("take_snapshot"), "arm cell without camera must not advertise take_snapshot");
+    assert.ok(armIds.includes("list_topics"), "escape-hatch verbs stay on every body");
   } finally {
     await harness.cleanup();
   }

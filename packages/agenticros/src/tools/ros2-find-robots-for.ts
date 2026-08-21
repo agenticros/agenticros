@@ -37,8 +37,8 @@ export function registerFindRobotsForTool(
       "ranked best-first. PREFER this over ros2_list_robots whenever the user names a verb " +
       "('which robot can find a chair', 'do I have an arm robot that can grasp', 'is there an " +
       "AMR online that can follow a person'). Capability matches the verbs from " +
-      "ros2_list_capabilities — by default robots inherit the gateway-wide registry; declaring " +
-      "per-robot capabilities in config narrows it. Kind matches robot.kind exactly ('amr' | " +
+      "ros2_list_capabilities — robots with a hardware profile only match verbs their features satisfy; " +
+      "declaring per-robot capabilities in config also narrows it. Kind matches robot.kind exactly ('amr' | " +
       "'arm' | 'drone' | 'rover'). When online=true, only currently-reachable robots are " +
       "returned (uses the same `<ns>/cmd_vel` heuristic as ros2_discover_robots and requires " +
       "the transport). The result lists matched robots with id/name/namespace/kind/sensors/" +
@@ -106,6 +106,8 @@ export function registerFindRobotsForTool(
             kind: m.robot.kind,
             sensors: m.robot.sensors,
             capabilities: m.robot.capabilities ?? null,
+            profile: m.robot.profile ?? null,
+            features: m.robot.profile?.features ?? [],
             cameraTopic: m.robot.cameraTopic,
             online: m.online,
             matched_capability_explicitly: m.matched_capability_explicitly,

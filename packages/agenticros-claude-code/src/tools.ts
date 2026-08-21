@@ -13,14 +13,16 @@ import {
   resolveCameraSubscribeTopic,
   toNamespacedTopic,
   toNamespacedTopicFull,
-  listAllCapabilities,
+  listCapabilitiesForRobot,
   listCapabilitiesWithDiscoverable,
+  capabilityUnavailableMessage,
   runMission,
   listRobots,
   getActiveRobotId,
   resolveRobotFromArgs,
   discoverRobots,
   findRobotsFor,
+  resolveBinding,
   type FindRobotsForResult,
   generateMissionId,
   createMemoryTranscriptSink,
@@ -117,7 +119,7 @@ export const TOOLS: McpTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        robot_id: { type: "string", description: "Optional robot id (from ros2_list_robots) to scope this call. When omitted, the active robot is used. Today every robot exposes the same capabilities, but this parameter is accepted so per-robot capability declarations can extend the registry without a schema change." },
+        robot_id: { type: "string", description: "Optional robot id (from ros2_list_robots) to scope this call. When omitted, the active robot is used. A robot with a hardware profile only advertises verbs its features satisfy." },
       },
     },
   },
@@ -608,6 +610,8 @@ function formatFindRobotsForResponse(result: FindRobotsForResult): string {
       kind: m.robot.kind,
       sensors: m.robot.sensors,
       capabilities: m.robot.capabilities ?? null,
+      profile: m.robot.profile ?? null,
+      features: m.robot.profile?.features ?? [],
       cameraTopic: m.robot.cameraTopic,
       online: m.online,
       matched_capability_explicitly: m.matched_capability_explicitly,
@@ -731,10 +735,17 @@ async function handleRunMission(
   args: Record<string, unknown>,
   config: AgenticROSConfig,
 ): Promise<{ content: ToolContent[]; isError?: boolean }> {
-  const caps = listAllCapabilities(config);
   const missionArg = args["mission"];
   const goalArg = args["goal"];
   const topLevelRobotId = typeof args["robot_id"] === "string" ? (args["robot_id"] as string) : undefined;
+  const missionRobotId =
+    missionArg && typeof missionArg === "object" && !Array.isArray(missionArg)
+      ? typeof (missionArg as Mission).robot_id === "string"
+        ? (missionArg as Mission).robot_id
+        : undefined
+      : undefined;
+  const scopedRobotId = missionRobotId ?? topLevelRobotId;
+  const caps = listCapabilitiesForRobot(config, scopedRobotId);
 
   // Phase 1.g — when no explicit mission is provided, compile from
   // the natural-language goal. We surface the planner's candidates
@@ -844,6 +855,8 @@ async function handleRunMission(
       cancellation: regEntry.cancellation,
       transcript,
       adapter: "claude-code",
+      unavailableMessage: (id) =>
+        capabilityUnavailableMessage(config, mission.robot_id ?? topLevelRobotId, id),
     });
   } finally {
     disposeRegistry();
@@ -896,7 +909,8 @@ export async function handleToolCall(
     } catch (err) {
       return robotResolveError(err);
     }
-    const caps = await listCapabilitiesWithDiscoverable(config);
+    const robot = resolveRobotFromArgs(config, args);
+    const caps = await listCapabilitiesWithDiscoverable(config, { robotId: robot.id });
     return { content: [{ type: "text", text: formatCapabilitiesResponse(caps) }] };
   }
   // ros2_list_robots reads the multi-robot section of the config (with
@@ -1201,7 +1215,7 @@ export async function handleToolCall(
 
     case "ros2_camera_snapshot": {
       const defaultTopic =
-        (robot.cameraTopic ?? "").trim() || "/camera/camera/color/image_raw/compressed";
+        resolveBinding(robot, "camera.rgb") || "/camera/camera/color/image_raw/compressed";
       const rawTopic = (args["topic"] as string | undefined) ?? defaultTopic;
       const topic = resolveCameraSubscribeTopic(robot.namespace, rawTopic);
       const rawMsgType = args["message_type"] as string | undefined;

@@ -13,14 +13,16 @@ import {
   resolveMemoryNamespace,
   toNamespacedTopic,
   toNamespacedTopicFull,
-  listAllCapabilities,
+  listCapabilitiesForRobot,
   listCapabilitiesWithDiscoverable,
+  capabilityUnavailableMessage,
   runMission,
   listRobots,
   getActiveRobotId,
   resolveRobotFromArgs,
   discoverRobots,
   findRobotsFor,
+  resolveBinding,
   type ResolvedRobot,
   generateMissionId,
   createMemoryTranscriptSink,
@@ -502,7 +504,7 @@ export async function executeTool(
   if (name === "ros2_list_capabilities") {
     const resolved = resolveRobotForTool(config, args);
     if ("error" in resolved) return resolved.error;
-    const caps = await listCapabilitiesWithDiscoverable(config);
+    const caps = await listCapabilitiesWithDiscoverable(config, { robotId: resolved.robot.id });
     const intrinsic = caps.filter((c) => c.source?.kind === "builtin").length;
     const skill = caps.filter((c) => c.installed !== false && c.source?.kind === "skill").length;
     const discoverable = caps.filter((c) => c.discoverable === true).length;
@@ -573,6 +575,8 @@ export async function executeTool(
             kind: m.robot.kind,
             sensors: m.robot.sensors,
             capabilities: m.robot.capabilities ?? null,
+            profile: m.robot.profile ?? null,
+            features: m.robot.profile?.features ?? [],
             cameraTopic: m.robot.cameraTopic,
             online: m.online,
             matched_capability_explicitly: m.matched_capability_explicitly,
@@ -659,10 +663,16 @@ export async function executeTool(
   // handle its own transport gating instead of requiring a connection up
   // front. Validate the input shape here; defer execution to runMission().
   if (name === "run_mission") {
-    const caps = listAllCapabilities(config);
     const missionArg = args["mission"];
     const goalArg = args["goal"];
     const topLevelRobotId = typeof args["robot_id"] === "string" ? (args["robot_id"] as string) : undefined;
+    const missionRobotId =
+      missionArg && typeof missionArg === "object" && !Array.isArray(missionArg)
+        ? typeof (missionArg as Mission).robot_id === "string"
+          ? (missionArg as Mission).robot_id
+          : undefined
+        : undefined;
+    const caps = listCapabilitiesForRobot(config, missionRobotId ?? topLevelRobotId);
 
     // Phase 1.g — accept either an explicit mission OR a natural-language
     // goal. We surface the planner's candidates + suggestions in the
@@ -747,6 +757,8 @@ export async function executeTool(
         cancellation: regEntry.cancellation,
         transcript,
         adapter: "gemini",
+        unavailableMessage: (id) =>
+          capabilityUnavailableMessage(config, mission.robot_id ?? topLevelRobotId, id),
       });
     } finally {
       disposeRegistry();
@@ -956,7 +968,7 @@ export async function executeTool(
 
     case "ros2_camera_snapshot": {
       const defaultTopic =
-        (robot.cameraTopic ?? "").trim() || "/camera/camera/color/image_raw/compressed";
+        resolveBinding(robot, "camera.rgb") || "/camera/camera/color/image_raw/compressed";
       const rawTopic = (args["topic"] as string | undefined) ?? defaultTopic;
       const topic = resolveCameraSubscribeTopic(robot.namespace, rawTopic);
       const rawMsgType = args["message_type"] as string | undefined;

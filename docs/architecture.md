@@ -292,6 +292,16 @@ yields `/robot-uuid/cmd_vel`.
 
 ---
 
+## Robot hardware profiles
+
+Each `robots[]` entry may declare a **profile**: frozen hardware features
+(`base`, `camera`, `depth`, …) plus ROS bindings (`cmd_vel`, `camera.rgb`).
+Advertised capability verbs are the intersection of installed skills and
+those features. Configs without a profile keep the gateway-wide skill list.
+See [robot-profile.md](robot-profile.md).
+
+---
+
 ## Transport Adapter Abstraction
 
 All plugin tools call `getTransport()` instead of directly using a specific

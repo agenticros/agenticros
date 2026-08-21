@@ -33,6 +33,8 @@ export const CapabilitySchema = z.object({
   preconditions: z.array(z.string()).optional(),
   interruptible: z.boolean().optional(),
   blocks_base: z.boolean().optional(),
+  requires: z.array(z.string().min(1)).optional(),
+  optional: z.array(z.string().min(1)).optional(),
   implementation: CapabilityImplementationSchema.optional(),
   tool: z.string().optional(),
 });

@@ -108,6 +108,37 @@ export function inspectSkillDir(dir: string): Omit<SkillRef, "registeredAs"> | u
 }
 
 /**
+ * Read `agenticros.capabilities[].requires` from a skill directory.
+ * Used to warn (never fail) when a robot profile cannot satisfy a skill.
+ */
+export function readSkillCapabilityRequires(
+  dir: string,
+): Array<{ id: string; requires: string[] }> {
+  const pkgPath = join(dir, "package.json");
+  if (!existsSync(pkgPath)) return [];
+  try {
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as {
+      agenticros?: { capabilities?: unknown };
+    };
+    const caps = pkg.agenticros?.capabilities;
+    if (!Array.isArray(caps)) return [];
+    const out: Array<{ id: string; requires: string[] }> = [];
+    for (const c of caps) {
+      if (!c || typeof c !== "object") continue;
+      const rec = c as { id?: unknown; requires?: unknown };
+      if (typeof rec.id !== "string" || rec.id.length === 0) continue;
+      const requires = Array.isArray(rec.requires)
+        ? rec.requires.filter((x): x is string => typeof x === "string" && x.length > 0)
+        : [];
+      if (requires.length > 0) out.push({ id: rec.id, requires });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Return a deduped list of "places we should look for skill clones" — the
  * directories whose children the CLI scans on `agenticros skills discover`.
  *

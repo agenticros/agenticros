@@ -15,7 +15,7 @@
 
 import { Type } from "@sinclair/typebox";
 import type { OpenClawPluginApi } from "../plugin-api.js";
-import type { AgenticROSConfig, Capability } from "@agenticros/core";
+import type { AgenticROSConfig } from "@agenticros/core";
 import { listCapabilitiesWithDiscoverable } from "@agenticros/core";
 import { ROBOT_ID_SCHEMA, resolveRobotForTool } from "./_robot-helpers.js";
 
@@ -32,14 +32,14 @@ export function registerCapabilitiesTool(
       "AgenticROS skills (e.g. follow_person, find_object). Also includes discoverable marketplace " +
       "capabilities (discoverable:true, install_ref) that are not installed yet so you can propose " +
       "`agenticros skills install <install_ref>`. PREFER this over ros2_list_topics for high-level " +
-      "planning. Pass robot_id to scope to a specific robot when using a multi-robot fleet.",
+      "planning. Pass robot_id to scope to a specific robot's hardware profile when using a multi-robot fleet.",
     parameters: Type.Object({ ...ROBOT_ID_SCHEMA }),
 
     async execute(_toolCallId, params) {
       const resolved = resolveRobotForTool(config, params);
       if ("error" in resolved) return resolved.error;
 
-      const caps = await listCapabilitiesWithDiscoverable(config);
+      const caps = await listCapabilitiesWithDiscoverable(config, { robotId: resolved.robot.id });
       const intrinsic = caps.filter((c) => c.source?.kind === "builtin").length;
       const skill = caps.filter((c) => c.installed !== false && c.source?.kind === "skill").length;
       const discoverable = caps.filter((c) => c.discoverable === true).length;

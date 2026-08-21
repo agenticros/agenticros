@@ -25,7 +25,14 @@ import {
   readAgenticrosContractTools,
   readOpenclawConfig,
 } from "../util/openclaw-config.js";
-import { listSkills } from "../util/skills.js";
+import { listSkills, readSkillCapabilityRequires } from "../util/skills.js";
+import { readConfigObject, readRobots } from "../util/robot-config.js";
+import {
+  featuresMissingBindings,
+  parseProfileObject,
+  unknownBindingKeys,
+  unknownFeatures,
+} from "../util/robot-profile.js";
 import { findMcpEntry } from "../util/mcp-discovery.js";
 import {
   buildMcpDoctorChecks,
@@ -648,6 +655,87 @@ export async function runDoctorChecks(): Promise<DoctorReport> {
       severity: "yellow",
       hint: "Expected packages/robot-eyes — re-run `agenticros init` or pull the latest monorepo.",
     });
+  }
+
+  // Robot hardware profiles — static, no live graph.
+  {
+    const obj = readConfigObject();
+    const { robots } = readRobots(obj);
+    const profiled = robots.filter((r) => r.profile);
+    if (robots.length > 0 && profiled.length === 0) {
+      checks.push({
+        id: "robot-profile",
+        label: "No robot hardware profile set — advertised verbs are gateway-wide",
+        severity: "yellow",
+        hint: "Run `agenticros robots profile infer --apply` so skills only advertise on bodies that have the hardware.",
+      });
+    }
+    for (const r of robots) {
+      const profile = r.profile ?? parseProfileObject(
+        (Array.isArray(obj["robots"]) ? (obj["robots"] as Record<string, unknown>[]) : []).find(
+          (e) => e && e["id"] === r.id,
+        )?.["profile"],
+      );
+      if (!profile) continue;
+      const unkF = unknownFeatures(profile.features);
+      const unkB = unknownBindingKeys(profile.bindings);
+      if (unkF.length > 0 || unkB.length > 0) {
+        checks.push({
+          id: `robot-profile-${r.id}-vocab`,
+          label: `Robot "${r.id}" profile has unknown ${[
+            unkF.length ? `feature(s) ${unkF.join(", ")}` : "",
+            unkB.length ? `binding key(s) ${unkB.join(", ")}` : "",
+          ]
+            .filter(Boolean)
+            .join(" / ")}`,
+          severity: "red",
+          hint: "See docs/robot-profile.md for the frozen feature and binding vocabulary.",
+        });
+      }
+      const missingBind = featuresMissingBindings(profile);
+      if (missingBind.length > 0) {
+        checks.push({
+          id: `robot-profile-${r.id}-bindings`,
+          label: `Robot "${r.id}" declares ${missingBind.join(", ")} but is missing the v1 binding`,
+          severity: "red",
+          hint: `Add --binding on \`agenticros robots add ${r.id}\` (e.g. camera.rgb=/your/camera/topic).`,
+        });
+      }
+    }
+    if (profiled.length > 0) {
+      try {
+        const skills = listSkills();
+        for (const skill of skills.registered) {
+          if (!skill.dir) continue;
+          const required = readSkillCapabilityRequires(skill.dir);
+          for (const cap of required) {
+            for (const r of profiled) {
+              const have = new Set(r.profile!.features);
+              const missing = cap.requires.filter((f) => !have.has(f));
+              if (missing.length === 0) continue;
+              checks.push({
+                id: `robot-profile-${r.id}-${cap.id}`,
+                label: `Skill ${cap.id} needs ${missing.join(", ")} — robot "${r.id}" profile does not have it`,
+                severity: "yellow",
+                hint: "The skill stays installed for other robots. Add the feature or omit this robot from that mission.",
+              });
+            }
+          }
+        }
+      } catch {
+        /* OpenClaw config missing — skip skill/profile pairing */
+      }
+      if (
+        profiled.length > 0 &&
+        !checks.some((c) => c.id.startsWith("robot-profile-") && c.severity === "red")
+      ) {
+        checks.push({
+          id: "robot-profile",
+          label: `Robot profile(s) set (${profiled.map((r) => r.id).join(", ")})`,
+          severity: "green",
+        });
+      }
+    }
   }
 
   // AgenticROS Cloud credentials (warn-only — local-only users may skip).

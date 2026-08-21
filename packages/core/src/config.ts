@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { TransportConfig } from "./transport/types.js";
+import { RobotProfileSchema } from "./robot-profile.js";
 
 const IceServerSchema = z.object({
   urls: z.union([z.string(), z.array(z.string())]),
@@ -226,6 +227,13 @@ export const AgenticROSConfigSchema = z.object({
          * one robot has the arm skill loaded and another doesn't.
          */
         capabilities: z.array(z.string()).optional(),
+        /**
+         * Hardware profile: features this body has + ROS bindings.
+         * Optional. When unset, verb filtering is skipped (gateway-wide
+         * registry — today's behaviour). When set, advertised verbs are
+         * the intersection of installed skills and `profile.features`.
+         */
+        profile: RobotProfileSchema.optional(),
         /**
          * Phase 1.d-resolve per-robot transport override.
          *

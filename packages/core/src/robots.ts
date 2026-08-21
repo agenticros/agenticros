@@ -26,6 +26,7 @@ import type { AgenticROSConfig } from "./config.js";
 import { getTransportConfig } from "./config.js";
 import type { TransportConfig } from "./transport/types.js";
 import { applyFleetOverride } from "./fleet-config.js";
+import type { RobotProfile } from "./robot-profile.js";
 
 /** Sensor/hardware tags on a robot (Phase 1.e). */
 export interface RobotSensors {
@@ -63,6 +64,11 @@ export interface ResolvedRobot {
    */
   capabilities?: string[];
   /**
+   * Hardware profile. Undefined when the config entry has no `profile`
+   * — callers must not invent one; verb filtering is skipped.
+   */
+  profile?: RobotProfile;
+  /**
    * Source tag — handy for diagnostics ("Why is this robot in the list?").
    *   - "config":  from config.robots[]
    *   - "legacy":  synthesised from the legacy single config.robot object
@@ -99,6 +105,7 @@ export function listRobots(config: AgenticROSConfig): ResolvedRobot[] {
       kind: r.kind ?? "amr",
       sensors: { ...DEFAULT_SENSORS, ...(r.sensors ?? {}) },
       capabilities: r.capabilities,
+      profile: r.profile,
       source: "config" as const,
     }));
   }

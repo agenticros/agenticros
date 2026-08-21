@@ -41,7 +41,7 @@
  */
 
 import type { AgenticROSConfig } from "./config.js";
-import { listAllCapabilities, type Capability } from "./capabilities.js";
+import { listCapabilitiesForRobot } from "./capabilities.js";
 import { listRobots, type ResolvedRobot } from "./robots.js";
 
 /** Query input to `findRobotsFor`. All fields optional → returns every robot. */
@@ -99,12 +99,6 @@ export function findRobotsFor(
     );
   }
 
-  // Resolve the global capability registry once — used as the fallback
-  // when a robot doesn't declare its own per-robot allowlist.
-  const globalCapIds: ReadonlySet<string> = new Set(
-    listAllCapabilities(config).map((c: Capability) => c.id),
-  );
-
   const wantedKind = query.kind?.trim().toLowerCase();
   const wantedCap = query.capability?.trim();
 
@@ -115,18 +109,13 @@ export function findRobotsFor(
     // kind filter
     if (wantedKind && robot.kind.toLowerCase() !== wantedKind) continue;
 
-    // capability filter
+    // capability filter — advertised verbs for THIS robot (allowlist +
+    // profile.requires), not the gateway-wide union.
     let matchedExplicitly = false;
     if (wantedCap) {
-      const allowlist = robot.capabilities;
-      if (allowlist) {
-        if (!allowlist.includes(wantedCap)) continue;
-        matchedExplicitly = true;
-      } else {
-        // No per-robot allowlist → fall back to the gateway-wide
-        // registry. This is the common case today.
-        if (!globalCapIds.has(wantedCap)) continue;
-      }
+      const advertised = listCapabilitiesForRobot(config, robot.id);
+      if (!advertised.some((c) => c.id === wantedCap)) continue;
+      matchedExplicitly = Boolean(robot.capabilities?.includes(wantedCap));
     }
 
     // online filter

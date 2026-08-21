@@ -634,9 +634,9 @@ hermesCmd
   });
 
 program
-  .command("robots [action] [arg]")
+  .command("robots [action] [arg] [extra]")
   .description(
-    "Manage the multi-robot fleet (~/.agenticros/config.json). action = list | discover | add [id] | remove <id> | set-default <id> | set-transport <id> [shorthand] | clear-transport <id>.",
+    "Manage the multi-robot fleet (~/.agenticros/config.json). action = list | discover | add [id] | remove <id> | set-default <id> | set-transport <id> [shorthand] | clear-transport <id> | profile show [id] | profile infer [id].",
   )
   .option("--name <name>", "Display name for the robot (used by add)")
   .option("--namespace <ns>", "ROS2 namespace for the robot (used by add)")
@@ -655,6 +655,17 @@ program
     "Comma-separated capability allowlist (e.g. drive_base,follow_person). Overrides the gateway-wide registry for ros2_find_robots_for on this robot. Pass an empty value (--capabilities='') to clear.",
   )
   .option(
+    "--features <list>",
+    "Comma-separated hardware features for robots[i].profile (e.g. base,camera,depth). Used by add.",
+  )
+  .option(
+    "--binding <pair>",
+    "Repeatable profile binding key=/topic (e.g. --binding camera.rgb=/cam/compressed). Used by add.",
+    (val: string, acc: string[]) => [...acc, val],
+    [] as string[],
+  )
+  .option("--apply", "Write the inferred profile (used by `robots profile infer`)", false)
+  .option(
     "--transport <shorthand>",
     "Per-robot transport override. Examples: zenoh, zenoh:ws://farm:10000, rosbridge:ws://10.0.0.5:9090, local:1, webrtc:wss://sig.example/signal",
   )
@@ -662,10 +673,11 @@ program
     "--transport-json <json>",
     'Full per-robot transport override as JSON (for fields the shorthand doesn\'t cover). Example: \'{"mode":"webrtc","webrtc":{"signalingUrl":"wss://sig.example/signal"}}\'',
   )
-  .action(async (action: string | undefined, arg: string | undefined, opts) => {
+  .action(async (action: string | undefined, arg: string | undefined, extra: string | undefined, opts) => {
     await robotsCommand({
       action,
       arg,
+      extra,
       name: opts.name,
       namespace: opts.namespace,
       camera: opts.camera,
@@ -673,6 +685,9 @@ program
       kind: opts.kind,
       sensors: opts.sensors,
       capabilities: opts.capabilities,
+      features: opts.features,
+      bindings: Array.isArray(opts.binding) && opts.binding.length > 0 ? opts.binding : undefined,
+      apply: opts.apply === true,
       transport: opts.transport,
       transportJson: opts.transportJson,
     });

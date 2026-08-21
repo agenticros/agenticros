@@ -434,6 +434,22 @@ test("robot-config: addRobot preserves prior kind / sensors / capabilities on a 
   assert.deepEqual(r.capabilities, ["fly_to"]);
 });
 
+test("robot-config: addRobot round-trips profile and preserves it on name-only update", () => {
+  const profile = {
+    schema: "agenticros.profile.v1",
+    features: ["base", "camera"],
+    bindings: { cmd_vel: "/cmd_vel", "camera.rgb": "/cam" },
+  };
+  const obj: Record<string, unknown> = {
+    robots: [{ id: "alpha", namespace: "alpha-ns", profile }],
+  };
+  const read = readRobots(obj);
+  assert.deepEqual(read.robots[0].profile, profile);
+
+  const result = addRobot({ id: "alpha", name: "Renamed", namespace: "alpha-ns" }, { obj });
+  assert.deepEqual(result.robots[0].profile, profile, "prior profile must survive name-only update");
+});
+
 test("robot-config: addRobot replaces capabilities with [] (caller-driven clear)", () => {
   // Empty array means "clear the allowlist" — the CLI relies on this
   // when the user passes --capabilities='' to revert a robot to the

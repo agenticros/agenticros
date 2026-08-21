@@ -240,6 +240,18 @@ Read or edit `~/.agenticros/config.json`. Actions:
 | `edit`  | `agenticros config edit` | Open in `$EDITOR`. |
 | `reset` | `agenticros config reset` | Delete the file (with confirm). |
 
+### `agenticros robots`
+
+Fleet entries in `~/.agenticros/config.json`. Profile flags gate advertised
+verbs per body — see [robot-profile.md](robot-profile.md).
+
+| Action | Example |
+|---|---|
+| `list` | `agenticros robots list` |
+| `add` | `agenticros robots add warehouse-01 --features=base,camera --binding camera.rgb=/cam/compressed` |
+| `profile show` | `agenticros robots profile show warehouse-01` |
+| `profile infer` | `agenticros robots profile infer warehouse-01 --apply` |
+
 ## Where state lives
 
 | Path | Owner | Purpose |

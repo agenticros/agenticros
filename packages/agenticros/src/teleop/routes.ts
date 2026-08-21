@@ -5,6 +5,8 @@ import {
   toTeleopCameraTopicShort,
   resolveCameraSubscribeTopic,
   applyCmdVelTwistSignConvention,
+  resolveRobot,
+  resolveBinding,
 } from "@agenticros/core";
 import { getTransport, getTransportOrNull, getTransportMode, tryReconnectFromFile } from "../service.js";
 import { readAgenticROSConfigFromFile } from "../config-file.js";
@@ -63,6 +65,13 @@ function readRequestBody(stream: NodeJS.ReadableStream): Promise<string> {
 }
 
 function getDefaultCameraTopic(config: AgenticROSConfig): string {
+  try {
+    const robot = resolveRobot(config);
+    const bound = resolveBinding(robot, "camera.rgb");
+    if (bound) return toTeleopCameraTopicShort(config, bound);
+  } catch {
+    /* no robots configured */
+  }
   const t = (config.teleop?.cameraTopic ?? "").trim();
   if (t) return toTeleopCameraTopicShort(config, t);
   const r = (config.robot?.cameraTopic ?? "").trim();
@@ -70,8 +79,17 @@ function getDefaultCameraTopic(config: AgenticROSConfig): string {
   return "/camera/camera/color/image_raw/compressed";
 }
 
-/** Resolve cmd_vel topic from config (teleop override or robot namespace). Used by estop and teleop. */
+/** Resolve cmd_vel topic from config (profile binding, teleop override, or robot namespace). Used by estop and teleop. */
 export function getCmdVelTopic(config: AgenticROSConfig): string {
+  try {
+    const robot = resolveRobot(config);
+    const bound = resolveBinding(robot, "cmd_vel", {
+      cmdVelTopic: config.teleop?.cmdVelTopic,
+    });
+    if (bound) return bound;
+  } catch {
+    /* fall through */
+  }
   const t = (config.teleop?.cmdVelTopic ?? "").trim();
   if (t) return t;
   return toNamespacedTopicFull(config, "/cmd_vel");

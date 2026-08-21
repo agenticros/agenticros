@@ -95,7 +95,13 @@ When you need full control — custom `on_fail` behaviour, explicit wiring, or s
 | Field | Purpose |
 |---|---|
 | `id` | Unique within the mission; later steps reference `{{id.outputs.field}}` |
-| `capability` | Must exist in `ros2_list_capabilities` |
+| `capability` | Must exist in `ros2_list_capabilities` for the target robot |
+
+When the target robot has a hardware [profile](robot-profile.md), a step
+whose verb needs missing features fails with `missing features: arm`
+instead of a generic unknown-capability error. Pass `robot_id` on
+`run_mission` / `mission.robot_id` so the planner and runner use that
+body's advertised verbs.
 | `inputs` | Literals or `{{stepId.outputs.fieldName}}` template refs |
 | `on_fail` | `"stop"` (default) aborts remaining steps; `"continue"` records the error and keeps going. Applied only after retries are exhausted. |
 | `retry` | Optional `{ max_attempts, backoff_ms?, backoff_multiplier? }`. Default is a single attempt. |

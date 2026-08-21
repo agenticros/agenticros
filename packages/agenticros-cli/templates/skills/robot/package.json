@@ -28,7 +28,8 @@
         "verb": "wave",
         "description": "{{description}}",
         "interruptible": true,
-        "blocks_base": true
+        "blocks_base": true,
+        "requires": ["base"]
       }
     ]
   },

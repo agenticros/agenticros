@@ -28,6 +28,7 @@ import {
   deriveSkillId,
   inspectSkillDir,
   listSkills,
+  readSkillCapabilityRequires,
   removeSkill,
   scanForSkills,
 } from "../util/skills.js";
@@ -50,6 +51,7 @@ import {
   restartOpenclawGateway,
 } from "../util/gateway-restart.js";
 import { colors, dim, err, header, info, isTty, ok, warn } from "../util/logger.js";
+import { readConfigObject, readRobots } from "../util/robot-config.js";
 import {
   ensureToolsAlsoAllow,
   openclawConfigExists,
@@ -498,6 +500,23 @@ function warnIfNotBuilt(dir: string, entry?: string): void {
   }
 }
 
+function warnProfileMismatches(skillDir: string): void {
+  const required = readSkillCapabilityRequires(skillDir);
+  if (required.length === 0) return;
+  const { robots } = readRobots(readConfigObject());
+  for (const robot of robots) {
+    if (!robot.profile) continue;
+    const have = new Set(robot.profile.features);
+    for (const cap of required) {
+      const missing = cap.requires.filter((f) => !have.has(f));
+      if (missing.length === 0) continue;
+      warn(
+        `Robot "${robot.id}" profile is missing ${missing.join(", ")} required by ${cap.id} — skill still installed (other robots can use it).`,
+      );
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Marketplace actions: search + install
 // ---------------------------------------------------------------------------
@@ -577,6 +596,7 @@ async function installAction(rawRef: string | undefined): Promise<void> {
       if (refReg.ok) ok(refReg.message);
       else warn(refReg.message);
       warnIfNotBuilt(cachePath, info1.entry);
+      warnProfileMismatches(cachePath);
       await postChangeFollowup({ ranSync: false });
       return;
     } catch (e) {
@@ -698,6 +718,7 @@ async function installAction(rawRef: string | undefined): Promise<void> {
   if (refReg.ok) ok(refReg.message);
   else warn(refReg.message);
   warnIfNotBuilt(skillDir, info1.entry);
+  warnProfileMismatches(skillDir);
 
   // 4) Sync the OpenClaw contracts.tools allowlist + auto-restart gateway.
   await postChangeFollowup({ ranSync: false });
