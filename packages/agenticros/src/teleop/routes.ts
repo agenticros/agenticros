@@ -7,6 +7,8 @@ import {
   applyCmdVelTwistSignConvention,
   resolveRobot,
   resolveBinding,
+  resolveSafetyForRobot,
+  clampTwistToLimits,
 } from "@agenticros/core";
 import { getTransport, getTransportOrNull, getTransportMode, tryReconnectFromFile } from "../service.js";
 import { readAgenticROSConfigFromFile } from "../config-file.js";
@@ -104,26 +106,21 @@ function clampTwist(
   angularY: number,
   angularZ: number,
 ): { linear: { x: number; y: number; z: number }; angular: { x: number; y: number; z: number } } {
-  const maxLin = config.safety?.maxLinearVelocity ?? 1.0;
-  const maxAng = config.safety?.maxAngularVelocity ?? 1.5;
-
-  const linMag = Math.sqrt(linearX * linearX + linearY * linearY + linearZ * linearZ);
-  const scaleLin = linMag > maxLin && linMag > 0 ? maxLin / linMag : 1;
-  const angMag = Math.abs(angularZ);
-  const scaleAng = angMag > maxAng && angMag > 0 ? maxAng / angMag : 1;
-
-  return {
-    linear: {
-      x: linearX * scaleLin,
-      y: linearY * scaleLin,
-      z: linearZ * scaleLin,
-    },
-    angular: {
-      x: angularX * scaleAng,
-      y: angularY * scaleAng,
-      z: Math.max(-maxAng, Math.min(maxAng, angularZ)),
-    },
-  };
+  let robot;
+  try {
+    robot = resolveRobot(config);
+  } catch {
+    robot = undefined;
+  }
+  return clampTwistToLimits(
+    resolveSafetyForRobot(config, robot),
+    linearX,
+    linearY,
+    linearZ,
+    angularX,
+    angularY,
+    angularZ,
+  );
 }
 
 /** Shared latest-frame cache: one subscription per topic, serve from cache so polling doesn't timeout. */

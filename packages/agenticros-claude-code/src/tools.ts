@@ -32,6 +32,8 @@ import {
   isExternalToolName,
   capabilityIdFromExternalTool,
   executeExternalCapability,
+  checkActionGoalSafety,
+  resolveSafetyForRobot,
 } from "@agenticros/core";
 import { getMissionRegistry } from "./mission-registry.js";
 import {
@@ -829,6 +831,7 @@ async function handleRunMission(
       const ext = await executeExternalCapability(cap, toolArgs, transport, {
         namespace: robot.namespace,
         signal: ctx?.signal,
+        workspaceCheck: resolveSafetyForRobot(config, robot),
       });
       return { text: ext.text, outputs: ext.outputs, isError: ext.isError };
     }
@@ -1084,7 +1087,7 @@ export async function handleToolCall(
           isError: true,
         };
       }
-      const safe = checkPublishSafety(config, args);
+      const safe = checkPublishSafety(config, args, robot);
       if (safe.block) {
         return { content: [{ type: "text", text: safe.blockReason ?? "Blocked by safety." }], isError: true };
       }
@@ -1168,6 +1171,10 @@ export async function handleToolCall(
       const action = toNamespacedTopic(robot.namespace, rawAction);
       const actionType = args["actionType"] as string;
       const goal = args["goal"] as Record<string, unknown>;
+      const fence = checkActionGoalSafety(config, { goal }, robot);
+      if (fence.block) {
+        return { content: [{ type: "text", text: fence.blockReason ?? "Blocked by safety." }], isError: true };
+      }
       const actionResult = await transport.sendActionGoal({ action, actionType, args: goal });
       const text = JSON.stringify({
         success: actionResult.result,

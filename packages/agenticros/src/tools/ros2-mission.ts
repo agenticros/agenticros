@@ -37,6 +37,7 @@ import {
   isExternalToolName,
   capabilityIdFromExternalTool,
   executeExternalCapability,
+  resolveSafetyForRobot,
 } from "@agenticros/core";
 import { resolveRobotForTool } from "./_robot-helpers.js";
 import { getMissionRegistry } from "../mission-registry.js";
@@ -190,6 +191,7 @@ export function registerMissionTool(
           const ext = await executeExternalCapability(cap, toolArgs, transport, {
             namespace: resolved.robot.namespace,
             signal: ctx?.signal,
+            workspaceCheck: resolveSafetyForRobot(config, resolved.robot),
           });
           return { text: ext.text, outputs: ext.outputs, isError: ext.isError };
         }

@@ -10,7 +10,7 @@ import { join } from "node:path";
 
 import { parseConfig, toNamespacedTopicFull } from "@agenticros/core";
 
-import { readConfigObject } from "./robot-config.js";
+import { getActiveRobotId, readConfigObject, readRobots } from "./robot-config.js";
 import { getCliPaths } from "./paths.js";
 
 /** RealSense color compressed default (camera topics stay un-namespaced). */
@@ -69,9 +69,20 @@ export function safetyLimitsFromConfig(raw: Record<string, unknown>): {
   maxAngularVelocity: number;
 } {
   const config = parseConfig(raw);
+  let maxLinear = config.safety?.maxLinearVelocity ?? 1.0;
+  let maxAngular = config.safety?.maxAngularVelocity ?? 1.5;
+  const { robots } = readRobots(raw);
+  const activeId = getActiveRobotId(raw);
+  const active = robots.find((r) => r.id === activeId);
+  if (typeof active?.safety?.maxLinearVelocity === "number") {
+    maxLinear = active.safety.maxLinearVelocity;
+  }
+  if (typeof active?.safety?.maxAngularVelocity === "number") {
+    maxAngular = active.safety.maxAngularVelocity;
+  }
   return {
-    maxLinearVelocity: config.safety?.maxLinearVelocity ?? 1.0,
-    maxAngularVelocity: config.safety?.maxAngularVelocity ?? 1.5,
+    maxLinearVelocity: maxLinear,
+    maxAngularVelocity: maxAngular,
   };
 }
 

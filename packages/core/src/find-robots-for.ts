@@ -41,7 +41,7 @@
  */
 
 import type { AgenticROSConfig } from "./config.js";
-import { listCapabilitiesForRobot } from "./capabilities.js";
+import { listAllCapabilities, listCapabilitiesForRobot } from "./capabilities.js";
 import { listRobots, type ResolvedRobot } from "./robots.js";
 
 /** Query input to `findRobotsFor`. All fields optional → returns every robot. */
@@ -113,9 +113,16 @@ export function findRobotsFor(
     // profile.requires), not the gateway-wide union.
     let matchedExplicitly = false;
     if (wantedCap) {
-      const advertised = listCapabilitiesForRobot(config, robot.id);
-      if (!advertised.some((c) => c.id === wantedCap)) continue;
-      matchedExplicitly = Boolean(robot.capabilities?.includes(wantedCap));
+      if (robot.capabilities) {
+        if (!robot.capabilities.includes(wantedCap)) continue;
+        const advertised = listCapabilitiesForRobot(config, robot.id);
+        const known = listAllCapabilities(config).some((c) => c.id === wantedCap);
+        if (known && !advertised.some((c) => c.id === wantedCap)) continue;
+        matchedExplicitly = true;
+      } else {
+        const advertised = listCapabilitiesForRobot(config, robot.id);
+        if (!advertised.some((c) => c.id === wantedCap)) continue;
+      }
     }
 
     // online filter

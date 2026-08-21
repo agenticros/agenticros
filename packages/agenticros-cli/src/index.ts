@@ -187,6 +187,7 @@ program
   .command("doctor")
   .description("Run health checks and print a green/yellow/red status table.")
   .option("--json", "Emit a JSON object instead of a human-readable table", false)
+  .option("--live", "Probe the live ROS graph and verify hardware-profile bindings", false)
   .action(async (opts) => {
     const exitCode = await doctorCommand(opts);
     if (exitCode !== 0) process.exit(exitCode);

@@ -78,6 +78,34 @@ test("executeExternalCapability sends action goal", async () => {
   assert.equal(call.actionType, "nav2_msgs/action/NavigateToPose");
 });
 
+test("executeExternalCapability rejects NavigateToPose outside workspaceLimits", async () => {
+  const cap: Capability = {
+    id: "navigate_to",
+    verb: "navigate",
+    description: "Nav2",
+    implementation: {
+      kind: "external_ros_node",
+      action: "navigate_to_pose",
+      msg_type: "nav2_msgs/action/NavigateToPose",
+    },
+  };
+  const transport = {
+    sendActionGoal: async () => {
+      throw new Error("should not send");
+    },
+  } as unknown as RosTransport;
+
+  const result = await executeExternalCapability(cap, { x: 50, y: 0 }, transport, {
+    workspaceCheck: {
+      maxLinearVelocity: 1,
+      maxAngularVelocity: 1.5,
+      workspaceLimits: { xMin: -1, xMax: 1, yMin: -1, yMax: 1 },
+    },
+  });
+  assert.equal(result.isError, true);
+  assert.match(result.text, /outside workspaceLimits/);
+});
+
 test("safeParseCapability accepts external_ros_node", () => {
   const parsed = safeParseCapability({
     id: "navigate_to",

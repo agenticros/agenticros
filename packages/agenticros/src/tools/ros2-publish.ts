@@ -1,7 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import type { OpenClawPluginApi } from "../plugin-api.js";
 import type { AgenticROSConfig } from "@agenticros/core";
-import { toNamespacedTopic, applyCmdVelTwistSignConvention } from "@agenticros/core";
+import { toNamespacedTopic, applyCmdVelTwistSignConvention, checkPublishSafety } from "@agenticros/core";
 import { getTransportForRobot } from "../service.js";
 import { ROBOT_ID_SCHEMA, resolveRobotForTool } from "./_robot-helpers.js";
 
@@ -35,6 +35,13 @@ export function registerPublishTool(api: OpenClawPluginApi, config: AgenticROSCo
       const topic = toNamespacedTopic(robot.namespace, rawTopic);
       const type = params["type"] as string;
       let message = params["message"] as Record<string, unknown>;
+      const safe = checkPublishSafety(config, { message }, robot);
+      if (safe.block) {
+        return {
+          content: [{ type: "text", text: safe.blockReason ?? "Blocked by safety." }],
+          details: { success: false, error: safe.blockReason },
+        };
+      }
       message = applyCmdVelTwistSignConvention(topic, type, message);
 
       const transport = await getTransportForRobot(config, robot);

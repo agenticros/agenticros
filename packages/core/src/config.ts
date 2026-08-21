@@ -2,6 +2,26 @@ import { z } from "zod";
 import type { TransportConfig } from "./transport/types.js";
 import { RobotProfileSchema } from "./robot-profile.js";
 
+/** Map-frame AABB for navigation goals. All four edges required when set. */
+export const WorkspaceLimitsSchema = z.object({
+  xMin: z.number(),
+  xMax: z.number(),
+  yMin: z.number(),
+  yMax: z.number(),
+});
+export type WorkspaceLimits = z.infer<typeof WorkspaceLimitsSchema>;
+
+/**
+ * Per-robot safety overlay. Unset fields inherit `config.safety`.
+ * `workspaceLimits` is replaced as a whole when present on the robot.
+ */
+export const RobotSafetyOverlaySchema = z.object({
+  maxLinearVelocity: z.number().optional(),
+  maxAngularVelocity: z.number().optional(),
+  workspaceLimits: WorkspaceLimitsSchema.optional(),
+});
+export type RobotSafetyOverlay = z.infer<typeof RobotSafetyOverlaySchema>;
+
 const IceServerSchema = z.object({
   urls: z.union([z.string(), z.array(z.string())]),
   username: z.string().optional(),
@@ -235,6 +255,13 @@ export const AgenticROSConfigSchema = z.object({
          */
         profile: RobotProfileSchema.optional(),
         /**
+         * Optional per-robot safety overlay. Each field, when set,
+         * replaces the gateway `config.safety` value for that robot.
+         * Unset fields inherit the gateway defaults. Used so a 0.3 m/s
+         * indoor AMR and a 1.5 m/s rover can share one gateway.
+         */
+        safety: RobotSafetyOverlaySchema.optional(),
+        /**
          * Phase 1.d-resolve per-robot transport override.
          *
          * When set, this robot uses its own transport instead of the
@@ -282,14 +309,12 @@ export const AgenticROSConfigSchema = z.object({
     .object({
       maxLinearVelocity: z.number().default(1.0),
       maxAngularVelocity: z.number().default(1.5),
-      workspaceLimits: z
-        .object({
-          xMin: z.number().default(-10),
-          xMax: z.number().default(10),
-          yMin: z.number().default(-10),
-          yMax: z.number().default(10),
-        })
-        .default({}),
+      /**
+       * Optional geofence for navigation goals (map frame). Unset =
+       * not enforced. Absence of a bound is pass-through; a set but
+       * inverted bound (xMin > xMax) fails closed.
+       */
+      workspaceLimits: WorkspaceLimitsSchema.optional(),
     })
     .default({}),
 

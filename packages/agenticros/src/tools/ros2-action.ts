@@ -1,7 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import type { OpenClawPluginApi } from "../plugin-api.js";
 import type { AgenticROSConfig } from "@agenticros/core";
-import { toNamespacedTopic } from "@agenticros/core";
+import { toNamespacedTopic, checkActionGoalSafety } from "@agenticros/core";
 import { getTransportForRobot } from "../service.js";
 import { ROBOT_ID_SCHEMA, resolveRobotForTool } from "./_robot-helpers.js";
 
@@ -35,6 +35,13 @@ export function registerActionTool(api: OpenClawPluginApi, config: AgenticROSCon
       const action = toNamespacedTopic(robot.namespace, rawAction);
       const actionType = params["actionType"] as string;
       const goal = params["goal"] as Record<string, unknown>;
+      const fence = checkActionGoalSafety(config, { goal }, robot);
+      if (fence.block) {
+        return {
+          content: [{ type: "text", text: fence.blockReason ?? "Blocked by safety." }],
+          details: { success: false, error: fence.blockReason },
+        };
+      }
 
       const transport = await getTransportForRobot(config, robot);
       const actionResult = await transport.sendActionGoal({

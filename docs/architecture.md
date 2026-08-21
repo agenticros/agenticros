@@ -298,7 +298,10 @@ Each `robots[]` entry may declare a **profile**: frozen hardware features
 (`base`, `camera`, `depth`, …) plus ROS bindings (`cmd_vel`, `camera.rgb`).
 Advertised capability verbs are the intersection of installed skills and
 those features. Configs without a profile keep the gateway-wide skill list.
-See [robot-profile.md](robot-profile.md).
+
+Optional `robots[i].safety` overlays gateway velocity caps and an optional
+`workspaceLimits` geofence. On transport loss the pool publishes a zero
+Twist to every robot whose profile has `base`. See [robot-profile.md](robot-profile.md).
 
 ---
 

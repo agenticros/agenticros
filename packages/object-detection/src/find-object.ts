@@ -4,7 +4,7 @@
  */
 
 import type { AgenticROSConfig, ResolvedRobot, RosTransport } from "@agenticros/core";
-import { resolveCameraSubscribeTopic, toNamespacedTopic } from "@agenticros/core";
+import { resolveCameraSubscribeTopic, toNamespacedTopic, resolveSafetyForRobot } from "@agenticros/core";
 import {
   ROS_MSG_COMPRESSED_IMAGE,
   ROS_MSG_IMAGE,
@@ -77,8 +77,8 @@ export async function findObject(
     };
   }
 
-  const safety = config.safety ?? {};
-  const maxAngular = safety.maxAngularVelocity ?? 1.5;
+  const safety = resolveSafetyForRobot(config, robot);
+  const maxAngular = safety.maxAngularVelocity;
   const requestedSpeed = Math.max(0.05, Math.min(maxAngular, opts.angularSpeed ?? DEFAULT_ANGULAR_SPEED));
   const clockwise = opts.clockwise ?? true;
   const angularZ = clockwise ? -requestedSpeed : requestedSpeed;

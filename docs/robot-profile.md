@@ -119,6 +119,43 @@ skill's `requires`. It never hard-fails.
 - Declared feature missing its v1 binding → red
 - Installed skill `requires` not satisfied by a profiled robot → yellow
 - No profile on any robot → yellow (“verbs are gateway-wide”)
+- Inverted `workspaceLimits` (xMin > xMax) → red
+
+`agenticros doctor --live` connects over the configured transport and
+checks each profile binding against the graph:
+
+- Declared topic/action missing → red
+- Type mismatch (e.g. `cmd_vel` is not Twist) → yellow
+- Present and typed correctly → green
+- Live graph unreachable → red
+
+## Per-robot safety
+
+Gateway `config.safety` is the default. Optional `robots[i].safety`
+overlays velocity ceilings and an optional map-frame geofence:
+
+```jsonc
+{
+  "safety": { "maxLinearVelocity": 1.0, "maxAngularVelocity": 1.5 },
+  "robots": [
+    {
+      "id": "indoor-amr",
+      "profile": { "features": ["base"], "bindings": { "cmd_vel": "/cmd_vel" } },
+      "safety": {
+        "maxLinearVelocity": 0.3,
+        "workspaceLimits": { "xMin": -4, "xMax": 4, "yMin": -4, "yMax": 4 }
+      }
+    }
+  ]
+}
+```
+
+- Twist publishes over the cap are **blocked** (MCP / OpenClaw / Gemini).
+- Teleop and find-object **clamp** to the cap.
+- `workspaceLimits` is optional; omit it to leave navigation unfenced.
+- On transport loss (and again on reconnect), AgenticROS publishes a
+  zero Twist to every robot whose profile has `base` (legacy kind other
+  than `arm` if no profile).
 
 Deprecated `sensors.has_realsense | has_lidar | has_arm` still work when
 `profile` is absent (`has_realsense` maps to `camera`+`depth`). Prefer

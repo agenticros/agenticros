@@ -33,6 +33,8 @@ import {
   isExternalToolName,
   capabilityIdFromExternalTool,
   executeExternalCapability,
+  checkActionGoalSafety,
+  resolveSafetyForRobot,
 } from "@agenticros/core";
 import {
   ROS_MSG_COMPRESSED_IMAGE,
@@ -732,6 +734,7 @@ export async function executeTool(
         const ext = await executeExternalCapability(cap, toolArgs, transport, {
           namespace: resolved.robot.namespace,
           signal: ctx?.signal,
+          workspaceCheck: resolveSafetyForRobot(config, resolved.robot),
         });
         return { text: ext.text, outputs: ext.outputs, isError: ext.isError };
       }
@@ -838,7 +841,7 @@ export async function executeTool(
           output: "Transport not connected to Zenoh/ROS2. Check zenohd is running (ws://localhost:10000) and config in ~/.agenticros/config.json.",
         };
       }
-      const safe = checkPublishSafety(config, args);
+      const safe = checkPublishSafety(config, args, robot);
       if (safe.block) {
         return { output: safe.blockReason ?? "Blocked by safety." };
       }
@@ -921,6 +924,10 @@ export async function executeTool(
       const action = toNamespacedTopic(robot.namespace, rawAction);
       const actionType = args["actionType"] as string;
       const goal = args["goal"] as Record<string, unknown>;
+      const fence = checkActionGoalSafety(config, { goal }, robot);
+      if (fence.block) {
+        return { output: fence.blockReason ?? "Blocked by safety." };
+      }
       const actionResult = await transport.sendActionGoal({ action, actionType, args: goal });
       const text = JSON.stringify({
         success: actionResult.result,

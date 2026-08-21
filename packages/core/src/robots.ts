@@ -22,7 +22,7 @@
  * default so it's selected by `getActiveRobotId()`.
  */
 
-import type { AgenticROSConfig } from "./config.js";
+import type { AgenticROSConfig, RobotSafetyOverlay } from "./config.js";
 import { getTransportConfig } from "./config.js";
 import type { TransportConfig } from "./transport/types.js";
 import { applyFleetOverride } from "./fleet-config.js";
@@ -69,6 +69,11 @@ export interface ResolvedRobot {
    */
   profile?: RobotProfile;
   /**
+   * Optional per-robot safety overlay. Undefined → inherit gateway
+   * `config.safety` via `resolveSafetyForRobot`.
+   */
+  safety?: RobotSafetyOverlay;
+  /**
    * Source tag — handy for diagnostics ("Why is this robot in the list?").
    *   - "config":  from config.robots[]
    *   - "legacy":  synthesised from the legacy single config.robot object
@@ -106,6 +111,7 @@ export function listRobots(config: AgenticROSConfig): ResolvedRobot[] {
       sensors: { ...DEFAULT_SENSORS, ...(r.sensors ?? {}) },
       capabilities: r.capabilities,
       profile: r.profile,
+      safety: r.safety,
       source: "config" as const,
     }));
   }

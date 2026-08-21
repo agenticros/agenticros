@@ -40,6 +40,7 @@ import {
   codexOnPath,
   hermesOnPath,
 } from "../util/mcp-setup.js";
+import { checkLiveBindings } from "../util/live-bindings.js";
 
 export type Severity = "green" | "yellow" | "red";
 
@@ -58,10 +59,12 @@ export interface DoctorReport {
 
 export interface DoctorOptions {
   json?: boolean;
+  /** Probe the live ROS graph and check profile bindings. */
+  live?: boolean;
 }
 
 export async function doctorCommand(opts: DoctorOptions): Promise<number> {
-  const report = await runDoctorChecks();
+  const report = await runDoctorChecks(opts);
 
   if (opts.json) {
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
@@ -99,7 +102,7 @@ export async function hasRedChecks(): Promise<boolean> {
   return report.summary.red > 0;
 }
 
-export async function runDoctorChecks(): Promise<DoctorReport> {
+export async function runDoctorChecks(opts: DoctorOptions = {}): Promise<DoctorReport> {
   const paths = getCliPaths();
   const checks: CheckResult[] = [];
 
@@ -786,6 +789,13 @@ export async function runDoctorChecks(): Promise<DoctorReport> {
     // configstore unavailable — skip
   }
 
+  appendWorkspaceLimitChecks(checks, readConfigObject());
+
+  if (opts.live) {
+    const live = await runLiveBindingChecks();
+    checks.push(...live);
+  }
+
   const summary = checks.reduce(
     (acc, c) => {
       acc[c.severity] += 1;
@@ -795,6 +805,119 @@ export async function runDoctorChecks(): Promise<DoctorReport> {
   );
 
   return { checks, summary };
+}
+
+function workspaceBoundsInvalid(bounds: Record<string, unknown>): string | undefined {
+  const xMin = bounds["xMin"];
+  const xMax = bounds["xMax"];
+  const yMin = bounds["yMin"];
+  const yMax = bounds["yMax"];
+  if (typeof xMin === "number" && typeof xMax === "number" && xMin > xMax) {
+    return `xMin (${xMin}) > xMax (${xMax})`;
+  }
+  if (typeof yMin === "number" && typeof yMax === "number" && yMin > yMax) {
+    return `yMin (${yMin}) > yMax (${yMax})`;
+  }
+  return undefined;
+}
+
+function appendWorkspaceLimitChecks(checks: CheckResult[], obj: Record<string, unknown>): void {
+  const gateway = obj["safety"];
+  if (gateway && typeof gateway === "object" && !Array.isArray(gateway)) {
+    const wl = (gateway as Record<string, unknown>)["workspaceLimits"];
+    if (wl && typeof wl === "object" && !Array.isArray(wl)) {
+      const bad = workspaceBoundsInvalid(wl as Record<string, unknown>);
+      if (bad) {
+        checks.push({
+          id: "safety-workspace",
+          label: `Gateway workspaceLimits malformed (${bad})`,
+          severity: "red",
+          hint: "Fix safety.workspaceLimits so min ≤ max, or omit the field to disable the geofence.",
+        });
+      }
+    }
+  }
+  const { robots } = readRobots(obj);
+  for (const r of robots) {
+    const wl = r.safety?.workspaceLimits;
+    if (!wl) continue;
+    const bad = workspaceBoundsInvalid(wl as unknown as Record<string, unknown>);
+    if (bad) {
+      checks.push({
+        id: `safety-workspace-${r.id}`,
+        label: `Robot "${r.id}" workspaceLimits malformed (${bad})`,
+        severity: "red",
+        hint: "Fix robots[].safety.workspaceLimits so min ≤ max.",
+      });
+    }
+  }
+}
+
+const LIVE_CONNECT_MS = 8_000;
+
+async function runLiveBindingChecks(): Promise<CheckResult[]> {
+  const { robots } = readRobots();
+  const profiled = robots.filter((r) => r.profile);
+  if (profiled.length === 0) {
+    return [
+      {
+        id: "live-graph",
+        label: "No hardware profile to verify on the live graph",
+        severity: "yellow",
+        hint: "Run `agenticros robots profile infer --apply`, then `agenticros doctor --live`.",
+      },
+    ];
+  }
+
+  const core = await import("@agenticros/core");
+  const cfg = core.parseConfig(readConfigObject());
+  const transport = await core.createTransport(core.getTransportConfig(cfg));
+  try {
+    await Promise.race([
+      transport.connect(),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error(`Transport connect timed out after ${LIVE_CONNECT_MS / 1000}s`)),
+          LIVE_CONNECT_MS,
+        ),
+      ),
+    ]);
+    const topics = await transport.listTopics();
+    let actions: Array<{ name: string; type?: string }> | undefined;
+    try {
+      actions = await transport.listActions();
+    } catch {
+      actions = undefined;
+    }
+    const live = checkLiveBindings(profiled, { topics, actions });
+    return live.map((c) => ({
+      id: c.id,
+      label: c.reason,
+      severity: c.severity,
+      detail: c.name || undefined,
+      hint:
+        c.severity === "red"
+          ? "Start the driver for that feature, or fix the binding with `agenticros robots add … --binding`."
+          : undefined,
+    }));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return [
+      {
+        id: "live-graph",
+        label: "Live graph unreachable",
+        severity: "red",
+        detail: msg,
+        hint: "Start the transport (zenohd / rosbridge / local ROS) and retry `agenticros doctor --live`.",
+      },
+    ];
+  } finally {
+    try {
+      await transport.disconnect();
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 // Silence unused warnings for utilities the doctor module re-exports.

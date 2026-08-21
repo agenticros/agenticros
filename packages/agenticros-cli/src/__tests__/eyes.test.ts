@@ -52,6 +52,20 @@ describe("eyes config helpers", () => {
       }),
       { maxLinearVelocity: 0.4, maxAngularVelocity: 0.8 },
     );
+    assert.deepEqual(
+      safetyLimitsFromConfig({
+        safety: { maxLinearVelocity: 1.0, maxAngularVelocity: 1.5 },
+        robots: [
+          {
+            id: "slow",
+            namespace: "slow",
+            default: true,
+            safety: { maxLinearVelocity: 0.2 },
+          },
+        ],
+      }),
+      { maxLinearVelocity: 0.2, maxAngularVelocity: 1.5 },
+    );
   });
 
   it("areEyesDepsInstalled requires node_modules/ws", () => {

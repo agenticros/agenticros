@@ -46,6 +46,22 @@ test("profile: parseConfig accepts robots[].profile", () => {
   assert.equal(r.profile.bindings["cmd_vel"], "/cmd_vel");
 });
 
+test("profile: parseConfig accepts robots[].safety overlay", () => {
+  const cfg = parseConfig({
+    safety: { maxLinearVelocity: 1.0, maxAngularVelocity: 1.5 },
+    robots: [
+      {
+        id: "slow",
+        namespace: "slow",
+        safety: { maxLinearVelocity: 0.25, workspaceLimits: { xMin: -3, xMax: 3, yMin: -3, yMax: 3 } },
+      },
+    ],
+  });
+  const r = resolveRobot(cfg, "slow");
+  assert.equal(r.safety?.maxLinearVelocity, 0.25);
+  assert.equal(r.safety?.workspaceLimits?.xMax, 3);
+});
+
 test("profile: absent profile stays undefined (legacy robots do not invent one)", () => {
   const cfg = parseConfig({ robots: [{ id: "alpha", namespace: "alpha-ns" }] });
   assert.equal(listRobots(cfg)[0].profile, undefined);
@@ -60,20 +76,20 @@ test("profile: resolveBinding uses profile then cameraTopic / cmd_vel fallbacks"
         cameraTopic: "/legacy/cam",
         profile: {
           features: ["base", "camera"],
-          bindings: { "camera.rgb": "/profile/cam/compressed", cmd_vel: "/cmd_vel" },
+          bindings: { "camera.rgb": "/camera/profile/cam/compressed", cmd_vel: "/cmd_vel" },
         },
       },
     ],
   });
   const a = resolveRobot(withProfile, "a");
-  assert.equal(resolveBinding(a, "camera.rgb"), "/profile/cam/compressed");
+  assert.equal(resolveBinding(a, "camera.rgb"), "/camera/profile/cam/compressed");
   assert.equal(resolveBinding(a, "cmd_vel"), "/ns/cmd_vel");
 
   const legacy = parseConfig({
-    robots: [{ id: "b", namespace: "bot", cameraTopic: "/cam/image" }],
+    robots: [{ id: "b", namespace: "bot", cameraTopic: "/camera/image" }],
   });
   const b = resolveRobot(legacy, "b");
-  assert.equal(resolveBinding(b, "camera.rgb"), "/cam/image");
+  assert.equal(resolveBinding(b, "camera.rgb"), "/camera/image");
   assert.equal(resolveBinding(b, "cmd_vel"), "/bot/cmd_vel");
 });
 

@@ -54,6 +54,8 @@ import {
   hasRobotTransportOverride,
   resolveRobot,
 } from "./index.js";
+import { listRobots } from "./robots.js";
+import { attachDisconnectFailSafe, publishStopForBases } from "./safety.js";
 
 const CONNECT_TIMEOUT_MS = 15_000;
 export const TRANSPORT_POOL_GLOBAL_KEY = "__global__";
@@ -64,6 +66,9 @@ export class TransportPool {
   private readonly entries = new Map<string, RosTransport>();
   /** Promises kept while a connection is in flight, so concurrent acquires share the same connect. */
   private readonly inFlight = new Map<string, Promise<RosTransport>>();
+  private readonly failSafeUnsub = new Map<string, () => void>();
+  /** Last config passed to acquire — used to resolve which robots share a transport on drain. */
+  private lastConfig: AgenticROSConfig | undefined;
 
   constructor(private readonly factory: TransportFactory = createTransport) {}
 
@@ -72,6 +77,7 @@ export class TransportPool {
    * See the module docstring for the full key + caching contract.
    */
   async acquire(config: AgenticROSConfig, robot: ResolvedRobot): Promise<RosTransport> {
+    this.lastConfig = config;
     const key = hasRobotTransportOverride(config, robot.id)
       ? robot.id
       : TRANSPORT_POOL_GLOBAL_KEY;
@@ -98,16 +104,34 @@ export class TransportPool {
    */
   async disconnectAll(): Promise<void> {
     const pending: Promise<unknown>[] = [];
-    for (const t of this.entries.values()) {
+    const cfg = this.lastConfig;
+    for (const [key, t] of this.entries) {
+      const robots = cfg ? robotsForPoolKey(cfg, key) : [];
       pending.push(
-        t.disconnect().catch(() => {
-          /* best-effort drain */
-        }),
+        (async () => {
+          await publishStopForBases(t, robots).catch(() => {});
+          this.clearFailSafe(key);
+          await t.disconnect().catch(() => {
+            /* best-effort drain */
+          });
+        })(),
       );
     }
     this.entries.clear();
     this.inFlight.clear();
     await Promise.all(pending);
+  }
+
+  private clearFailSafe(key: string): void {
+    const unsub = this.failSafeUnsub.get(key);
+    if (unsub) {
+      try {
+        unsub();
+      } catch {
+        /* ignore */
+      }
+      this.failSafeUnsub.delete(key);
+    }
   }
 
   /** Visible for tests: how many distinct transports are alive right now. */
@@ -135,7 +159,13 @@ export class TransportPool {
     if (cached) {
       // Stale entry (e.g. router restarted under us). Drop it cleanly.
       this.entries.delete(key);
-      cached.disconnect().catch(() => {});
+      this.clearFailSafe(key);
+      const staleRobots = this.lastConfig ? robotsForPoolKey(this.lastConfig, key) : [];
+      void publishStopForBases(cached, staleRobots)
+        .catch(() => {})
+        .finally(() => {
+          cached.disconnect().catch(() => {});
+        });
     }
 
     const connectFlight = (async (): Promise<RosTransport> => {
@@ -143,6 +173,11 @@ export class TransportPool {
       const t = await this.factory(cfg);
       await connectWithTimeout(t);
       this.entries.set(key, t);
+      if (this.lastConfig) {
+        this.clearFailSafe(key);
+        const unsub = attachDisconnectFailSafe(t, robotsForPoolKey(this.lastConfig, key));
+        this.failSafeUnsub.set(key, unsub);
+      }
       return t;
     })();
     this.inFlight.set(key, connectFlight);
@@ -169,3 +204,12 @@ async function connectWithTimeout(t: RosTransport): Promise<void> {
   });
   await Promise.race([t.connect(), timeout]);
 }
+
+function robotsForPoolKey(config: AgenticROSConfig, key: string): ResolvedRobot[] {
+  const robots = listRobots(config);
+  if (key === TRANSPORT_POOL_GLOBAL_KEY) {
+    return robots.filter((r) => !hasRobotTransportOverride(config, r.id));
+  }
+  return robots.filter((r) => r.id === key);
+}
+

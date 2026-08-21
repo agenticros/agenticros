@@ -129,7 +129,7 @@ skipped (with a checkmark) when already done:
 
 Pass `--force` to re-run every step regardless of state.
 
-### `agenticros doctor [--json]`
+### `agenticros doctor [--json] [--live]`
 
 Runs every health check and prints a coloured table. With `--json`, emits the
 same report as a structured object for CI / scripting:
@@ -142,6 +142,10 @@ same report as a structured object for CI / scripting:
 ```
 
 Exits non-zero if any check is red.
+
+`--live` connects over the configured transport and verifies each hardware-profile
+binding against the ROS graph (declared `cmd_vel` / camera / actions must exist).
+Without `--live`, profile checks are static (schema + required bindings only).
 
 Checks include MCP server build status, OpenClaw plugin health, **MCP client configs**
 (Codex, Hermes, Claude — path and namespace policy), and CLI presence on `PATH`.

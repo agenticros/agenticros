@@ -104,7 +104,7 @@ export const BUILTIN_CAPABILITIES: readonly Capability[] = [
     verb: "drive",
     description:
       "Drive the robot base by publishing geometry_msgs/Twist to the configured cmd_vel topic. " +
-      "Linear/angular velocities are clamped server-side by safety.maxLinearVelocity / maxAngularVelocity.",
+      "Linear/angular velocities are enforced server-side by per-robot safety overlays (else gateway safety.maxLinearVelocity / maxAngularVelocity).",
     inputs: {
       linear_x: { type: "number", description: "Forward velocity (m/s).", optional: true },
       angular_z: { type: "number", description: "Yaw velocity (rad/s).", optional: true },

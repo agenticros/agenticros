@@ -10,6 +10,8 @@
 import type { Capability, CapabilityImplementation } from "./capabilities.js";
 import type { RosTransport } from "./transport/transport.js";
 import { toNamespacedTopic } from "./topic-utils.js";
+import type { SafetyLimits } from "./safety.js";
+import { checkWorkspacePayload } from "./safety.js";
 
 export interface ExecuteExternalOptions {
   /** Robot namespace for topic/action/service prefixing. */
@@ -21,6 +23,8 @@ export interface ExecuteExternalOptions {
    * Subscribe waits also reject early on abort.
    */
   signal?: AbortSignal;
+  /** When set, NavigateToPose-style goals outside the fence are rejected. */
+  workspaceCheck?: SafetyLimits;
 }
 
 export interface ExecuteExternalResult {
@@ -151,6 +155,15 @@ export async function executeExternalCapability(
         };
       }
       const args = buildExternalGoal(impl, inputs);
+      if (options.workspaceCheck) {
+        const fence = checkWorkspacePayload(options.workspaceCheck, args);
+        if (fence.block) {
+          return {
+            text: fence.blockReason ?? "Blocked by workspaceLimits.",
+            isError: true,
+          };
+        }
+      }
       const goalPromise = transport.sendActionGoal({
         action,
         actionType,

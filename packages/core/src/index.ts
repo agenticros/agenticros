@@ -2,12 +2,14 @@
  * @agenticros/core — Platform-agnostic ROS2 transport, config, and utilities.
  */
 
-export type { AgenticROSConfig, RobotTransportOverride } from "./config.js";
+export type { AgenticROSConfig, RobotTransportOverride, RobotSafetyOverlay, WorkspaceLimits } from "./config.js";
 export {
   AgenticROSConfigSchema,
   parseConfig,
   prepareConfigForPersistence,
   getTransportConfig,
+  WorkspaceLimitsSchema,
+  RobotSafetyOverlaySchema,
 } from "./config.js";
 
 export {
@@ -59,6 +61,32 @@ export {
   resolveCameraSubscribeTopic,
 } from "./topic-utils.js";
 export { applyCmdVelTwistSignConvention } from "./cmd-vel-twist.js";
+export {
+  TWIST_MSG_TYPE,
+  ZERO_TWIST,
+  resolveSafetyForRobot,
+  isTwistMessage,
+  checkTwistMessage,
+  clampTwistToLimits,
+  checkWorkspacePosition,
+  extractWorkspacePositions,
+  checkWorkspacePayload,
+  checkPublishSafety,
+  checkActionGoalSafety,
+  checkInputsWorkspace,
+  robotHasMobileBase,
+  publishStopForBases,
+  attachDisconnectFailSafe,
+  checkLiveBindings,
+} from "./safety.js";
+export type {
+  SafetyLimits,
+  SafetyCheckResult,
+  TwistComponents,
+  LiveBindingCheck,
+  LiveCheckSeverity,
+  LiveGraphSnapshot,
+} from "./safety.js";
 export { isCdrTypeSupported } from "./transport/zenoh/cdr.js";
 export {
   renderAgenticROSBanner,

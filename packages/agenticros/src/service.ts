@@ -5,6 +5,9 @@ import {
   getTransportConfig,
   getTransportConfigForRobot,
   hasRobotTransportOverride,
+  listRobots,
+  attachDisconnectFailSafe,
+  publishStopForBases,
 } from "@agenticros/core";
 import type { OpenClawPluginApi } from "./plugin-api.js";
 import type { PluginLogger } from "./plugin-api.js";
@@ -18,8 +21,46 @@ let transport: RosTransport | null = null;
 /** Tracks the active transport mode. */
 let currentMode: TransportConfig["mode"] | null = null;
 
+/** Config captured at registerService — used to pick fail-safe cmd_vel targets. */
+let serviceConfig: AgenticROSConfig | null = null;
+let globalFailSafeUnsub: (() => void) | null = null;
+const overrideFailSafeUnsub = new Map<string, () => void>();
+
 /** Concurrency guard — prevents overlapping switchTransport calls. */
 let switching = false;
+
+function liveServiceConfig(): AgenticROSConfig | null {
+  try {
+    return readAgenticROSConfigFromFile();
+  } catch {
+    return serviceConfig;
+  }
+}
+
+function globalFailSafeRobots(): ResolvedRobot[] {
+  const cfg = liveServiceConfig();
+  if (!cfg) return [];
+  return listRobots(cfg).filter((r) => !hasRobotTransportOverride(cfg, r.id));
+}
+
+function clearGlobalFailSafe(): void {
+  if (!globalFailSafeUnsub) return;
+  try {
+    globalFailSafeUnsub();
+  } catch {
+    /* ignore */
+  }
+  globalFailSafeUnsub = null;
+}
+
+function attachGlobalFailSafe(t: RosTransport): void {
+  clearGlobalFailSafe();
+  globalFailSafeUnsub = attachDisconnectFailSafe(t, globalFailSafeRobots());
+}
+
+async function stopTransportBestEffort(t: RosTransport, robots: ResolvedRobot[]): Promise<void> {
+  await publishStopForBases(t, robots).catch(() => {});
+}
 
 /**
  * Serialize every connect attempt (no TOCTOU gap). Two callers that both see `transport` disconnected
@@ -57,6 +98,8 @@ export async function switchTransport(config: TransportConfig, logger: PluginLog
   switching = true;
   try {
     if (transport) {
+      await stopTransportBestEffort(transport, globalFailSafeRobots());
+      clearGlobalFailSafe();
       await transport.disconnect();
       transport = null;
       currentMode = null;
@@ -72,6 +115,7 @@ export async function switchTransport(config: TransportConfig, logger: PluginLog
 
     transport = newTransport;
     currentMode = config.mode;
+    attachGlobalFailSafe(newTransport);
 
     logger.info(`ROS2 transport switched to ${config.mode}`);
   } finally {
@@ -205,6 +249,8 @@ async function ensureTransportConnected(
     }
     if (transport) {
       try {
+        await stopTransportBestEffort(transport, globalFailSafeRobots());
+        clearGlobalFailSafe();
         await transport.disconnect();
       } catch {
         /* ignore */
@@ -231,6 +277,7 @@ async function ensureTransportConnected(
     await newTransport.connect();
     transport = newTransport;
     currentMode = transportCfg.mode;
+    attachGlobalFailSafe(newTransport);
     api.logger.info(`ROS2 transport connected (mode: ${transportCfg.mode})`);
   };
 
@@ -305,7 +352,20 @@ async function acquireOverrideTransport(
   if (cached) {
     // Stale entry — drop cleanly so a fresh build can proceed.
     overrideTransports.delete(robot.id);
-    cached.disconnect().catch(() => {});
+    const unsub = overrideFailSafeUnsub.get(robot.id);
+    if (unsub) {
+      try {
+        unsub();
+      } catch {
+        /* ignore */
+      }
+      overrideFailSafeUnsub.delete(robot.id);
+    }
+    void publishStopForBases(cached, [robot])
+      .catch(() => {})
+      .finally(() => {
+        cached.disconnect().catch(() => {});
+      });
   }
 
   const connectFlight = (async (): Promise<RosTransport> => {
@@ -313,6 +373,7 @@ async function acquireOverrideTransport(
     const t = await createTransport(transportCfg);
     await connectWithTimeout(t, OVERRIDE_CONNECT_TIMEOUT_MS);
     overrideTransports.set(robot.id, t);
+    overrideFailSafeUnsub.set(robot.id, attachDisconnectFailSafe(t, [robot]));
     return t;
   })();
   overrideInFlight.set(robot.id, connectFlight);
@@ -341,8 +402,26 @@ async function connectWithTimeout(t: RosTransport, timeoutMs: number): Promise<v
 
 async function drainOverridePool(): Promise<void> {
   const pending: Promise<unknown>[] = [];
-  for (const t of overrideTransports.values()) {
-    pending.push(t.disconnect().catch(() => {}));
+  for (const [id, t] of overrideTransports) {
+    pending.push(
+      (async () => {
+        const unsub = overrideFailSafeUnsub.get(id);
+        if (unsub) {
+          try {
+            unsub();
+          } catch {
+            /* ignore */
+          }
+          overrideFailSafeUnsub.delete(id);
+        }
+        const cfg = liveServiceConfig();
+        const robot = cfg ? listRobots(cfg).find((r) => r.id === id) : undefined;
+        if (robot) {
+          await publishStopForBases(t, [robot]).catch(() => {});
+        }
+        await t.disconnect().catch(() => {});
+      })(),
+    );
   }
   overrideTransports.clear();
   overrideInFlight.clear();
@@ -358,6 +437,7 @@ const DISCONNECTED_POLL_MS = 15000;
  * when the connection drops (e.g. Zenoh session closed).
  */
 export function registerService(api: OpenClawPluginApi, config: AgenticROSConfig): void {
+  serviceConfig = config;
   const transportCfg = getTransportConfig(config);
 
   let pollInterval: ReturnType<typeof setInterval> | null = null;
@@ -389,6 +469,8 @@ export function registerService(api: OpenClawPluginApi, config: AgenticROSConfig
         retryTimer = null;
       }
       if (transport) {
+        await stopTransportBestEffort(transport, globalFailSafeRobots());
+        clearGlobalFailSafe();
         await transport.disconnect();
         transport = null;
         currentMode = null;

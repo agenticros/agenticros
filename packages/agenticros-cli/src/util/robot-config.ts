@@ -34,6 +34,32 @@ import { getCliPaths } from "./paths.js";
 import type { RobotProfile } from "./robot-profile.js";
 import { parseProfileObject } from "./robot-profile.js";
 
+function parseSafetyOverlay(raw: unknown): RobotEntry["safety"] {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const o = raw as Record<string, unknown>;
+  const out: NonNullable<RobotEntry["safety"]> = {};
+  if (typeof o["maxLinearVelocity"] === "number") out.maxLinearVelocity = o["maxLinearVelocity"];
+  if (typeof o["maxAngularVelocity"] === "number") out.maxAngularVelocity = o["maxAngularVelocity"];
+  const wl = o["workspaceLimits"];
+  if (wl && typeof wl === "object" && !Array.isArray(wl)) {
+    const w = wl as Record<string, unknown>;
+    if (
+      typeof w["xMin"] === "number" &&
+      typeof w["xMax"] === "number" &&
+      typeof w["yMin"] === "number" &&
+      typeof w["yMax"] === "number"
+    ) {
+      out.workspaceLimits = {
+        xMin: w["xMin"],
+        xMax: w["xMax"],
+        yMin: w["yMin"],
+        yMax: w["yMax"],
+      };
+    }
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 /** Sensor/hardware tags on a robot — mirrors @agenticros/core's RobotSensors. */
 export interface RobotSensors {
   has_realsense?: boolean;
@@ -70,6 +96,15 @@ export interface RobotEntry {
    * advertised verbs stay gateway-wide.
    */
   profile?: RobotProfile;
+  /**
+   * Optional per-robot safety overlay (velocity / workspace). Unset
+   * fields inherit gateway `config.safety`.
+   */
+  safety?: {
+    maxLinearVelocity?: number;
+    maxAngularVelocity?: number;
+    workspaceLimits?: { xMin: number; xMax: number; yMin: number; yMax: number };
+  };
   /**
    * Optional per-robot transport override. Opaque JSON — the core's
    * `RobotTransportOverrideSchema` is the schema-of-truth and will Zod-
@@ -151,6 +186,7 @@ export function readRobots(
           ? (r["capabilities"] as unknown[]).filter((c): c is string => typeof c === "string")
           : undefined,
         profile: parseProfileObject(r["profile"]),
+        safety: parseSafetyOverlay(r["safety"]),
         transport:
           r["transport"] && typeof r["transport"] === "object" && !Array.isArray(r["transport"])
             ? (r["transport"] as Record<string, unknown>)
@@ -262,6 +298,7 @@ export function addRobot(
   if (entry.sensors !== undefined) next["sensors"] = entry.sensors;
   if (entry.capabilities !== undefined) next["capabilities"] = entry.capabilities;
   if (entry.profile !== undefined) next["profile"] = entry.profile;
+  if (entry.safety !== undefined) next["safety"] = entry.safety;
 
   let added: boolean;
   if (existingIdx >= 0) {
@@ -298,6 +335,14 @@ export function addRobot(
       !Array.isArray(prev["profile"])
     ) {
       next["profile"] = prev["profile"];
+    }
+    if (
+      entry.safety === undefined &&
+      prev["safety"] &&
+      typeof prev["safety"] === "object" &&
+      !Array.isArray(prev["safety"])
+    ) {
+      next["safety"] = prev["safety"];
     }
     explicit[existingIdx] = next;
     added = false;
