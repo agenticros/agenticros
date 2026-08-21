@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1100" viewBox="0 0 1800 1100" role="img" aria-labelledby="title desc">
   <title id="title">AgenticROS system flow</title>
-  <desc id="desc">System flow showing chat channels and Jarvis voice (spoken input and spoken replies) connecting through AI agent platforms and AgenticROS tools, capabilities, missions, memory, transports, and skills to ROS, RealSense, Nav2, robot hardware, and mission feedback.</desc>
+  <desc id="desc">System flow showing chat channels and Jarvis voice (spoken input and spoken replies) connecting through AI agent platforms and AgenticROS tools, capabilities, missions, memory, transports, and skills to ROS, RealSense, Nav2, robot hardware, and mission feedback. Everyday Jarvis questions use a fast chat model; robot commands still go through OpenClaw.</desc>
   <defs>
     <style>
       .bg { fill: #f5f7fb; }
@@ -101,8 +101,8 @@
   <path d="M 148 642 C 154 650 154 658 148 666" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round"/>
   <text class="label" x="168" y="640">Jarvis Voice</text>
   <text class="small" x="168" y="660">skill · mic in + spoken replies</text>
-  <text class="text" x="116" y="696">"Hey Jarvis" wake word → OpenClaw</text>
-  <text class="text" x="116" y="718">LLM chat, tasks, and missions</text>
+  <text class="text" x="116" y="696">"Hey Jarvis" wake word</text>
+  <text class="text" x="116" y="718">Fast chat; robot turns → OpenClaw</text>
   <text class="small" x="116" y="738">Kokoro TTS replies out loud</text>
 
   <rect class="panel shadow" x="468" y="144" width="414" height="826" rx="18"/>

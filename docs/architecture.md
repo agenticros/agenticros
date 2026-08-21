@@ -11,9 +11,10 @@ Jarvis voice in and spoken replies out) and agent platforms (OpenClaw,
 NemoClaw, Claude, Codex, Gemini, Hermes) call into AgenticROS — tools and
 capabilities, missions and memory, transport and safety, skills and
 perception — then out to the ROS 2 graph and robot hardware. Jarvis is
-the `chrismatthieu/jarvis` skill: wake-word speech becomes the same
-OpenClaw agent loop as chat, covering ordinary LLM conversation and
-AgenticROS tasks and missions. Source SVG: [agenticros-system-flow.svg](agenticros-system-flow.svg).
+the `chrismatthieu/jarvis` skill: after the wake word, everyday questions
+are answered by a fast chat model; robot commands and ROS inquiries go
+through the same OpenClaw agent loop as web chat, so installed AgenticROS
+skills work the same out loud. Source SVG: [agenticros-system-flow.svg](agenticros-system-flow.svg).
 The text diagrams below break out each deployment mode in more detail.
 A package-level diagram of adapters and `ros2_ws` nodes is in
 [agenticros-architecture.svg](agenticros-architecture.svg).
