@@ -6,6 +6,8 @@ When disabled (the default), the memory tools are not registered at all. There a
 
 > **Cross-process out of the box.** With the `mem0` backend, the underlying `mem0ai/oss` package writes to `~/.mem0/vector_store.db` (SQLite + vectors) so a fact you remember from Claude Desktop is immediately recall-able from OpenClaw — and vice versa — without any extra setup or running server. With the `local` backend, the shared file is `~/.agenticros/memory.json`. See [Cross-adapter behavior](#cross-adapter-behavior) below.
 
+> **This robot vs the fleet.** `memory_*` is for facts that belong to **this robot**. Sharing what robots see and remember across an organization is a separate, optional paid layer — [fleet hive](hive.md). Hive is **not** a memory backend (`memory.backend` stays `local` or `mem0`). If you never enable hive, nothing here changes.
+
 ---
 
 ## When to enable
@@ -46,7 +48,7 @@ By default the namespace is `config.robot.namespace`, so memories are scoped per
 | Per-user override | Set `config.memory.namespace` to the user id |
 | Per-call override | Pass `namespace` in the tool args |
 
-> Heads up: with the default, two robots **never** see each other's memories. With a shared override, all robots with that namespace do.
+> Heads up: with the default, two robots **never** see each other's memories. With a shared override, all robots with that namespace do. To share facts across robots in an org without collapsing namespaces, use [fleet hive](hive.md) (`hive_remember` / `hive_recall`) — that is a sibling feature, not `memory.backend: "hive"`.
 
 ---
 

@@ -95,6 +95,36 @@ export {
 } from "./banner.js";
 
 export { createMemory, resolveMemoryNamespace } from "./memory/index.js";
+
+export {
+  createHiveClient,
+  hiveRecipeOn,
+  DEFAULT_HIVE_URL,
+  HIVE_EVENT_SCHEMA,
+  HIVE_RECIPE_CATALOG,
+  HIVE_RECIPE_IDS,
+  HiveUnavailableError,
+  isDeniedActuationTopic,
+  taskDefinitionMentionsActuation,
+  assertHivePublishDenied,
+  makeHiveEvent,
+  isHiveEvent,
+  mergeHiveConfig,
+} from "./hive/index.js";
+export type {
+  HiveClient,
+  HiveClientHooks,
+  HiveClientOverrides,
+  HiveEnableResult,
+  HiveEvent,
+  HiveEventKind,
+  HiveMemoryItem,
+  HiveRecipeCatalogEntry,
+  HiveRecipeId,
+  HiveRecipeResult,
+  HiveStatus,
+  HiveConfigPatch,
+} from "./hive/index.js";
 export type {
   MemoryProvider,
   MemoryRecord,

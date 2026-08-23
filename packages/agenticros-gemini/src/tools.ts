@@ -49,6 +49,13 @@ import { getTransportForRobot } from "./transport.js";
 import { checkPublishSafety } from "./safety.js";
 import { getDepthDistance } from "./depth.js";
 import { ensureMemory } from "./memory.js";
+import { ensureHive, getHive, persistHivePatch, setHive } from "./hive.js";
+import {
+  createHiveClient,
+  HIVE_RECIPE_IDS,
+  HiveUnavailableError,
+  type HiveRecipeId,
+} from "@agenticros/core";
 import { getFollowMeLocal } from "./follow-me/loop.js";
 import { getFollowMeDepth } from "./follow-me/depth-loop.js";
 import { findObject } from "@agenticros/object-detection";
@@ -58,6 +65,15 @@ const MEMORY_TOOL_NAMES = new Set([
   "memory_recall",
   "memory_forget",
   "memory_status",
+]);
+
+const HIVE_TOOL_NAMES = new Set([
+  "hive_remember",
+  "hive_recall",
+  "hive_forget",
+  "hive_status",
+  "hive_enable",
+  "hive_set_recipe",
 ]);
 
 /**
@@ -384,6 +400,56 @@ export const GEMINI_FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
     }),
   },
   {
+    name: "hive_remember",
+    description:
+      "Store a fact for the whole fleet. Use for \"tell the other robots\". For this robot only, use memory_remember. Only when hive is enabled.",
+    parametersJsonSchema: schemaFromProps(
+      {
+        content: { type: "string", description: "Fleet fact as a self-contained sentence." },
+        tags: { type: "array", description: "Optional tags." },
+      },
+      ["content"],
+    ),
+  },
+  {
+    name: "hive_recall",
+    description:
+      "Search fleet memory. For this robot only, use memory_recall. Only when hive is enabled.",
+    parametersJsonSchema: schemaFromProps({
+      query: { type: "string", description: "Free-text query." },
+      limit: { type: "number", description: "Max matches (default 10)." },
+    }),
+  },
+  {
+    name: "hive_forget",
+    description: "Delete a fleet fact by key or query. Only when hive is enabled.",
+    parametersJsonSchema: schemaFromProps({
+      key: { type: "string", description: "Key from hive_remember." },
+      query: { type: "string", description: "Delete matching fleet facts." },
+    }),
+  },
+  {
+    name: "hive_status",
+    description: "Plain-language fleet hive status. Never ask for URLs or key ids.",
+    parametersJsonSchema: schemaFromProps({}),
+  },
+  {
+    name: "hive_enable",
+    description: "Turn on fleet hive. Do not ask for URLs or key ids.",
+    parametersJsonSchema: schemaFromProps({}),
+  },
+  {
+    name: "hive_set_recipe",
+    description: "Start or stop detect | describe | health. Never submit YAML.",
+    parametersJsonSchema: schemaFromProps(
+      {
+        id: { type: "string", description: "detect | describe | health" },
+        on: { type: "boolean", description: "true to start, false to stop." },
+      },
+      ["id"],
+    ),
+  },
+  {
     name: "run_mission",
     description:
       "Execute a multi-step mission by chaining capabilities (the verbs returned by ros2_list_capabilities). PASS EITHER a natural-language `goal` (recommended for simple verbs like 'find a chair', 'take a picture', 'follow me', 'find a chair and drive toward it') OR an explicit `mission.steps[]` plan when you need precise control. Steps run sequentially; each step's outputs are available to later steps via {{stepId.outputs.fieldName}} template references. Default on_fail behaviour is 'stop' (abort on first error). Returns a per-step result list, a summary line, a mission_id you can pass to mission_cancel to abort mid-run, and (when a goal was provided) the compiled plan + candidate match list so you can see what the planner did. When memory is enabled, every step is also written to the shared memory under namespace mission:<mission_id> so a second agent can recall the timeline via memory_recall. Today the runner supports: drive_base, take_snapshot, measure_depth, list_topics, publish_topic, subscribe_once, follow_person, find_object. Pass mission.robot_id (or top-level robot_id with goal) to target every step at one robot.",
@@ -472,11 +538,13 @@ export const GEMINI_TOOLS = [{ functionDeclarations: GEMINI_FUNCTION_DECLARATION
  */
 export async function buildGeminiTools(config: AgenticROSConfig) {
   const memory = await ensureMemory(config);
-  const declarations = memory
-    ? GEMINI_FUNCTION_DECLARATIONS
-    : GEMINI_FUNCTION_DECLARATIONS.filter(
-        (d) => !MEMORY_TOOL_NAMES.has(d.name ?? ""),
-      );
+  const hive = await ensureHive(config);
+  const declarations = GEMINI_FUNCTION_DECLARATIONS.filter((d) => {
+    const name = d.name ?? "";
+    if (!memory && MEMORY_TOOL_NAMES.has(name)) return false;
+    if (!hive && HIVE_TOOL_NAMES.has(name)) return false;
+    return true;
+  });
   return [{ functionDeclarations: declarations }];
 }
 
@@ -497,6 +565,9 @@ export async function executeTool(
   // packages/agenticros-claude-code/src/tools.ts.
   if (MEMORY_TOOL_NAMES.has(name)) {
     return executeMemoryTool(name, args, config);
+  }
+  if (HIVE_TOOL_NAMES.has(name)) {
+    return executeHiveTool(name, args, config);
   }
   // ros2_list_capabilities reads skill manifests + intrinsic verbs from
   // local config — no transport required. robot_id is accepted but
@@ -1281,5 +1352,80 @@ async function executeMemoryTool(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return { output: `${name} failed: ${message}` };
+  }
+}
+
+function hiveOwnerMessage(err: unknown): string {
+  if (err instanceof HiveUnavailableError) return err.ownerMessage;
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/ECONNREFUSED|fetch failed|ENOTFOUND/i.test(msg)) return "Corebrum is not running.";
+  if (/license|403|forbidden/i.test(msg)) return "Fleet memory needs a hive plan.";
+  return "Fleet memory is not available yet.";
+}
+
+async function executeHiveTool(
+  name: string,
+  args: Record<string, unknown>,
+  config: AgenticROSConfig,
+): Promise<ToolResult> {
+  try {
+    if (name === "hive_enable") {
+      const next = persistHivePatch({ enabled: true });
+      const hive =
+        getHive() ??
+        createHiveClient(next, {}, {
+          persist: (ids) => {
+            persistHivePatch({ identityId: ids.identityId, hiveId: ids.hiveId });
+          },
+        });
+      if (!hive) return { output: "Fleet hive is off. Run `agenticros hive on`." };
+      setHive(hive);
+      const result = await hive.ensure();
+      return { output: JSON.stringify({ success: true, ...result }) };
+    }
+    const hive = (await ensureHive(config)) ?? getHive();
+    if (!hive) {
+      return {
+        output:
+          "Fleet hive is off. Run `agenticros hive on` or flip Share with my fleet. See docs/hive.md.",
+      };
+    }
+    if (name === "hive_remember") {
+      const content = String(args.content ?? "").trim();
+      if (!content) return { output: "hive_remember requires 'content'." };
+      const tags = Array.isArray(args.tags) ? (args.tags as unknown[]).map(String) : undefined;
+      const result = await hive.remember(content, { tags });
+      return { output: JSON.stringify({ success: true, ...result }) };
+    }
+    if (name === "hive_recall") {
+      const query = typeof args.query === "string" ? args.query : undefined;
+      const limit = typeof args.limit === "number" ? args.limit : 10;
+      const results = await hive.recall(query, limit);
+      return { output: JSON.stringify({ success: true, count: results.length, results }) };
+    }
+    if (name === "hive_forget") {
+      const result = await hive.forget(
+        typeof args.key === "string" ? args.key : undefined,
+        typeof args.query === "string" ? args.query : undefined,
+      );
+      return { output: JSON.stringify({ success: true, ...result }) };
+    }
+    if (name === "hive_set_recipe") {
+      const id = String(args.id ?? "").trim() as HiveRecipeId;
+      if (!HIVE_RECIPE_IDS.includes(id)) {
+        return { output: "Unknown recipe. Use detect, describe, or health." };
+      }
+      const on = args.on !== false;
+      const result = await hive.setRecipe(id, on, {
+        cameraTopic: config.robot?.cameraTopic,
+        namespace: config.robot?.namespace,
+      });
+      persistHivePatch({ recipes: { [id]: on } });
+      return { output: JSON.stringify({ success: true, ...result }) };
+    }
+    const status = await hive.status();
+    return { output: JSON.stringify({ success: true, ...status }) };
+  } catch (err) {
+    return { output: hiveOwnerMessage(err) };
   }
 }

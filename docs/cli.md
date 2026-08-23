@@ -256,6 +256,17 @@ verbs per body — see [robot-profile.md](robot-profile.md).
 | `profile show` | `agenticros robots profile show warehouse-01` |
 | `profile infer` | `agenticros robots profile infer warehouse-01 --apply` |
 
+### `agenticros hive [on|off|doctor|recipes]`
+
+Optional fleet hive (off by default). See [hive.md](hive.md).
+
+| Action | Effect |
+|---|---|
+| `on` | Write `hive.enabled=true` and fill URL / robot id / org. Does not require YAML. |
+| `off` | Turn hive off. Robot memory and driving are unchanged. |
+| `doctor` | Plain-language reachability: running / not running / needs a hive plan. |
+| `recipes` | Interactive list: detect, describe, health. |
+
 ## Where state lives
 
 | Path | Owner | Purpose |

@@ -361,6 +361,21 @@ cross-process verification steps.
 
 ---
 
+## Optional fleet hive
+
+When `config.hive.enabled` is true, adapters register `hive_*` tools
+(remember / recall / forget / status / enable / set_recipe) that talk to
+an optional Corebrum process over `http://127.0.0.1:6502/api/*`. Hive is
+**not** a memory backend: per-robot `memory_*` stays on `local` / `mem0`.
+Corebrum is a separate proprietary product; AgenticROS never vendors it
+and never publishes `cmd_vel` through it.
+
+When hive is off (the default), `createHiveClient` returns `null`, no
+`hive_*` tools are registered, and nothing calls `:6502`. See
+[hive.md](hive.md).
+
+---
+
 ## Data Flow Example
 
 ```

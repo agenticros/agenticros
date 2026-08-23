@@ -515,6 +515,37 @@
           }
         }
       },
+      "hive": {
+        "type": "object",
+        "description": "Optional fleet hive. Off by default; see docs/hive.md. Not a memory backend.",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "Share with my fleet. When false, no hive_* tools are registered."
+          },
+          "url": {
+            "type": "string",
+            "description": "Hive HTTP base URL. Omit for http://127.0.0.1:6502."
+          },
+          "identityId": {
+            "type": "string",
+            "description": "Filled automatically from the ARC robot id."
+          },
+          "hiveId": {
+            "type": "string",
+            "description": "Filled automatically after the robot joins the org hive."
+          },
+          "recipes": {
+            "type": "object",
+            "properties": {
+              "detect": { "type": "boolean", "default": false },
+              "describe": { "type": "boolean", "default": false },
+              "health": { "type": "boolean", "default": false }
+            }
+          }
+        }
+      },
       "skills": {
         "type": "object",
         "description": "Per-skill config. Keys are skill ids (e.g. followme). Each skill validates its own slice.",

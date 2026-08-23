@@ -184,6 +184,31 @@ export interface CloudMe {
   maxRobots?: number;
 }
 
+export interface CloudOrg {
+  id: string;
+  name?: string;
+  hiveEnabled?: boolean;
+}
+
+export async function fetchCurrentOrg(): Promise<CloudOrg | null> {
+  const apiToken = getApiToken();
+  if (!apiToken) return null;
+  try {
+    const response = await fetch(`${CLOUD_REST}/orgs/current`, {
+      headers: {
+        "Content-Type": "application/json",
+        api_token: apiToken,
+        Authorization: `Bearer ${apiToken}`,
+      },
+    });
+    if (!response.ok) return null;
+    const data = (await response.json()) as { org?: CloudOrg | null };
+    return data.org ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchMe(): Promise<CloudMe | null> {
   const apiToken = getApiToken();
   if (!apiToken) return null;

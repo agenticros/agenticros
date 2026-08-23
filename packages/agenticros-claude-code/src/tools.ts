@@ -51,6 +51,13 @@ import { getFollowMeLocal } from "./follow-me/loop.js";
 import { getFollowMeDepth } from "./follow-me/depth-loop.js";
 import { findObject } from "@agenticros/object-detection";
 import { ensureMemory } from "./memory.js";
+import { ensureHive, getHive, persistHivePatch, setHive } from "./hive.js";
+import {
+  createHiveClient,
+  HIVE_RECIPE_IDS,
+  HiveUnavailableError,
+  type HiveRecipeId,
+} from "@agenticros/core";
 
 const DEFAULT_DEPTH_TOPIC = "/camera/camera/depth/image_rect_raw";
 
@@ -65,6 +72,15 @@ export const MEMORY_TOOL_NAMES = new Set<string>([
   "memory_status",
 ]);
 
+export const HIVE_TOOL_NAMES = new Set<string>([
+  "hive_remember",
+  "hive_recall",
+  "hive_forget",
+  "hive_status",
+  "hive_enable",
+  "hive_set_recipe",
+]);
+
 /**
  * Tools that read purely from local config / filesystem and don't need the
  * ROS transport. The MCP server entry point uses this to skip
@@ -75,6 +91,7 @@ export const MEMORY_TOOL_NAMES = new Set<string>([
  */
 export const NO_TRANSPORT_TOOL_NAMES = new Set<string>([
   ...MEMORY_TOOL_NAMES,
+  ...HIVE_TOOL_NAMES,
   "ros2_list_capabilities",
   "ros2_list_robots",
   // ros2_find_robots_for can run config-only (no online filter); the
@@ -397,6 +414,67 @@ export const TOOLS: McpTool[] = [
       properties: {
         namespace: { type: "string", description: "Optional namespace override; defaults to the robot namespace." },
       },
+    },
+  },
+  {
+    name: "hive_remember",
+    description:
+      "Store a fact for the whole fleet (every robot in this org). Use when the user says \"tell the other robots\" or \"remember this for the fleet\". For THIS robot only, use memory_remember. Only available when hive is enabled.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        content: { type: "string", description: "The fleet fact, written as a self-contained sentence." },
+        tags: { type: "array", description: "Optional tags." },
+      },
+      required: ["content"],
+    },
+  },
+  {
+    name: "hive_recall",
+    description:
+      "Search fleet memory — what other robots have seen or been told. For this robot only, use memory_recall. Only available when hive is enabled.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Free-text query." },
+        limit: { type: "number", description: "Max matches (default 10)." },
+      },
+    },
+  },
+  {
+    name: "hive_forget",
+    description: "Delete a fleet fact by key or query. Irreversible. Only available when hive is enabled.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        key: { type: "string", description: "Key returned by hive_remember." },
+        query: { type: "string", description: "Delete matching fleet facts." },
+      },
+    },
+  },
+  {
+    name: "hive_status",
+    description:
+      "Plain-language fleet hive status. Never ask the owner for URLs or key ids. Only available when hive is enabled.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "hive_enable",
+    description:
+      "Turn on fleet hive. Call when the user says \"turn on fleet memory\" or \"share with my fleet\". Do not ask for URLs or key ids.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "hive_set_recipe",
+    description:
+      "Start or stop a named fleet recipe: detect | describe | health. Never submit YAML. Only available when hive is enabled.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Recipe id: detect | describe | health" },
+        on: { type: "boolean", description: "true to start, false to stop." },
+      },
+      required: ["id"],
     },
   },
   {
@@ -900,6 +978,9 @@ export async function handleToolCall(
   // dispatch them before getTransport() (which throws when zenohd is down).
   if (MEMORY_TOOL_NAMES.has(name)) {
     return handleMemoryToolCall(name, args, config);
+  }
+  if (HIVE_TOOL_NAMES.has(name)) {
+    return handleHiveToolCall(name, args, config);
   }
   // ros2_list_capabilities reads skill manifests + intrinsic verbs from
   // local config — no transport required. robot_id is accepted but
@@ -1596,5 +1677,92 @@ async function handleMemoryToolCall(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return { content: [{ type: "text", text: `${name} failed: ${message}` }], isError: true };
+  }
+}
+
+function hiveOwnerMessage(err: unknown): string {
+  if (err instanceof HiveUnavailableError) return err.ownerMessage;
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/ECONNREFUSED|fetch failed|ENOTFOUND/i.test(msg)) return "Corebrum is not running.";
+  if (/license|403|forbidden/i.test(msg)) return "Fleet memory needs a hive plan.";
+  return "Fleet memory is not available yet.";
+}
+
+async function handleHiveToolCall(
+  name: string,
+  args: Record<string, unknown>,
+  config: AgenticROSConfig,
+): Promise<{ content: { type: "text"; text: string }[]; isError?: boolean }> {
+  try {
+    if (name === "hive_enable") {
+      const next = persistHivePatch({ enabled: true });
+      const hive =
+        getHive() ??
+        createHiveClient(next, {}, {
+          persist: (ids) => {
+            persistHivePatch({ identityId: ids.identityId, hiveId: ids.hiveId });
+          },
+        });
+      if (!hive) {
+        return {
+          content: [{ type: "text", text: "Fleet hive is off. Run `agenticros hive on`." }],
+          isError: true,
+        };
+      }
+      setHive(hive);
+      const result = await hive.ensure();
+      return { content: [{ type: "text", text: JSON.stringify({ success: true, ...result }) }] };
+    }
+    const hive = (await ensureHive(config)) ?? getHive();
+    if (!hive) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Fleet hive is off. Run `agenticros hive on` or flip Share with my fleet. See docs/hive.md.",
+          },
+        ],
+        isError: true,
+      };
+    }
+    if (name === "hive_remember") {
+      const content = String(args.content ?? "").trim();
+      if (!content) {
+        return { content: [{ type: "text", text: "hive_remember requires 'content'." }], isError: true };
+      }
+      const tags = Array.isArray(args.tags) ? (args.tags as unknown[]).map(String) : undefined;
+      const result = await hive.remember(content, { tags });
+      return { content: [{ type: "text", text: JSON.stringify({ success: true, ...result }) }] };
+    }
+    if (name === "hive_recall") {
+      const query = typeof args.query === "string" ? args.query : undefined;
+      const limit = typeof args.limit === "number" ? args.limit : 10;
+      const results = await hive.recall(query, limit);
+      return { content: [{ type: "text", text: JSON.stringify({ success: true, count: results.length, results }) }] };
+    }
+    if (name === "hive_forget") {
+      const result = await hive.forget(
+        typeof args.key === "string" ? args.key : undefined,
+        typeof args.query === "string" ? args.query : undefined,
+      );
+      return { content: [{ type: "text", text: JSON.stringify({ success: true, ...result }) }] };
+    }
+    if (name === "hive_set_recipe") {
+      const id = String(args.id ?? "").trim() as HiveRecipeId;
+      if (!HIVE_RECIPE_IDS.includes(id)) {
+        return { content: [{ type: "text", text: "Unknown recipe. Use detect, describe, or health." }], isError: true };
+      }
+      const on = args.on !== false;
+      const result = await hive.setRecipe(id, on, {
+        cameraTopic: config.robot?.cameraTopic,
+        namespace: config.robot?.namespace,
+      });
+      persistHivePatch({ recipes: { [id]: on } });
+      return { content: [{ type: "text", text: JSON.stringify({ success: true, ...result }) }] };
+    }
+    const status = await hive.status();
+    return { content: [{ type: "text", text: JSON.stringify({ success: true, ...status }) }] };
+  } catch (err) {
+    return { content: [{ type: "text", text: hiveOwnerMessage(err) }], isError: true };
   }
 }

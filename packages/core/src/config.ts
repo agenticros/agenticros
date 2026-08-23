@@ -443,6 +443,32 @@ export const AgenticROSConfigSchema = z.object({
     })
     .default({}),
 
+  /**
+   * Optional fleet hive (Corebrum HTTP on :6502). Sibling of `memory`, not a
+   * memory backend. When `enabled: false` (default), createHiveClient returns
+   * null and adapters skip hive_* tools. See docs/hive.md.
+   */
+  hive: z
+    .object({
+      /** Master switch. When false, adapters skip registering hive tools. */
+      enabled: z.boolean().default(false),
+      /** Corebrum web base URL. Omit → http://127.0.0.1:6502 */
+      url: z.string().optional(),
+      /** Corebrum identity key_id. Omit → ARC ROBOT_ID */
+      identityId: z.string().optional(),
+      /** Corebrum hive_id after create/join. Omit → find/create by org name */
+      hiveId: z.string().optional(),
+      /** Named recipes the fleet should run. YAML never lives in this repo. */
+      recipes: z
+        .object({
+          detect: z.boolean().default(false),
+          describe: z.boolean().default(false),
+          health: z.boolean().default(false),
+        })
+        .default({}),
+    })
+    .default({}),
+
   /** Per-skill config. Keys are skill ids (e.g. followme). Each skill validates its own slice. */
   skills: z.record(z.string(), z.unknown()).default({}),
 
@@ -498,6 +524,9 @@ export function prepareConfigForPersistence(
     if (Array.isArray(robots) && robots.length === 0) {
       delete out.robots;
     }
+  }
+  if (!Object.prototype.hasOwnProperty.call(raw, "hive")) {
+    delete out.hive;
   }
   return out;
 }

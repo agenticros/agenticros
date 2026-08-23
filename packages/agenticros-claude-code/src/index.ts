@@ -15,8 +15,9 @@ import type { AgenticROSConfig } from "@agenticros/core";
 import { renderAgenticROSBanner } from "@agenticros/core";
 import { loadConfig, loadConfigAsync } from "./config.js";
 import { connect, disconnect } from "./transport.js";
-import { TOOLS, handleToolCall, MEMORY_TOOL_NAMES, NO_TRANSPORT_TOOL_NAMES } from "./tools.js";
+import { TOOLS, handleToolCall, MEMORY_TOOL_NAMES, HIVE_TOOL_NAMES, NO_TRANSPORT_TOOL_NAMES } from "./tools.js";
 import { ensureMemory } from "./memory.js";
+import { ensureHive } from "./hive.js";
 
 let config: AgenticROSConfig | null = null;
 let transportConnected = false;
@@ -62,7 +63,12 @@ function main(): void {
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     const cfg = config ?? loadConfig();
     const memory = await ensureMemory(cfg);
-    const filtered = memory ? TOOLS : TOOLS.filter((t) => !MEMORY_TOOL_NAMES.has(t.name));
+    const hive = await ensureHive(cfg);
+    const filtered = TOOLS.filter((t) => {
+      if (!memory && MEMORY_TOOL_NAMES.has(t.name)) return false;
+      if (!hive && HIVE_TOOL_NAMES.has(t.name)) return false;
+      return true;
+    });
     return {
       tools: filtered.map((t) => ({
         name: t.name,

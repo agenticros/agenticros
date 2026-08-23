@@ -44,6 +44,7 @@ import {
   whoamiCommand,
 } from "./commands/cloud-auth.js";
 import { registerCommand } from "./commands/register.js";
+import { hiveCommand } from "./commands/hive.js";
 import { remoteCommand } from "./commands/remote.js";
 import { gatewayCommand } from "./commands/gateway.js";
 import { err } from "./util/logger.js";
@@ -650,6 +651,16 @@ hermesCmd
   .action(async (opts: { json?: boolean }) => {
     const exitCode = await hermesDoctorCommand(opts);
     if (exitCode !== 0) process.exit(exitCode);
+  });
+
+program
+  .command("hive [action]")
+  .description(
+    "Optional fleet hive (off by default). action = on | off | doctor | recipes. See docs/hive.md.",
+  )
+  .action(async (action: string | undefined) => {
+    const code = await hiveCommand({ action });
+    if (code !== 0) process.exit(code);
   });
 
 program

@@ -63,9 +63,11 @@ export function registerRobotContext(api: OpenClawPluginApi, config: AgenticROSC
       if (fallback) cameraTopicHint = fallback;
     }
     const memorySection = await buildMemorySection(config);
+    const hiveSection = buildHiveSection(config);
     const context =
       buildRobotContext(config, robotName, robotNamespace, capabilities, cameraTopicHint) +
-      memorySection;
+      memorySection +
+      hiveSection;
     return { prependContext: context };
   });
 }
@@ -110,6 +112,22 @@ You have a shared long-term memory store. It is shared across **all** AgenticROS
 ${recentBlock}
 
 If a question seems answerable from this list, answer directly. If you need more (e.g. semantic match, full search), call \`memory_recall\` with a focused query.`;
+}
+
+/**
+ * Mention fleet hive only when enabled so agents never invent hive_* tools.
+ */
+function buildHiveSection(config: AgenticROSConfig): string {
+  if (!config.hive?.enabled) return "";
+  const recipes = config.hive.recipes ?? {};
+  const on = ["detect", "describe", "health"].filter(
+    (id) => recipes[id as "detect" | "describe" | "health"],
+  );
+  const recipeLine = on.length > 0 ? `Running recipes: ${on.join(", ")}.` : "No recipes running yet.";
+  return `\n\n### Fleet hive (optional, enabled)
+Facts for **this robot** stay in \`memory_*\`. Facts for **the fleet** (other robots in the org) use \`hive_remember\` / \`hive_recall\` / \`hive_forget\` / \`hive_status\`.
+Call \`hive_set_recipe\` with id \`detect\` | \`describe\` | \`health\` when the user wants cameras watched. Never ask for URLs, key ids, or YAML.
+${recipeLine}`;
 }
 
 /**

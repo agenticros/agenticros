@@ -5,6 +5,8 @@ import { registerService } from "./service.js";
 import { registerTools } from "./tools/index.js";
 import { registerMemoryTools } from "./tools/ros2-memory.js";
 import { initMemory } from "./memory.js";
+import { registerHiveTools } from "./tools/hive-tools.js";
+import { initHive } from "./hive.js";
 import { loadSkills } from "./skill-loader.js";
 import { registerSafetyHook } from "./safety/validator.js";
 import { registerRobotContext } from "./context/robot-context.js";
@@ -66,6 +68,15 @@ export default {
       .catch((e) => {
         const msg = e instanceof Error ? e.message : String(e);
         api.logger.error("AgenticROS: memory init failed: " + msg);
+      });
+
+    void initHive(config, api.logger)
+      .then((hive) => {
+        if (hive) registerHiveTools(api, config);
+      })
+      .catch((e) => {
+        const msg = e instanceof Error ? e.message : String(e);
+        api.logger.error("AgenticROS: hive init failed: " + msg);
       });
 
     // Load optional skills synchronously. OpenClaw 2026.6's plugin host snapshots

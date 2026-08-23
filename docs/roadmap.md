@@ -198,6 +198,7 @@ OpenClaw / Grok.”
 | Product | Model | Notes |
 |---------|--------|--------|
 | **Hosted semantic memory** | Per-robot or per-GB | Cross-site sync, backup, retention — local mem0/JSON stays free |
+| **Fleet hive** | Org add-on (Teams+ for managed hosting) | Shared fleet notes + camera-watch recipes via optional Corebrum (`:6502`). Self-host with `agenticros hive on`; ARC org checkbox for managed. Not a `memory.backend`. See [hive.md](hive.md). |
 | **Spatial memory cloud** | Premium | Map-linked recall, multi-robot shared maps, ReMEmbR-class pipelines |
 | **Embedder / VLM gateway** | Usage | Optional cloud embeddings/VLM when Ollama isn’t available |
 | **Mission transcript vault** | Retention add-on | Compliance, debugging; customer-owned data |

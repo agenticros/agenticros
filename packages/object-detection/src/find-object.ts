@@ -4,7 +4,7 @@
  */
 
 import type { AgenticROSConfig, ResolvedRobot, RosTransport } from "@agenticros/core";
-import { resolveCameraSubscribeTopic, toNamespacedTopic, resolveSafetyForRobot } from "@agenticros/core";
+import { resolveCameraSubscribeTopic, toNamespacedTopic, resolveSafetyForRobot, hiveRecipeOn, isHiveEvent } from "@agenticros/core";
 import {
   ROS_MSG_COMPRESSED_IMAGE,
   ROS_MSG_IMAGE,
@@ -76,6 +76,9 @@ export async function findObject(
         `Supported: ${COCO_CLASSES.join(", ")}.`,
     };
   }
+
+  const hiveHit = await tryHiveDetections(robot, config, transport, opts.target, opts.minConfidence ?? DEFAULT_MIN_CONFIDENCE);
+  if (hiveHit) return hiveHit;
 
   const safety = resolveSafetyForRobot(config, robot);
   const maxAngular = safety.maxAngularVelocity;
@@ -215,6 +218,120 @@ async function snapshotOnce(
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * When the fleet `detect` recipe is on, prefer a recent hive detections
+ * message over in-process ONNX. ONNX remains the default when hive is off.
+ */
+async function tryHiveDetections(
+  robot: ResolvedRobot,
+  config: AgenticROSConfig,
+  transport: RosTransport,
+  target: string,
+  minConfidence: number,
+): Promise<FindObjectResult | null> {
+  if (!hiveRecipeOn(config, "detect")) return null;
+  const classId = resolveCocoClassId(target);
+  if (classId === null) return null;
+  const topic = toNamespacedTopic(robot.namespace, "agenticros/detections");
+  const wanted = target.trim().toLowerCase();
+  return new Promise((resolve) => {
+    let settled = false;
+    let sub: { unsubscribe: () => void } | undefined;
+    const finish = (value: FindObjectResult | null) => {
+      if (settled) return;
+      settled = true;
+      try {
+        sub?.unsubscribe();
+      } catch {
+        /* ignore */
+      }
+      resolve(value);
+    };
+    sub = transport.subscribe({ topic }, (msg) => {
+      const event = isHiveEvent(msg) ? msg : (msg.data && typeof msg.data === "object" ? msg.data : msg);
+      const payload =
+        event && typeof event === "object" && "payload" in event
+          ? (event as { payload?: unknown }).payload
+          : event;
+      const detections = extractDetections(payload);
+      const match = detections.find(
+        (d) =>
+          (d.label.toLowerCase() === wanted || d.classId === classId) &&
+          d.confidence >= minConfidence,
+      );
+      if (!match) return;
+      finish({
+        found: true,
+        target,
+        classId,
+        elapsedSeconds: 0,
+        rotationDirection: "clockwise",
+        angularSpeed: 0,
+        detection: {
+          confidence: match.confidence,
+          cx: match.cx,
+          cy: match.cy,
+          width: match.width,
+          height: match.height,
+          imageWidth: match.imageWidth,
+          imageHeight: match.imageHeight,
+          horizontalOffset: (match.cx - match.imageWidth / 2) / Math.max(1, match.imageWidth / 2),
+        },
+      });
+    });
+    setTimeout(() => finish(null), 800);
+  });
+}
+
+function extractDetections(payload: unknown): {
+  label: string;
+  classId?: number;
+  confidence: number;
+  cx: number;
+  cy: number;
+  width: number;
+  height: number;
+  imageWidth: number;
+  imageHeight: number;
+}[] {
+  if (!payload) return [];
+  const rows = Array.isArray(payload)
+    ? payload
+    : payload && typeof payload === "object" && Array.isArray((payload as { detections?: unknown }).detections)
+      ? (payload as { detections: unknown[] }).detections
+      : [payload];
+  const out: {
+    label: string;
+    classId?: number;
+    confidence: number;
+    cx: number;
+    cy: number;
+    width: number;
+    height: number;
+    imageWidth: number;
+    imageHeight: number;
+  }[] = [];
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    const r = row as Record<string, unknown>;
+    const label = String(r.label ?? r.class ?? r.name ?? "").trim();
+    const confidence = Number(r.confidence ?? r.score ?? 0);
+    if (!label && r.classId === undefined) continue;
+    out.push({
+      label,
+      classId: typeof r.classId === "number" ? r.classId : undefined,
+      confidence: Number.isFinite(confidence) ? confidence : 0,
+      cx: Number(r.cx ?? r.x ?? 0),
+      cy: Number(r.cy ?? r.y ?? 0),
+      width: Number(r.width ?? 0),
+      height: Number(r.height ?? 0),
+      imageWidth: Number(r.imageWidth ?? r.image_width ?? 1),
+      imageHeight: Number(r.imageHeight ?? r.image_height ?? 1),
+    });
+  }
+  return out;
 }
 
 function resolveCmdVelTopic(config: AgenticROSConfig, robot: ResolvedRobot): string {

@@ -1,6 +1,6 @@
 # AgenticROS Documentation
 
-AgenticROS connects AI agent platforms to ROS2 robots through a shared core, transport adapters, and platform-specific integrations. These docs cover setup, architecture, transport modes, operator workflows, skills, memory, simulation, and troubleshooting.
+AgenticROS connects AI agent platforms to ROS2 robots through a shared core, transport adapters, and platform-specific integrations. These docs cover setup, architecture, transport modes, operator workflows, skills, memory, optional fleet hive, simulation, and troubleshooting.
 
 ## Start here
 
@@ -17,7 +17,8 @@ AgenticROS connects AI agent platforms to ROS2 robots through a shared core, tra
 
 - [Camera support](cameras.md) - supported ROS image message types and RealSense notes.
 - [Teleop web app](teleop.md) - opening the teleop page, config, requirements, and HTTP API reference.
-- [Memory](memory.md) - cross-adapter long-term memory, backends, recipes, and verification steps.
+- [Memory](memory.md) - cross-adapter long-term memory for **this robot** (`local` / `mem0`).
+- [Fleet hive](hive.md) - optional paid layer so robots in an org share what they see and remember. Off by default; not a memory backend.
 - [Skills](skills.md) - skill contracts, marketplace install flow, manual install, and publishing guidance.
 
 ## Transports and deployments
@@ -48,7 +49,7 @@ AgenticROS connects AI agent platforms to ROS2 robots through a shared core, tra
 
 The main packages are organized as:
 
-- `packages/core` - transport interfaces, config schema, missions, memory, capabilities, and transport factories.
+- `packages/core` - transport interfaces, config schema, missions, memory, optional fleet hive client, capabilities, and transport factories.
 - `packages/ros-camera` - shared camera snapshot encoding.
 - `packages/object-detection` - shared YOLOv8n detector and find-object scan.
 - `packages/agenticros` - OpenClaw plugin, config UI, tools, routes, and teleop.

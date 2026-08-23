@@ -116,6 +116,23 @@ export function getConfigPageHtml(): string {
       <pre id="memory-test-output" style="display:none;background:#252525;padding:8px;border:1px solid #444;border-radius:4px;font-size:0.8rem;color:#9c9;max-width:520px;white-space:pre-wrap;word-break:break-all"></pre>
     </section>
     <section>
+      <h2>Fleet hive</h2>
+      <p class="field-hint">Optional. Robots in your organization share what they see and remember. Off by default. This is not this-robot memory (above). You do not install anything per robot.</p>
+      <div class="field">
+        <label><input type="checkbox" id="hive.enabled" name="hive.enabled" /> Share with my fleet</label>
+      </div>
+      <div id="section-hive-recipes" style="display:none">
+        <div class="field"><label><input type="checkbox" id="hive.recipes.detect" name="hive.recipes.detect" /> Detect objects on cameras</label></div>
+        <div class="field"><label><input type="checkbox" id="hive.recipes.describe" name="hive.recipes.describe" /> Describe what robots see</label></div>
+        <div class="field"><label><input type="checkbox" id="hive.recipes.health" name="hive.recipes.health" /> Fleet health notes</label></div>
+        <details id="hive-advanced">
+          <summary style="cursor:pointer;color:#aaa;font-size:0.85rem">Advanced</summary>
+          <div class="field"><label for="hive.url">Hive URL</label><input type="text" id="hive.url" name="hive.url" placeholder="http://127.0.0.1:6502" /></div>
+          <p class="field-hint">Leave blank for localhost. <a href="http://127.0.0.1:6502" target="_blank" rel="noopener">Open local hive UI</a></p>
+        </details>
+      </div>
+    </section>
+    <section>
       <h2>Skills</h2>
       <div class="field">
         <label for="skillPackages">Skill packages (comma-separated)</label>
@@ -269,9 +286,14 @@ const CONFIG_PAGE_SCRIPT = `(function() {
     if (mem0Sec) mem0Sec.style.display = choice === 'mem0' ? 'block' : 'none';
     if (actions) actions.style.display = choice === 'off' ? 'none' : 'block';
   }
+  function updateHiveVisibility() {
+    var on = !!getFieldValue('hive.enabled');
+    var rec = document.getElementById('section-hive-recipes');
+    if (rec) rec.style.display = on ? 'block' : 'none';
+  }
   function payloadFromForm() {
-    var payload = { transport: {}, robot: {}, rosbridge: {}, zenoh: {}, local: {}, webrtc: {}, teleop: {}, safety: {}, memory: { local: {}, mem0: {} }, skillPackages: [], skillPaths: [], skills: {} };
-    var names = ['transport.mode','robot.name','robot.namespace','robot.cameraTopic','rosbridge.url','rosbridge.reconnect','rosbridge.reconnectInterval','zenoh.routerEndpoint','zenoh.domainId','zenoh.keyFormat','local.domainId','webrtc.signalingUrl','webrtc.apiUrl','webrtc.robotId','teleop.cameraTopic','teleop.cmdVelTopic','teleop.speedDefault','teleop.cameraPollMs','safety.maxLinearVelocity','safety.maxAngularVelocity','memory.local.storePath','memory.mem0.inferOnWrite','memory.mem0.historyDbPath','skills.followme.useOllama','skills.followme.ollamaUrl','skills.followme.vlmModel','skills.followme.cameraTopic','skills.followme.cameraMessageType','skills.followme.depthTopic','skills.followme.cmdVelTopic','skills.followme.targetDistance','skills.followme.rateHz','skills.followme.minLinearVelocity','skills.followme.invertLinearX','skills.followme.logTickTiming','skills.followme.criticalStopDistanceM','skills.followme.maxVelocityFraction','skills.followme.visionCallbackUrl','skills.followme.useDepthSectors','skills.followme.searchAngularVelocity','skills.followme.searchTicksBeforeSwitch'];
+    var payload = { transport: {}, robot: {}, rosbridge: {}, zenoh: {}, local: {}, webrtc: {}, teleop: {}, safety: {}, memory: { local: {}, mem0: {} }, hive: { recipes: {} }, skillPackages: [], skillPaths: [], skills: {} };
+    var names = ['transport.mode','robot.name','robot.namespace','robot.cameraTopic','rosbridge.url','rosbridge.reconnect','rosbridge.reconnectInterval','zenoh.routerEndpoint','zenoh.domainId','zenoh.keyFormat','local.domainId','webrtc.signalingUrl','webrtc.apiUrl','webrtc.robotId','teleop.cameraTopic','teleop.cmdVelTopic','teleop.speedDefault','teleop.cameraPollMs','safety.maxLinearVelocity','safety.maxAngularVelocity','memory.local.storePath','memory.mem0.inferOnWrite','memory.mem0.historyDbPath','hive.url','skills.followme.useOllama','skills.followme.ollamaUrl','skills.followme.vlmModel','skills.followme.cameraTopic','skills.followme.cameraMessageType','skills.followme.depthTopic','skills.followme.cmdVelTopic','skills.followme.targetDistance','skills.followme.rateHz','skills.followme.minLinearVelocity','skills.followme.invertLinearX','skills.followme.logTickTiming','skills.followme.criticalStopDistanceM','skills.followme.maxVelocityFraction','skills.followme.visionCallbackUrl','skills.followme.useDepthSectors','skills.followme.searchAngularVelocity','skills.followme.searchTicksBeforeSwitch'];
     for (var i = 0; i < names.length; i++) {
       var v = getFieldValue(names[i]);
       if (v !== undefined) setByPath(payload, names[i], v);
@@ -279,16 +301,28 @@ const CONFIG_PAGE_SCRIPT = `(function() {
     var memChoice = getMemoryBackendChoice();
     payload.memory.enabled = (memChoice !== 'off');
     if (memChoice !== 'off') payload.memory.backend = memChoice;
+    payload.hive.enabled = !!getFieldValue('hive.enabled');
+    payload.hive.recipes = {
+      detect: !!getFieldValue('hive.recipes.detect'),
+      describe: !!getFieldValue('hive.recipes.describe'),
+      health: !!getFieldValue('hive.recipes.health')
+    };
+    if (!payload.hive.enabled) delete payload.hive.url;
     payload.skillPackages = toArray(getFieldValue('skillPackages'));
     payload.skillPaths = toArray(getFieldValue('skillPaths'));
     return payload;
   }
   function populateForm(c) {
-    var names = ['transport.mode','robot.name','robot.namespace','robot.cameraTopic','rosbridge.url','rosbridge.reconnect','rosbridge.reconnectInterval','zenoh.routerEndpoint','zenoh.domainId','zenoh.keyFormat','local.domainId','webrtc.signalingUrl','webrtc.apiUrl','webrtc.robotId','teleop.cameraTopic','teleop.cmdVelTopic','teleop.speedDefault','teleop.cameraPollMs','safety.maxLinearVelocity','safety.maxAngularVelocity','memory.local.storePath','memory.mem0.inferOnWrite','memory.mem0.historyDbPath','skills.followme.useOllama','skills.followme.ollamaUrl','skills.followme.vlmModel','skills.followme.cameraTopic','skills.followme.cameraMessageType','skills.followme.depthTopic','skills.followme.cmdVelTopic','skills.followme.targetDistance','skills.followme.rateHz','skills.followme.minLinearVelocity','skills.followme.invertLinearX','skills.followme.logTickTiming','skills.followme.criticalStopDistanceM','skills.followme.maxVelocityFraction','skills.followme.visionCallbackUrl','skills.followme.useDepthSectors','skills.followme.searchAngularVelocity','skills.followme.searchTicksBeforeSwitch'];
+    var names = ['transport.mode','robot.name','robot.namespace','robot.cameraTopic','rosbridge.url','rosbridge.reconnect','rosbridge.reconnectInterval','zenoh.routerEndpoint','zenoh.domainId','zenoh.keyFormat','local.domainId','webrtc.signalingUrl','webrtc.apiUrl','webrtc.robotId','teleop.cameraTopic','teleop.cmdVelTopic','teleop.speedDefault','teleop.cameraPollMs','safety.maxLinearVelocity','safety.maxAngularVelocity','memory.local.storePath','memory.mem0.inferOnWrite','memory.mem0.historyDbPath','hive.url','skills.followme.useOllama','skills.followme.ollamaUrl','skills.followme.vlmModel','skills.followme.cameraTopic','skills.followme.cameraMessageType','skills.followme.depthTopic','skills.followme.cmdVelTopic','skills.followme.targetDistance','skills.followme.rateHz','skills.followme.minLinearVelocity','skills.followme.invertLinearX','skills.followme.logTickTiming','skills.followme.criticalStopDistanceM','skills.followme.maxVelocityFraction','skills.followme.visionCallbackUrl','skills.followme.useDepthSectors','skills.followme.searchAngularVelocity','skills.followme.searchTicksBeforeSwitch'];
     for (var i = 0; i < names.length; i++) {
       var v = getByPath(c, names[i]);
       setFieldValue(names[i], v);
     }
+    setFieldValue('hive.enabled', !!getByPath(c, 'hive.enabled'));
+    setFieldValue('hive.recipes.detect', !!getByPath(c, 'hive.recipes.detect'));
+    setFieldValue('hive.recipes.describe', !!getByPath(c, 'hive.recipes.describe'));
+    setFieldValue('hive.recipes.health', !!getByPath(c, 'hive.recipes.health'));
+    updateHiveVisibility();
     var memEnabled = !!getByPath(c, 'memory.enabled');
     var memBackend = getByPath(c, 'memory.backend') || 'local';
     setMemoryBackendChoice(memEnabled ? memBackend : 'off');
@@ -414,6 +448,8 @@ const CONFIG_PAGE_SCRIPT = `(function() {
   for (var ri = 0; ri < memoryRadios.length; ri++) {
     memoryRadios[ri].addEventListener('change', updateMemoryVisibility);
   }
+  var hiveEnabledEl = document.getElementById('hive.enabled');
+  if (hiveEnabledEl) hiveEnabledEl.addEventListener('change', updateHiveVisibility);
   var memoryTestBtn = document.getElementById('memory-test-btn');
   var memoryClearBtn = document.getElementById('memory-clear-btn');
   var memoryTestStatus = document.getElementById('memory-test-status');
