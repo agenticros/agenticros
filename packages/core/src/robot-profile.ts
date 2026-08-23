@@ -240,6 +240,9 @@ export function inferProfileDraft(
   const bindings: Record<string, string> = {};
   if (features.has("base")) {
     bindings["cmd_vel"] = resolveBinding(robot, "cmd_vel", opts) ?? "/cmd_vel";
+    bindings["odom"] =
+      resolveBinding(robot, "odom") ??
+      toNamespacedTopicFull(robot.namespace, "/odom");
   }
   if (features.has("camera")) {
     const rgb = resolveBinding(robot, "camera.rgb");

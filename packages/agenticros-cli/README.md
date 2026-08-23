@@ -116,7 +116,9 @@ Default cloud host: **`cloud.agenticros.com`** (REST + WebSocket).
 ### Motors
 
 Subscribes to `/cmd_vel` (or the namespaced topic from the portal) and drives
-differential-drive PWM.
+differential-drive PWM. When ARC has wheel diameter and track width (mm), also
+publishes `/odom` and `odom`→`base_link` TF (cmd_vel dead-reckon; Firmata
+encoders if `-e` is passed).
 
 | Command | Description |
 |---------|-------------|
@@ -138,7 +140,10 @@ differential-drive PWM.
 |------|---------|----------|
 | `-b, --backend` | `rpi` \| `firmata` \| `jetson` | `-b firmata` |
 | `-p, --pins` | Pin list left-to-right | Pi default `27,22,17,18`; Firmata `3,4,5,7,8,9`; Jetson BOARD `16,18,22,26` |
-| `-e, --encoderpins` | Firmata encoder pins | default `13,2,12,11` |
+| `-e, --encoderpins` | Firmata encoder pins (enables encoder odom) | e.g. `13,2,12,11` |
+| `--odom` | Force-enable `/odom` (ARC geometry; defaults if unset) | |
+| `--no-odom` | Disable `/odom` | |
+| `--tpr <n>` | Encoder ticks per revolution | default `351` |
 | `-d, --device` | Firmata serial device | `-d /dev/ttyACM0` |
 
 ```bash
@@ -147,7 +152,8 @@ agenticros start motors -b rpi -p 27,22,17,18
 
 # Arduino Firmata (Radxa / LattePanda / Jetson+Arduino / NUC)
 sudo usermod -aG dialout $USER   # once, then reboot
-agenticros start motors -b firmata -d /dev/ttyACM0 -p 3,4,5,7,8,9
+agenticros start motors -b firmata -d /dev/ttyACM0 -p 3,4,5,7,8,9 --odom
+agenticros start motors -b firmata -d /dev/ttyACM0 -e 13,2,12,11 --tpr 351
 
 # Jetson native GPIO (manual; requires system JETGPIO)
 agenticros start motors -b jetson -p 16,18,22,26

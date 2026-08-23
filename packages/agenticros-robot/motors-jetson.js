@@ -2,11 +2,12 @@ import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 
 import { getRobotId, getApiToken } from './robot-config.js';
-import { fetchRobotConfig, getCmdVelTopic } from './ros-topics.js';
+import { fetchRobotConfig, getCmdVelTopic, resolveTopic } from './ros-topics.js';
+import { createOdometry, resolveOdomSetup } from './lib/odometry.js';
+import * as gpio from './lib/jetson-gpio.js';
 
 var robotId = getRobotId();
 var apiToken = getApiToken();
-import * as gpio from './lib/jetson-gpio.js';
 
 const rclnodejs = require('rclnodejs');
 
@@ -60,7 +61,23 @@ async function main() {
 
   const node = new rclnodejs.Node('motor_controller');
 
+  const odomSetup = resolveOdomSetup({ config: robotConfig, argv: process.argv });
+  let odom = null;
+  if (odomSetup.enabled) {
+    const odomTopic = resolveTopic('odom', robotId, robotConfig.rosNamespace);
+    odom = createOdometry({
+      node,
+      odomTopic,
+      kinematics: odomSetup.kinematics,
+      mode: odomSetup.mode,
+    });
+    odom.start();
+    console.log(`Odometry: ${odomSetup.mode} → ${odomTopic}`);
+  }
+
   node.createSubscription('geometry_msgs/msg/Twist', cmdVelTopic, (msg) => {
+    odom?.setCmdVel(msg.linear.x, msg.angular.z);
+
     const linear_x = -msg.linear.x;
     const angular_z = msg.angular.z;
 
@@ -79,6 +96,7 @@ async function main() {
 
   process.on('SIGINT', () => {
     console.log('Shutting down...');
+    odom?.stop();
     stopMotors();
     gpio.deinit();
     node.destroy();

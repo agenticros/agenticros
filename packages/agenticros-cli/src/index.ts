@@ -334,6 +334,9 @@ program
     "motors: pin list; realsense: -p with no value enables pointcloud",
   )
   .option("-e, --encoderpins <list>", "motors (firmata): encoder pins")
+  .option("--odom", "motors: force-enable /odom (uses ARC wheel geometry; defaults if unset)")
+  .option("--no-odom", "motors: disable /odom")
+  .option("--tpr <n>", "motors: encoder ticks per revolution")
   .option("-d, --device <path>", "motors firmata device or camera /dev/videoN")
   .option("-r, --resolution <WxH>", "camera resolution (e.g. 672x672)")
   .option("-f, --fps <n>", "camera FPS")
@@ -354,6 +357,9 @@ program
         backend?: string;
         pins?: string | boolean;
         encoderpins?: string;
+        odom?: boolean;
+        noOdom?: boolean;
+        tpr?: string;
         device?: string;
         resolution?: string;
         fps?: string;
@@ -371,6 +377,9 @@ program
         backend: opts.backend,
         pins,
         encoderpins: opts.encoderpins,
+        odom: opts.odom === true,
+        noOdom: opts.noOdom === true || opts.odom === false,
+        tpr: opts.tpr,
         device: opts.device,
         resolution: opts.resolution,
         fps: opts.fps,
@@ -398,6 +407,9 @@ for (const service of ["motors", "realsense", "camera"] as const) {
     .option("-b, --backend <name>", "rpi | firmata | jetson")
     .option("-p, --pins [list]", "pin list or realsense -p for pointcloud")
     .option("-e, --encoderpins <list>", "encoder pins")
+    .option("--odom", "force-enable /odom (uses ARC wheel geometry; defaults if unset)")
+    .option("--no-odom", "disable /odom")
+    .option("--tpr <n>", "encoder ticks per revolution")
     .option("-d, --device <path>", "device path")
     .option("-r, --resolution <WxH>", "camera resolution")
     .option("-f, --fps <n>", "camera FPS")
@@ -409,6 +421,9 @@ for (const service of ["motors", "realsense", "camera"] as const) {
         backend?: string;
         pins?: string | boolean;
         encoderpins?: string;
+        odom?: boolean;
+        noOdom?: boolean;
+        tpr?: string;
         device?: string;
         resolution?: string;
         fps?: string;
@@ -424,6 +439,9 @@ for (const service of ["motors", "realsense", "camera"] as const) {
           backend: opts.backend,
           pins,
           encoderpins: opts.encoderpins,
+          odom: opts.odom === true,
+          noOdom: opts.noOdom === true || opts.odom === false,
+          tpr: opts.tpr,
           device: opts.device,
           resolution: opts.resolution,
           fps: opts.fps,

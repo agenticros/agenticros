@@ -161,6 +161,7 @@ export function inferProfileDraft(input: {
   const bindings: Record<string, string> = {};
   if (features.has("base")) {
     bindings["cmd_vel"] = prefixRootTopic(ns, (input.cmdVelTopic ?? "").trim() || "/cmd_vel");
+    bindings["odom"] = prefixRootTopic(ns, "/odom");
   }
   if (features.has("camera") && camera) {
     bindings["camera.rgb"] = camera.startsWith("/") ? camera : `/${camera}`;

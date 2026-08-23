@@ -49,6 +49,7 @@ export async function fetchRobotConfig(robotId, apiToken, server = 'https://clou
       rosTopics: data.rosTopics || [],
       camera: data.camera || '',
       compute: data.compute || '',
+      wheelCount: data.wheelCount,
       wheelBetween: data.wheelBetween,
       wheelDiameter: data.wheelDiameter,
       ticksPerRevolution: data.ticksPerRevolution,

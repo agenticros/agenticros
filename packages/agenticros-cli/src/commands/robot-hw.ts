@@ -202,6 +202,9 @@ export interface MotorsStartOptions {
   pins?: string;
   encoderpins?: string;
   device?: string;
+  odom?: boolean;
+  noOdom?: boolean;
+  tpr?: string;
 }
 
 export async function startMotorsCommand(opts: MotorsStartOptions = {}): Promise<void> {
@@ -217,6 +220,9 @@ export async function startMotorsCommand(opts: MotorsStartOptions = {}): Promise
   if (opts.pins) args.push("-p", opts.pins);
   if (opts.encoderpins) args.push("-e", opts.encoderpins);
   if (opts.device) args.push("-d", opts.device);
+  if (opts.odom) args.push("--odom");
+  if (opts.noOdom) args.push("--no-odom");
+  if (opts.tpr) args.push("--tpr", opts.tpr);
 
   try {
     await execa("node", args, { stdio: "inherit", cwd: dir });

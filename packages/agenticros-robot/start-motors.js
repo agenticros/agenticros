@@ -4,6 +4,7 @@
  *
  * Usage:
  *   node start-motors.js [-b rpi|firmata|jetson] [-p pins] [-e encoderpins] [-d device]
+ *                        [--odom] [--no-odom] [--tpr n]
  *
  * Defaults: Raspberry Pi (portal compute) → motors-rpi5.js; else firmata.
  * Jetson native GPIO is opt-in only via -b jetson (never auto-selected).
@@ -41,6 +42,15 @@ if (argv.p) {
 }
 if (argv.e) {
   options.push("--encoderpins", String(argv.e));
+}
+if (argv.odom === true) {
+  options.push("--odom");
+}
+if (argv.odom === false || argv["no-odom"]) {
+  options.push("--no-odom");
+}
+if (argv.tpr != null && argv.tpr !== true) {
+  options.push("--tpr", String(argv.tpr));
 }
 
 const child = spawn("node", options, {

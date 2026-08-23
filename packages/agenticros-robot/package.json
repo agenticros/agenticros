@@ -15,9 +15,13 @@
     "./ros-topics.js": "./ros-topics.js",
     "./robot-config.js": "./robot-config.js"
   },
+  "scripts": {
+    "test": "node --test lib/*.test.js"
+  },
   "files": [
     "*.js",
     "lib/**/*.js",
+    "!lib/**/*.test.js",
     "README.md"
   ],
   "dependencies": {

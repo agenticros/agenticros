@@ -107,7 +107,9 @@ agenticros robots profile infer warehouse-01 --apply  # write draft
 ```
 
 `infer` drafts from `kind`, `cameraTopic`, deprecated `sensors`, and
-namespaced `/cmd_vel`. It does not overwrite unless `--apply`.
+namespaced `/cmd_vel` plus `/odom` when `base` is present. It does not
+overwrite unless `--apply`. `odom` is optional — it is not required for
+the `base` feature.
 
 `agenticros skills install` still installs on the gateway (mixed fleets
 need that). It **warns** per configured robot whose profile fails the

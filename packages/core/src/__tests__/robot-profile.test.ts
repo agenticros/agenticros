@@ -179,6 +179,7 @@ test("profile: inferProfileDraft from kind + cameraTopic + sensors", () => {
   assert.ok(draft.features.includes("depth"));
   assert.ok(draft.features.includes("lidar"));
   assert.ok(draft.bindings["cmd_vel"]);
+  assert.equal(draft.bindings["odom"], "/wh/odom");
   assert.ok(draft.bindings["camera.rgb"]);
 });
 
