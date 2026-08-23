@@ -46,7 +46,7 @@
     "prepublishOnly": "pnpm run clean && pnpm run build && pnpm run pack:runtime && pnpm run size:check && pnpm run tarball:check"
   },
   "dependencies": {
-    "@agenticros/core": "workspace:*",
+    "@agenticros/core": "^0.8.7",
     "@inquirer/prompts": "^7.0.0",
     "commander": "^12.1.0",
     "configstore": "^7.0.0",
