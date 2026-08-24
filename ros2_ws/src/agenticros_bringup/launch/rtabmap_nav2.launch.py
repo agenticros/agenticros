@@ -23,6 +23,12 @@ Jetson RealSense D457 (broken HW stamps, no URDF yet)::
       rewrite_camera_stamps:=true \\
       use_static_robot_tf:=true \\
       depth_topic:=/camera/camera/depth/image_rect_raw
+
+Jetson D436 (this launch owns the camera; stop any other realsense node first)::
+
+    ros2 launch agenticros_bringup rtabmap_nav2.launch.py \\
+      use_static_robot_tf:=true \\
+      color_profile:=640x480x15 depth_profile:=640x480x15
 """
 
 from __future__ import annotations
@@ -34,6 +40,7 @@ from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
     IncludeLaunchDescription,
+    LogInfo,
     OpaqueFunction,
 )
 from launch.conditions import IfCondition
@@ -138,21 +145,42 @@ def _launch_setup(context, *args, **kwargs):
         ],
     )
 
-    realsense = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            PathJoinSubstitution(
-                [FindPackageShare("realsense2_camera"), "launch", "rs_launch.py"]
-            )
-        ),
+    # Launch the camera node directly. Including rs_launch.py (realsense-ros
+    # 4.57+) warns on every parent launch argument (use_rtabmap, params_file, …)
+    # because it iterates context.launch_configurations.
+    realsense = Node(
+        package="realsense2_camera",
+        executable="realsense2_camera_node",
+        namespace="camera",
+        name="camera",
+        output="screen",
+        emulate_tty=True,
         condition=IfCondition(LaunchConfiguration("use_realsense")),
-        launch_arguments={
-            "camera_name": "camera",
-            "camera_namespace": "camera",
-            "enable_color": "true",
-            "enable_depth": "true",
-            "align_depth.enable": "true",
-            "pointcloud.enable": "false",
-        }.items(),
+        parameters=[
+            {
+                "camera_name": "camera",
+                "camera_namespace": "camera",
+                "enable_color": True,
+                "enable_depth": True,
+                "enable_sync": True,
+                "align_depth.enable": True,
+                "pointcloud.enable": False,
+                "enable_gyro": False,
+                "enable_accel": False,
+                "initial_reset": True,
+                "rgb_camera.color_profile": LaunchConfiguration("color_profile"),
+                "depth_module.depth_profile": LaunchConfiguration("depth_profile"),
+            }
+        ],
+    )
+    realsense_hint = LogInfo(
+        condition=IfCondition(LaunchConfiguration("use_realsense")),
+        msg=(
+            "Starting realsense2_camera_node. If you see "
+            "'Device or resource busy' / VIDIOC_S_FMT errno=16, another process "
+            "already owns the camera (agenticros start realsense, realsense-viewer, "
+            "or a leftover node). Stop it, or relaunch with use_realsense:=false."
+        ),
     )
 
     rtabmap = IncludeLaunchDescription(
@@ -177,28 +205,36 @@ def _launch_setup(context, *args, **kwargs):
             # Absolute so explore/Nav2 get /map (not /rtabmap/map under ns).
             "map_topic": LaunchConfiguration("rtabmap_map_topic"),
             "database_path": LaunchConfiguration("database_path"),
+            # Keep RTAB-Map nodes under /rtabmap without leaking this into Nav2.
+            "namespace": "rtabmap",
             "rviz": "false",
             "rtabmap_viz": "false",
         }.items(),
     )
 
-    nav2_bringup = get_package_share_directory("nav2_bringup")
-    navigation_launch = os.path.join(nav2_bringup, "launch", "navigation_launch.py")
-    nav2 = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(navigation_launch),
-        launch_arguments={
-            # rtabmap.launch.py also declares `namespace` (default "rtabmap").
-            # Without an explicit empty override, Nav2's RewrittenYaml nests
-            # every param under root_key=rtabmap and controller_server never
-            # sees FollowPath.critics → "No critics defined for FollowPath".
-            "namespace": "",
-            "use_sim_time": use_sim_time,
-            "params_file": LaunchConfiguration("params_file"),
-            "autostart": LaunchConfiguration("autostart"),
-            "use_composition": "False",
-            "use_respawn": "False",
-        }.items(),
-    )
+    def _include_nav2(nav2_context, *args, **kwargs):
+        # rtabmap.launch.py writes namespace:=rtabmap into the global launch
+        # context. Nav2 RewrittenYaml uses that as root_key *when nodes start*,
+        # so an empty launch_arguments override is not enough — clear it here.
+        nav2_context.launch_configurations["namespace"] = ""
+        navigation_launch = os.path.join(
+            get_package_share_directory("nav2_bringup"),
+            "launch",
+            "navigation_launch.py",
+        )
+        return [
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(navigation_launch),
+                launch_arguments={
+                    "namespace": "",
+                    "use_sim_time": use_sim_time,
+                    "params_file": LaunchConfiguration("params_file"),
+                    "autostart": LaunchConfiguration("autostart"),
+                    "use_composition": "False",
+                    "use_respawn": "False",
+                }.items(),
+            )
+        ]
 
     explore = Node(
         package="agenticros_explore",
@@ -221,9 +257,10 @@ def _launch_setup(context, *args, **kwargs):
         stamp_fix,
         static_footprint,
         static_camera,
+        realsense_hint,
         realsense,
         rtabmap,
-        nav2,
+        OpaqueFunction(function=_include_nav2),
         explore,
     ]
 
@@ -268,6 +305,21 @@ def generate_launch_description() -> LaunchDescription:
             DeclareLaunchArgument("use_sim_time", default_value="false"),
             DeclareLaunchArgument("autostart", default_value="true"),
             DeclareLaunchArgument("params_file", default_value=default_params),
+            DeclareLaunchArgument(
+                "namespace",
+                default_value="",
+                description="Nav2 namespace. Must stay empty so params_file is not nested under rtabmap.",
+            ),
+            DeclareLaunchArgument(
+                "color_profile",
+                default_value="640x480x15",
+                description="RealSense RGB WxHxFPS. Keep this modest on Jetson.",
+            ),
+            DeclareLaunchArgument(
+                "depth_profile",
+                default_value="640x480x15",
+                description="RealSense depth WxHxFPS (match RGB when align_depth is on).",
+            ),
             DeclareLaunchArgument(
                 "rgb_topic",
                 default_value="/camera/camera/color/image_raw",

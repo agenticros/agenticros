@@ -163,6 +163,48 @@ If your URDF uses only `base_link`, pass `frame_id:=base_link` and `base_frame:=
 
 RTAB-Map is CPU-heavy. On a small Jetson, lower RGB-D rate, tighten voxel size, and prefer wheel odom (`visual_odometry:=false`).
 
+## Troubleshooting (Jetson)
+
+The FastRTPS `Failed init_port fastrtps_port7006` lines are noisy but not fatal — DDS falls back to UDP.
+
+### `Parameter 'use_realsense' is not supported`
+
+That warning comes from `realsense2_camera/rs_launch.py` treating **every** parent launch argument as a camera parameter. Current `rtabmap_nav2.launch.py` starts `realsense2_camera_node` directly, so those warnings should be gone after you pull and `colcon build --packages-select agenticros_bringup`.
+
+### `Device or resource busy` / `xioctl(VIDIOC_S_FMT) errno=16`
+
+Only one process can open the D436. Stop the other owner first:
+
+```bash
+agenticros stop realsense        # if you used agenticros start realsense
+# or: pkill -f realsense2_camera_node
+# confirm: fuser /dev/video0 /dev/video4
+```
+
+Then either let this launch own the camera, or keep the existing node and skip a second one:
+
+```bash
+ros2 launch agenticros_bringup rtabmap_nav2.launch.py use_realsense:=false
+```
+
+Default profiles here are `640x480x15` (override with `color_profile` / `depth_profile`). The D436 IMU HID warnings are expected — gyro/accel are left off.
+
+### `No critics defined for FollowPath` / `Failed to change state for node: smoother_server`
+
+Nav2 loaded its **compiled defaults** (DWB, no critics) instead of `config/nav2_rtabmap.yaml`. That happens when `rtabmap.launch.py` sets launch `namespace:=rtabmap` and Nav2's `RewrittenYaml` nests every param under that key. Pull this repo, rebuild `agenticros_bringup`, and confirm you are launching **this** file (not a stale install without `--symlink-install`).
+
+```bash
+cd ~/Projects/agenticros
+git pull
+cd ros2_ws
+source /opt/ros/jazzy/setup.bash
+colcon build --packages-select agenticros_bringup agenticros_explore agenticros_msgs --symlink-install
+source install/setup.bash
+ros2 launch agenticros_bringup rtabmap_nav2.launch.py
+```
+
+On configure you should see `Created smoother : simple_smoother` and **not** `No critics defined for FollowPath`.
+
 ## What not to do
 
 - Do not `drive_base` around the room and hope SLAM + the LLM avoid furniture. That bypasses Nav2’s costmap.
