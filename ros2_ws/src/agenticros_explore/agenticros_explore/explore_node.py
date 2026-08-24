@@ -20,6 +20,12 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.duration import Duration
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
+from rclpy.qos import (
+    DurabilityPolicy,
+    HistoryPolicy,
+    QoSProfile,
+    ReliabilityPolicy,
+)
 from tf2_ros import Buffer, TransformException, TransformListener
 
 from agenticros_msgs.action import Explore
@@ -32,6 +38,14 @@ from .frontiers import (
     free_cells,
     pick_frontier,
     pick_wander_pose,
+)
+
+# Match Nav2 / RTAB-Map map publishers (TRANSIENT_LOCAL + RELIABLE).
+_MAP_QOS = QoSProfile(
+    depth=1,
+    reliability=ReliabilityPolicy.RELIABLE,
+    durability=DurabilityPolicy.TRANSIENT_LOCAL,
+    history=HistoryPolicy.KEEP_LAST,
 )
 
 
@@ -71,7 +85,11 @@ class ExploreNode(Node):
         self._tf_listener = TransformListener(self._tf_buffer, self)
 
         self.create_subscription(
-            OccupancyGrid, self._map_topic, self._on_map, 1, callback_group=self._cb_group
+            OccupancyGrid,
+            self._map_topic,
+            self._on_map,
+            _MAP_QOS,
+            callback_group=self._cb_group,
         )
 
         self._nav_client = ActionClient(
@@ -162,7 +180,10 @@ class ExploreNode(Node):
             self.get_parameter("min_frontier_m").value
         )
         if mode == "wander":
-            cells = free_cells(data, meta)
+            # Allow free cells next to unknown — early RTAB-Map grids are
+            # mostly unknown, so the default inflate-vs-unknown filter yields
+            # zero candidates and wander times out with goals_sent=0.
+            cells = free_cells(data, meta, treat_unknown_as_blocked=False)
             self._wander_rng += 1
             min_sep = float(self.get_parameter("wander_min_sep_m").value)
             return pick_wander_pose(cells, robot, self._recent_goals, min_sep, self._wander_rng)

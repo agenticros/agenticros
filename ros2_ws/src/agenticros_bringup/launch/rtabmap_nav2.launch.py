@@ -71,7 +71,12 @@ def generate_launch_description() -> LaunchDescription:
             "frame_id": LaunchConfiguration("frame_id"),
             "approx_sync": "true",
             "visual_odometry": LaunchConfiguration("visual_odometry"),
+            # Absolute topic so Nav2 sees /odom; vo_frame_id must NOT have a
+            # leading slash (TF2 rejects "/odom" as a frame id).
             "odom_topic": LaunchConfiguration("odom_topic"),
+            "vo_frame_id": LaunchConfiguration("vo_frame_id"),
+            # Absolute so explore/Nav2 get /map (not /rtabmap/map under ns).
+            "map_topic": LaunchConfiguration("rtabmap_map_topic"),
             "database_path": LaunchConfiguration("database_path"),
             "rviz": "false",
             "rtabmap_viz": "false",
@@ -81,6 +86,11 @@ def generate_launch_description() -> LaunchDescription:
     nav2 = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(navigation_launch),
         launch_arguments={
+            # rtabmap.launch.py also declares `namespace` (default "rtabmap").
+            # Without an explicit empty override, Nav2's RewrittenYaml nests
+            # every param under root_key=rtabmap and controller_server never
+            # sees FollowPath.critics → "No critics defined for FollowPath".
+            "namespace": "",
             "use_sim_time": use_sim_time,
             "params_file": LaunchConfiguration("params_file"),
             "autostart": LaunchConfiguration("autostart"),
@@ -146,13 +156,23 @@ def generate_launch_description() -> LaunchDescription:
             ),
             DeclareLaunchArgument("odom_topic", default_value="/odom"),
             DeclareLaunchArgument(
+                "vo_frame_id",
+                default_value="odom",
+                description="TF frame for visual odometry (no leading slash).",
+            ),
+            DeclareLaunchArgument(
                 "database_path",
                 default_value="~/.ros/rtabmap.db",
             ),
-            DeclareLaunchArgument("map_topic", default_value="map"),
+            DeclareLaunchArgument(
+                "rtabmap_map_topic",
+                default_value="/map",
+                description="Where rtabmap publishes the occupancy grid (absolute).",
+            ),
+            DeclareLaunchArgument("map_topic", default_value="/map"),
             DeclareLaunchArgument("navigate_action", default_value="navigate_to_pose"),
             DeclareLaunchArgument("map_frame", default_value="map"),
-            DeclareLaunchArgument("base_frame", default_value="base_footprint"),
+            DeclareLaunchArgument("base_frame", default_value="base_link"),
             realsense,
             rtabmap,
             nav2,

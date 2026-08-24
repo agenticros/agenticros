@@ -179,8 +179,15 @@ def free_cells(
     data: Sequence[int],
     meta: GridMeta,
     inflate_cells: int = 2,
+    *,
+    treat_unknown_as_blocked: bool = True,
 ) -> List[Pose2D]:
-    """Free cells not adjacent (within inflate_cells) to occupied or map edge."""
+    """Free cells not adjacent (within inflate_cells) to obstacles or map edge.
+
+    For early SLAM maps, set ``treat_unknown_as_blocked=False`` (wander) so
+    free cells next to unknown are still valid goals; otherwise almost every
+    free cell is rejected while the map is still mostly unknown.
+    """
     width, height = meta.width, meta.height
     if width <= 0 or height <= 0 or len(data) < width * height:
         return []
@@ -194,7 +201,10 @@ def free_cells(
             for nx in range(mx - inflate_cells, mx + inflate_cells + 1):
                 for ny in range(my - inflate_cells, my + inflate_cells + 1):
                     nidx = cell_index(nx, ny, width)
-                    if is_occupied(data[nidx]) or is_unknown(data[nidx]):
+                    if is_occupied(data[nidx]):
+                        blocked = True
+                        break
+                    if treat_unknown_as_blocked and is_unknown(data[nidx]):
                         blocked = True
                         break
                 if blocked:
