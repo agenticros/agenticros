@@ -39,6 +39,10 @@ import { homedir } from "node:os";
 import { pathToFileURL, fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 
+// Skills must not start long-lived side effects (mics, timers, network) while
+// we only need registerTool names. Jarvis and similar skills honor this.
+process.env.AGENTICROS_SKILL_DISCOVERY = "1";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const REPO_ROOT = resolve(__dirname, "..");
