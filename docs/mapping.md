@@ -54,7 +54,8 @@ npx agenticros skills install @agenticros/navigate-to
 Calibrated extrinsics, a `base_link` / `base_footprint` TF tree, and (ideally) wheel `/odom` **or** RTAB-Map visual odometry.
 
 ```bash
-# Default: RealSense + RTAB-Map + Nav2 (no AMCL) + explore/wander actions
+# Default: camera + SLAM + Nav2 + explore action server (does not drive until a mission).
+# Wipes ~/.ros/rtabmap.db unless delete_db_on_start:=false. Pass robot_namespace if needed.
 ros2 launch agenticros_bringup rtabmap_nav2.launch.py
 
 # Wheel odom instead of visual odometry:
@@ -204,6 +205,30 @@ ros2 launch agenticros_bringup rtabmap_nav2.launch.py
 ```
 
 On configure you should see `Created smoother : simple_smoother` and **not** `No critics defined for FollowPath`.
+
+### `VWDictionary addWordRef() Not found word` (robot never moved)
+
+That spam means `~/.ros/rtabmap.db` was not closed cleanly (Ctrl-C, crash, power loss). Word ids in the occupancy graph do not exist in the vocabulary. Visual odometry can still print `Odom: quality=…` while the loaded grid is junk.
+
+This launch **does not drive**. It only brings up camera + SLAM + Nav2 + the explore *action server*. After it is healthy, say *"wander around"* / *"map the room"*, or:
+
+```bash
+ros2 action send_goal /wander agenticros_msgs/action/Explore "{mode: wander, timeout_s: 60}"
+```
+
+Fresh map (default as of this bringup):
+
+```bash
+# Stop the launch, then either rely on delete_db_on_start:=true (default) or:
+rm -f ~/.ros/rtabmap.db ~/.ros/rtabmap.db.back
+ros2 launch agenticros_bringup rtabmap_nav2.launch.py \
+  use_static_robot_tf:=true \
+  robot_namespace:=YOUR_NS    # if motors subscribe to /YOUR_NS/cmd_vel
+```
+
+To **resume** a good map: `delete_db_on_start:=false`. To try repairing a crashed db: `rtabmap-recovery ~/.ros/rtabmap.db`.
+
+If wander runs but the base never moves, Nav2 is publishing `/cmd_vel` and the firmware is listening on `/<namespace>/cmd_vel`. Pass `robot_namespace` (same as `robot.namespace` in `~/.agenticros/config.json`).
 
 ## What not to do
 

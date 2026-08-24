@@ -28,7 +28,8 @@ Jetson D436 (this launch owns the camera; stop any other realsense node first)::
 
     ros2 launch agenticros_bringup rtabmap_nav2.launch.py \\
       use_static_robot_tf:=true \\
-      color_profile:=640x480x15 depth_profile:=640x480x15
+      color_profile:=640x480x15 depth_profile:=640x480x15 \\
+      robot_namespace:=YOUR_NS
 """
 
 from __future__ import annotations
@@ -205,6 +206,7 @@ def _launch_setup(context, *args, **kwargs):
             # Absolute so explore/Nav2 get /map (not /rtabmap/map under ns).
             "map_topic": LaunchConfiguration("rtabmap_map_topic"),
             "database_path": LaunchConfiguration("database_path"),
+            "delete_db_on_start": LaunchConfiguration("delete_db_on_start"),
             # Keep RTAB-Map nodes under /rtabmap without leaking this into Nav2.
             "namespace": "rtabmap",
             "rviz": "false",
@@ -253,7 +255,16 @@ def _launch_setup(context, *args, **kwargs):
         ],
     )
 
-    return [
+    drive_hint = LogInfo(
+        msg=(
+            "rtabmap_nav2 bringup does not drive. When Nav2 is active, run a "
+            "mission (\"wander around\" / \"map the room\") or: "
+            "ros2 action send_goal /wander agenticros_msgs/action/Explore "
+            "\"{mode: wander, timeout_s: 60}\""
+        ),
+    )
+
+    actions = [
         stamp_fix,
         static_footprint,
         static_camera,
@@ -262,7 +273,25 @@ def _launch_setup(context, *args, **kwargs):
         rtabmap,
         OpaqueFunction(function=_include_nav2),
         explore,
+        drive_hint,
     ]
+
+    # Nav2 publishes /cmd_vel; many physical bases subscribe to /<ns>/cmd_vel.
+    ns = LaunchConfiguration("robot_namespace").perform(context).strip().strip("/")
+    if ns:
+        actions.append(
+            Node(
+                package="agenticros_bringup",
+                executable="cmd_vel_relay",
+                name="agenticros_nav2_cmd_vel_to_base",
+                output="screen",
+                parameters=[
+                    {"input_topic": "/cmd_vel", "output_topic": f"/{ns}/cmd_vel"},
+                ],
+            )
+        )
+
+    return actions
 
 
 def generate_launch_description() -> LaunchDescription:
@@ -367,6 +396,22 @@ def generate_launch_description() -> LaunchDescription:
             DeclareLaunchArgument(
                 "database_path",
                 default_value="~/.ros/rtabmap.db",
+            ),
+            DeclareLaunchArgument(
+                "delete_db_on_start",
+                default_value="true",
+                description=(
+                    "Wipe ~/.ros/rtabmap.db on start. Needed after Ctrl-C / crash "
+                    "(VWDictionary addWordRef Not found word). Set false to resume a map."
+                ),
+            ),
+            DeclareLaunchArgument(
+                "robot_namespace",
+                default_value="",
+                description=(
+                    "If the base listens on /<ns>/cmd_vel, relay Nav2 /cmd_vel there "
+                    "(same value as robot.namespace, no slashes)."
+                ),
             ),
             DeclareLaunchArgument(
                 "rtabmap_map_topic",
