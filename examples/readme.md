@@ -11,7 +11,8 @@ This directory contains example AgenticROS workflows that show how AI agents can
 | [Navigate To (Nav2)](navigate-to/README.md) | Ready | `@agenticros/navigate-to` — Nav2 NavigateToPose (sim: `up sim-amr --nav2`). |
 | [Navigate Through Poses](navigate-through-poses/README.md) | Ready | `@agenticros/navigate-through-poses` — Nav2 waypoint chains (same `--nav2`). |
 | [Detect Humans](detect-humans/README.md) | Ready | `@agenticros/detect-humans` — on-robot detections. |
-| [Start SLAM](start-slam/README.md) | Ready | `@agenticros/start-slam` — start / stop / save / load map. |
+| [Start SLAM](start-slam/README.md) | Ready | `@agenticros/start-slam` — start / stop / save / load / mapping vs localization. |
+| [Explore / wander](explore/README.md) | Ready | `@agenticros/explore` — frontier coverage + safe wandering (Nav2). |
 | [Follow Me (ROS)](follow-me-ros/README.md) | Ready | `@agenticros/follow-me-ros` — on-robot follow_me services. |
 | [MoveIt pick](moveit-pick/README.md) | Ready | `@agenticros/moveit-pick` — MoveGroup pick (operator MoveIt bringup). |
 | [Dock To Charger](dock-to-charger/README.md) | Ready | `@agenticros/dock-to-charger` — OpenNav DockRobot. |
@@ -25,6 +26,7 @@ npx agenticros skills install @agenticros/navigate-to
 npx agenticros skills install @agenticros/navigate-through-poses
 npx agenticros skills install @agenticros/detect-humans
 npx agenticros skills install @agenticros/start-slam
+npx agenticros skills install @agenticros/explore
 npx agenticros skills install @agenticros/follow-me-ros
 npx agenticros skills install @agenticros/moveit-pick
 npx agenticros skills install @agenticros/dock-to-charger

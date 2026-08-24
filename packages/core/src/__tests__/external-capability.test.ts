@@ -106,6 +106,32 @@ test("executeExternalCapability rejects NavigateToPose outside workspaceLimits",
   assert.match(result.text, /outside workspaceLimits/);
 });
 
+test("buildExternalGoal maps database_path to LoadDatabase", () => {
+  const goal = buildExternalGoal(
+    {
+      kind: "external_ros_node",
+      service: "rtabmap/load_database",
+      msg_type: "rtabmap_msgs/srv/LoadDatabase",
+    },
+    { database_path: "/tmp/rtabmap.db" },
+  );
+  assert.equal((goal as { database_path: string }).database_path, "/tmp/rtabmap.db");
+  assert.equal((goal as { clear: boolean }).clear, true);
+});
+
+test("buildExternalGoal maps timeout_s onto Explore (wander action forces mode)", () => {
+  const goal = buildExternalGoal(
+    {
+      kind: "external_ros_node",
+      action: "wander",
+      msg_type: "agenticros_msgs/action/Explore",
+    },
+    { timeout_s: 45 },
+  );
+  assert.equal((goal as { mode: string }).mode, "wander");
+  assert.equal((goal as { timeout_s: number }).timeout_s, 45);
+});
+
 test("safeParseCapability accepts external_ros_node", () => {
   const parsed = safeParseCapability({
     id: "navigate_to",

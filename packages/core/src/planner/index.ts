@@ -148,6 +148,24 @@ const VERB_SYNONYMS: Record<string, readonly string[]> = {
     "what topics",
     "topic list",
   ],
+  explore: [
+    "explore the room",
+    "explore this room",
+    "explore the space",
+    "explore this space",
+    "run exploration",
+    "start exploring",
+    "explore",
+  ],
+  wander: [
+    "wander around",
+    "wander the room",
+    "wander this room",
+    "walk around the room",
+    "walk around",
+    "roam around",
+    "wander",
+  ],
 };
 
 /** Multi-step conjunction patterns ("X and then Y", "X then Y", "X and Y"). */
@@ -172,6 +190,8 @@ function detectVerb(goal: string): { verb: keyof typeof VERB_SYNONYMS; matched: 
     "follow",
     "measure",
     "see",
+    "wander",
+    "explore",
     "drive",
     "find",
   ];
@@ -358,6 +378,38 @@ function compileSegment(
         },
       };
     }
+    case "explore": {
+      if (!availableIds.has("explore")) return null;
+      return {
+        step: {
+          id: stepId("explore", index),
+          capability: "explore",
+          inputs: { timeout_s: 180 },
+        },
+        candidate: {
+          capability_id: "explore",
+          confidence: 0.9,
+          rationale: `matched verb "${detected.matched}"`,
+          inputs: { timeout_s: 180 },
+        },
+      };
+    }
+    case "wander": {
+      if (!availableIds.has("wander")) return null;
+      return {
+        step: {
+          id: stepId("wander", index),
+          capability: "wander",
+          inputs: { timeout_s: 60 },
+        },
+        candidate: {
+          capability_id: "wander",
+          confidence: 0.9,
+          rationale: `matched verb "${detected.matched}"`,
+          inputs: { timeout_s: 60 },
+        },
+      };
+    }
   }
   return null;
 }
@@ -455,6 +507,66 @@ function tryFindAndApproach(
   return null;
 }
 
+function tryMapTheRoom(
+  goal: string,
+  availableIds: Set<string>,
+): { steps: MissionStep[]; candidates: PlannerCandidate[] } | null {
+  const g = normalise(goal);
+  const mapPhrases = [
+    "map the room",
+    "map this room",
+    "map the space",
+    "map this space",
+    "map a room",
+  ];
+  if (!mapPhrases.some((p) => g.includes(p))) return null;
+  if (!availableIds.has("explore")) return null;
+
+  const steps: MissionStep[] = [];
+  const candidates: PlannerCandidate[] = [];
+  if (availableIds.has("start_slam")) {
+    steps.push({
+      id: "slam",
+      capability: "start_slam",
+      inputs: { request: {} },
+    });
+    candidates.push({
+      capability_id: "start_slam",
+      confidence: 0.9,
+      rationale: "compound goal: start SLAM before covering the room",
+      inputs: { request: {} },
+    });
+  }
+  if (availableIds.has("explore")) {
+    steps.push({
+      id: "cover",
+      capability: "explore",
+      inputs: { timeout_s: 180 },
+    });
+    candidates.push({
+      capability_id: "explore",
+      confidence: 0.9,
+      rationale: "compound goal: frontier-explore the room",
+      inputs: { timeout_s: 180 },
+    });
+  }
+  if (availableIds.has("save_map")) {
+    steps.push({
+      id: "save",
+      capability: "save_map",
+      inputs: { request: {} },
+    });
+    candidates.push({
+      capability_id: "save_map",
+      confidence: 0.85,
+      rationale: "compound goal: persist the RTAB-Map database after coverage",
+      inputs: { request: {} },
+    });
+  }
+  if (steps.length === 0) return null;
+  return { steps, candidates };
+}
+
 /** Recognised verbs the planner can handle today — surfaced in error messages. */
 const RECOGNISED_VERBS_SUMMARY = [
   "find / locate / look for <object>",
@@ -464,6 +576,8 @@ const RECOGNISED_VERBS_SUMMARY = [
   "drive forward / backward, turn left / right, stop",
   "list topics",
   "find <object> and drive toward it (multi-step)",
+  "map the room (start_slam → explore → save_map when installed)",
+  "explore the room / wander around",
 ];
 
 /**
@@ -490,6 +604,15 @@ export function compileGoalToMission(
   }
 
   const availableIds = new Set(capabilities.map((c) => c.id));
+
+  const mapped = tryMapTheRoom(trimmed, availableIds);
+  if (mapped) {
+    return {
+      mission: buildMission(mapped.steps, trimmed, options),
+      candidates: mapped.candidates,
+      suggestions: [],
+    };
+  }
 
   // Compound find-then-approach is the showcase Phase 1.c pattern.
   // Check it first so "find a chair and drive toward it" doesn't get

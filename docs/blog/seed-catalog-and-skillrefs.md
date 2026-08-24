@@ -9,7 +9,8 @@ Install from [skills.agenticros.com](https://skills.agenticros.com):
 | Skill | Capability | What it does |
 |-------|------------|--------------|
 | **Detect humans** | `detect_humans` | Subscribe to your vision stack’s `Detection2DArray` |
-| **Start SLAM** | `start_slam` / `stop_slam` / `save_map` / `load_map` | Trigger RTAB-Map mapping / map load from a mission step |
+| **Start SLAM** | `start_slam` / `stop_slam` / `save_map` / `load_map` / mapping vs localization | Trigger RTAB-Map mapping / database backup / map load from a mission step |
+| **Explore** | `explore` / `wander` | Frontier coverage and safe wandering (Nav2 `NavigateToPose`) |
 | **Follow Me (ROS)** | `follow_person_ros` | Call the on-robot follow node via services |
 | **Navigate To** | `navigate_to` | Nav2 `NavigateToPose` as a marketplace skill |
 | **Navigate Through Poses** | `navigate_through_poses` | Nav2 waypoint routes |
@@ -23,6 +24,7 @@ npx agenticros skills install @agenticros/navigate-to
 npx agenticros skills install @agenticros/navigate-through-poses
 npx agenticros skills install @agenticros/detect-humans
 npx agenticros skills install @agenticros/start-slam
+npx agenticros skills install @agenticros/explore
 npx agenticros skills install @agenticros/follow-me-ros
 npx agenticros skills install @agenticros/moveit-pick
 npx agenticros skills install @agenticros/dock-to-charger

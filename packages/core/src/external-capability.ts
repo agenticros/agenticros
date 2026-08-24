@@ -119,6 +119,39 @@ export function buildExternalGoal(
     }
   }
 
+  if (
+    msgType.includes("loaddatabase") ||
+    impl.service?.includes("load_database")
+  ) {
+    const databasePath =
+      typeof inputs.database_path === "string" ? inputs.database_path : "";
+    return {
+      database_path: databasePath,
+      clear: inputs.clear !== false,
+    };
+  }
+
+  if (
+    msgType.includes("explore") ||
+    impl.action === "explore" ||
+    impl.action === "wander"
+  ) {
+    const timeout = Number(inputs.timeout_s ?? 0) || 0;
+    const minFrontier = Number(inputs.min_frontier_m ?? 0) || 0;
+    const maxGoals = Number(inputs.max_goals ?? 0) || 0;
+    const modeFromAction = impl.action === "wander" ? "wander" : "explore";
+    const mode =
+      typeof inputs.mode === "string" && inputs.mode.trim()
+        ? inputs.mode.trim()
+        : modeFromAction;
+    return {
+      mode,
+      timeout_s: timeout,
+      min_frontier_m: minFrontier,
+      max_goals: maxGoals,
+    };
+  }
+
   // Passthrough remaining inputs (minus robot_id).
   const { robot_id: _rid, ...rest } = inputs;
   return rest;

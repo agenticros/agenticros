@@ -252,6 +252,59 @@ test("planner: 'paint the wall blue' (unrecognised verb) fails gracefully with s
 
 // --- Options pass-through ---
 
+test("planner: 'wander around' maps to wander when the skill is installed", () => {
+  const caps: Capability[] = [
+    ...BASE_CAPS,
+    { id: "wander", verb: "wander", description: "wander", source: { kind: "skill", skillId: "explore", package: "@agenticros/explore" } },
+  ];
+  const res = compileGoalToMission("wander around", caps);
+  assert.ok(res.mission, `expected mission, got error: ${res.error}`);
+  assert.equal(res.mission!.steps.length, 1);
+  assert.equal(res.mission!.steps[0].capability, "wander");
+  assert.equal((res.mission!.steps[0].inputs as { timeout_s: number }).timeout_s, 60);
+});
+
+test("planner: 'explore the room' maps to explore", () => {
+  const caps: Capability[] = [
+    ...BASE_CAPS,
+    { id: "explore", verb: "explore", description: "explore", source: { kind: "skill", skillId: "explore", package: "@agenticros/explore" } },
+  ];
+  const res = compileGoalToMission("explore the room", caps);
+  assert.ok(res.mission);
+  assert.equal(res.mission!.steps[0].capability, "explore");
+});
+
+test("planner: 'map the room' chains start_slam → explore → save_map when installed", () => {
+  const caps: Capability[] = [
+    ...BASE_CAPS,
+    { id: "start_slam", verb: "map", description: "start", source: { kind: "skill", skillId: "start-slam", package: "@agenticros/start-slam" } },
+    { id: "save_map", verb: "map", description: "save", source: { kind: "skill", skillId: "start-slam", package: "@agenticros/start-slam" } },
+    { id: "explore", verb: "explore", description: "explore", source: { kind: "skill", skillId: "explore", package: "@agenticros/explore" } },
+  ];
+  const res = compileGoalToMission("map the room", caps);
+  assert.ok(res.mission, `expected mission, got error: ${res.error}`);
+  assert.deepEqual(
+    res.mission!.steps.map((s) => s.capability),
+    ["start_slam", "explore", "save_map"],
+  );
+});
+
+test("planner: 'map the room' still compiles with only explore installed", () => {
+  const caps: Capability[] = [
+    ...BASE_CAPS,
+    { id: "explore", verb: "explore", description: "explore", source: { kind: "skill", skillId: "explore", package: "@agenticros/explore" } },
+  ];
+  const res = compileGoalToMission("map the room", caps);
+  assert.ok(res.mission);
+  assert.equal(res.mission!.steps.length, 1);
+  assert.equal(res.mission!.steps[0].capability, "explore");
+});
+
+test("planner: 'wander around' fails when wander isn't installed", () => {
+  const res = compileGoalToMission("wander around", BASE_CAPS);
+  assert.equal(res.mission, null);
+});
+
 test("planner: options.robot_id is propagated onto the compiled mission", () => {
   const res = compileGoalToMission("take a picture", BASE_CAPS, { robot_id: "robotA" });
   assert.ok(res.mission);

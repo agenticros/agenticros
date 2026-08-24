@@ -347,3 +347,7 @@ Or with flags:
 | Demo with Docker (Mode B + local rosbridge) | `--docker` |
 
 The script updates `~/.openclaw/openclaw.json` (or `OPENCLAW_CONFIG`) with `plugins.entries.agenticros.config`. It requires **jq** for JSON edits; without jq it prints the options for you to set manually. With `--docker`, it also starts the Docker Compose ROS2+rosbridge service so you can point the plugin at `ws://localhost:9090`.
+
+## Mapping a room
+
+To build an occupancy map and walk around without hitting furniture, bring up RTAB-Map + Nav2 (**no AMCL**) and install `@agenticros/start-slam` + `@agenticros/explore`. See **[Mapping a room](mapping.md)**.

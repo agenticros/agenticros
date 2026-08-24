@@ -244,6 +244,7 @@ npx agenticros skills install @agenticros/navigate-to
 npx agenticros skills install @agenticros/navigate-through-poses
 npx agenticros skills install @agenticros/detect-humans
 npx agenticros skills install @agenticros/start-slam
+npx agenticros skills install @agenticros/explore
 npx agenticros skills install @agenticros/follow-me-ros
 npx agenticros skills install @agenticros/moveit-pick
 npx agenticros skills install @agenticros/dock-to-charger

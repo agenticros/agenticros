@@ -60,6 +60,8 @@ node scripts/test-navigate-sim.mjs
 
 See [examples/navigate-to](../examples/navigate-to/README.md).
 
+Live RGB-D mapping (RTAB-Map, no AMCL) is a **different** stack — see [Mapping a room](mapping.md). `sim-amr --nav2` will not start RTAB-Map.
+
 ## Layout
 
 | Layer | Where | What |

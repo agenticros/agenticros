@@ -42,6 +42,8 @@ For common verbs, pass a **`goal`** string to **`run_mission`**. A deterministic
 | `take a picture` | `take_snapshot` |
 | `follow me` | `follow_person` |
 | `find a chair and drive toward it` | `find_object` → `drive_base` (steers via `{{find.outputs.horizontal_offset}}`) |
+| `map the room` | `start_slam` → `explore` → `save_map` (when those skills are installed) |
+| `wander around` | `wander` |
 | `take a picture and then measure depth` | `take_snapshot` → `measure_depth` |
 
 **Direct tool call** (MCP / debugging):
@@ -285,7 +287,8 @@ Builtin bindings live in `@agenticros/core` (`buildMissionBindings`). Skill-decl
 | `navigate_to` | external Nav2 action (`npx agenticros skills install @agenticros/navigate-to`) |
 | `navigate_through_poses` | external Nav2 through-poses (`@agenticros/navigate-through-poses`) |
 | `detect_humans` | external vision topic subscribe (`@agenticros/detect-humans`) |
-| `start_slam` / `stop_slam` / `save_map` / `load_map` | external RTAB-Map services (`@agenticros/start-slam`) |
+| `start_slam` / `stop_slam` / `save_map` / `load_map` / `set_mapping_mode` / `set_localization_mode` | external RTAB-Map services (`@agenticros/start-slam`) |
+| `explore` / `wander` | external `agenticros_explore` actions (`@agenticros/explore`) |
 | `follow_person_ros` / `stop_follow_person_ros` | external `agenticros_follow_me` services (`@agenticros/follow-me-ros`) |
 | `pick_object` | external MoveIt MoveGroup (`@agenticros/moveit-pick`; operator bringup) |
 | `dock_to_charger` | external OpenNav DockRobot (`@agenticros/dock-to-charger`; operator bringup) |

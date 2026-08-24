@@ -11,6 +11,7 @@ find_package(rosidl_default_generators REQUIRED)
 
 find_package(builtin_interfaces REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(action_msgs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/CapabilityManifest.msg"
@@ -21,7 +22,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/FollowMeSetDistance.srv"
   "srv/FollowMeGetStatus.srv"
   "srv/FollowMeSetTarget.srv"
-  DEPENDENCIES std_msgs builtin_interfaces geometry_msgs
+  "action/Explore.action"
+  DEPENDENCIES std_msgs builtin_interfaces geometry_msgs action_msgs
 )
 
 ament_package()

@@ -56,6 +56,9 @@ ros2 launch agenticros_sim sim_arm.launch.py use_rviz:=true
 
 Nav2 requires `ros-$ROS_DISTRO-nav2-bringup`. After `--nav2`, install
 `@agenticros/navigate-to` and call `run_mission` with `navigate_to`.
+
+This is a **static map + AMCL** stack. For live RGB-D mapping (RTAB-Map, no AMCL) and the `explore` / `wander` skills, see [docs/mapping.md](../../../../docs/mapping.md).
+
 ## Arm topic layout
 
 The arm exposes one position-command topic per joint plus the usual

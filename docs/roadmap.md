@@ -35,7 +35,7 @@ premium skills — never on the real-time control path.
 | Robot hardware profiles (features + ROS bindings, verb gating) | Shipped (`@agenticros/core` 0.8.4) |
 | Dynamic mission bindings + Gemini find/follow | Shipped |
 | External ROS-node skill loader | Shipped |
-| Seed catalog — navigate / through-poses / detect / slam (+load) / follow-ros / moveit-pick / dock | Shipped (operator bringup on real robots) |
+| Seed catalog — navigate / through-poses / detect / slam (+load) / explore+wander / follow-ros / moveit-pick / dock | Shipped (operator bringup on real robots) |
 | Sim AMR + Nav2 (`agenticros up sim-amr --nav2`) | Shipped (`/odom` fixed; map + AMCL + Nav2; smoke script) |
 | Sim arm MoveIt2 / GHA mission CI | WIP (per-joint jogging works; MoveIt deferred) |
 | `skillRefs` + `~/.agenticros/skills-cache/` (git + npm) | Shipped |
@@ -99,7 +99,7 @@ embodied agents.
   dynamic bindings, Gemini find/follow, `external_ros_node` dispatch.
 - **Seeds (adjacent repos / npm `@agenticros/*`):** `navigate-to`,
   `navigate-through-poses`, `detect-humans`, `start-slam` (+ `load_map`),
-  `follow-me-ros`, `moveit-pick`, `dock-to-charger`, plus in-process
+  `explore` / `wander`, `follow-me-ros`, `moveit-pick`, `dock-to-charger`, plus in-process
   `find` / `followme`. Nav2 on Gazebo AMR shipped (`--nav2`); sim MoveIt CI still WIP.
 - **Marketplace UX v1+v2:** `skillRefs` → `~/.agenticros/skills-cache/`
   (git **and** npm pack), discoverable caps, CLI install prefers npm when

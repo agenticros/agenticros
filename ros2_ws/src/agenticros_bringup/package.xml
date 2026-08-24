@@ -3,7 +3,7 @@
 <package format="3">
   <name>agenticros_bringup</name>
   <version>0.0.1</version>
-  <description>Launch files and RViz configs for TurtleBot3 Gazebo simulation and visualization aligned with AgenticROS defaults (cmd_vel, /scan, rosbridge).</description>
+  <description>Launch files and RViz configs for TurtleBot3 Gazebo, RealSense, RTAB-Map + Nav2, and visualization aligned with AgenticROS defaults.</description>
   <maintainer email="team@plaipin.com">PlaiPin</maintainer>
   <license>Apache-2.0</license>
 

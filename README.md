@@ -515,7 +515,7 @@ cd agenticros-skill-my-skill && npm install && npm run dev
 npx agenticros publish   # GitHub + marketplace + npm publish
 ```
 
-Seed catalog (npm): `@agenticros/followme`, `find`, `navigate-to`, `navigate-through-poses`, `detect-humans`, `start-slam`, `follow-me-ros`, `moveit-pick`, `dock-to-charger`.
+Seed catalog (npm): `@agenticros/followme`, `find`, `navigate-to`, `navigate-through-poses`, `detect-humans`, `start-slam`, `explore`, `follow-me-ros`, `moveit-pick`, `dock-to-charger`.
 
 ### What the CLI writes
 

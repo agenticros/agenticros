@@ -92,6 +92,8 @@ AgenticROS teleop and many stacks publish **`/<namespace>/cmd_vel`** (e.g. `/rob
 | `mode_a_gazebo.launch.py` | **Mode A:** Gazebo + TurtleBot3 only; sets **`ROS_DOMAIN_ID`** (default `0`). Use with AgenticROS **local** transport—no rosbridge. |
 | `mode_a_gazebo_rviz.launch.py` | **Mode A:** Gazebo + RViz + same domain ID setup. |
 | `cmd_vel_bridge.launch.py` | Relay only: namespaced **`src_cmd_vel`** → **`dst_cmd_vel`** (default `/cmd_vel`). |
+| `realsense_rosbridge.launch.py` | RealSense + rosbridge + optional cmd_vel relay. |
+| `rtabmap_nav2.launch.py` | **Mapping:** optional RealSense + RTAB-Map + Nav2 (**no AMCL**) + `agenticros_explore`. See [docs/mapping.md](../../../docs/mapping.md). |
 
 ### Examples
 
