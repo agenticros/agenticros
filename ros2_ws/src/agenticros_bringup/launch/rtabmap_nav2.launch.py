@@ -3,6 +3,13 @@
 RTAB-Map publishes /map and map→odom. Nav2 is started via navigation_launch.py
 only — do not include localization_launch / AMCL.
 
+Requires (Jazzy)::
+
+    sudo apt-get install -y \\
+      ros-jazzy-navigation2 \\
+      ros-jazzy-nav2-bringup \\
+      ros-jazzy-rtabmap-ros
+
 Example::
 
     ros2 launch agenticros_bringup rtabmap_nav2.launch.py

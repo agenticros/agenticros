@@ -298,6 +298,7 @@ Skills you author can add new ids via `agenticros.capabilities[]` in `package.js
 ## Related docs
 
 - [Skills](skills.md) — declare capabilities, install marketplace skills
+- [Mapping a room](mapping.md) — Nav2 + RTAB-Map apt packages, explore/wander bringup
 - [Memory](memory.md) — mission transcripts and cross-agent recall
 - [Strategy memo](strategy-ai-agents-plus-ros.md) — Phase 1 design and roadmap
 - [MCP adapter README](../packages/agenticros-claude-code/README.md#tools) — full tool list

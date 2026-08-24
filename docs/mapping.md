@@ -18,14 +18,21 @@ Skills:
 
 ## Install
 
-```bash
-sudo apt install \
-  ros-$ROS_DISTRO-rtabmap-ros \
-  ros-$ROS_DISTRO-nav2-bringup \
-  ros-$ROS_DISTRO-realsense2-camera   # if you have a D435 / D455
+Nav2’s metapackage (`navigation2`) is required in addition to `nav2-bringup`. Without it, `navigate_to_pose` / costmaps are missing and `@agenticros/explore` cannot run. Jazzy:
 
+```bash
+sudo apt-get install -y \
+  ros-jazzy-navigation2 \
+  ros-jazzy-nav2-bringup \
+  ros-jazzy-rtabmap-ros \
+  ros-jazzy-realsense2-camera   # if you have a D435 / D455
+```
+
+Humble: replace `jazzy` with `humble`. `nav2-bringup` alone does **not** pull the full Nav2 stack on Jazzy.
+
+```bash
 cd /path/to/agenticros/ros2_ws
-source /opt/ros/$ROS_DISTRO/setup.bash
+source /opt/ros/jazzy/setup.bash   # or humble
 colcon build --packages-select agenticros_msgs agenticros_explore agenticros_bringup
 source install/setup.bash
 

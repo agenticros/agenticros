@@ -35,7 +35,7 @@ and keeps your old config at `~/.agenticros/config.json.real.<ts>.bak`.
 
 ## Nav2 on sim-amr
 
-Requires `sudo apt install ros-$ROS_DISTRO-nav2-bringup` (Humble or Jazzy).
+Requires `sudo apt install ros-$ROS_DISTRO-navigation2 ros-$ROS_DISTRO-nav2-bringup` (Humble or Jazzy). `nav2-bringup` alone is not enough on Jazzy.
 
 ```bash
 agenticros up sim-amr --nav2 --headless
@@ -198,7 +198,7 @@ cd ros2_ws && colcon build --packages-select agenticros_sim --symlink-install
 ### Nav2 / `--nav2` fails to start
 
 ```bash
-sudo apt install ros-$ROS_DISTRO-nav2-bringup
+sudo apt-get install -y ros-$ROS_DISTRO-navigation2 ros-$ROS_DISTRO-nav2-bringup
 cd ros2_ws && colcon build --packages-select agenticros_sim --symlink-install
 ```
 

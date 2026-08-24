@@ -165,7 +165,7 @@ esac
 
 if [[ "$USE_NAV2" == "true" ]]; then
   if ! ros2 pkg prefix nav2_bringup >/dev/null 2>&1; then
-    err "nav2_bringup not found. Install: sudo apt install ros-\$ROS_DISTRO-nav2-bringup"
+    err "nav2_bringup not found. Install: sudo apt-get install -y ros-\$ROS_DISTRO-navigation2 ros-\$ROS_DISTRO-nav2-bringup"
     exit 1
   fi
 fi

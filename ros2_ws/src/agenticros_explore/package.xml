@@ -15,6 +15,11 @@
   <depend>tf2_ros</depend>
   <depend>agenticros_msgs</depend>
 
+  <!-- Full Nav2 stack at runtime (navigate_to_pose + costmaps). nav2_msgs alone is not enough.
+       sudo apt-get install -y ros-${ROS_DISTRO}-navigation2 ros-${ROS_DISTRO}-nav2-bringup -->
+  <exec_depend>navigation2</exec_depend>
+  <exec_depend>nav2_bringup</exec_depend>
+
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
 

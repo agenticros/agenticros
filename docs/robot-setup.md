@@ -350,4 +350,13 @@ The script updates `~/.openclaw/openclaw.json` (or `OPENCLAW_CONFIG`) with `plug
 
 ## Mapping a room
 
-To build an occupancy map and walk around without hitting furniture, bring up RTAB-Map + Nav2 (**no AMCL**) and install `@agenticros/start-slam` + `@agenticros/explore`. See **[Mapping a room](mapping.md)**.
+To build an occupancy map and walk around without hitting furniture, install Nav2 + RTAB-Map, bring them up **without AMCL**, and install `@agenticros/start-slam` + `@agenticros/explore`.
+
+```bash
+sudo apt-get install -y \
+  ros-jazzy-navigation2 \
+  ros-jazzy-nav2-bringup \
+  ros-jazzy-rtabmap-ros
+```
+
+See **[Mapping a room](mapping.md)**.

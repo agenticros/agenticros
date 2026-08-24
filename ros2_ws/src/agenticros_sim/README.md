@@ -54,7 +54,7 @@ ros2 launch agenticros_sim sim_arm.launch.py
 ros2 launch agenticros_sim sim_arm.launch.py use_rviz:=true
 ```
 
-Nav2 requires `ros-$ROS_DISTRO-nav2-bringup`. After `--nav2`, install
+Nav2 requires `ros-$ROS_DISTRO-navigation2` **and** `ros-$ROS_DISTRO-nav2-bringup` (`nav2-bringup` alone is not enough on Jazzy). After `--nav2`, install
 `@agenticros/navigate-to` and call `run_mission` with `navigate_to`.
 
 This is a **static map + AMCL** stack. For live RGB-D mapping (RTAB-Map, no AMCL) and the `explore` / `wander` skills, see [docs/mapping.md](../../../../docs/mapping.md).

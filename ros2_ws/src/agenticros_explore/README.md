@@ -4,15 +4,27 @@ ROS 2 node that advertises **`explore`** and **`wander`** actions. It reads `/ma
 
 The marketplace skill [`@agenticros/explore`](https://www.npmjs.com/package/@agenticros/explore) dispatches those actions. AgenticROS does not launch this node for you.
 
+## Dependencies
+
+Jazzy (Humble: `ros-humble-…`):
+
+```bash
+sudo apt-get install -y \
+  ros-jazzy-navigation2 \
+  ros-jazzy-nav2-bringup \
+  ros-jazzy-rtabmap-ros
+```
+
+`navigation2` is the Nav2 metapackage (planner, controller, `navigate_to_pose`). `nav2-bringup` is launches/params. `rtabmap-ros` is required for live mapping (`/map`); skip it only if another node already publishes the occupancy grid (e.g. `sim-amr --nav2`).
+
 ## Build
 
 ```bash
 cd ros2_ws
+source /opt/ros/jazzy/setup.bash
 colcon build --packages-select agenticros_msgs agenticros_explore
 source install/setup.bash
 ```
-
-Requires `ros-$ROS_DISTRO-nav2-msgs` (pulled in by `nav2-bringup`).
 
 ## Run
 

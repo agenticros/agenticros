@@ -250,6 +250,8 @@ npx agenticros skills install @agenticros/moveit-pick
 npx agenticros skills install @agenticros/dock-to-charger
 ```
 
+`@agenticros/explore` needs the Nav2 metapackage on the robot (`ros-jazzy-navigation2` **and** `ros-jazzy-nav2-bringup`). Live mapping also needs `ros-jazzy-rtabmap-ros`. See **[Mapping a room](mapping.md)**.
+
 Or pin in config (auto-fetch on MCP/Gemini startup; OpenClaw merges already-cached paths):
 
 ```jsonc

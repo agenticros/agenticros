@@ -95,6 +95,8 @@ AgenticROS teleop and many stacks publish **`/<namespace>/cmd_vel`** (e.g. `/rob
 | `realsense_rosbridge.launch.py` | RealSense + rosbridge + optional cmd_vel relay. |
 | `rtabmap_nav2.launch.py` | **Mapping:** optional RealSense + RTAB-Map + Nav2 (**no AMCL**) + `agenticros_explore`. See [docs/mapping.md](../../../docs/mapping.md). |
 
+**`rtabmap_nav2.launch.py` apt (Jazzy):** `ros-jazzy-navigation2`, `ros-jazzy-nav2-bringup`, `ros-jazzy-rtabmap-ros` (and `ros-jazzy-realsense2-camera` if `use_realsense:=true`). `navigation2` is the Nav2 metapackage — `nav2-bringup` alone is not enough.
+
 ### Examples
 
 ```bash

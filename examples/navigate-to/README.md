@@ -4,7 +4,7 @@ Canonical package: **[agenticros-skill-navigate-to](https://github.com/agenticro
 
 ## Sim walkthrough (Gazebo AMR + Nav2)
 
-Requires ROS 2 Humble/Jazzy, Gazebo Harmonic, and `ros-$ROS_DISTRO-nav2-bringup`.
+Requires ROS 2 Humble/Jazzy, Gazebo Harmonic, and `ros-$ROS_DISTRO-navigation2` plus `ros-$ROS_DISTRO-nav2-bringup` (`nav2-bringup` alone is not enough on Jazzy).
 
 ```bash
 # 1. Bring up Gazebo AMR with map + AMCL + Nav2 (headless OK)

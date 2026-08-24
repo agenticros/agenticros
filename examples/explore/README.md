@@ -9,10 +9,21 @@ npx agenticros skills install @agenticros/explore
 npx agenticros skills install @agenticros/start-slam
 ```
 
-On a physical RGB-D robot:
+On the **robot**, install Nav2 + RTAB-Map before launching. Jazzy:
 
 ```bash
-# From agenticros/ros2_ws after colcon build of agenticros_msgs + agenticros_explore + agenticros_bringup
+sudo apt-get install -y \
+  ros-jazzy-navigation2 \
+  ros-jazzy-nav2-bringup \
+  ros-jazzy-rtabmap-ros
+```
+
+Humble: the same names with `ros-humble-…`. Then, from `agenticros/ros2_ws`:
+
+```bash
+source /opt/ros/jazzy/setup.bash
+colcon build --packages-select agenticros_msgs agenticros_explore agenticros_bringup
+source install/setup.bash
 ros2 launch agenticros_bringup rtabmap_nav2.launch.py
 ```
 
