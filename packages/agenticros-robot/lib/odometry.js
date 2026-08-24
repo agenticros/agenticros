@@ -318,7 +318,9 @@ export function createOdometry({ node, odomTopic, kinematics, mode }) {
     },
     start() {
       if (!node || timer) return timer;
-      timer = node.createTimer(ODOM_PERIOD_MS, () => {
+      // rclnodejs ≥1.9 requires bigint period (nanoseconds).
+      const periodNs = BigInt(Math.round(ODOM_PERIOD_MS * 1e6));
+      timer = node.createTimer(periodNs, () => {
         api.tick(node.now());
       });
       return timer;

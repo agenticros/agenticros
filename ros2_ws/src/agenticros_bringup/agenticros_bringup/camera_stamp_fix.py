@@ -73,6 +73,19 @@ class CameraStampFix(Node):
             rgb, depth, info = self._rgb, self._depth, self._info
         if rgb is None or depth is None or info is None:
             return
+        # RTAB-Map requires depth size == RGB or an integer scale factor.
+        # Independent "latest" frames can briefly mismatch after a stream
+        # reconfigure — skip until both agree.
+        if depth.height == 0 or depth.width == 0:
+            return
+        if rgb.height % depth.height != 0 or rgb.width % depth.width != 0:
+            if depth.height % rgb.height != 0 or depth.width % rgb.width != 0:
+                if self._n % 50 == 0:
+                    self.get_logger().warn(
+                        "Skipping mismatched frames rgb=%dx%d depth=%dx%d"
+                        % (rgb.width, rgb.height, depth.width, depth.height)
+                    )
+                return
         now = self.get_clock().now().to_msg()
         rgb.header.stamp = now
         depth.header.stamp = now
