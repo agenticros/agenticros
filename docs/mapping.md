@@ -30,6 +30,14 @@ sudo apt-get install -y \
 
 Humble: replace `jazzy` with `humble`. `nav2-bringup` alone does **not** pull the full Nav2 stack on Jazzy.
 
+If RTAB-Map / Nav2 fails at startup with `libdiagnostic_updater.so: cannot open shared object file` (or undefined `diagnostic_updater::Updater` symbols), the apt package is headers-only on some distros. Build the shared library into this workspace once:
+
+```bash
+./scripts/install_diagnostic_updater.sh humble   # or jazzy
+source /opt/ros/humble/setup.bash
+source ros2_ws/install/setup.bash
+```
+
 ```bash
 cd /path/to/agenticros/ros2_ws
 source /opt/ros/jazzy/setup.bash   # or humble
@@ -57,6 +65,24 @@ ros2 launch agenticros_bringup rtabmap_nav2.launch.py \
   use_realsense:=false use_rtabmap:=false
 ```
 
+### Jetson / D457 (GMSL) notes
+
+Some GMSL RealSense setups publish broken or desynced hardware timestamps, and motor stacks may not publish `base_link` yet. Use the built-in stamp rewriter and temporary static TFs (disable once you have a URDF + good clocks):
+
+```bash
+# Camera already running elsewhere (recommended profiles: 424x240x15):
+ros2 launch agenticros_bringup rtabmap_nav2.launch.py \
+  use_realsense:=false \
+  rewrite_camera_stamps:=true \
+  use_static_robot_tf:=true \
+  depth_topic:=/camera/camera/depth/image_rect_raw \
+  frame_id:=base_link \
+  base_frame:=base_link
+```
+
+- `rewrite_camera_stamps:=true` republishes synced ROS-time frames on `/camera_fixed/*` and points RTAB-Map there.
+- `use_static_robot_tf:=true` publishes `base_link`→`base_footprint` and `base_link`→`camera_link` (override `camera_x/y/z` as needed).
+- Prefer raw depth (`depth/image_rect_raw`) if `aligned_depth_to_color` never publishes on your device.
 Confirm:
 
 ```bash

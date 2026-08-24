@@ -33,6 +33,11 @@ ros2_ws/install/
 ros2_ws/log/
 ros2_ws/src/*/build/
 ros2_ws/src/*/*.egg-info/
+# Source-built overlays (see scripts/install_*.sh)
+ros2_ws/src/diagnostics_repo/
+ros2_ws/src/diagnostic_updater
+ros2_ws/src/rosbridge_suite_repo/
+ros2_ws/.agenticros-cli-build-stamp
 
 # Python
 __pycache__/

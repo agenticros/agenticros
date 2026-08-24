@@ -19,6 +19,7 @@ setup(
     entry_points={
         "console_scripts": [
             "cmd_vel_relay = agenticros_bringup.cmd_vel_relay:main",
+            "camera_stamp_fix = agenticros_bringup.camera_stamp_fix:main",
         ],
     },
     zip_safe=True,
