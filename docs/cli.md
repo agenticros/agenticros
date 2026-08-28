@@ -100,7 +100,7 @@ live in `configstore('agenticros')` (`ROBOT_ID`, `API_TOKEN`); legacy
 | `agenticros disconnect` | Stop `comms.js`. |
 | `agenticros id` | Print (or create) robot ID. |
 | `agenticros set --token=… [--id=…]` | Manual credential save (prefer `login`). Run `agenticros init` first so connect/motors deps are installed. |
-| `agenticros start motors [-b rpi\|firmata\|jetson] [-p pins] [-e enc] [-d device] [--odom] [--no-odom] [--tpr n]` | Start motor controller. Publishes `/odom` when ARC has wheel geometry (or `--odom`). `-e` enables Firmata encoder odom. Jetson GPIO is **opt-in** (`-b jetson` only). |
+| `agenticros start motors [-b rpi\|firmata\|jetson] [-p pins] [-e enc] [-d device] [--odom] [--no-odom] [--tpr n]` | Start motor controller. Publishes `/odom` when ARC has wheel geometry (or `--odom`). `-e` enables Firmata encoder odom. Jetson GPIO is **opt-in** (`-b jetson` only). Hardware pin maps: [hardware.md](hardware.md). |
 | `agenticros stop motors` | Stop all motor backends. |
 | `agenticros start realsense [-p\|--pointcloud]` | Start RealSense (recovery preflight + pidfile). |
 | `agenticros stop realsense` | Stop RealSense node. |

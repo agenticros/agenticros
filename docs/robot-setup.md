@@ -2,6 +2,8 @@
 
 This guide gets the AgenticROS project running on your robot (Ubuntu + ROS2 + OpenClaw) for testing and demos.
 
+Still assembling the chassis, L298N, motors, or RealSense? Start with **[Hardware getting started](hardware.md)**, then come back here for ROS 2 and the OpenClaw plugin.
+
 ## Onboarding (quick path)
 
 For a **new robot**, use the setup scripts after cloning the repo:

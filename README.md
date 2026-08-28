@@ -22,6 +22,8 @@ AgenticROS turns ROS 2 robots into agent-native machines. Speak, type, or messag
 
 With AgenticROS, your robot can describe what it sees, follow intent ("go check the front door"), run skills you author, and respond to natural language across the agent platforms you already use. **One ROS 2 workspace, one config, many agents.**
 
+**Building a robot from parts?** Start with the **[hardware getting started guide](docs/hardware.md)** — reference BOM (Jetson or Pi / RADXA / LattePanda / x86+Arduino), L298N GPIO wiring for `/cmd_vel` and `/odom`, RealSense, then OpenClaw and other agents.
+
 ## Supported AI Agent platforms
 
 - **[OpenClaw](https://openclaw.ai)** — Native gateway plugin with ROS 2 tools, commands, a config UI, a teleop web app, and a skill loader. The flagship integration.
@@ -137,7 +139,7 @@ Full architecture + design trade-offs: **[docs/strategy-ai-agents-plus-ros.md](d
 - `**packages/agenticros-gemini**` — Gemini CLI (function calling; no MCP).
 - `**packages/robot-eyes**` — On-robot face display (`agenticros eyes`): animated eyes follow `cmd_vel` turns; when idle, follow a person in the RealSense camera if YOLO is already installed. Optional WASD. See [docs/eyes.md](docs/eyes.md).
 - `**ros2_ws/**` — ROS2 workspace: `agenticros_msgs`, `agenticros_bringup` (Gazebo + RViz + rosbridge launches), `agenticros_discovery`, `agenticros_agent`, `agenticros_follow_me`.
-- `**docs/**` — Architecture, skills, robot setup, Zenoh, teleop, eyes, **[local VLM / Ollama](docs/local-vlm.md)**.
+- `**docs/**` — Architecture, **[hardware getting started](docs/hardware.md)**, skills, robot setup, Zenoh, teleop, eyes, **[local VLM / Ollama](docs/local-vlm.md)**.
 - `**scripts/**` — Workspace setup, gateway plugin config, run demos.
 - `**docker/**` — Docker Compose and Dockerfiles for ROS2 + plugin images.
 - `**examples/**` — Example projects.
@@ -153,6 +155,7 @@ npx agenticros
 ```
 
 That's it. Run it on any machine with **Node ≥ 20**, no `git clone` required.
+If you are still wiring motors and a camera, do that first: **[docs/hardware.md](docs/hardware.md)**.
 The first run launches the interactive menu:
 
 ```text

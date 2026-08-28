@@ -121,6 +121,8 @@ differential-drive PWM. When ARC has wheel diameter and track width (mm), also
 publishes `/odom` and `odom`→`base_link` TF (cmd_vel dead-reckon; Firmata
 encoders if `-e` is passed).
 
+**BOM, L298N pin maps, and encoder wiring:** [docs/hardware.md](../../docs/hardware.md).
+
 | Command | Description |
 |---------|-------------|
 | `agenticros start motors [options]` | Start motor controller (detached). |

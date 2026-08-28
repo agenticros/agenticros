@@ -33,6 +33,8 @@ Robot ID and API token live in `configstore('agenticros')`. Legacy values from
 
 ## Motors backend selection
 
+Pin maps for L298N (Jetson BOARD, Pi BCM, Firmata) plus encoder `/odom`: **[docs/hardware.md](../../docs/hardware.md)**.
+
 1. Portal `compute === "Raspberry Pi"` → `motors-rpi5.js`
 2. Otherwise → `motors-firmata.js`
 3. Overrides: `-b rpi` | `-b firmata` | `-b jetson`

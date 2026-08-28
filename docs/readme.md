@@ -4,8 +4,9 @@ AgenticROS connects AI agent platforms to ROS2 robots through a shared core, tra
 
 ## Start here
 
+- [Hardware getting started](hardware.md) - BOM, L298N GPIO wiring for `/cmd_vel` and `/odom`, RealSense, then link-out to OpenClaw and other agents.
 - [Architecture](architecture.md) - system layers, deployment modes, transport abstraction, and data flow.
-- [Robot setup](robot-setup.md) - robot-side prerequisites, launch steps, OpenClaw plugin setup, and quick checks.
+- [Robot setup](robot-setup.md) - robot-side ROS 2, launch steps, OpenClaw plugin setup, and quick checks.
 - [Local VLM / Ollama](local-vlm.md) - run OpenClaw or Hermes with local vision models (no cloud API keys).
 - [MCP client setup](mcp-setup.md) - unified `agenticros mcp setup` for Codex, Hermes, and Claude.
 - [Codex CLI setup](codex-setup.md) - register the AgenticROS MCP server for OpenAI Codex (`agenticros codex setup`).
