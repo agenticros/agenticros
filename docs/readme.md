@@ -25,7 +25,7 @@ AgenticROS connects AI agent platforms to ROS2 robots through a shared core, tra
 
 ## Transports and deployments
 
-- [Zenoh setup](zenoh-agenticros.md) - Mode D setup with `zenohd`, remote API, bridge configuration, teleop, and troubleshooting.
+- [Zenoh setup](zenoh-agenticros.md) - Mode D setup with `npx zenoh-fleet`, `zenohd`, remote API, bridge configuration, teleop, and troubleshooting.
 - [NVIDIA NemoClaw](nemoclaw.md) - installing NemoClaw, adding ROS2, RealSense, and AgenticROS, plus daily operating commands.
 - [OpenClaw releases and plugin routes](openclaw-releases-and-plugin-routes.md) - route behavior, release notes, auth logs, plugin loading issues, and [LAN web chat from a laptop browser](openclaw-releases-and-plugin-routes.md#open-openclaw-web-chat-from-another-machine-on-the-lan).
 

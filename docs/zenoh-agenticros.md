@@ -11,6 +11,25 @@ AgenticROS can connect to a Zenoh router so you can control a robot that uses **
 
 If you only run `zenohd` with default settings, it listens on `tcp/7447`. Native tools (e.g. `z_sub -e tcp/127.0.0.1:7447`) will see traffic, but **AgenticROS will not** until the router also exposes the remote-api WebSocket.
 
+## Generate matching configs (recommended)
+
+For a laptop hub and one or more robots, generate compatible Zenoh JSON5 instead of copying Eclipse defaults and hand-editing IPs. The wizard writes a **hub** config (`zenohd` + remote-api on port 10000) and a **member** config (`zenoh-bridge-ros2dds` or `rmw_zenoh` client). The robot is a member — do **not** run a second `zenohd` on the robot.
+
+```bash
+npx zenoh-fleet                      # wizard (same CLI as @agenticros/zenoh-fleet)
+```
+
+Hub: start the generated router, then point AgenticROS at `ws://<hub>:10000` (never `tcp/...`):
+
+```bash
+zenohd -c /path/to/<fleet>/zenohd.json5
+./scripts/configure_agenticros.sh --mode zenoh --zenoh-endpoint ws://localhost:10000
+```
+
+Member (on each robot): start the generated bridge (or rmw session), then confirm the hub is reachable: `nc -zv <hub> 7447`.
+
+Full CLI and ARC publish/pull: [zenoh-fleet](https://github.com/agenticros/zenoh-fleet). The checked-in examples below (`scripts/zenohd-agenticros.json5`, `scripts/zenoh-bridge-ros2dds-robot.json5`) remain a manual fallback.
+
 ## Install on macOS (Homebrew)
 
 Install the Zenoh router and the WebSocket (remote-api) plugin so AgenticROS can connect:
@@ -23,7 +42,9 @@ brew install zenoh-plugin-remote-api
 
 If the tap or package names differ, see [Eclipse Zenoh installation](https://zenoh.io/docs/getting-started/installation/). Then follow “Run zenohd” below.
 
-## Run zenohd with the remote-api plugin
+## Run zenohd with the remote-api plugin (manual)
+
+If you used `zenoh-fleet`, start `zenohd -c /path/to/<fleet>/zenohd.json5` and skip to step 4.
 
 1. **Install** `zenohd` and `zenoh-plugin-remote-api` (e.g. on macOS: `brew install zenoh zenoh-plugin-remote-api` after tapping `eclipse-zenoh/homebrew-zenoh`; see [Eclipse Zenoh](https://zenoh.io/docs/getting-started/installation/) for other platforms).
 
@@ -78,7 +99,7 @@ For **video in the teleop page** (`/agenticros/teleop/`):
 
 ## Using zenoh-bridge-ros2dds
 
-- On the **Mac**: run **zenohd only** (the router), with `zenohd-agenticros.json5`. Do not run the bridge on the Mac.
+- On the **Mac**: run **zenohd only** (the router), with the hub file from `zenoh-fleet` or `zenohd-agenticros.json5`. Do not run the bridge on the Mac.
 - On the **robot**: run **zenoh-bridge-ros2dds** (the **bridge** executable), **not zenohd**. The bridge connects to the Mac’s zenohd and forwards Zenoh ↔ ROS 2. If you run zenohd on the robot, the robot is a second router and cmd_vel from AgenticROS (which goes to the Mac’s router) never reaches the bridge that talks to ROS 2.
 - Set AgenticROS **zenoh.keyFormat** to **`ros2dds`** (default) so topic keys match the bridge.
 
@@ -86,12 +107,14 @@ For **video in the teleop page** (`/agenticros/teleop/`):
 
 | Machine | Run this | Config |
 |---------|----------|--------|
-| **Mac** | `zenohd` (router) | `zenohd-agenticros.json5` |
-| **Robot** | `zenoh-bridge-ros2dds` (bridge) | `zenoh-bridge-ros2dds-robot.json5` (edit `connect.endpoints` to Mac IP) |
+| **Mac** | `zenohd` (router) | `zenoh-fleet` hub `zenohd.json5`, or `zenohd-agenticros.json5` |
+| **Robot** | `zenoh-bridge-ros2dds` (bridge) | `zenoh-fleet` member file, or `zenoh-bridge-ros2dds-robot.json5` (edit `connect.endpoints` to Mac IP) |
 
 ### Robot bridge config (allow cmd_vel)
 
-So that Twist commands from AgenticROS reach the robot, the bridge on the robot must be allowed to bridge **subscribers** (Zenoh → ROS2). If you use an **allow** config, you must list both publishers and subscribers; otherwise unlisted types are disabled. Use the example in this repo:
+So that Twist commands from AgenticROS reach the robot, the bridge on the robot must be allowed to bridge **subscribers** (Zenoh → ROS2). If you use an **allow** config, you must list both publishers and subscribers; otherwise unlisted types are disabled.
+
+If you used `npx zenoh-fleet` as a **member** on the robot, start the generated `zenoh-bridge-ros2dds-robot.json5` (hub endpoint already filled). Otherwise use the example in this repo:
 
 - **`scripts/zenoh-bridge-ros2dds-robot.json5`** — sets `"mode": "client"` (bridge connects to the Mac's zenohd), `connect.endpoints` to the Zenoh router, and `plugins.ros2dds.allow` for subscribers (e.g. `.+/cmd_vel`) and publishers (`.+`). Edit `connect.endpoints` and replace `192.168.0.241` with your Mac’s IP (where zenohd runs), then on the robot run: `zenoh-bridge-ros2dds -c /path/to/zenoh-bridge-ros2dds-robot.json5`. From the robot, verify the Mac is reachable: `ping <mac-ip>` and `nc -zv <mac-ip> 7447`; on the Mac, zenohd must listen on all interfaces (not only localhost). **Do not use this file with zenohd** — zenohd does not load the ros2dds plugin and will panic on `allow`.
 

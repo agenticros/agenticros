@@ -235,7 +235,7 @@ OpenClaw runs in the cloud; the robot runs the **AgenticROS Agent Node** (`agent
 
 ### If using Zenoh (Mode D)
 
-1. Run a Zenoh router (**zenohd**) with **zenoh-plugin-remote-api** so the plugin can connect. AgenticROS uses **zenoh-ts**, which connects only via **WebSocket** (e.g. `ws://localhost:10000`), not native TCP. If you only start `zenohd` with default TCP (7447), native tools like `z_sub -e tcp/127.0.0.1:7447` will see traffic but AgenticROS will not. See [Zenoh setup for AgenticROS](zenoh-agenticros.md) for a config that enables the remote-api WebSocket on port 10000.
+1. Generate matching router and bridge configs with [`npx zenoh-fleet`](https://github.com/agenticros/zenoh-fleet) (hub on the OpenClaw machine, member on each robot — not a second `zenohd`). Then run **zenohd** with **zenoh-plugin-remote-api** so the plugin can connect. AgenticROS uses **zenoh-ts**, which connects only via **WebSocket** (e.g. `ws://localhost:10000` or `ws://<hub>:10000`), not native TCP. If you only start `zenohd` with default TCP (7447), native tools like `z_sub -e tcp/127.0.0.1:7447` will see traffic but AgenticROS will not. Full steps and a manual JSON5 fallback: [Zenoh setup for AgenticROS](zenoh-agenticros.md).
 2. Install the plugin via the helper script with Zenoh wiring:
    ```bash
    cd /path/to/agenticros

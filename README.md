@@ -139,7 +139,7 @@ Full architecture + design trade-offs: **[docs/strategy-ai-agents-plus-ros.md](d
 - `**packages/agenticros-gemini**` — Gemini CLI (function calling; no MCP).
 - `**packages/robot-eyes**` — On-robot face display (`agenticros eyes`): animated eyes follow `cmd_vel` turns; when idle, follow a person in the RealSense camera if YOLO is already installed. Optional WASD. See [docs/eyes.md](docs/eyes.md).
 - `**ros2_ws/**` — ROS2 workspace: `agenticros_msgs`, `agenticros_bringup` (Gazebo + RViz + rosbridge launches), `agenticros_discovery`, `agenticros_agent`, `agenticros_follow_me`.
-- `**docs/**` — Architecture, **[hardware getting started](docs/hardware.md)**, skills, robot setup, Zenoh, teleop, eyes, **[local VLM / Ollama](docs/local-vlm.md)**.
+- `**docs/**` — Architecture, **[hardware getting started](docs/hardware.md)**, skills, robot setup, Zenoh (`npx zenoh-fleet` for Mode D fleets), teleop, eyes, **[local VLM / Ollama](docs/local-vlm.md)**.
 - `**scripts/**` — Workspace setup, gateway plugin config, run demos.
 - `**docker/**` — Docker Compose and Dockerfiles for ROS2 + plugin images.
 - `**examples/**` — Example projects.
@@ -339,7 +339,7 @@ Shared MCP setup (Claude and Codex):
 
 1. **Build** (from repo root): `pnpm install && pnpm build`
 2. **AgenticROS config**: `~/.agenticros/config.json` — set `zenoh.routerEndpoint`, `robot.namespace`, `robot.cameraTopic`, etc. (see [packages/agenticros-claude-code/README.md](packages/agenticros-claude-code/README.md)).
-3. **Zenoh**: Run `zenohd` with the remote-api plugin (e.g. port 10000) — see `scripts/zenohd-agenticros.json5` or [docs/zenoh-agenticros.md](docs/zenoh-agenticros.md).
+3. **Zenoh**: For a laptop + robots fleet, run `npx zenoh-fleet` then start the generated hub `zenohd`. Or use `scripts/zenohd-agenticros.json5` — see [docs/zenoh-agenticros.md](docs/zenoh-agenticros.md).
 
 Optional: override `robot.namespace` per MCP launch with env `**AGENTICROS_ROBOT_NAMESPACE`**. Prefer leaving it empty in MCP/Codex config so `agenticros mode real|sim` drives the active profile (see [docs/codex-setup.md](docs/codex-setup.md)).
 
