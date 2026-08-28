@@ -19,14 +19,14 @@ The reference robot is a [DFRobot 2WD chassis](https://www.dfrobot.com/product-6
 Prices are approximate USD (what this kit cost to buy). Shop around; they move.
 
 
-| Qty | Item                                                            | Approx. | Link                                                                                           |
-| --- | --------------------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------- |
-| 1   | NVIDIA Jetson Orin Nano Developer Kit                           | $384.90 | [Amazon](https://www.amazon.com/NVIDIA-Jetson-Orin-Nano-Developer/dp/B0BZJTQ5YP)               |
-| 1   | RealSense Depth Camera **D436**                                 | $354    | [RealSense store](https://store.realsenseai.com/buy-intel-realsense-depth-camera-d436.html)    |
-| 1   | DFRobot 2WD MiniQ chassis                                       | $34.90  | [DFRobot](https://www.dfrobot.com/product-65.html)                                             |
-| 2   | TT geared motor with encoder, 6V 160RPM 120:1 L-shape (FIT0458) | $14.80  | [DFRobot](https://www.dfrobot.com/product-1458.html)                                           |
-| 1   | L298N H-bridge (from a 4-pack)                                  | $2.50   | [Amazon](https://www.amazon.com/BOJACK-H-Bridge-Controller-Intelligent-Mega2560/dp/B0C5JCF5RS) |
-| 1   | Patriot 512GB NVMe (Jetson has no onboard SSD)                  | $88     | [Amazon](https://www.amazon.com/dp/B0D4RCRNHG)                                                 |
+| Qty | Item                                                                                               | Approx. | Link                                                                                           |
+| --- | -------------------------------------------------------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------- |
+| 1   | NVIDIA Jetson Orin Nano Developer Kit                                                              | $384.90 | [Amazon](https://www.amazon.com/NVIDIA-Jetson-Orin-Nano-Developer/dp/B0BZJTQ5YP)               |
+| 1   | RealSense Depth Camera **D436**                                                                    | $354    | [RealSense store](https://store.realsenseai.com/buy-intel-realsense-depth-camera-d436.html)    |
+| 1   | DFRobot 2WD MiniQ chassis (includes wheels without encoders)                                       | $34.90  | [DFRobot](https://www.dfrobot.com/product-65.html)                                             |
+| 2   | TT geared motor with encoder, 6V 160RPM 120:1 L-shape (FIT0458) - only needed if you want encoders | $14.80  | [DFRobot](https://www.dfrobot.com/product-1458.html)                                           |
+| 1   | L298N H-bridge (from a 4-pack)                                                                     | $2.50   | [Amazon](https://www.amazon.com/BOJACK-H-Bridge-Controller-Intelligent-Mega2560/dp/B0C5JCF5RS) |
+| 1   | Patriot 512GB NVMe (Jetson has no onboard SSD)                                                     | $88     | [Amazon](https://www.amazon.com/dp/B0D4RCRNHG)                                                 |
 
 
 **Accessories**
