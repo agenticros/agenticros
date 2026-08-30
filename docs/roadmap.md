@@ -37,16 +37,17 @@ premium skills — never on the real-time control path.
 | External ROS-node skill loader | Shipped |
 | Seed catalog — navigate / through-poses / detect / slam (+load) / explore+wander / follow-ros / moveit-pick / dock | Shipped (operator bringup on real robots) |
 | Sim AMR + Nav2 (`agenticros up sim-amr --nav2`) | Shipped (`/odom` fixed; map + AMCL + Nav2; smoke script) |
-| Sim arm MoveIt2 / GHA mission CI | WIP (per-joint jogging works; MoveIt deferred) |
+| Sim arm MoveIt2 (named pose, local smoke) | Shipped (`agenticros up sim-arm --moveit`; no GHA) |
+| Headless GHA mission CI | Planned |
 | `skillRefs` + `~/.agenticros/skills-cache/` (git + npm) | Shipped |
 | Discoverable marketplace capabilities in `ros2_list_capabilities` | Shipped |
 | Marketplace npm `@agenticros/*` + CLI auto-restart | Shipped (true mid-session hot-reload still blocked on OpenClaw) |
 | Skills marketplace (metadata + git/npm install) | Live at [skills.agenticros.com](https://skills.agenticros.com) |
 | Cross-adapter memory (local / mem0) | Shipped, off by default |
-| Safety (per-robot velocity, optional `workspaceLimits`, fail-safe stop, `doctor --live`) | Shipped (`@agenticros/core` 0.8.5); `blocks_base` mutex + MCP `/estop` parity still open |
+| Safety (per-robot velocity, optional `workspaceLimits`, fail-safe stop, `doctor --live`) | Shipped (`@agenticros/core` 0.8.5); MCP/Gemini `ros2_estop` shipped; `blocks_base` mutex still open |
 | AgenticROS Cloud (ARC) — P2P teleop, register, presence | Live at [cloud.agenticros.com](https://cloud.agenticros.com) |
 | ARC organizations + teams (invite by GitHub, shared fleet) | Shipped on Teams / Enterprise |
-| Published packages | `@agenticros/core` **0.8.6**, CLI `agenticros` **0.7.16** |
+| Published packages | `@agenticros/core` **0.8.8**, CLI `agenticros` **0.7.18** |
 | Parallel mission steps + true hot-reload + paid licenses | Planned |
 | Spatial memory | Planned |
 | ACP / A2A multi-agent mesh | Planned |
@@ -54,10 +55,10 @@ premium skills — never on the real-time control path.
 
 **Highest-leverage gaps for advanced physical AI**
 
-1. MoveIt2 on sim-arm + headless GHA mission CI (Nav2 on sim-amr shipped).
+1. Headless GHA mission CI (Nav2 + sim-arm `--moveit` bringup shipped locally).
 2. Missions are sequential — **parallel** step groups still deferred (retries + mid-step cancel shipped).
 3. Memory is flat facts, not spatial.
-4. Safety geofence + per-robot velocity shipped; **`blocks_base` cmd_vel mutex** and MCP `/estop` parity still open.
+4. Safety geofence + per-robot velocity shipped; MCP/Gemini `ros2_estop` shipped; **`blocks_base` cmd_vel mutex** still open.
 5. True mid-session OpenClaw tool injection (without gateway restart) still open.
 6. Observability is logs/transcripts — no **mission dashboard**; ARC orgs/teams share teleop today, not live mission replay.
 
@@ -100,7 +101,7 @@ embodied agents.
 - **Seeds (adjacent repos / npm `@agenticros/*`):** `navigate-to`,
   `navigate-through-poses`, `detect-humans`, `start-slam` (+ `load_map`),
   `explore` / `wander`, `follow-me-ros`, `moveit-pick`, `dock-to-charger`, plus in-process
-  `find` / `followme`. Nav2 on Gazebo AMR shipped (`--nav2`); sim MoveIt CI still WIP.
+  `find` / `followme`. Nav2 on Gazebo AMR shipped (`--nav2`); sim-arm `--moveit` shipped (local smoke, no GHA).
 - **Marketplace UX v1+v2:** `skillRefs` → `~/.agenticros/skills-cache/`
   (git **and** npm pack), discoverable caps, CLI install prefers npm when
   advertised, auto-restarts OpenClaw gateway (`--no-restart` to skip).
@@ -114,10 +115,10 @@ See [missions.md](missions.md), [skills.md](skills.md),
 
 | # | Deliverable | Why |
 |---|-------------|-----|
-| 1 | **MoveIt2 on sim-arm** + headless GHA mission CI | Nav2 on sim-amr shipped; arm still per-joint jogging only |
+| 1 | **Headless GHA mission CI** | Nav2 + sim-arm `--moveit` shipped locally; no `.github/workflows` yet |
 | 2 | **Mission parallel steps** — DAG / parallel groups where safe (`blocks_base` mutex) | Retries + mid-step cancel shipped; parallel still deferred |
 | 3 | **Optional LLM planner** behind the same `compileGoalToMission` contract | Rule-based planner stays default; LLM expands coverage without changing the API |
-| 4 | **Safety remainder** — `blocks_base` cmd_vel mutex, MCP `/estop` parity with OpenClaw | Per-robot velocity + `workspaceLimits` + fail-safe stop + `doctor --live` shipped in 0.8.5 |
+| 4 | **Safety remainder** — `blocks_base` cmd_vel mutex | Per-robot velocity + `workspaceLimits` + fail-safe stop + `doctor --live` + MCP/Gemini `ros2_estop` shipped |
 | 5 | **Sim polish** — docking sim bringup, richer mission CI recipes | Nav2 bringup + smoke script shipped; expand coverage |
 | 6 | **True OpenClaw hot-reload** — mid-session tool injection without gateway restart | npm + auto-restart shipped; needs OpenClaw upstream contract |
 | 7 | **Observability baseline** — structured mission JSONL, `mission_status` tool, simple local view of recent missions / heartbeats | Debuggability for users and skill authors |
@@ -216,7 +217,7 @@ OpenClaw / Grok.”
 
 | Window | Focus |
 |--------|--------|
-| **Now** | ARC orgs + teams live on Teams / Enterprise; OSS safety/profile ABI on core 0.8.6 / CLI 0.7.16 |
+| **Now** | ARC orgs + teams live on Teams / Enterprise; OSS safety/profile ABI on core 0.8.8 / CLI 0.7.18 |
 | **0–3 months** | Soft-launch paid skill licenses + Stripe Connect once quality catalog exists; remote mission dispatch on the org fleet |
 | **3–6 months** | Fleet **mission console** (live timeline / cancel / replay) on top of shipped orgs |
 | **6–12 months** | Hosted / spatial memory as enterprise wedge |
@@ -255,7 +256,7 @@ Hosted / spatial memory + multi-agent mesh
 
 ## If we only do five things next
 
-1. **MoveIt2 on sim-arm** + GHA mission CI (Nav2 on sim-amr already shipped).
+1. **GHA mission CI** (Nav2 + sim-arm `--moveit` already shipped locally).
 2. **Mission parallel steps** (retries + mid-step cancel already shipped).
 3. **True OpenClaw hot-reload** (npm + auto-restart already shipped).
 4. **Spatial memory** (OSS schema first; paid hosted later).

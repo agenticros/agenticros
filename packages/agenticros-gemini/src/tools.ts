@@ -35,6 +35,10 @@ import {
   executeExternalCapability,
   checkActionGoalSafety,
   resolveSafetyForRobot,
+  emergencyStopRobot,
+  listPlaces,
+  savePlaceFromArgs,
+  executeNavigateToPlace,
 } from "@agenticros/core";
 import {
   ROS_MSG_COMPRESSED_IMAGE,
@@ -56,8 +60,8 @@ import {
   HiveUnavailableError,
   type HiveRecipeId,
 } from "@agenticros/core";
-import { getFollowMeLocal } from "./follow-me/loop.js";
-import { getFollowMeDepth } from "./follow-me/depth-loop.js";
+import { getFollowMeLocal, stopFollowMeLocalIfPresent } from "./follow-me/loop.js";
+import { getFollowMeDepth, stopFollowMeDepthIfPresent } from "./follow-me/depth-loop.js";
 import { findObject } from "@agenticros/object-detection";
 
 const MEMORY_TOOL_NAMES = new Set([
@@ -301,6 +305,12 @@ export const GEMINI_FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
     }),
   },
   {
+    name: "ros2_estop",
+    description:
+      "Emergency stop — immediately halt the robot (zero Twist on cmd_vel). Also stops in-process follow-me loops. Does not cancel a running mission (use mission_cancel). Pass robot_id to stop a specific robot.",
+    parametersJsonSchema: schemaFromProps({ ...ROBOT_ID_PROP }),
+  },
+  {
     name: "ros2_follow_me_stop",
     description: "Stop the follow-me skill.",
     parametersJsonSchema: schemaFromProps({
@@ -352,6 +362,38 @@ export const GEMINI_FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
         ...ROBOT_ID_PROP,
       },
       ["target"],
+    ),
+  },
+  {
+    name: "ros2_save_place",
+    description:
+      "Save a named map pose. Pass name plus optional x,y,yaw; if omitted, reads /amcl_pose.",
+    parametersJsonSchema: schemaFromProps(
+      {
+        name: { type: "string", description: "Place name (e.g. kitchen)." },
+        x: { type: "number", description: "Map-frame x (m)." },
+        y: { type: "number", description: "Map-frame y (m)." },
+        yaw: { type: "number", description: "Map-frame yaw (rad)." },
+        frame: { type: "string", description: "Frame id (default map)." },
+        ...ROBOT_ID_PROP,
+      },
+      ["name"],
+    ),
+  },
+  {
+    name: "ros2_list_places",
+    description: "List named places saved with ros2_save_place.",
+    parametersJsonSchema: schemaFromProps({}),
+  },
+  {
+    name: "ros2_navigate_to_place",
+    description: "Navigate to a named place via Nav2 (requires @agenticros/navigate-to).",
+    parametersJsonSchema: schemaFromProps(
+      {
+        name: { type: "string", description: "Place name." },
+        ...ROBOT_ID_PROP,
+      },
+      ["name"],
     ),
   },
   {
@@ -605,6 +647,10 @@ export async function executeTool(
         robots,
       }),
     };
+  }
+  if (name === "ros2_list_places") {
+    const places = listPlaces();
+    return { output: JSON.stringify({ success: true, count: places.length, places }) };
   }
   // ros2_find_robots_for is config-driven by default. Only the
   // online=true|false branch touches the transport (same heuristic as
@@ -1174,6 +1220,30 @@ export async function executeTool(
       }
     }
 
+    case "ros2_estop": {
+      await stopFollowMeLocalIfPresent(robot.id);
+      await stopFollowMeDepthIfPresent(robot.id);
+      const result = emergencyStopRobot(transport, robot, config);
+      if (result.skipped === "no_mobile_base") {
+        return {
+          output: JSON.stringify({
+            success: true,
+            robot_id: robot.id,
+            skipped: "no_mobile_base",
+            message: "Emergency stop skipped — this robot has no mobile base.",
+          }),
+        };
+      }
+      return {
+        output: JSON.stringify({
+          success: true,
+          robot_id: robot.id,
+          topic: result.topic,
+          message: "Emergency stop activated. Robot halted.",
+        }),
+      };
+    }
+
     case "ros2_follow_me_stop": {
       const mode = followMeMode(args);
       if (mode === "local") {
@@ -1270,6 +1340,22 @@ export async function executeTool(
       } catch (err) {
         return { output: `Follow-me set_target failed: ${err instanceof Error ? err.message : String(err)}` };
       }
+    }
+
+    case "ros2_save_place": {
+      try {
+        const record = await savePlaceFromArgs(args, { robot, transport });
+        return { output: JSON.stringify({ success: true, place: record }) };
+      } catch (err) {
+        return { output: err instanceof Error ? err.message : String(err) };
+      }
+    }
+
+    case "ros2_navigate_to_place": {
+      const placeName = String(args["name"] ?? "").trim();
+      if (!placeName) return { output: "ros2_navigate_to_place requires 'name'." };
+      const nav = await executeNavigateToPlace(config, robot, placeName, transport, opts?.signal);
+      return { output: nav.text };
     }
 
     case "ros2_find_object": {

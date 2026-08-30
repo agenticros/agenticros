@@ -14,7 +14,14 @@ install(DIRECTORY
   config
   urdf
   maps
+  scripts
   DESTINATION share/${PROJECT_NAME}/
+)
+
+# FollowJointTrajectory → /arm/*/cmd_pos (used by sim_arm_moveit.launch.py).
+install(PROGRAMS
+  scripts/arm_trajectory_bridge.py
+  DESTINATION lib/${PROJECT_NAME}
 )
 
 # Tell gz_sim where to find our world + model files at runtime when the

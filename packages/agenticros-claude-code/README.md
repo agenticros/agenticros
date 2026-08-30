@@ -224,6 +224,7 @@ The server exposes the same ROS2 tools as the OpenClaw plugin:
 | `run_mission` | Execute a multi-step mission **or** compile a natural-language `goal` into one. Chains capabilities via `{{stepId.outputs.field}}` template refs; returns a `mission_id` |
 | `mission_cancel` | Cancel an in-flight mission by `mission_id` at the next step boundary (idempotent, safe on unknown ids) |
 | **Direct ROS** | |
+| `ros2_estop` | Emergency stop — zero Twist on cmd_vel (also stops in-process follow-me). Does not cancel a mission |
 | `ros2_publish` | Publish to a topic (e.g. cmd_vel) — safety-clamped |
 | `ros2_subscribe_once` | Get next message from a topic |
 | `ros2_service_call` | Call a ROS2 service |

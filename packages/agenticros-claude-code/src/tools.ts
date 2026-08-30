@@ -34,6 +34,10 @@ import {
   executeExternalCapability,
   checkActionGoalSafety,
   resolveSafetyForRobot,
+  emergencyStopRobot,
+  listPlaces,
+  savePlaceFromArgs,
+  executeNavigateToPlace,
 } from "@agenticros/core";
 import { getMissionRegistry } from "./mission-registry.js";
 import {
@@ -47,8 +51,8 @@ import { resolveMemoryNamespace } from "@agenticros/core";
 import { getTransportForRobot } from "./transport.js";
 import { checkPublishSafety } from "./safety.js";
 import { getDepthDistance } from "./depth.js";
-import { getFollowMeLocal } from "./follow-me/loop.js";
-import { getFollowMeDepth } from "./follow-me/depth-loop.js";
+import { getFollowMeLocal, stopFollowMeLocalIfPresent } from "./follow-me/loop.js";
+import { getFollowMeDepth, stopFollowMeDepthIfPresent } from "./follow-me/depth-loop.js";
 import { findObject } from "@agenticros/object-detection";
 import { ensureMemory } from "./memory.js";
 import { ensureHive, getHive, persistHivePatch, setHive } from "./hive.js";
@@ -112,6 +116,7 @@ export const NO_TRANSPORT_TOOL_NAMES = new Set<string>([
   // user asking "paint the wall" should get suggestions, not an
   // ECONNREFUSED).
   "run_mission",
+  "ros2_list_places",
 ]);
 
 export interface McpTool {
@@ -313,6 +318,17 @@ export const TOOLS: McpTool[] = [
     },
   },
   {
+    name: "ros2_estop",
+    description:
+      "Emergency stop — immediately halt the robot by publishing zero Twist on cmd_vel (five times). Also stops any in-process follow-me loops. Does not cancel a running mission (use mission_cancel for that). Pass robot_id to stop a specific robot; omitted = active robot.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        robot_id: { type: "string", description: "Optional robot id (from ros2_list_robots) to scope this call. When omitted, the active robot is used." },
+      },
+    },
+  },
+  {
     name: "ros2_follow_me_stop",
     description: "Stop the follow-me skill. Robot will stop sending follow velocity commands. Pass mode='local' for the YOLO loop or mode='depth' for the depth-only loop. Pass robot_id to stop a specific robot; omitted = active robot.",
     inputSchema: {
@@ -508,6 +524,41 @@ export const TOOLS: McpTool[] = [
         robot_id: { type: "string", description: "Optional robot id (from ros2_list_robots) to scope this call. When omitted, the active robot is used." },
       },
       required: ["target"],
+    },
+  },
+  {
+    name: "ros2_save_place",
+    description:
+      "Save a named map pose for later ros2_navigate_to_place / \"go to the kitchen\". Pass name plus optional x,y,yaw. If x/y are omitted, reads /amcl_pose (or /pose). Stored in ~/.agenticros/places.json.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Place name (e.g. kitchen)." },
+        x: { type: "number", description: "Map-frame x in meters." },
+        y: { type: "number", description: "Map-frame y in meters." },
+        yaw: { type: "number", description: "Map-frame yaw in radians." },
+        frame: { type: "string", description: "Frame id (default map)." },
+        robot_id: { type: "string", description: "Optional robot id (from ros2_list_robots) to scope this call. When omitted, the active robot is used." },
+      },
+      required: ["name"],
+    },
+  },
+  {
+    name: "ros2_list_places",
+    description: "List named places saved with ros2_save_place.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "ros2_navigate_to_place",
+    description:
+      "Navigate to a named place via Nav2. Requires @agenticros/navigate-to (agenticros skills install --bundle mapping).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Place name from ros2_list_places." },
+        robot_id: { type: "string", description: "Optional robot id (from ros2_list_robots) to scope this call. When omitted, the active robot is used." },
+      },
+      required: ["name"],
     },
   },
   {
@@ -1006,6 +1057,15 @@ export async function handleToolCall(
       content: [{ type: "text", text: formatRobotsResponse(robots, active) }],
     };
   }
+  if (name === "ros2_list_places") {
+    const places = listPlaces();
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({ success: true, count: places.length, places }),
+      }],
+    };
+  }
   // ros2_find_robots_for is config-driven by default and only touches
   // the transport when the caller filters by online status. Putting it
   // here (above the unconditional transport resolution) lets agents
@@ -1441,6 +1501,36 @@ export async function handleToolCall(
       }
     }
 
+    case "ros2_estop": {
+      await stopFollowMeLocalIfPresent(robot.id);
+      await stopFollowMeDepthIfPresent(robot.id);
+      const result = emergencyStopRobot(transport, robot, config);
+      if (result.skipped === "no_mobile_base") {
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              success: true,
+              robot_id: robot.id,
+              skipped: "no_mobile_base",
+              message: "Emergency stop skipped — this robot has no mobile base.",
+            }),
+          }],
+        };
+      }
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            success: true,
+            robot_id: robot.id,
+            topic: result.topic,
+            message: "Emergency stop activated. Robot halted.",
+          }),
+        }],
+      };
+    }
+
     case "ros2_follow_me_stop": {
       const mode = followMeMode(args);
       if (mode === "local") {
@@ -1555,6 +1645,29 @@ export async function handleToolCall(
       } catch (err) {
         return { content: [{ type: "text", text: `Follow-me status failed: ${err instanceof Error ? err.message : String(err)}` }], isError: true };
       }
+    }
+
+    case "ros2_save_place": {
+      try {
+        const record = await savePlaceFromArgs(args, { robot, transport });
+        return {
+          content: [{ type: "text", text: JSON.stringify({ success: true, place: record }) }],
+        };
+      } catch (err) {
+        return {
+          content: [{ type: "text", text: err instanceof Error ? err.message : String(err) }],
+          isError: true,
+        };
+      }
+    }
+
+    case "ros2_navigate_to_place": {
+      const placeName = String(args["name"] ?? "").trim();
+      if (!placeName) {
+        return { content: [{ type: "text", text: "ros2_navigate_to_place requires 'name'." }], isError: true };
+      }
+      const nav = await executeNavigateToPlace(config, robot, placeName, transport, opts?.signal);
+      return { content: [{ type: "text", text: nav.text }], isError: nav.isError };
     }
 
     case "ros2_find_object": {

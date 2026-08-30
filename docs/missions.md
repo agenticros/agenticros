@@ -42,6 +42,9 @@ For common verbs, pass a **`goal`** string to **`run_mission`**. A deterministic
 | `take a picture` | `take_snapshot` |
 | `follow me` | `follow_person` |
 | `find a chair and drive toward it` | `find_object` → `drive_base` (steers via `{{find.outputs.horizontal_offset}}`) |
+| `go to 1.2, 3.4` / `navigate to x=1 y=2` | `navigate_to` (when the navigate-to skill is installed) |
+| `go to the kitchen` | `navigate_to_place` |
+| `save this place as kitchen` | `save_place` |
 | `map the room` | `start_slam` → `explore` → `save_map` (when those skills are installed) |
 | `wander around` | `wander` |
 | `take a picture and then measure depth` | `take_snapshot` → `measure_depth` |
@@ -217,6 +220,8 @@ Call **`mission_pause`**, then **`mission_resume`** with the same `mission_id` w
 { "mission_id": "<id from run_mission>" }
 ```
 
+`mission_cancel` stops the **mission runner** at the next step boundary. To immediately zero the base, use OpenClaw `/estop` or MCP/Gemini `ros2_estop` — that is not the same as cancel.
+
 Call **`mission_cancel`**. Behaviour:
 
 - **Interruptible** capabilities (`interruptible: true` in the capability manifest — e.g. `find_object`, follow loops, external Nav2 actions): the runner aborts the in-flight tool via `AbortSignal` (and `cancelActionGoal` for ROS actions when the transport supports it). The current step is marked `cancelled`.
@@ -284,13 +289,14 @@ Builtin bindings live in `@agenticros/core` (`buildMissionBindings`). Skill-decl
 | `subscribe_once` | `ros2_subscribe_once` |
 | `follow_person` | `ros2_follow_me_start` (skill / Gemini / MCP) |
 | `find_object` | `ros2_find_object` (skill / Gemini / MCP) |
-| `navigate_to` | external Nav2 action (`npx agenticros skills install @agenticros/navigate-to`) |
+| `save_place` / `list_places` / `navigate_to_place` | `ros2_save_place` / `ros2_list_places` / `ros2_navigate_to_place` (builtin; Nav2 via `@agenticros/navigate-to`) |
+| `navigate_to` | external Nav2 action (`npx agenticros skills install --bundle mapping`) |
 | `navigate_through_poses` | external Nav2 through-poses (`@agenticros/navigate-through-poses`) |
 | `detect_humans` | external vision topic subscribe (`@agenticros/detect-humans`) |
 | `start_slam` / `stop_slam` / `save_map` / `load_map` / `set_mapping_mode` / `set_localization_mode` | external RTAB-Map services (`@agenticros/start-slam`) |
 | `explore` / `wander` | external `agenticros_explore` actions (`@agenticros/explore`) |
 | `follow_person_ros` / `stop_follow_person_ros` | external `agenticros_follow_me` services (`@agenticros/follow-me-ros`) |
-| `pick_object` | external MoveIt MoveGroup (`@agenticros/moveit-pick`; operator bringup) |
+| `pick_object` | external MoveIt MoveGroup (`@agenticros/moveit-pick`; `agenticros up sim-arm --moveit` or operator bringup) |
 | `dock_to_charger` | external OpenNav DockRobot (`@agenticros/dock-to-charger`; operator bringup) |
 
 Skills you author can add new ids via `agenticros.capabilities[]` in `package.json` (or sibling `capabilities.json`); once registered, they appear in `ros2_list_capabilities` and are chainable in `run_mission` without editing three adapter binding tables. See [skills.md — Chaining your skill in missions](skills.md#chaining-your-skill-in-missions).

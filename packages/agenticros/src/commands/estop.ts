@@ -1,13 +1,6 @@
 import type { OpenClawPluginApi } from "../plugin-api.js";
-import type { AgenticROSConfig } from "@agenticros/core";
+import { emergencyStopRobot, resolveRobot, type AgenticROSConfig } from "@agenticros/core";
 import { getTransport } from "../service.js";
-import { getCmdVelTopic } from "../teleop/routes.js";
-
-const TWIST_TYPE = "geometry_msgs/msg/Twist";
-const ZERO_TWIST = {
-  linear: { x: 0, y: 0, z: 0 },
-  angular: { x: 0, y: 0, z: 0 },
-};
 
 /**
  * Register the /estop command.
@@ -23,14 +16,15 @@ export function registerEstopCommand(api: OpenClawPluginApi, config: AgenticROSC
     async handler(_ctx) {
       try {
         const transport = getTransport();
-        const topic = getCmdVelTopic(config);
+        const robot = resolveRobot(config);
+        const result = emergencyStopRobot(transport, robot, config);
 
-        // Send zero repeatedly so the base reliably stops
-        for (let i = 0; i < 5; i++) {
-          transport.publish({ topic, type: TWIST_TYPE, msg: ZERO_TWIST });
+        if (result.skipped === "no_mobile_base") {
+          api.logger.warn("ESTOP: skipped — robot has no mobile base");
+          return { text: "Emergency stop skipped — this robot has no mobile base." };
         }
 
-        api.logger.warn("ESTOP: Zero velocity command sent");
+        api.logger.warn(`ESTOP: Zero velocity command sent on ${result.topic ?? "cmd_vel"}`);
         return { text: "Emergency stop activated. Robot halted." };
       } catch (error) {
         api.logger.error(`ESTOP FAILED: ${String(error)}`);

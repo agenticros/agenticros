@@ -47,13 +47,16 @@ async function makeSkillDir(
   return dir;
 }
 
-test("BUILTIN_CAPABILITIES exposes the six intrinsic robot verbs", () => {
+test("BUILTIN_CAPABILITIES exposes the intrinsic robot verbs", () => {
   const ids = BUILTIN_CAPABILITIES.map((c) => c.id).sort();
   assert.deepEqual(ids, [
     "drive_base",
+    "list_places",
     "list_topics",
     "measure_depth",
+    "navigate_to_place",
     "publish_topic",
+    "save_place",
     "subscribe_once",
     "take_snapshot",
   ]);

@@ -25,6 +25,8 @@ export interface SimRunOptions {
   headless?: boolean;
   /** AMR only: launch Nav2 (map + AMCL + navigation) via sim_amr_nav2.launch.py. */
   nav2?: boolean;
+  /** Arm only: launch MoveIt2 move_group + trajectory bridge via sim_arm_moveit.launch.py. */
+  moveit?: boolean;
 }
 
 async function runSim(robot: "amr" | "arm", opts: SimRunOptions): Promise<void> {
@@ -54,6 +56,13 @@ async function runSim(robot: "amr" | "arm", opts: SimRunOptions): Promise<void> 
       process.exit(2);
     }
     args.push("--nav2");
+  }
+  if (opts.moveit) {
+    if (robot !== "arm") {
+      err("--moveit is only supported with sim-arm.");
+      process.exit(2);
+    }
+    args.push("--moveit");
   }
 
   info(`Invoking ${script} ${args.join(" ")}…`);

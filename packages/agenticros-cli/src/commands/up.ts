@@ -27,6 +27,12 @@ export interface UpOptions {
   rviz?: boolean;
   headless?: boolean;
   nav2?: boolean;
+  /** sim-arm only: also launch MoveIt2 move_group + FollowJointTrajectory bridge. */
+  moveit?: boolean;
+  /** Real robot: also launch RTAB-Map + Nav2 (agenticros_bringup). */
+  map?: boolean;
+  /** Real robot + --map: use wheel /odom instead of RTAB-Map visual odom. */
+  wheelOdom?: boolean;
   camera?: boolean;
   motors?: boolean;
   /** Start @agenticros/eyes after the stack comes up (real / sim). */
@@ -60,6 +66,8 @@ export async function upCommand(opts: UpOptions): Promise<void> {
         rosDistro: opts.rosDistro,
         camera: opts.camera !== false,
         motors: opts.motors !== false,
+        map: opts.map === true,
+        wheelOdom: opts.wheelOdom === true,
       });
       break;
     case "sim-amr":
@@ -75,6 +83,7 @@ export async function upCommand(opts: UpOptions): Promise<void> {
         namespace: opts.namespace,
         useRviz: opts.rviz === true,
         headless: resolveHeadless(opts.headless),
+        moveit: opts.moveit === true,
       });
       break;
   }
@@ -200,7 +209,7 @@ async function resolveTarget(raw: string | undefined): Promise<UpTarget> {
     choices: [
       { name: "Real robot (RealSense + motors + MCP)", value: "real" },
       { name: "Sim AMR (Gazebo + 2-wheel diff-drive; add --nav2 for Nav2)", value: "sim-amr" },
-      { name: "Sim Arm (Gazebo + UR5e; MoveIt2 WIP)", value: "sim-arm" },
+      { name: "Sim Arm (Gazebo + UR5e-shaped; add --moveit for MoveIt2)", value: "sim-arm" },
     ],
     default: "real",
   });

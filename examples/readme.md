@@ -14,9 +14,9 @@ This directory contains example AgenticROS workflows that show how AI agents can
 | [Start SLAM](start-slam/README.md) | Ready | `@agenticros/start-slam` — start / stop / save / load / mapping vs localization. |
 | [Explore / wander](explore/README.md) | Ready | `@agenticros/explore` — frontier coverage + safe wandering (Nav2). |
 | [Follow Me (ROS)](follow-me-ros/README.md) | Ready | `@agenticros/follow-me-ros` — on-robot follow_me services. |
-| [MoveIt pick](moveit-pick/README.md) | Ready | `@agenticros/moveit-pick` — MoveGroup pick (operator MoveIt bringup). |
+| [MoveIt pick](moveit-pick/README.md) | Ready | `@agenticros/moveit-pick` — MoveGroup (sim: `up sim-arm --moveit`). |
 | [Dock To Charger](dock-to-charger/README.md) | Ready | `@agenticros/dock-to-charger` — OpenNav DockRobot. |
-| [Robotic arm control](arm-control/README.md) | Planned | Richer pick/place demos; sim-arm MoveIt2 CI still WIP. |
+| [Robotic arm control](arm-control/README.md) | Planned | Richer pick/place + gripper; named-pose MoveIt on sim-arm is shipped. |
 | [Multi-robot fleet patrol](fleet-patrol/README.md) | Partial | Use `navigate_through_poses` + fleet tools — see [docs/missions.md](../docs/missions.md). |
 
 ## Marketplace seed skills

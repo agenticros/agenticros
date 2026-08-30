@@ -4,7 +4,8 @@ AgenticROS ships a simulation track so contributors without a physical robot
 can still drive every MCP tool end-to-end against a virtual robot. The first
 shipped sim is a **2-wheel AMR** powered by Gazebo Harmonic + ROS-GZ bridges,
 in the `agenticros_sim` ROS 2 package. **Nav2** is available on the same AMR
-via `agenticros up sim-amr --nav2`.
+via `agenticros up sim-amr --nav2`. A **6-DOF arm** is also available
+(`agenticros up sim-arm`); add `--moveit` to bring up MoveIt2.
 
 ## Quick start (CLI)
 
@@ -13,6 +14,8 @@ agenticros up sim-amr            # gzsim with GUI, namespace=sim_robot
 agenticros up sim-amr --rviz     # add RViz with sensible defaults
 agenticros up sim-amr --nav2     # Gazebo AMR + map + AMCL + Nav2
 agenticros up sim-amr --nav2 --headless
+agenticros up sim-arm            # Gazebo 6-DOF arm (per-joint /arm/*/cmd_pos)
+agenticros up sim-arm --moveit --headless
 ```
 
 Stop everything with:
@@ -62,6 +65,45 @@ See [examples/navigate-to](../examples/navigate-to/README.md).
 
 Live RGB-D mapping (RTAB-Map, no AMCL) is a **different** stack — see [Mapping a room](mapping.md). `sim-amr --nav2` will not start RTAB-Map.
 
+## MoveIt2 on sim-arm
+
+Sim-only MVP: headless Gazebo arm + MoveGroup reaches a **named joint pose**.
+No gripper, no pick/place, no `ros2_control` rewrite. The SDF still takes
+per-joint `std_msgs/Float64` on `/arm/<joint>/cmd_pos`; a small bridge
+converts MoveIt's `FollowJointTrajectory` into those setpoints.
+
+Requires `sudo apt install ros-$ROS_DISTRO-moveit` (Jazzy + Gazebo Harmonic
+is the intended target). The arm SDF notes a Fortress-vs-Harmonic plugin
+difference — see `models/agenticros_arm/model.sdf`.
+
+```bash
+agenticros up sim-arm --moveit --headless
+npx agenticros skills install @agenticros/moveit-pick
+# MCP / OpenClaw: run_mission pick_object with a MoveGroup joint-constraint goal
+# Named SRDF targets: home, ready  (group "arm", tip tool0)
+```
+
+What `--moveit` launches:
+
+| Piece | Source |
+|-------|--------|
+| Gazebo + bridge + RSP | `sim_arm.launch.py` |
+| `move_group` | `agenticros_arm_moveit_config` (SRDF group `arm`) |
+| Trajectory bridge | `arm_trajectory_bridge.py` → `/arm_controller/follow_joint_trajectory` → `/arm/*/cmd_pos` |
+
+Smoke script (sim + MoveIt already up):
+
+```bash
+node scripts/test-moveit-sim.mjs
+```
+
+The smoke asserts `/move_action` exists and joints move toward the named
+`ready` pose (via `run_mission pick_object` if the skill is installed, else
+`ros2_action_goal`). Pick/place and the [arm-control](../examples/arm-control/README.md)
+demo stay Planned.
+
+Full pick/place with a gripper is out of scope for this bringup.
+
 ## Layout
 
 | Layer | Where | What |
@@ -71,8 +113,9 @@ Live RGB-D mapping (RTAB-Map, no AMCL) is a **different** stack — see [Mapping
 | Bridge    | `agenticros_sim/config/amr_bridge.yaml`       | gz ↔ ROS 2 topic mapping, renaming gz defaults to RealSense paths. |
 | Map / Nav2 | `maps/`, `config/nav2_params.yaml`, `launch/sim_amr_nav2.launch.py` | Static map + AMCL + Nav2. |
 | Launch    | `agenticros_sim/launch/sim_amr.launch.py`     | One-shot `ros2 launch` entry point. |
+| Arm / MoveIt | `launch/sim_arm.launch.py`, `sim_arm_moveit.launch.py`, `agenticros_arm_moveit_config` | Per-joint jogging or MoveGroup + trajectory bridge. |
 | Worker    | `scripts/sim/run_sim.sh`                       | Bash wrapper the CLI uses (sources ROS, sets PIDs, logs to /tmp). |
-| CLI       | `agenticros up sim-amr [--rviz] [--nav2] [--headless]` | Interactive + scripted entry. |
+| CLI       | `agenticros up sim-amr [--rviz] [--nav2] [--headless]` / `up sim-arm [--moveit]` | Interactive + scripted entry. |
 
 ## Available tools in sim
 
@@ -89,6 +132,7 @@ against the sim AMR. Specifically:
 | `ros2_follow_me_start` mode='depth' | depth blob in front of AMR         | ✓ (person cylinder at +2.5 m) |
 | `ros2_follow_me_start` mode='local' (YOLO) | RGB image                  | works if YOLO model is available |
 | `ros2_action_goal` / `navigate_to` | Nav2 `navigate_to_pose`              | ✓ with `agenticros up sim-amr --nav2` |
+| `ros2_action_goal` / `pick_object` | MoveIt `move_action`                 | ✓ with `agenticros up sim-arm --moveit` |
 | `ros2_service_call`        | various                                     | basic services; Nav2 lifecycle via bringup |
 
 ## Sensor formats
@@ -107,9 +151,11 @@ against the sim AMR. Specifically:
 ```bash
 agenticros up sim-amr --headless
 agenticros up sim-amr --nav2 --headless
+agenticros up sim-arm --moveit --headless
 # Equivalent direct invocation:
 ros2 launch agenticros_sim sim_amr.launch.py gui:=false
 ros2 launch agenticros_sim sim_amr_nav2.launch.py gui:=false
+ros2 launch agenticros_sim sim_arm_moveit.launch.py gui:=false
 ```
 
 The `gui:=false` / `--headless` flag adds `-s --headless-rendering` to `gz sim`,
@@ -150,6 +196,7 @@ When CPU-bound, drop the depth camera update rate from 30 → 15 Hz in
 | `/odom` (OdometryWithCovariance bridge)                  | ✅ (fixed; was type-mismatch) |
 | `/camera/camera/color/image_raw` (headless)              | ❌ blocked by EGL / DRI2 (see `Known sharp edges`) |
 | Nav2 `navigate_to_pose` via `--nav2`                     | ✅ bringup shipped; run `scripts/test-navigate-sim.mjs` on a ROS host |
+| MoveIt `move_action` via `--moveit`                      | ✅ bringup shipped; run `scripts/test-moveit-sim.mjs` on a ROS + Gazebo host |
 
 ## Troubleshooting
 
@@ -204,6 +251,17 @@ cd ros2_ws && colcon build --packages-select agenticros_sim --symlink-install
 
 Confirm `/navigate_to_pose` exists after launch (`ros2 action list`). AMCL
 initial pose is set in `nav2_params.yaml` to the default spawn `(0, 0)`.
+
+### MoveIt / `--moveit` fails to start
+
+```bash
+sudo apt-get install -y ros-$ROS_DISTRO-moveit
+cd ros2_ws && colcon build --packages-select agenticros_sim agenticros_arm_moveit_config --symlink-install
+```
+
+Confirm `/move_action` and `/arm_controller/follow_joint_trajectory` exist
+after launch. The intended sim target is Jazzy + Gazebo Harmonic; Humble +
+Fortress may need the plugin note already in `models/agenticros_arm/model.sdf`.
 
 ### Other
 

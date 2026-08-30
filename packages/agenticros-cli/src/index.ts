@@ -93,6 +93,9 @@ program
   .option("--headless", "Run gz-sim with no GUI (auto-enabled on Jetson or when $DISPLAY is unset)")
   .option("--no-headless", "Force gz-sim GUI on (override Jetson auto-headless)")
   .option("--nav2", "sim-amr only: also launch Nav2 (map + AMCL + navigation)", false)
+  .option("--moveit", "sim-arm only: also launch MoveIt2 move_group + trajectory bridge", false)
+  .option("--map", "real only: also launch RTAB-Map + Nav2 (agenticros_bringup)", false)
+  .option("--wheel-odom", "real --map: use wheel /odom instead of RTAB-Map visual odom", false)
   .option("--no-camera", "Skip starting the RealSense camera (real target only)")
   .option("--no-motors", "Skip starting the motor controller (real target only)")
   .option("--eyes", "Also start robot eyes on the local display (tablets / face screens)", false)
@@ -516,6 +519,7 @@ program
   .option("--no-restart", "Skip automatic OpenClaw gateway restart after install/sync", false)
   .option("-y, --yes", "Non-interactive; skip confirm prompts (install/remove)", false)
   .option("--json", "With `skills list`: emit JSON", false)
+  .option("--bundle <name>", "With `skills install`: install a named bundle (mapping)")
   .action(async (action: string | undefined, arg: string | undefined, opts) => {
     const act = (action ?? "list").toLowerCase();
     if (act === "create") {
@@ -536,6 +540,7 @@ program
       noRestart: opts.restart === false,
       yes: opts.yes === true,
       json: opts.json === true,
+      bundle: typeof opts.bundle === "string" ? opts.bundle : undefined,
     });
   });
 

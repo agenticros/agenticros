@@ -9,4 +9,4 @@ npx agenticros skills install @agenticros/moveit-pick
 
 Then `run_mission` with capability `pick_object` and an explicit MoveGroup `goal` matching your MoveIt setup.
 
-Operator-owned MoveIt bringup required (`sim-arm` MoveIt2 CI still WIP). See the skill README.
+On sim: `agenticros up sim-arm --moveit --headless` then `node scripts/test-moveit-sim.mjs`. On a real arm, bring up your own MoveIt stack. See the skill README.

@@ -183,6 +183,42 @@ export const BUILTIN_CAPABILITIES: readonly Capability[] = [
     interruptible: true,
     source: { kind: "builtin" },
   },
+  {
+    id: "save_place",
+    verb: "remember_place",
+    description:
+      "Save a named map pose (x, y, yaw) for later navigate_to_place. " +
+      "If x/y are omitted, the tool tries to read the current AMCL / localization pose.",
+    inputs: {
+      name: { type: "string", description: "Place name (e.g. kitchen)." },
+      x: { type: "number", description: "Map-frame x (m).", optional: true },
+      y: { type: "number", description: "Map-frame y (m).", optional: true },
+      yaw: { type: "number", description: "Map-frame yaw (rad).", optional: true },
+      frame: { type: "string", description: "Frame id (default map).", optional: true },
+    },
+    interruptible: true,
+    source: { kind: "builtin" },
+  },
+  {
+    id: "list_places",
+    verb: "list_places",
+    description: "List named places saved with save_place.",
+    interruptible: true,
+    source: { kind: "builtin" },
+  },
+  {
+    id: "navigate_to_place",
+    verb: "navigate",
+    description:
+      "Navigate to a previously saved named place via Nav2 (requires the navigate-to skill).",
+    inputs: {
+      name: { type: "string", description: "Place name (e.g. kitchen)." },
+    },
+    interruptible: true,
+    blocks_base: true,
+    requires: ["base"],
+    source: { kind: "builtin" },
+  },
 ];
 
 function isCapabilityLike(value: unknown): value is Partial<Capability> & { id: string } {

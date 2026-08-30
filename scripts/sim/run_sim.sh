@@ -8,6 +8,7 @@
 #
 # Usage:
 #   run_sim.sh --robot amr [--namespace sim_robot] [--rviz] [--no-gui] [--nav2]
+#   run_sim.sh --robot arm [--namespace sim_robot] [--rviz] [--no-gui] [--moveit]
 #
 # Flags:
 #   --robot amr|arm        Which sim launch to start (default: amr).
@@ -15,6 +16,7 @@
 #   --rviz                 Bring up RViz alongside Gazebo.
 #   --no-gui               Run gz-sim headless (CI / docker).
 #   --nav2                 AMR only: also launch Nav2 (map + AMCL + navigation).
+#   --moveit               Arm only: also launch MoveIt2 move_group + trajectory bridge.
 #   --ros-distro <distro>  Override ROS 2 distro (auto-detect by default).
 #   --colcon-ws <path>     Override the colcon workspace (default: <repo>/ros2_ws).
 #   --help                 Print this help and exit.
@@ -36,6 +38,7 @@ NAMESPACE=""
 USE_RVIZ="false"
 GUI="true"
 USE_NAV2="false"
+USE_MOVEIT="false"
 ROS_DISTRO_OVERRIDE=""
 COLCON_WS=""
 
@@ -46,10 +49,11 @@ while [[ $# -gt 0 ]]; do
     --rviz)         USE_RVIZ="true"; shift ;;
     --no-gui)       GUI="false"; shift ;;
     --nav2)         USE_NAV2="true"; shift ;;
+    --moveit)       USE_MOVEIT="true"; shift ;;
     --ros-distro)   ROS_DISTRO_OVERRIDE="$2"; shift 2 ;;
     --colcon-ws)    COLCON_WS="$2"; shift 2 ;;
     -h|--help)
-      sed -n '2,26p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+      sed -n '2,28p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
       exit 0 ;;
     *) echo "Unknown arg: $1" >&2; exit 2 ;;
   esac
@@ -62,6 +66,11 @@ fi
 
 if [[ "$USE_NAV2" == "true" && "$ROBOT" != "amr" ]]; then
   echo "--nav2 is only supported with --robot amr" >&2
+  exit 2
+fi
+
+if [[ "$USE_MOVEIT" == "true" && "$ROBOT" != "arm" ]]; then
+  echo "--moveit is only supported with --robot arm" >&2
   exit 2
 fi
 
@@ -93,15 +102,29 @@ fi
 
 log "ROS_DISTRO=$ROS_DISTRO"
 log "COLCON_WS=$COLCON_WS"
-log "robot=$ROBOT  namespace=${NAMESPACE:-<none>}  rviz=$USE_RVIZ  gui=$GUI  nav2=$USE_NAV2"
+log "robot=$ROBOT  namespace=${NAMESPACE:-<none>}  rviz=$USE_RVIZ  gui=$GUI  nav2=$USE_NAV2  moveit=$USE_MOVEIT"
 
 # shellcheck disable=SC1090
 source "/opt/ros/$ROS_DISTRO/setup.bash"
 
 # ---------- Build agenticros_sim if not yet built ----------
+NEED_BUILD=0
 if [[ ! -f "$COLCON_WS/install/agenticros_sim/share/agenticros_sim/launch/sim_amr.launch.py" ]]; then
-  log "agenticros_sim not built in $COLCON_WS — building now..."
-  (cd "$COLCON_WS" && colcon build --symlink-install --packages-select agenticros_sim agenticros_msgs)
+  NEED_BUILD=1
+fi
+if [[ "$USE_MOVEIT" == "true" ]]; then
+  if [[ ! -f "$COLCON_WS/install/agenticros_sim/share/agenticros_sim/launch/sim_arm_moveit.launch.py" ]] ||
+     [[ ! -f "$COLCON_WS/install/agenticros_arm_moveit_config/share/agenticros_arm_moveit_config/launch/move_group.launch.py" ]]; then
+    NEED_BUILD=1
+  fi
+fi
+if [[ "$NEED_BUILD" -eq 1 ]]; then
+  log "sim packages not built in $COLCON_WS — building now..."
+  BUILD_PKGS=(agenticros_sim agenticros_msgs)
+  if [[ "$USE_MOVEIT" == "true" ]]; then
+    BUILD_PKGS+=(agenticros_arm_moveit_config)
+  fi
+  (cd "$COLCON_WS" && colcon build --symlink-install --packages-select "${BUILD_PKGS[@]}")
 fi
 
 # shellcheck disable=SC1090
@@ -160,12 +183,29 @@ case "$ROBOT" in
       LAUNCH_FILE="sim_amr.launch.py"
     fi
     ;;
-  arm) LAUNCH_FILE="sim_arm.launch.py" ;;
+  arm)
+    if [[ "$USE_MOVEIT" == "true" ]]; then
+      LAUNCH_FILE="sim_arm_moveit.launch.py"
+    else
+      LAUNCH_FILE="sim_arm.launch.py"
+    fi
+    ;;
 esac
 
 if [[ "$USE_NAV2" == "true" ]]; then
   if ! ros2 pkg prefix nav2_bringup >/dev/null 2>&1; then
     err "nav2_bringup not found. Install: sudo apt-get install -y ros-\$ROS_DISTRO-navigation2 ros-\$ROS_DISTRO-nav2-bringup"
+    exit 1
+  fi
+fi
+
+if [[ "$USE_MOVEIT" == "true" ]]; then
+  if ! ros2 pkg prefix moveit_ros_move_group >/dev/null 2>&1; then
+    err "moveit_ros_move_group not found. Install: sudo apt-get install -y ros-\$ROS_DISTRO-moveit"
+    exit 1
+  fi
+  if ! ros2 pkg prefix agenticros_arm_moveit_config >/dev/null 2>&1; then
+    err "agenticros_arm_moveit_config not found. Rebuild: colcon build --packages-select agenticros_sim agenticros_arm_moveit_config --symlink-install"
     exit 1
   fi
 fi

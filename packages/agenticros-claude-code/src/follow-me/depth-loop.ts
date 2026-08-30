@@ -446,6 +446,12 @@ export function getFollowMeDepth(
   return entry;
 }
 
+/** Stop the in-process depth follow loop if one was started for this robot. */
+export async function stopFollowMeDepthIfPresent(robotId: string): Promise<void> {
+  const entry = instances.get(robotId);
+  if (entry) await entry.stop();
+}
+
 /** Test-only: clear the registry so suites can run in isolation. */
 export function _resetFollowMeDepthRegistry(): void {
   instances.clear();

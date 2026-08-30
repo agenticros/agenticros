@@ -192,7 +192,7 @@ async function runSimFlow(): Promise<boolean> {
     choices: [
       { name: "2-wheel AMR (camera + depth + LiDAR)", value: "sim-amr" },
       {
-        name: "6-DOF arm (UR5e-shaped, per-joint position control)",
+        name: "6-DOF arm (UR5e-shaped; use `agenticros up sim-arm --moveit` for MoveIt2)",
         value: "sim-arm",
       },
       { name: "Back to main menu", value: BACK },

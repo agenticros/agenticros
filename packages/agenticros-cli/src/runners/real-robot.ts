@@ -14,13 +14,25 @@ import { execa } from "execa";
 
 import { getCliPaths } from "../util/paths.js";
 import { detectRosDistro } from "../util/env.js";
-import { err, header, info } from "../util/logger.js";
+import { err, header, info, ok } from "../util/logger.js";
 import { ensureWorkspaceReady } from "../util/workspace.js";
+import { getActiveRobotId, readConfigObject, readRobots } from "../util/robot-config.js";
 
 export interface RealRobotOptions {
   rosDistro?: string;
   camera?: boolean;
   motors?: boolean;
+  map?: boolean;
+  wheelOdom?: boolean;
+}
+
+function activeRobotNamespace(): string {
+  const obj = readConfigObject();
+  const { robots } = readRobots(obj);
+  const activeId = getActiveRobotId(obj);
+  const match = robots.find((r) => r.id === activeId);
+  const fromRobot = (obj["robot"] as { namespace?: string } | undefined)?.namespace;
+  return (match?.namespace ?? fromRobot ?? "").trim();
 }
 
 export async function runRealRobot(opts: RealRobotOptions): Promise<void> {
@@ -63,6 +75,32 @@ export async function runRealRobot(opts: RealRobotOptions): Promise<void> {
     });
   } catch (e) {
     err(`start_demo.sh failed: ${e instanceof Error ? e.message : String(e)}`);
+    process.exit(1);
+  }
+
+  if (opts.map !== true) return;
+
+  const mapScript = join(paths.scriptsDir, "start_mapping.sh");
+  if (!existsSync(mapScript)) {
+    err(`start_mapping.sh not found at ${mapScript}.`);
+    process.exit(1);
+  }
+  const ns = activeRobotNamespace();
+  const mapEnv = {
+    ...env,
+    AGENTICROS_ROBOT_NAMESPACE: ns,
+    ...(opts.wheelOdom === true ? { AGENTICROS_WHEEL_ODOM: "1" } : {}),
+  };
+  header("Mapping stack (RTAB-Map + Nav2)");
+  info(`robot_namespace=${ns || "(none)"}  visual_odometry=${opts.wheelOdom ? "false (wheel /odom)" : "true"}`);
+  ok('Next after this stays up: agenticros skills install --bundle mapping');
+  try {
+    await execa("bash", [mapScript, ros.distro], {
+      env: mapEnv,
+      stdio: "inherit",
+    });
+  } catch (e) {
+    err(`Mapping launch failed: ${e instanceof Error ? e.message : String(e)}`);
     process.exit(1);
   }
 }

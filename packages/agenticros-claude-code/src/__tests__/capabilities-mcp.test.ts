@@ -290,23 +290,25 @@ test("mcp: tools/call ros2_list_capabilities returns the expected shape", async 
       }>;
     };
     assert.equal(payload.success, true);
-    assert.equal(payload.intrinsic_count, 6, "should report exactly 6 intrinsic verbs");
+    assert.equal(payload.intrinsic_count, 9, "should report exactly 9 intrinsic verbs");
     assert.ok(payload.skill_count >= 1, "fixture skill should contribute at least one capability");
     assert.equal(
       payload.total,
       payload.intrinsic_count + payload.skill_count + (payload.discoverable_count ?? 0),
     );
 
-    // All 6 intrinsic verbs present.
     const intrinsicIds = payload.capabilities
       .filter((c) => c.source?.kind === "builtin")
       .map((c) => c.id)
       .sort();
     assert.deepEqual(intrinsicIds, [
       "drive_base",
+      "list_places",
       "list_topics",
       "measure_depth",
+      "navigate_to_place",
       "publish_topic",
+      "save_place",
       "subscribe_once",
       "take_snapshot",
     ]);
@@ -722,12 +724,15 @@ test("mcp: every ROS2 tool advertises optional robot_id in its inputSchema", asy
       "ros2_depth_distance",
       // Phase 1.d-extend: skill tools must also route through robot_id so
       // multi-robot deployments can target a specific robot's loop.
+      "ros2_estop",
       "ros2_follow_me_start",
       "ros2_follow_me_stop",
       "ros2_follow_me_status",
       "ros2_follow_me_set_distance",
       "ros2_follow_me_set_target",
       "ros2_find_object",
+      "ros2_save_place",
+      "ros2_navigate_to_place",
     ];
     for (const name of expected) {
       const tool = list.tools.find((t) => t.name === name);

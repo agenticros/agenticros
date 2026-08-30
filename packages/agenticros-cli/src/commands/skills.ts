@@ -68,6 +68,8 @@ export interface SkillsOptions {
   yes?: boolean;
   /** Emit JSON for list (and other machine-readable actions). */
   json?: boolean;
+  /** Named install bundle, e.g. `mapping`. */
+  bundle?: string;
 }
 
 let skipGatewayRestart = false;
@@ -98,7 +100,7 @@ export async function skillsCommand(opts: SkillsOptions): Promise<void> {
       return searchAction(opts.arg);
     case "install":
     case "i":
-      return installAction(opts.arg);
+      return installAction(opts.arg, opts.bundle);
     case "create":
       return createSkillCommand({ slug: opts.arg ?? "", template: undefined });
     case "dev":
@@ -559,15 +561,41 @@ async function searchAction(rawQuery: string | undefined): Promise<void> {
  * register it locally. Prefers npm when the install descriptor advertises
  * `npmPackage`.
  */
-async function installAction(rawRef: string | undefined): Promise<void> {
+const MAPPING_BUNDLE = [
+  "@agenticros/start-slam",
+  "@agenticros/explore",
+  "@agenticros/navigate-to",
+] as const;
+
+async function installAction(rawRef: string | undefined, bundle?: string): Promise<void> {
+  const bundleName = (bundle ?? "").trim().toLowerCase();
+  if (bundleName) {
+    if (bundleName !== "mapping") {
+      err(`Unknown skill bundle '${bundleName}'. Known bundles: mapping`);
+      process.exit(2);
+    }
+    header("Installing mapping skill bundle…");
+    info("Packages: " + MAPPING_BUNDLE.join(", "));
+    for (const pkg of MAPPING_BUNDLE) {
+      await installOneRef(pkg);
+    }
+    ok("Mapping bundle installed. Chat: \"map the room\" then \"save this place as kitchen\".");
+    return;
+  }
   const ref = (rawRef ?? "").trim();
   if (!ref) {
     err("Usage: agenticros skills install <owner/skill|@agenticros/name>");
+    err("       agenticros skills install --bundle mapping");
     err("Example: agenticros skills install chrismatthieu/followme");
     err("Example: agenticros skills install @agenticros/navigate-to");
     err("Find skills at https://skills.agenticros.com or via `agenticros skills search`.");
     process.exit(2);
   }
+  await installOneRef(ref);
+}
+
+async function installOneRef(rawRef: string): Promise<void> {
+  const ref = rawRef.trim();
   header(`Installing skill '${ref}'…`);
 
   // Direct npm scoped ref — skip marketplace descriptor.

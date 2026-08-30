@@ -12,6 +12,9 @@ import type { ProfileRobot } from "./robot-profile.js";
 import { resolveBinding } from "./robot-profile.js";
 import type { RosTransport } from "./transport/transport.js";
 
+/** How many zero-Twist publishes `/estop` and `ros2_estop` send so the base reliably stops. */
+export const ESTOP_PUBLISH_COUNT = 5;
+
 export const TWIST_MSG_TYPE = "geometry_msgs/msg/Twist";
 
 export const ZERO_TWIST: {
@@ -270,6 +273,49 @@ export function robotHasMobileBase(robot: ProfileRobot): boolean {
 }
 
 const STOP_PUBLISH_BUDGET_MS = 500;
+
+export interface EmergencyStopResult {
+  /** Resolved cmd_vel topic, when a stop was published. */
+  topic?: string;
+  /** Present when this robot has no mobile base (arm-only). */
+  skipped?: "no_mobile_base";
+}
+
+/**
+ * Immediate emergency stop for one robot: five zero Twists on its
+ * cmd_vel. Used by OpenClaw `/estop` and MCP/Gemini `ros2_estop`.
+ * Does not cancel Nav2 or missions — that is `mission_cancel`.
+ */
+export function emergencyStopRobot(
+  transport: RosTransport,
+  robot: ProfileRobot,
+  config?: { teleop?: { cmdVelTopic?: string } },
+): EmergencyStopResult {
+  if (!robotHasMobileBase(robot)) {
+    return { skipped: "no_mobile_base" };
+  }
+  const topic =
+    resolveBinding(robot, "cmd_vel", {
+      cmdVelTopic: config?.teleop?.cmdVelTopic,
+    }) ?? "/cmd_vel";
+  try {
+    transport.advertise?.({ topic, type: TWIST_MSG_TYPE });
+  } catch {
+    /* rosbridge advertise is optional */
+  }
+  const msg = {
+    linear: { ...ZERO_TWIST.linear },
+    angular: { ...ZERO_TWIST.angular },
+  };
+  for (let i = 0; i < ESTOP_PUBLISH_COUNT; i++) {
+    try {
+      void transport.publish({ topic, type: TWIST_MSG_TYPE, msg });
+    } catch {
+      /* socket may already be half-closed */
+    }
+  }
+  return { topic };
+}
 
 /** Best-effort zero Twist on every mobile-base robot sharing this transport. */
 export async function publishStopForBases(

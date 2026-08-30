@@ -100,7 +100,7 @@ Reload MCP in Hermes after changing robot config (`/reload-mcp`).
 
 Same surface as Claude Code / Codex MCP:
 
-- Core ROS: `ros2_list_topics`, `ros2_publish`, `ros2_subscribe_once`, services, actions, params
+- Core ROS: `ros2_list_topics`, `ros2_publish`, `ros2_estop`, `ros2_subscribe_once`, services, actions, params
 - Perception: `ros2_camera_snapshot`, `ros2_depth_distance`
 - Fleet: `ros2_discover_robots`, `ros2_list_capabilities`, `run_mission`, `mission_cancel`
 - Built-in missions: follow-me and find-object tools

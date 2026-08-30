@@ -37,9 +37,9 @@ Bring up a robot stack. Targets:
 
 | Target    | What it does |
 |-----------|-----|
-| `real`    | Runs `scripts/start_demo.sh`: RealSense camera (unless `--no-camera`), MCP build, and local motor controller via `@agenticros/robot` (unless `--no-motors`). |
+| `real`    | Runs `scripts/start_demo.sh`: RealSense camera (unless `--no-camera`), MCP build, and local motor controller via `@agenticros/robot` (unless `--no-motors`). Add `--map` for RTAB-Map + Nav2. |
 | `sim-amr` | Launches the simulated 2-wheel AMR (`scripts/sim/run_sim.sh`). Add `--nav2` for map + AMCL + Nav2. |
-| `sim-arm` | Launches the simulated UR5e-shaped arm (per-joint position control; MoveIt2 WIP). |
+| `sim-arm` | Launches the simulated UR5e-shaped arm (per-joint `/arm/*/cmd_pos`). Add `--moveit` for MoveIt2 move_group + FollowJointTrajectory bridge. |
 
 Flags:
 - `--ros-distro humble|jazzy|…` override ROS distro detection
@@ -47,6 +47,9 @@ Flags:
 - `--rviz` open RViz alongside the sim
 - `--headless` / `--no-headless` control gz GUI (auto-headless on Jetson / no `$DISPLAY`)
 - `--nav2` sim-amr only: also launch Nav2 (`sim_amr_nav2.launch.py`)
+- `--moveit` sim-arm only: also launch MoveIt2 (`sim_arm_moveit.launch.py`)
+- `--map` real only: also launch RTAB-Map + Nav2 (`scripts/start_mapping.sh`)
+- `--wheel-odom` with `--map`: use wheel `/odom` instead of visual odometry
 - `--no-camera` skip starting the RealSense camera (real target)
 - `--no-motors` skip starting the motor controller (real target)
 - `--eyes` also start robot eyes on the local display (see [eyes.md](eyes.md))
@@ -306,6 +309,7 @@ Optional fleet hive (off by default). See [hive.md](hive.md).
 | `agenticros skills remove <id> [--yes] [--no-restart]` | Unregister a skill; `--yes` skips prompts (required for remote). |
 | `agenticros skills sync [--no-restart]` | Re-sync OpenClaw `contracts.tools` allowlist from registered skills. |
 | `agenticros skills install <owner/skill\|@scope/pkg> [--yes] [--no-restart]` | Install from marketplace or npm; prefers npm when advertised; auto-restarts OpenClaw gateway unless `--no-restart`. |
+| `agenticros skills install --bundle mapping` | Install `@agenticros/start-slam`, `explore`, and `navigate-to`. |
 | `agenticros skills search <q>` | Search the marketplace. |
 
 ## Troubleshooting

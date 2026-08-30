@@ -507,6 +507,92 @@ function tryFindAndApproach(
   return null;
 }
 
+const COORD_PATTERNS: RegExp[] = [
+  /(?:go to|navigate to|drive to)\s+(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)/i,
+  /(?:go to|navigate to|drive to)\s+x\s*=\s*(-?\d+(?:\.\d+)?)\s*,?\s*y\s*=\s*(-?\d+(?:\.\d+)?)/i,
+];
+
+function tryNavigateToCoords(
+  goal: string,
+  availableIds: Set<string>,
+): { steps: MissionStep[]; candidates: PlannerCandidate[] } | null {
+  if (!availableIds.has("navigate_to")) return null;
+  const g = normalise(goal);
+  for (const re of COORD_PATTERNS) {
+    const m = g.match(re);
+    if (!m) continue;
+    const x = Number(m[1]);
+    const y = Number(m[2]);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    const inputs = { x, y };
+    return {
+      steps: [{ id: "nav", capability: "navigate_to", inputs }],
+      candidates: [
+        {
+          capability_id: "navigate_to",
+          confidence: 0.92,
+          rationale: `parsed map coordinates (${x}, ${y})`,
+          inputs,
+        },
+      ],
+    };
+  }
+  return null;
+}
+
+const PLACE_PATTERNS: RegExp[] = [
+  /^(?:go to|navigate to|drive to)\s+(?:the\s+)?(.+)$/i,
+  /^(?:save this place as|remember this place as|name this place)\s+(.+)$/i,
+];
+
+function tryNavigateToPlace(
+  goal: string,
+  availableIds: Set<string>,
+): { steps: MissionStep[]; candidates: PlannerCandidate[] } | null {
+  const g = normalise(goal);
+  if (COORD_PATTERNS.some((re) => re.test(g))) return null;
+
+  const saveMatch = g.match(/^(?:save this place as|remember this place as|name this place)\s+(.+)$/i);
+  if (saveMatch && availableIds.has("save_place")) {
+    const name = saveMatch[1].trim().replace(/[.!?]+$/, "");
+    if (!name) return null;
+    const inputs = { name };
+    return {
+      steps: [{ id: "save", capability: "save_place", inputs }],
+      candidates: [
+        {
+          capability_id: "save_place",
+          confidence: 0.9,
+          rationale: `save current pose as named place "${name}"`,
+          inputs,
+        },
+      ],
+    };
+  }
+
+  if (!availableIds.has("navigate_to_place")) return null;
+  for (const re of PLACE_PATTERNS) {
+    const m = g.match(re);
+    if (!m) continue;
+    if (/save this place|remember this place|name this place/i.test(g)) continue;
+    const name = m[1].trim().replace(/[.!?]+$/, "");
+    if (!name || /^(forward|backward|backwards|left|right)$/i.test(name)) return null;
+    const inputs = { name };
+    return {
+      steps: [{ id: "place", capability: "navigate_to_place", inputs }],
+      candidates: [
+        {
+          capability_id: "navigate_to_place",
+          confidence: 0.88,
+          rationale: `named place "${name}"`,
+          inputs,
+        },
+      ],
+    };
+  }
+  return null;
+}
+
 function tryMapTheRoom(
   goal: string,
   availableIds: Set<string>,
@@ -578,6 +664,8 @@ const RECOGNISED_VERBS_SUMMARY = [
   "find <object> and drive toward it (multi-step)",
   "map the room (start_slam → explore → save_map when installed)",
   "explore the room / wander around",
+  "go to 1.2, 3.4 / navigate to x=1 y=2",
+  "go to the kitchen / navigate to kitchen (named place)",
 ];
 
 /**
@@ -604,6 +692,24 @@ export function compileGoalToMission(
   }
 
   const availableIds = new Set(capabilities.map((c) => c.id));
+
+  const toCoords = tryNavigateToCoords(trimmed, availableIds);
+  if (toCoords) {
+    return {
+      mission: buildMission(toCoords.steps, trimmed, options),
+      candidates: toCoords.candidates,
+      suggestions: [],
+    };
+  }
+
+  const toPlace = tryNavigateToPlace(trimmed, availableIds);
+  if (toPlace) {
+    return {
+      mission: buildMission(toPlace.steps, trimmed, options),
+      candidates: toPlace.candidates,
+      suggestions: [],
+    };
+  }
 
   const mapped = tryMapTheRoom(trimmed, availableIds);
   if (mapped) {

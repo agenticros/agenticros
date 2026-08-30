@@ -76,6 +76,8 @@ export {
   checkInputsWorkspace,
   robotHasMobileBase,
   publishStopForBases,
+  emergencyStopRobot,
+  ESTOP_PUBLISH_COUNT,
   attachDisconnectFailSafe,
   checkLiveBindings,
 } from "./safety.js";
@@ -86,6 +88,7 @@ export type {
   LiveBindingCheck,
   LiveCheckSeverity,
   LiveGraphSnapshot,
+  EmergencyStopResult,
 } from "./safety.js";
 export { isCdrTypeSupported } from "./transport/zenoh/cdr.js";
 export {
@@ -209,6 +212,24 @@ export { createMemoryTranscriptSink } from "./mission-transcript-sink.js";
 
 export { compileGoalToMission } from "./planner/index.js";
 export type { PlannerResult, PlannerCandidate } from "./planner/index.js";
+
+export {
+  defaultPlacesPath,
+  loadPlaces,
+  savePlaces,
+  listPlaces,
+  getPlace,
+  savePlace,
+  forgetPlace,
+  poseFromLocalizationMessage,
+} from "./places.js";
+export type { SavedPlace, PlacesStore } from "./places.js";
+export {
+  readCurrentMapPose,
+  savePlaceFromArgs,
+  findNavigateToCapability,
+  executeNavigateToPlace,
+} from "./places-runtime.js";
 
 export {
   listRobots,

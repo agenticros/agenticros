@@ -16,6 +16,8 @@ import {
   checkWorkspacePayload,
   clampTwistToLimits,
   extractWorkspacePositions,
+  emergencyStopRobot,
+  ESTOP_PUBLISH_COUNT,
   publishStopForBases,
   resolveSafetyForRobot,
   robotHasMobileBase,
@@ -194,6 +196,80 @@ test("safety: publishStopForBases publishes zero Twist only for bases", async ()
     linear: ZERO_TWIST.linear,
     angular: ZERO_TWIST.angular,
   });
+});
+
+test("safety: emergencyStopRobot publishes zero Twist five times", () => {
+  const published: Array<{ topic: string; type?: string; msg: unknown }> = [];
+  const transport = {
+    advertise: () => {},
+    publish: (opts: { topic: string; type?: string; msg: Record<string, unknown> }) => {
+      published.push({ topic: opts.topic, type: opts.type, msg: opts.msg });
+    },
+  } as unknown as RosTransport;
+
+  const result = emergencyStopRobot(
+    transport,
+    {
+      namespace: "wh",
+      cameraTopic: "",
+      profile: {
+        schema: "agenticros.profile.v1",
+        features: ["base"],
+        bindings: { cmd_vel: "/cmd_vel" },
+      },
+    },
+  );
+
+  assert.equal(result.skipped, undefined);
+  assert.equal(result.topic, "/wh/cmd_vel");
+  assert.equal(published.length, ESTOP_PUBLISH_COUNT);
+  for (const p of published) {
+    assert.equal(p.topic, "/wh/cmd_vel");
+    assert.equal(p.type, "geometry_msgs/msg/Twist");
+    assert.deepEqual(p.msg, {
+      linear: ZERO_TWIST.linear,
+      angular: ZERO_TWIST.angular,
+    });
+  }
+});
+
+test("safety: emergencyStopRobot honors teleop.cmdVelTopic override", () => {
+  const published: string[] = [];
+  const transport = {
+    publish: (opts: { topic: string }) => {
+      published.push(opts.topic);
+    },
+  } as unknown as RosTransport;
+
+  const result = emergencyStopRobot(
+    transport,
+    { namespace: "bot", cameraTopic: "", kind: "amr" },
+    { teleop: { cmdVelTopic: "/custom_cmd_vel" } },
+  );
+
+  assert.equal(result.topic, "/bot/custom_cmd_vel");
+  assert.equal(published.length, ESTOP_PUBLISH_COUNT);
+  assert.ok(published.every((t) => t === "/bot/custom_cmd_vel"));
+});
+
+test("safety: emergencyStopRobot skips arm-only robots", () => {
+  const published: string[] = [];
+  const transport = {
+    publish: (opts: { topic: string }) => {
+      published.push(opts.topic);
+    },
+  } as unknown as RosTransport;
+
+  const result = emergencyStopRobot(transport, {
+    namespace: "arm",
+    cameraTopic: "",
+    kind: "arm",
+    profile: { schema: "agenticros.profile.v1", features: ["arm"], bindings: {} },
+  });
+
+  assert.equal(result.skipped, "no_mobile_base");
+  assert.equal(result.topic, undefined);
+  assert.equal(published.length, 0);
 });
 
 test("safety: attachDisconnectFailSafe publishes stop on drop after connect", async () => {

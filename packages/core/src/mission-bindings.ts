@@ -106,6 +106,25 @@ export const BUILTIN_MISSION_BINDINGS: CapabilityToolBindings = {
       return out;
     },
   },
+  save_place: {
+    tool: "ros2_save_place",
+    buildArgs: (inputs) => {
+      const out: Record<string, unknown> = { name: String(inputs.name ?? "") };
+      copyNumber(out, inputs, "x");
+      copyNumber(out, inputs, "y");
+      copyNumber(out, inputs, "yaw");
+      copyString(out, inputs, "frame");
+      return out;
+    },
+  },
+  list_places: {
+    tool: "ros2_list_places",
+    buildArgs: () => ({}),
+  },
+  navigate_to_place: {
+    tool: "ros2_navigate_to_place",
+    buildArgs: (inputs) => ({ name: String(inputs.name ?? "") }),
+  },
 };
 
 /** Synthetic tool prefix for external_ros_node capabilities. */

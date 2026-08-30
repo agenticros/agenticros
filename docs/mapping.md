@@ -1,6 +1,20 @@
 # Mapping a room (RTAB-Map + Nav2)
 
-AgenticROS does not run SLAM or path planning in the agent process. Mapping a room is three operator-owned ROS pieces plus two marketplace skills:
+```bash
+agenticros up real --map
+agenticros skills install --bundle mapping
+# chat: "map the room"
+# then: "save this place as kitchen" / "go to the kitchen"
+```
+
+`--map` starts camera + motors (`start_demo.sh`) then `agenticros_bringup` RTAB-Map + Nav2. Use `--wheel-odom` when the motor controller publishes `/odom`.
+
+| Stack | Command | Localization |
+|-------|---------|--------------|
+| **Real robot (live map)** | `agenticros up real --map` | RTAB-Map RGB-D VSLAM (or wheel `/odom` with `--wheel-odom`) |
+| **Sim (known floorplan)** | `agenticros up sim-amr --nav2` | Static map + AMCL — **not** RTAB-Map |
+
+AgenticROS does not run SLAM or path planning in the agent process. Mapping a room is three operator-owned ROS pieces plus marketplace skills:
 
 1. **RTAB-Map** builds `/map` and `map` → `odom` (RGB-D VSLAM).
 2. **Nav2** (`navigation_launch.py` only — **no AMCL**) drives to poses and avoids obstacles.
@@ -44,9 +58,8 @@ source /opt/ros/jazzy/setup.bash   # or humble
 colcon build --packages-select agenticros_msgs agenticros_explore agenticros_bringup
 source install/setup.bash
 
-npx agenticros skills install @agenticros/start-slam
-npx agenticros skills install @agenticros/explore
-npx agenticros skills install @agenticros/navigate-to
+npx agenticros skills install --bundle mapping
+# same as: start-slam + explore + navigate-to
 ```
 
 ## Bringup (physical RGB-D robot)

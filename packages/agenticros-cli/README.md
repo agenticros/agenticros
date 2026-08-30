@@ -216,6 +216,7 @@ agenticros start camera -d /dev/video4
 | `agenticros up sim-amr` | Simulated 2-wheel AMR. |
 | `agenticros up sim-amr --nav2` | AMR + Nav2. |
 | `agenticros up sim-arm` | Simulated 6-DOF arm. |
+| `agenticros up sim-arm --moveit` | Arm + MoveIt2 move_group + trajectory bridge. |
 | `agenticros up … --eyes` | Also start robot eyes. |
 | `agenticros eyes` | Fullscreen eyes display (`cmd_vel` gaze; idle person-follow if YOLO is already installed). |
 | `agenticros down` | Stop sim/camera/mcp/eyes/motors. |

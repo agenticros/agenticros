@@ -13,6 +13,7 @@ import { registerCapabilitiesTool } from "./ros2-capabilities.js";
 import { registerRobotsTool } from "./ros2-robots.js";
 import { registerDiscoverRobotsTool } from "./ros2-discover.js";
 import { registerFindRobotsForTool } from "./ros2-find-robots-for.js";
+import { registerPlacesTools } from "./ros2-places.js";
 import { registerMissionTool, type ToolRegistry } from "./ros2-mission.js";
 import { registerMissionCancelTool } from "./mission-cancel.js";
 import { registerMissionPauseTool } from "./mission-pause.js";
@@ -62,6 +63,7 @@ export function registerTools(api: OpenClawPluginApi, config: AgenticROSConfig):
   registerRobotsTool(wrappedApi, config);
   registerDiscoverRobotsTool(wrappedApi, config);
   registerFindRobotsForTool(wrappedApi, config);
+  registerPlacesTools(wrappedApi, config);
   registerMissionTool(wrappedApi, config, registry);
   registerMissionCancelTool(wrappedApi);
   registerMissionPauseTool(wrappedApi);

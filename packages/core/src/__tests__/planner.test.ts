@@ -330,3 +330,47 @@ test("planner: candidates list contains the matched capability ids in declaratio
     assert.ok(c.rationale.length > 0);
   }
 });
+
+const NAV_CAPS: Capability[] = [
+  ...BASE_CAPS,
+  {
+    id: "navigate_to",
+    verb: "navigate",
+    description: "nav",
+    source: { kind: "skill", skillId: "navigate-to", package: "@agenticros/navigate-to" },
+  },
+  { id: "navigate_to_place", verb: "navigate", description: "place", source: { kind: "builtin" } },
+  { id: "save_place", verb: "remember_place", description: "save", source: { kind: "builtin" } },
+];
+
+test("planner: 'go to 1.2, 3.4' compiles to navigate_to", () => {
+  const res = compileGoalToMission("go to 1.2, 3.4", NAV_CAPS);
+  assert.ok(res.mission, res.error);
+  assert.equal(res.mission!.steps[0].capability, "navigate_to");
+  assert.deepEqual(res.mission!.steps[0].inputs, { x: 1.2, y: 3.4 });
+});
+
+test("planner: 'navigate to x=1 y=2' compiles to navigate_to", () => {
+  const res = compileGoalToMission("navigate to x=1 y=2", NAV_CAPS);
+  assert.ok(res.mission, res.error);
+  assert.deepEqual(res.mission!.steps[0].inputs, { x: 1, y: 2 });
+});
+
+test("planner: 'go to the kitchen' compiles to navigate_to_place", () => {
+  const res = compileGoalToMission("go to the kitchen", NAV_CAPS);
+  assert.ok(res.mission, res.error);
+  assert.equal(res.mission!.steps[0].capability, "navigate_to_place");
+  assert.equal((res.mission!.steps[0].inputs as { name: string }).name, "kitchen");
+});
+
+test("planner: 'save this place as kitchen' compiles to save_place", () => {
+  const res = compileGoalToMission("save this place as kitchen", NAV_CAPS);
+  assert.ok(res.mission, res.error);
+  assert.equal(res.mission!.steps[0].capability, "save_place");
+  assert.equal((res.mission!.steps[0].inputs as { name: string }).name, "kitchen");
+});
+
+test("planner: named-place goals fail when navigate_to_place is not installed", () => {
+  const res = compileGoalToMission("go to the kitchen", BASE_CAPS);
+  assert.equal(res.mission, null);
+});
