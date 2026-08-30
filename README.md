@@ -197,11 +197,13 @@ agenticros codex doctor         # validate ~/.codex/config.toml
 agenticros hermes setup         # register AgenticROS MCP for Hermes Agent
 agenticros hermes doctor        # validate ~/.hermes/config.yaml
 agenticros up real              # real robot stack
+agenticros up real --map        # real robot + RTAB-Map + Nav2
 agenticros up real --eyes       # real robot + on-display robot eyes
 agenticros up sim-amr           # simulated AMR (Gazebo + RViz, headless on Jetson)
 agenticros up sim-amr --nav2    # AMR + Nav2 for navigate_to missions
 agenticros up sim-arm           # simulated 6-DOF arm (per-joint /arm/*/cmd_pos)
 agenticros up sim-arm --moveit  # arm + MoveIt2 move_group + trajectory bridge
+agenticros skills install --bundle mapping   # start-slam + explore + navigate-to
 agenticros eyes                 # fullscreen robot eyes on a tablet / head unit
 agenticros mode <real|sim>      # swap the active config profile (namespace, transport)
 agenticros robots               # list / add / remove robots in the fleet (kind, sensors, capabilities)

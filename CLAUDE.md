@@ -15,6 +15,8 @@ AgenticROS is a ROS2 integration for AI agent platforms. It provides a **core** 
 Available MCP tools:
 - `ros2_list_topics` — list all topics with types
 - `ros2_publish` — publish a message to a topic
+- `ros2_estop` — emergency stop (zero Twist on cmd_vel; also stops in-process follow-me)
+- `ros2_save_place` / `ros2_list_places` / `ros2_navigate_to_place` — named map places (`~/.agenticros/places.json`)
 - `ros2_subscribe_once` — read one message from a topic
 - `ros2_service_call` — call a ROS2 service
 - `ros2_action_goal` — send an action goal

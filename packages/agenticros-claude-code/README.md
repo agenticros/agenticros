@@ -225,6 +225,9 @@ The server exposes the same ROS2 tools as the OpenClaw plugin:
 | `mission_cancel` | Cancel an in-flight mission by `mission_id` at the next step boundary (idempotent, safe on unknown ids) |
 | **Direct ROS** | |
 | `ros2_estop` | Emergency stop — zero Twist on cmd_vel (also stops in-process follow-me). Does not cancel a mission |
+| `ros2_save_place` | Save a named map pose (`name` plus optional `x,y,yaw`; otherwise `/amcl_pose`) |
+| `ros2_list_places` | List stored places (`~/.agenticros/places.json`) |
+| `ros2_navigate_to_place` | Look up a place and dispatch Nav2 via the `navigate-to` skill |
 | `ros2_publish` | Publish to a topic (e.g. cmd_vel) — safety-clamped |
 | `ros2_subscribe_once` | Get next message from a topic |
 | `ros2_service_call` | Call a ROS2 service |

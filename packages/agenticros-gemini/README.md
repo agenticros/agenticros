@@ -1,6 +1,6 @@
 # AgenticROS Gemini adapter
 
-CLI that uses **Google Gemini** to chat with your ROS2 robot. Same tool set as the Claude Code adapter (list topics, publish, subscribe, services, actions, params, camera snapshot, depth distance). No MCP — Gemini function calling is used directly.
+CLI that uses **Google Gemini** to chat with your ROS2 robot. Same tool set as the Claude Code adapter (list topics, publish, estop, subscribe, services, actions, params, camera snapshot, depth, named places). No MCP — Gemini function calling is used directly.
 
 ## Prerequisites
 
@@ -110,6 +110,10 @@ The same ROS2 tools as the OpenClaw and Claude Code adapters:
 | Tool | Description |
 |------|-------------|
 | `ros2_list_topics` | List topics and types |
+| `ros2_estop` | Emergency stop — zero Twist on cmd_vel (also stops in-process follow-me) |
+| `ros2_save_place` | Save a named map pose (`name` plus optional `x,y,yaw`; otherwise `/amcl_pose`) |
+| `ros2_list_places` | List stored places (`~/.agenticros/places.json`) |
+| `ros2_navigate_to_place` | Look up a place and dispatch Nav2 via the `navigate-to` skill |
 | `ros2_publish` | Publish to a topic (e.g. cmd_vel) |
 | `ros2_subscribe_once` | Get next message from a topic |
 | `ros2_service_call` | Call a ROS2 service |
@@ -122,7 +126,7 @@ The same ROS2 tools as the OpenClaw and Claude Code adapters:
 | `memory_forget` *(when enabled)* | Delete by id, query, or whole namespace |
 | `memory_status` *(when enabled)* | Health check + record count + embedder info |
 
-Safety limits from config (max linear/angular velocity) are applied before `ros2_publish`.
+Safety limits from config (max linear/angular velocity) are applied before `ros2_publish`. `ros2_estop` publishes a zero Twist and does not cancel a mission.
 
 ### Optional: shared memory across agents
 

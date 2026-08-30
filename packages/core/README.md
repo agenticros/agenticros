@@ -7,7 +7,7 @@ It contains:
 - The `RosTransport` interface every transport implementation satisfies.
 - Four implementations: **Zenoh** (binary CDR), **Rosbridge** (WebSocket JSON), **WebRTC** (Mode C, cloud/remote), and **Local DDS** via `rclnodejs`.
 - A Zod config schema (`AgenticROSConfig`) shared across all adapters.
-- Topic-namespace utilities, capability registry, and a small long-term memory layer (`mem0` or local file backend).
+- Topic-namespace utilities, capability registry, a small long-term memory layer (`mem0` or local file backend), named places (`~/.agenticros/places.json`), and `emergencyStopRobot`.
 
 You don't normally use it directly — you use one of the adapters that depends on it:
 

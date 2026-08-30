@@ -20,6 +20,8 @@ agenticros start motors            # /cmd_vel → GPIO / Firmata
 agenticros start realsense         # or: agenticros start camera
 agenticros                         # interactive menu
 agenticros up real                 # RealSense + motors + MCP demo stack
+agenticros up real --map           # also RTAB-Map + Nav2 (add --wheel-odom if /odom exists)
+agenticros skills install --bundle mapping
 agenticros doctor
 agenticros down
 ```
@@ -213,6 +215,7 @@ agenticros start camera -d /dev/video4
 | `agenticros start\|stop realsense` | RealSense ROS node. |
 | `agenticros start\|stop camera` | 2D V4L → `/camera2d`. |
 | `agenticros up real` | RealSense + motors + MCP demo stack. |
+| `agenticros up real --map` | Real robot + RTAB-Map + Nav2. Add `--wheel-odom` to use `/odom` instead of visual odom. |
 | `agenticros up sim-amr` | Simulated 2-wheel AMR. |
 | `agenticros up sim-amr --nav2` | AMR + Nav2. |
 | `agenticros up sim-arm` | Simulated 6-DOF arm. |
@@ -227,6 +230,7 @@ agenticros start camera -d /dev/video4
 | `agenticros mcp setup` | Codex + Hermes + Claude MCP. |
 | `agenticros web` | Open cloud config/teleop dashboard URL. |
 | `agenticros skills …` | Skill marketplace / local skills. |
+| `agenticros skills install --bundle mapping` | Install `@agenticros/start-slam`, `explore`, and `navigate-to`. |
 | `agenticros --help` | Full help. |
 
 ## Local VLM (Ollama)

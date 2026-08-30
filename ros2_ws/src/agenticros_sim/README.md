@@ -27,7 +27,10 @@ agenticros_sim/
 ├── launch/
 │   ├── sim_amr.launch.py               Gazebo AMR + bridge
 │   ├── sim_amr_nav2.launch.py          Gazebo AMR + Nav2 (map + AMCL)
-│   └── sim_arm.launch.py               Gazebo arm
+│   ├── sim_arm.launch.py               Gazebo arm
+│   └── sim_arm_moveit.launch.py        Gazebo arm + MoveIt2 + trajectory bridge
+├── scripts/
+│   └── arm_trajectory_bridge.py        FollowJointTrajectory → /arm/*/cmd_pos
 ├── env-hooks/                          Add the package's share/ to GZ_SIM_RESOURCE_PATH
 └── CMakeLists.txt + package.xml        Standard ament_cmake skeleton
 ```
@@ -42,9 +45,10 @@ agenticros up sim-amr --nav2     # AMR + Nav2 (map + AMCL + navigation)
 agenticros up sim-amr --nav2 --headless
 agenticros up sim-arm            # Arm: GUI
 agenticros up sim-arm --rviz     # Arm: GUI + RViz (RobotModel + TF)
+agenticros up sim-arm --moveit --headless
 
 # Or run the launch files directly:
-cd ros2_ws && colcon build --symlink-install --packages-select agenticros_sim
+cd ros2_ws && colcon build --symlink-install --packages-select agenticros_sim agenticros_arm_moveit_config
 source install/setup.bash
 ros2 launch agenticros_sim sim_amr.launch.py
 ros2 launch agenticros_sim sim_amr_nav2.launch.py gui:=false
@@ -52,10 +56,17 @@ ros2 launch agenticros_sim sim_amr.launch.py use_rviz:=true
 ros2 launch agenticros_sim sim_amr.launch.py gui:=false      # headless
 ros2 launch agenticros_sim sim_arm.launch.py
 ros2 launch agenticros_sim sim_arm.launch.py use_rviz:=true
+ros2 launch agenticros_sim sim_arm_moveit.launch.py gui:=false
 ```
 
 Nav2 requires `ros-$ROS_DISTRO-navigation2` **and** `ros-$ROS_DISTRO-nav2-bringup` (`nav2-bringup` alone is not enough on Jazzy). After `--nav2`, install
 `@agenticros/navigate-to` and call `run_mission` with `navigate_to`.
+
+MoveIt on sim-arm requires `ros-$ROS_DISTRO-moveit`. `--moveit` launches
+`sim_arm.launch.py` plus `agenticros_arm_moveit_config` `move_group` and
+`arm_trajectory_bridge.py` (`FollowJointTrajectory` → `/arm/*/cmd_pos`).
+Named SRDF poses: `home`, `ready`. Smoke: `node scripts/test-moveit-sim.mjs`.
+See [docs/simulation.md](../../../../docs/simulation.md).
 
 This is a **static map + AMCL** stack. For live RGB-D mapping (RTAB-Map, no AMCL) and the `explore` / `wander` skills, see [docs/mapping.md](../../../../docs/mapping.md).
 
