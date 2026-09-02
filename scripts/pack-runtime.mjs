@@ -41,6 +41,8 @@ import { cpSync, existsSync, mkdirSync, rmSync, statSync, writeFileSync } from "
 import { dirname, join, relative, resolve, sep as pathSep } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { validateRosPackageXmlsOrExit } from "./validate-ros-package-xml.mjs";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const REPO_ROOT = resolve(__dirname, "..");
@@ -270,4 +272,8 @@ copyDocs();
 copyPatches();
 writeBundleManifest();
 reportSize();
+validateRosPackageXmlsOrExit([
+  join(REPO_ROOT, "ros2_ws", "src"),
+  join(RUNTIME_DIR, "ros2_ws", "src"),
+]);
 logStep("Done.");

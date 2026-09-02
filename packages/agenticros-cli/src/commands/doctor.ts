@@ -15,7 +15,7 @@ import { join } from "node:path";
 import { execa } from "execa";
 
 import { getCliPaths } from "../util/paths.js";
-import { detectRosDistro, hasGazeboHarmonic } from "../util/env.js";
+import { detectRosDistro, hasBin, hasGazeboHarmonic } from "../util/env.js";
 import { colors, header, ok, warn, err, info } from "../util/logger.js";
 import { activeConfigPath, profilesDir, readActiveMode } from "../util/profiles.js";
 import {
@@ -141,6 +141,38 @@ export async function runDoctorChecks(opts: DoctorOptions = {}): Promise<DoctorR
       severity: "red",
       hint: "Install Node 20+ from https://nodejs.org",
     });
+  }
+
+  if (hasBin("pnpm")) {
+    checks.push({
+      id: "pnpm",
+      label: "pnpm available",
+      severity: "green",
+    });
+  } else {
+    checks.push({
+      id: "pnpm",
+      label: "pnpm not installed",
+      severity: "red",
+      hint: "Install with: npm install -g pnpm  (or: corepack enable && corepack prepare pnpm@latest --activate)",
+    });
+  }
+
+  if (ros.setupBash) {
+    if (hasBin("colcon")) {
+      checks.push({
+        id: "colcon",
+        label: "colcon available",
+        severity: "green",
+      });
+    } else {
+      checks.push({
+        id: "colcon",
+        label: "colcon not installed",
+        severity: "red",
+        hint: "ROS 2 is present but the build tool is missing. Install with: sudo apt install -y python3-colcon-common-extensions",
+      });
+    }
   }
 
   // Workspace built (workspace mode only).

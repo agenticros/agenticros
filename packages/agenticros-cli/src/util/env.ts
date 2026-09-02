@@ -3,7 +3,7 @@
  */
 
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 
 /** Common ROS 2 install locations under /opt/ros/<distro>/setup.bash. */
 const KNOWN_DISTROS = ["humble", "iron", "jazzy", "rolling"] as const;
@@ -53,6 +53,22 @@ export function hasGazeboHarmonic(): boolean {
 export const isLinux = process.platform === "linux";
 export const isWindows = process.platform === "win32";
 export const isMac = process.platform === "darwin";
+
+/**
+ * True when `name` resolves on PATH. Does not execute the binary.
+ * On Windows also matches `.cmd` / `.exe` / `.bat` shims (e.g. `pnpm.cmd`).
+ */
+export function hasBin(name: string): boolean {
+  const dirs = (process.env["PATH"] ?? "").split(delimiter);
+  const names = isWindows ? [name, `${name}.cmd`, `${name}.exe`, `${name}.bat`] : [name];
+  for (const dir of dirs) {
+    if (!dir) continue;
+    for (const n of names) {
+      if (existsSync(join(dir, n))) return true;
+    }
+  }
+  return false;
+}
 
 /** Whether we appear to be running on a Jetson (Tegra kernel). */
 export function isJetson(): boolean {

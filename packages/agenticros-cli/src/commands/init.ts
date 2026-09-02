@@ -36,7 +36,7 @@ import { runDoctorChecks } from "./doctor.js";
 import { loginCommand } from "./cloud-auth.js";
 import { registerCommand } from "./register.js";
 import { claudeOnPath, codexOnPath, hermesOnPath, mcpSetupCommand } from "../util/mcp-setup.js";
-import { detectRosDistro, isWindows } from "../util/env.js";
+import { detectRosDistro, hasBin, isWindows } from "../util/env.js";
 import { getCliPaths, isAgenticrosMonorepo, resetPathsCache } from "../util/paths.js";
 import {
   getApiToken,
@@ -124,6 +124,16 @@ export async function initCommand(opts: InitOptions): Promise<void> {
   // install`. Otherwise users got stuck in "node_modules exists but tsc isn't
   // in .bin" purgatory.
   if (opts.force || !isWorkspaceInstalled(repoRoot)) {
+    if (!hasBin("pnpm")) {
+      err(
+        "pnpm is not installed (or not on PATH). `agenticros init` uses pnpm " +
+          "to install the JS workspace — Node/npm alone is not enough. Install it and re-run:\n" +
+          "    npm install -g pnpm\n" +
+          "or, with Node 20+ Corepack:\n" +
+          "    corepack enable && corepack prepare pnpm@latest --activate",
+      );
+      process.exit(1);
+    }
     await runStep("Installing JS workspace dependencies (pnpm install)", async () => {
       await runPnpmInstall(repoRoot);
     });
@@ -171,6 +181,13 @@ export async function initCommand(opts: InitOptions): Promise<void> {
       "Skipping ROS 2 colcon build: no ROS 2 install under /opt/ros/. " +
         "Install Humble or Jazzy on this machine if you need local sim / " +
         "colcon, or continue — MCP/OpenClaw can still drive a remote robot.",
+    );
+  } else if (!hasBin("colcon")) {
+    warn(
+      `Skipping ROS 2 colcon build: ROS 2 ${ros.distro} is installed, but ` +
+        "colcon is not on PATH. The build tool is a separate package. Install " +
+        "it and re-run `agenticros init`:\n" +
+        "    sudo apt install -y python3-colcon-common-extensions",
     );
   } else if (opts.force || !colconBuiltForCurrentCli(ros2WsRoot)) {
     await runStep("Building ROS 2 workspace (colcon)", async () => {

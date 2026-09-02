@@ -34,7 +34,7 @@
   <exec_depend>nav2_waypoint_follower</exec_depend>
   <exec_depend>nav2_velocity_smoother</exec_depend>
   <exec_depend>nav2_lifecycle_manager</exec_depend>
-  <!-- Optional MoveIt2 stack (sim_arm_moveit.launch.py / agenticros up sim-arm --moveit) -->
+  <!-- Optional MoveIt2 stack for sim_arm_moveit.launch.py -->
   <exec_depend>rclpy</exec_depend>
   <exec_depend>control_msgs</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>

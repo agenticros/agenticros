@@ -46,6 +46,8 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { validateRosPackageXmls } from "./validate-ros-package-xml.mjs";
+
 // ---------- config ----------
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -176,6 +178,23 @@ try {
     process.exit(1);
   }
   ok(`All ${REQUIRED_RUNTIME_FILES.length} critical runtime files present.`);
+
+  // 3b. every shipped package.xml must be well-formed XML (no `--` in comments).
+  // agenticros@0.7.19 shipped `<!-- ... --moveit -->` and colcon/Expat
+  // rejected it after `npx agenticros init` refreshed the install from the bundle.
+  step("Validating shipped ros2_ws package.xml manifests...");
+  const shippedRosSrc = join(runtimeInTar, "ros2_ws", "src");
+  const xmlReport = validateRosPackageXmls(shippedRosSrc);
+  if (xmlReport.files.length === 0) {
+    fail(`No package.xml files under ${shippedRosSrc}`);
+    process.exit(1);
+  }
+  if (xmlReport.failures.length > 0) {
+    fail("Shipped package.xml is not well-formed:");
+    for (const f of xmlReport.failures) process.stderr.write(`    ${f}\n`);
+    process.exit(1);
+  }
+  ok(`${xmlReport.files.length} shipped package.xml manifest(s) are well-formed.`);
 
   // 4. simulate init: cp -a runtime/. installDir/
   step("Copying runtime/ into a fresh install dir (simulating `agenticros init`)...");

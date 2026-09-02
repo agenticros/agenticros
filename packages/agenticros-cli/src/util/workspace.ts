@@ -13,6 +13,7 @@ import { join } from "node:path";
 
 import { execa } from "execa";
 
+import { hasBin } from "./env.js";
 import { info, ok, warn, withSpinner } from "./logger.js";
 
 /**
@@ -149,6 +150,12 @@ async function execPnpmInstall(repoRoot: string, extraArgs: string[] = []): Prom
  * rosbridge transports still work.
  */
 export async function runPnpmInstall(repoRoot: string): Promise<void> {
+  if (!hasBin("pnpm")) {
+    throw new Error(
+      "pnpm is not installed (or not on PATH). Install it with: npm install -g pnpm " +
+        "(or: corepack enable && corepack prepare pnpm@latest --activate)",
+    );
+  }
   writeInstallNpmrc(repoRoot);
   try {
     await execPnpmInstall(repoRoot);

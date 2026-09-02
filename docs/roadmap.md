@@ -47,7 +47,7 @@ premium skills — never on the real-time control path.
 | Safety (per-robot velocity, optional `workspaceLimits`, fail-safe stop, `doctor --live`) | Shipped (`@agenticros/core` 0.8.5); MCP/Gemini `ros2_estop` shipped; `blocks_base` mutex still open |
 | AgenticROS Cloud (ARC) — P2P teleop, register, presence | Live at [cloud.agenticros.com](https://cloud.agenticros.com) |
 | ARC organizations + teams (invite by GitHub, shared fleet) | Shipped on Teams / Enterprise |
-| Published packages | `@agenticros/core` **0.8.9**, CLI `agenticros` **0.7.19** |
+| Published packages | `@agenticros/core` **0.8.9**, CLI `agenticros` **0.7.20** |
 | Parallel mission steps + true hot-reload + paid licenses | Planned |
 | Spatial memory | Planned |
 | ACP / A2A multi-agent mesh | Planned |
@@ -217,7 +217,7 @@ OpenClaw / Grok.”
 
 | Window | Focus |
 |--------|--------|
-| **Now** | ARC orgs + teams live on Teams / Enterprise; OSS safety/profile ABI on core 0.8.9 / CLI 0.7.19 |
+| **Now** | ARC orgs + teams live on Teams / Enterprise; OSS safety/profile ABI on core 0.8.9 / CLI 0.7.20 |
 | **0–3 months** | Soft-launch paid skill licenses + Stripe Connect once quality catalog exists; remote mission dispatch on the org fleet |
 | **3–6 months** | Fleet **mission console** (live timeline / cancel / replay) on top of shipped orgs |
 | **6–12 months** | Hosted / spatial memory as enterprise wedge |
