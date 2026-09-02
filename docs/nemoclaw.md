@@ -12,6 +12,8 @@
 
 > **Vanilla OpenClaw or Hermes on your laptop?** See **[local-vlm.md](local-vlm.md)** for Ollama setup without NemoClaw. This guide adds sandbox policy, Jetson tuning, and `nemoclaw inference set` on top of that.
 
+> **Jetson Agent Skills** (`SKILL.md` for device diagnostics, memory, LLM serve) are separate from AgenticROS robot skills. Install them with NVIDIA’s catalog or `./install.sh` — see [Jetson Agent Skills](https://www.jetson-ai-lab.com/tutorials/jetson-agent-skills/) and [official maker catalogs](https://www.skills.sh/official). AgenticROS skills still install with `npx agenticros skills install`.
+
 ## Part 1 — Installing NemoClaw
 
 These are the exact steps that succeeded on this Jetson (`nemoclaw v0.0.48`, NemoClaw sandbox build `1779389075`, OpenClaw `2026.4.24`, OpenShell `0.0.39`, Tegra L4T kernel 5.15).

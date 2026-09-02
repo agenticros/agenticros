@@ -20,7 +20,7 @@ AgenticROS connects AI agent platforms to ROS2 robots through a shared core, tra
 - [Teleop web app](teleop.md) - opening the teleop page, config, requirements, and HTTP API reference.
 - [Memory](memory.md) - cross-adapter long-term memory for **this robot** (`local` / `mem0`).
 - [Fleet hive](hive.md) - optional paid layer so robots in an org share what they see and remember. Off by default; not a memory backend.
-- [Skills](skills.md) - skill contracts, marketplace install flow, manual install, and publishing guidance.
+- [Skills](skills.md) - skill contracts, marketplace install flow, manual install, publishing, and links to third-party Agent Skills catalogs.
 - [Mapping a room](mapping.md) - RTAB-Map + Nav2 (no AMCL) + explore/wander.
 
 ## Transports and deployments

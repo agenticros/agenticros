@@ -229,7 +229,7 @@ agenticros start camera -d /dev/video4
 | `agenticros config` / `mode` | Edit `~/.agenticros/config.json`. |
 | `agenticros mcp setup` | Codex + Hermes + Claude MCP. |
 | `agenticros web` | Open cloud config/teleop dashboard URL. |
-| `agenticros skills …` | Skill marketplace / local skills. |
+| `agenticros skills …` | Skill marketplace / local skills. Robot skills only — see [docs/skills.md](https://github.com/agenticros/agenticros/blob/main/docs/skills.md). |
 | `agenticros skills install --bundle mapping` | Install `@agenticros/start-slam`, `explore`, and `navigate-to`. |
 | `agenticros --help` | Full help. |
 

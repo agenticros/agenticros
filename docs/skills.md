@@ -4,6 +4,8 @@ Skills are optional packages that add tools and behaviors to the AgenticROS plug
 
 A central marketplace at **[skills.agenticros.com](https://skills.agenticros.com)** lists every published skill and supplies the install descriptors the CLI uses. Each skill has a **namespaced ref** `owner/skill-id` (your GitHub login + `agenticros.id`), e.g. `chrismatthieu/followme`, and preferably an npm package under **`@agenticros/*`**. Legacy flat slugs still resolve for older listings. The marketplace stores **metadata** (including `npmPackage` when published); source also lives on GitHub.
 
+This catalog is **AgenticROS robot skills** (npm packages with an `agenticros` block). Third-party [Agent Skills](https://agentskills.io/home) (`SKILL.md`) are not listed or installed through this marketplace. Official maker catalogs live on **[skills.sh/official](https://www.skills.sh/official)**; Jetson Device and BSP workflows are documented at **[Jetson Agent Skills](https://www.jetson-ai-lab.com/tutorials/jetson-agent-skills/)**.
+
 ## Quick install — from the marketplace
 
 ```bash
@@ -315,3 +317,13 @@ Or paste the OpenClaw config by hand:
   }
 }
 ```
+
+## Related: Agent Skills
+
+AgenticROS skills are robot plugins (`registerSkill`, capabilities, missions). [Agent Skills](https://agentskills.io/home) are a separate `SKILL.md` format used by coding and on-device agents. We do not index those catalogs here.
+
+- **[Official Agent Skills catalogs](https://www.skills.sh/official)** — maker catalogs on skills.sh (Anthropic, NVIDIA, OpenAI, and others)
+- **[Jetson Agent Skills](https://www.jetson-ai-lab.com/tutorials/jetson-agent-skills/)** — Device and BSP workflows for a live Jetson
+- **[Agent Skills spec](https://agentskills.io/home)** — the SKILL.md format
+
+Install those catalogs with their own tools (`npx skills add …` or the Jetson `install.sh`). Keep using `npx agenticros skills install owner/skill-id` for robot skills.

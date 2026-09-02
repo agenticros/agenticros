@@ -495,6 +495,8 @@ Add `{ "memory": { "enabled": true, "backend": "mem0" } }` to `~/.agenticros/con
 
 AgenticROS **skills** are optional packages that add tools and behaviors (e.g. `follow_person`, `find_object`, `navigate_to`). They load at OpenClaw gateway start from **`skillPackages`**, **`skillPaths`**, and **`skillRefs`** (marketplace / npm pins cached under `~/.agenticros/skills-cache/`). Browse and install from **[skills.agenticros.com](https://skills.agenticros.com)**, or scaffold and publish your own with the CLI.
 
+That marketplace is robot skills only. Third-party [Agent Skills](https://agentskills.io/home) (`SKILL.md`) live upstream: **[skills.sh/official](https://www.skills.sh/official)** (official maker catalogs) and **[Jetson Agent Skills](https://www.jetson-ai-lab.com/tutorials/jetson-agent-skills/)** for Jetson Device and BSP workflows.
+
 ### Managing skills with the CLI
 
 ```bash

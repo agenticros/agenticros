@@ -93,7 +93,7 @@ Publish to the marketplace with `npx agenticros publish`, or submit via **[skill
 npx agenticros skills install your-handle/myskill
 ```
 
-See the [skills contract & guide](https://github.com/agenticros/agenticros/blob/main/docs/skills.md) for the full reference.
+See the [skills contract & guide](https://github.com/agenticros/agenticros/blob/main/docs/skills.md) for the full reference. The marketplace lists AgenticROS robot skills only; third-party Agent Skills catalogs are linked from that guide.
 
 ## License
 

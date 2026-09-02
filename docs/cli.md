@@ -312,6 +312,8 @@ Optional fleet hive (off by default). See [hive.md](hive.md).
 | `agenticros skills install --bundle mapping` | Install `@agenticros/start-slam`, `explore`, and `navigate-to`. |
 | `agenticros skills search <q>` | Search the marketplace. |
 
+Robot skills only. Third-party Agent Skills (`SKILL.md`) are not installed through these commands — see [Official catalogs](https://www.skills.sh/official), [Jetson Agent Skills](https://www.jetson-ai-lab.com/tutorials/jetson-agent-skills/), and the [Agent Skills spec](https://agentskills.io/home). Details in [skills.md](skills.md).
+
 ## Troubleshooting
 
 - **`doctor` shows red checks** → run `agenticros init` to walk through every

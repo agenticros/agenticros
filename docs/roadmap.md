@@ -42,7 +42,7 @@ premium skills — never on the real-time control path.
 | `skillRefs` + `~/.agenticros/skills-cache/` (git + npm) | Shipped |
 | Discoverable marketplace capabilities in `ros2_list_capabilities` | Shipped |
 | Marketplace npm `@agenticros/*` + CLI auto-restart | Shipped (true mid-session hot-reload still blocked on OpenClaw) |
-| Skills marketplace (metadata + git/npm install) | Live at [skills.agenticros.com](https://skills.agenticros.com) |
+| Skills marketplace (metadata + git/npm install) | Live at [skills.agenticros.com](https://skills.agenticros.com) (robot skills). Third-party Agent Skills: [skills.sh/official](https://www.skills.sh/official) |
 | Cross-adapter memory (local / mem0) | Shipped, off by default |
 | Safety (per-robot velocity, optional `workspaceLimits`, fail-safe stop, `doctor --live`) | Shipped (`@agenticros/core` 0.8.5); MCP/Gemini `ros2_estop` shipped; `blocks_base` mutex still open |
 | AgenticROS Cloud (ARC) — P2P teleop, register, presence | Live at [cloud.agenticros.com](https://cloud.agenticros.com) |
