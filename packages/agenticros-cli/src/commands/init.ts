@@ -51,7 +51,7 @@ import {
 } from "../util/openclaw-config.js";
 import { ensureProfilesExist, switchMode } from "../util/profiles.js";
 import { writeState } from "../util/state.js";
-import { isWorkspaceBuilt, isWorkspaceInstalled, runPnpmInstall } from "../util/workspace.js";
+import { isWorkspaceBuilt, isWorkspaceInstalled, runPnpmInstall, writeWorkspaceNodeAbi } from "../util/workspace.js";
 
 export interface InitOptions {
   force?: boolean;
@@ -139,6 +139,7 @@ export async function initCommand(opts: InitOptions): Promise<void> {
     });
   } else {
     ok("JS workspace deps already installed (skip).");
+    writeWorkspaceNodeAbi(repoRoot);
   }
 
   // Step: build TS workspace. Check core/dist (not just MCP dist) - the MCP

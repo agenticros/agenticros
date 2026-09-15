@@ -8,17 +8,25 @@
  *
  * Defaults: Raspberry Pi (portal compute) → motors-rpi5.js; else firmata.
  * Jetson native GPIO is opt-in only via -b jetson (never auto-selected).
+ *
+ * The controller is only reported as started if it is still alive after a
+ * short settle window. Native-addon crashes (common after a Node upgrade)
+ * are written to /tmp/agenticros-motors.log and fail this script.
  */
 
-import { spawn } from "node:child_process";
+import { execFile as execFileCb } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import minimist from "minimist";
 
 import { ensureRobotId, getApiToken, fetchRobotDetails } from "./robot-config.js";
+import { spawnDetachedVerified, tailLog } from "./lib/spawn-detached.js";
 
+const execFile = promisify(execFileCb);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const argv = minimist(process.argv.slice(2));
+const MOTORS_LOG = "/tmp/agenticros-motors.log";
 
 await ensureRobotId();
 void getApiToken();
@@ -53,10 +61,37 @@ if (argv.tpr != null && argv.tpr !== true) {
   options.push("--tpr", String(argv.tpr));
 }
 
-const child = spawn("node", options, {
-  detached: true,
-  stdio: "ignore",
-});
-child.unref();
-console.log("Robot motors started.");
-process.exit(0);
+async function pkill(pattern) {
+  try {
+    await execFile("pkill", ["-f", pattern]);
+  } catch {
+    // pkill exits 1 when nothing matched
+  }
+}
+
+await pkill("motors-rpi5.js");
+await pkill("motors-firmata.js");
+await pkill("motors-jetson.js");
+await new Promise((r) => setTimeout(r, 200));
+
+const name = path.basename(script);
+try {
+  const { pid } = await spawnDetachedVerified({
+    command: process.execPath,
+    args: options,
+    cwd: __dirname,
+    logFile: MOTORS_LOG,
+  });
+  console.log(`Motor controller running (${name} pid ${pid}).`);
+  console.log(`Logs: ${MOTORS_LOG}`);
+} catch (e) {
+  const log = e && typeof e === "object" && "log" in e ? String(e.log) : tailLog(MOTORS_LOG);
+  console.error(`Motor controller failed to stay running (${name}).`);
+  console.error(`Last log output:\n${log}`);
+  if (log.includes("NODE_MODULE_VERSION")) {
+    console.error(
+      "Native module ABI mismatch after a Node.js upgrade. Run: agenticros init --force",
+    );
+  }
+  process.exit(1);
+}

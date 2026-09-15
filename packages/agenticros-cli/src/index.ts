@@ -469,7 +469,7 @@ for (const service of ["motors", "realsense", "camera"] as const) {
 program
   .command("logs [target]")
   .description(
-    "Tail logs. target = camera | mcp | gateway | sim | eyes (default: print available logs).",
+    "Tail logs. target = camera | mcp | gateway | sim | eyes | motors | comms (default: print available logs).",
   )
   .option("-f, --follow", "Tail the log (tail -F). Default prints last N lines and exits.", false)
   .option("-n, --lines <n>", "Number of lines from the end to start at", "200")

@@ -41,6 +41,11 @@ import {
   hermesOnPath,
 } from "../util/mcp-setup.js";
 import { checkLiveBindings } from "../util/live-bindings.js";
+import {
+  currentNodeModuleAbi,
+  nativeAddonsNeedRebuild,
+  readWorkspaceNodeAbi,
+} from "../util/workspace.js";
 
 export type Severity = "green" | "yellow" | "red";
 
@@ -188,12 +193,23 @@ export async function runDoctorChecks(opts: DoctorOptions = {}): Promise<DoctorR
     });
 
     const nm = join(paths.repoRoot!, "node_modules");
-    checks.push({
-      id: "js-deps",
-      label: "JS workspace deps installed",
-      severity: existsSync(nm) ? "green" : "red",
-      hint: existsSync(nm) ? undefined : "Run: pnpm install",
-    });
+    if (existsSync(nm) && nativeAddonsNeedRebuild(paths.repoRoot!)) {
+      const fromAbi = readWorkspaceNodeAbi(paths.repoRoot!) ?? "unknown";
+      checks.push({
+        id: "js-deps",
+        label: "JS native modules need rebuild (Node ABI changed)",
+        severity: "red",
+        detail: `modules ABI ${fromAbi} → ${currentNodeModuleAbi()} (Node ${process.versions.node})`,
+        hint: "Node was upgraded without reinstalling JS deps. Run: agenticros init --force",
+      });
+    } else {
+      checks.push({
+        id: "js-deps",
+        label: "JS workspace deps installed",
+        severity: existsSync(nm) ? "green" : "red",
+        hint: existsSync(nm) ? undefined : "Run: pnpm install  (or: agenticros init --force)",
+      });
+    }
   }
 
   // MCP server built.

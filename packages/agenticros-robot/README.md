@@ -21,7 +21,7 @@ Robot ID and API token live in `configstore('agenticros')`. Legacy values from
 | File | Purpose |
 |------|---------|
 | `comms.js` | Cloud P2P + ROS bridge (`agenticros connect`) |
-| `start-motors.js` | Pick backend and spawn a motor controller |
+| `start-motors.js` | Pick backend and spawn a motor controller (fails if the child dies; logs: `/tmp/agenticros-motors.log`) |
 | `motors-rpi5.js` | Raspberry Pi GPIO motors |
 | `motors-firmata.js` | Firmata / Arduino motors (default for non-Pi, including Jetson+Arduino) |
 | `motors-jetson.js` | Experimental Jetson native GPIO via JETGPIO — **opt-in only** (`-b jetson`) |
@@ -41,6 +41,10 @@ Pin maps for L298N (Jetson BOARD, Pi BCM, Firmata) plus encoder `/odom`: **[docs
 
 `motors-jetson.js` is never auto-selected. It requires system JETGPIO
 (`libjetgpio.so`) and optional npm `koffi`, and often needs root / `/dev/mem`.
+
+Firmata uses `firmata-io` plus serialport v13 (N-API) rather than the old
+`firmata` meta-package (serialport v8 NAN bindings). Those v8 bindings are
+compiled for one Node ABI and crash after a Node upgrade (v22 → v26).
 
 ## Odometry
 

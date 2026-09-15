@@ -309,6 +309,7 @@ Try: *“drive forward slowly”*, *“what do you see?”*, `/estop`.
 | Symptom                               | Check                                                                                                                          |
 | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | `start motors` does nothing on Jetson | You must pass `-b jetson`. Default for non-Pi compute is Firmata (expects `/dev/ttyACM0`). JETGPIO installed? May need `sudo`. |
+| `start motors` says started but `status` is idle | The controller crashed on boot. Check `agenticros logs motors`. After a Node.js upgrade this is usually a native addon ABI mismatch — run `agenticros init --force`. |
 | One wheel dead                        | ENA/ENB jumper (Pi/Jetson) or PWM pin actually on ENA/ENB (Firmata). Common GND.                                               |
 | Both wheels spin the wrong way        | Invert by swapping both motors’ OUT leads, or swap each pair in `-p`.                                                          |
 | Encoders ignored                      | Only `-b firmata -e …`. Encoder VCC must be 5V, not 3.3V.                                                                      |

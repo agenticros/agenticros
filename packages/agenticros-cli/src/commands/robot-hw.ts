@@ -229,6 +229,7 @@ export async function startMotorsCommand(opts: MotorsStartOptions = {}): Promise
     ok("Robot motors started.");
   } catch (e) {
     warn(`start motors failed: ${e instanceof Error ? e.message : String(e)}`);
+    warn("See /tmp/agenticros-motors.log (or: agenticros logs motors)");
     process.exit(1);
   }
 }

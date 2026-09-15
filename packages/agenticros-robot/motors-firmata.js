@@ -6,12 +6,14 @@ import { fetchRobotConfig, getCmdVelTopic, resolveTopic } from './ros-topics.js'
 import { createOdometry, resolveOdomSetup } from './lib/odometry.js';
 import { startFirmataEncoderPoller } from './lib/firmata-encoders.js';
 import { Motor } from './lib/firmata-motor.js';
+import { FirmataSerialPort } from './lib/firmata-serialport.js';
 
 var robotId = getRobotId();
 var apiToken = getApiToken();
 
 const rclnodejs = require('rclnodejs');
-const Firmata = require('firmata');
+const bindFirmata = require('firmata-io');
+const Firmata = bindFirmata(FirmataSerialPort);
 
 const configPromise = fetchRobotConfig(robotId, apiToken);
 
@@ -23,6 +25,10 @@ if (deviceIndex > -1) {
 const device = (deviceValue || '/dev/ttyACM0');
 console.log('Device:', `${device}`);
 const board = new Firmata(device);
+board.on('error', (err) => {
+  console.error('Firmata error:', err);
+  if (!board.isReady) process.exit(1);
+});
 
 const pinsIndex = process.argv.indexOf('--pins');
 let pinsValue;

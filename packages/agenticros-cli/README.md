@@ -47,13 +47,14 @@ server, optionally configures OpenClaw / MCP clients, and writes
 
 ```bash
 agenticros init
-# Refresh scripts/deps after a CLI upgrade:
+# Refresh scripts/deps after a CLI upgrade or a Node.js major upgrade (22 → 26):
 agenticros init --force
 ```
 
 **You need `init` (or a full monorepo `pnpm install`) before `agenticros connect`
 or `start motors`.** The published npm package ships sources; native deps are
-installed into the workspace by init.
+installed into the workspace by init. Skipping init after switching Node
+versions leaves addons compiled for the old ABI — motors then exit immediately.
 
 ### 2. AgenticROS Cloud (`login` + `register`)
 

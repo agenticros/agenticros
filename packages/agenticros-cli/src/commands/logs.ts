@@ -6,6 +6,8 @@
  *   mcp      /tmp/agenticros-mcp.log     (the MCP server)
  *   sim      /tmp/agenticros-sim.log     (the sim launcher)
  *   eyes     /tmp/agenticros-eyes.log    (robot face display)
+ *   motors   /tmp/agenticros-motors.log  (start motors helper)
+ *   comms    /tmp/agenticros-comms.log   (cloud connect)
  *   gateway  journalctl --user-unit openclaw-gateway.service
  *
  * Without a target, prints the list of available log targets.
@@ -18,9 +20,14 @@ import { execa } from "execa";
 import { logPath, type ManagedProcess } from "../util/pidfile.js";
 import { colors, header, info, warn } from "../util/logger.js";
 
-type LogTarget = "camera" | "mcp" | "sim" | "rosbridge" | "eyes" | "gateway";
+type LogTarget = "camera" | "mcp" | "sim" | "rosbridge" | "eyes" | "gateway" | "motors" | "comms";
 
-const TARGETS: LogTarget[] = ["camera", "mcp", "sim", "rosbridge", "eyes", "gateway"];
+const TARGETS: LogTarget[] = ["camera", "mcp", "sim", "rosbridge", "eyes", "motors", "comms", "gateway"];
+
+const EXTRA_LOG_PATH: Partial<Record<LogTarget, string>> = {
+  motors: "/tmp/agenticros-motors.log",
+  comms: "/tmp/agenticros-comms.log",
+};
 
 export interface LogsOptions {
   target?: string;
@@ -55,7 +62,7 @@ export async function logsCommand(opts: LogsOptions): Promise<void> {
     return;
   }
 
-  const path = logPath(target as ManagedProcess);
+  const path = EXTRA_LOG_PATH[target] ?? logPath(target as ManagedProcess);
   if (!existsSync(path)) {
     warn(`No log file at ${path}.`);
     return;
@@ -73,7 +80,7 @@ function printTargetAvailability(t: LogTarget): void {
     process.stdout.write(`  ${colors.cyan("gateway")} ${colors.dim("(journalctl --user-unit openclaw-gateway.service)")}\n`);
     return;
   }
-  const p = logPath(t as ManagedProcess);
+  const p = EXTRA_LOG_PATH[t] ?? logPath(t as ManagedProcess);
   const exists = existsSync(p);
   const icon = exists ? colors.green("●") : colors.dim("○");
   process.stdout.write(`  ${icon}  ${t.padEnd(10)} ${colors.dim(p)}\n`);

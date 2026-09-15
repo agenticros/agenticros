@@ -8,7 +8,8 @@
  * pick the right menu item, we just auto-recover.
  */
 
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { join } from "node:path";
 
 import { execa } from "execa";
@@ -77,9 +78,88 @@ export function isWorkspaceInstalled(repoRoot: string): boolean {
       "package.json",
     );
     if (!existsSync(robotSocket)) return false;
+    // serialport is a direct robot dep (Firmata). Missing after a CLI/source
+    // refresh means init skipped pnpm install.
+    const robotSerial = join(
+      repoRoot,
+      "packages",
+      "agenticros-robot",
+      "node_modules",
+      "serialport",
+      "package.json",
+    );
+    if (!existsSync(robotSerial)) return false;
   }
 
+  // node_modules from a previous Node major still look "installed" but NAN
+  // addons (old serialport, canvas, …) crash with NODE_MODULE_VERSION.
+  if (nativeAddonsNeedRebuild(repoRoot)) return false;
+
   return true;
+}
+
+const ABI_STAMP_REL = join("node_modules", ".agenticros-node-abi");
+
+/** `process.versions.modules` — NODE_MODULE_VERSION (127 on Node 22, 147 on Node 26). */
+export function currentNodeModuleAbi(): string {
+  return String(process.versions.modules);
+}
+
+export function readWorkspaceNodeAbi(repoRoot: string): string | undefined {
+  try {
+    const v = readFileSync(join(repoRoot, ABI_STAMP_REL), "utf8").trim();
+    return v || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function writeWorkspaceNodeAbi(repoRoot: string, abi = currentNodeModuleAbi()): void {
+  const nm = join(repoRoot, "node_modules");
+  if (!existsSync(nm)) return;
+  writeFileSync(join(repoRoot, ABI_STAMP_REL), `${abi}\n`);
+}
+
+/**
+ * True when JS native addons were compiled for a different Node ABI than the
+ * running interpreter. After `nvm use 26` without `agenticros init --force`,
+ * `node_modules` still exists so init would otherwise skip `pnpm install`.
+ */
+export function nativeAddonsNeedRebuild(repoRoot: string): boolean {
+  const stamped = readWorkspaceNodeAbi(repoRoot);
+  if (stamped) return stamped !== currentNodeModuleAbi();
+  return probeNativeAbiMismatch(repoRoot);
+}
+
+function probeNativeAbiMismatch(repoRoot: string): boolean {
+  const requireFrom = [
+    join(repoRoot, "package.json"),
+    join(repoRoot, "packages", "agenticros-robot", "package.json"),
+    join(repoRoot, "packages", "core", "package.json"),
+  ];
+  // NAN addons compiled for one NODE_MODULE_VERSION. N-API addons (sharp,
+  // serialport v10+, koffi) typically survive a Node upgrade.
+  const candidates = ["@serialport/bindings", "canvas", "node-datachannel"];
+  for (const from of requireFrom) {
+    const req = createRequire(from);
+    for (const pkg of candidates) {
+      try {
+        req.resolve(`${pkg}/package.json`);
+      } catch {
+        continue;
+      }
+      try {
+        req(pkg);
+      } catch (e) {
+        const err = e as { code?: string; message?: string };
+        const msg = err.message ?? String(e);
+        if (err.code === "ERR_DLOPEN_FAILED" || msg.includes("NODE_MODULE_VERSION")) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
 }
 
 /**
@@ -167,6 +247,7 @@ export async function runPnpmInstall(repoRoot: string): Promise<void> {
     );
     await execPnpmInstall(repoRoot, ["--no-optional"]);
   }
+  writeWorkspaceNodeAbi(repoRoot);
 }
 
 /** Run `pnpm -r build` in repoRoot. */
@@ -189,10 +270,16 @@ export async function ensureWorkspaceReady(
   const installed = isWorkspaceInstalled(repoRoot);
   const built = isWorkspaceBuilt(repoRoot);
 
-  if (installed && built) return;
+  if (installed && built) {
+    writeWorkspaceNodeAbi(repoRoot);
+    return;
+  }
 
   info(`Preparing workspace for ${what} (one-time setup):`);
   if (!installed) {
+    if (nativeAddonsNeedRebuild(repoRoot)) {
+      warn("  ↳ native modules were built for a different Node.js ABI; reinstalling");
+    }
     warn("  ↳ pnpm install (~1-2 min on Jetson)");
   }
   if (!built) {
