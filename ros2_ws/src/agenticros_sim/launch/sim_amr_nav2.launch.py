@@ -7,7 +7,7 @@ Includes:
   * nav2_bringup/bringup_launch.py    (map_server + amcl + controller/planner/bt)
 
 Launch args (forwarded to sim_amr where applicable):
-  gui, use_rviz, use_sim_time, x, y, z, yaw
+  gui, use_rviz, use_sim_time, x, y, z, yaw, real_camera
   map          — occupancy grid YAML (default: maps/agenticros_indoor.yaml)
   params_file  — Nav2 params (default: config/nav2_params.yaml)
   autostart    — lifecycle autostart (default true)
@@ -15,6 +15,7 @@ Launch args (forwarded to sim_amr where applicable):
 Examples:
   ros2 launch agenticros_sim sim_amr_nav2.launch.py gui:=false
   ros2 launch agenticros_sim sim_amr_nav2.launch.py use_rviz:=true
+  ros2 launch agenticros_sim sim_amr_nav2.launch.py real_camera:=true use_rviz:=true gui:=false
 """
 
 from __future__ import annotations
@@ -46,6 +47,11 @@ def generate_launch_description() -> LaunchDescription:
     y_arg = DeclareLaunchArgument("y", default_value="0.0")
     z_arg = DeclareLaunchArgument("z", default_value="0.1")
     yaw_arg = DeclareLaunchArgument("yaw", default_value="0.0")
+    real_camera_arg = DeclareLaunchArgument(
+        "real_camera",
+        default_value="false",
+        description="Live RealSense overlay on the sim AMR (see sim_amr.launch.py).",
+    )
     map_arg = DeclareLaunchArgument("map", default_value=default_map)
     params_arg = DeclareLaunchArgument("params_file", default_value=default_params)
     autostart_arg = DeclareLaunchArgument("autostart", default_value="true")
@@ -60,6 +66,7 @@ def generate_launch_description() -> LaunchDescription:
             "y": LaunchConfiguration("y"),
             "z": LaunchConfiguration("z"),
             "yaw": LaunchConfiguration("yaw"),
+            "real_camera": LaunchConfiguration("real_camera"),
         }.items(),
     )
 
@@ -92,6 +99,7 @@ def generate_launch_description() -> LaunchDescription:
             y_arg,
             z_arg,
             yaw_arg,
+            real_camera_arg,
             map_arg,
             params_arg,
             autostart_arg,

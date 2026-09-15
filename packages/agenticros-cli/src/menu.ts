@@ -201,18 +201,40 @@ async function runSimFlow(): Promise<boolean> {
   });
   if (target === BACK) return false;
 
-  const rvizChoice = await select<"yes" | "no" | typeof BACK>({
-    message: "Show RViz?",
-    choices: [
-      { name: "No", value: "no" },
-      { name: "Yes", value: "yes" },
-      { name: "Back to main menu", value: BACK },
-    ],
-    default: "no",
-  });
-  if (rvizChoice === BACK) return false;
+  let realCamera = false;
+  if (target === "sim-amr") {
+    const cam = await select<"sim" | "realsense" | typeof BACK>({
+      message: "Camera?",
+      choices: [
+        { name: "Gazebo RGB-D (simulated)", value: "sim" },
+        {
+          name: "Real RealSense (shadow AMR — live camera, sim body in RViz)",
+          value: "realsense",
+        },
+        { name: "Back to main menu", value: BACK },
+      ],
+      default: "sim",
+    });
+    if (cam === BACK) return false;
+    realCamera = cam === "realsense";
+  }
 
-  await upCommand({ target, rviz: rvizChoice === "yes" });
+  let rviz = realCamera;
+  if (!realCamera) {
+    const rvizChoice = await select<"yes" | "no" | typeof BACK>({
+      message: "Show RViz?",
+      choices: [
+        { name: "No", value: "no" },
+        { name: "Yes", value: "yes" },
+        { name: "Back to main menu", value: BACK },
+      ],
+      default: "no",
+    });
+    if (rvizChoice === BACK) return false;
+    rviz = rvizChoice === "yes";
+  }
+
+  await upCommand({ target, rviz, realCamera });
   return true;
 }
 

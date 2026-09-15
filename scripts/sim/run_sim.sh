@@ -7,7 +7,7 @@
 # tees output to /tmp/agenticros-sim.log so `agenticros logs sim` works.
 #
 # Usage:
-#   run_sim.sh --robot amr [--namespace sim_robot] [--rviz] [--no-gui] [--nav2]
+#   run_sim.sh --robot amr [--namespace sim_robot] [--rviz] [--no-gui] [--nav2] [--real-camera]
 #   run_sim.sh --robot arm [--namespace sim_robot] [--rviz] [--no-gui] [--moveit]
 #
 # Flags:
@@ -16,6 +16,7 @@
 #   --rviz                 Bring up RViz alongside Gazebo.
 #   --no-gui               Run gz-sim headless (CI / docker).
 #   --nav2                 AMR only: also launch Nav2 (map + AMCL + navigation).
+#   --real-camera          AMR only: live RealSense eyes on the sim AMR body (implies overlay).
 #   --moveit               Arm only: also launch MoveIt2 move_group + trajectory bridge.
 #   --ros-distro <distro>  Override ROS 2 distro (auto-detect by default).
 #   --colcon-ws <path>     Override the colcon workspace (default: <repo>/ros2_ws).
@@ -39,6 +40,7 @@ USE_RVIZ="false"
 GUI="true"
 USE_NAV2="false"
 USE_MOVEIT="false"
+REAL_CAMERA="false"
 ROS_DISTRO_OVERRIDE=""
 COLCON_WS=""
 
@@ -49,11 +51,12 @@ while [[ $# -gt 0 ]]; do
     --rviz)         USE_RVIZ="true"; shift ;;
     --no-gui)       GUI="false"; shift ;;
     --nav2)         USE_NAV2="true"; shift ;;
+    --real-camera)  REAL_CAMERA="true"; shift ;;
     --moveit)       USE_MOVEIT="true"; shift ;;
     --ros-distro)   ROS_DISTRO_OVERRIDE="$2"; shift 2 ;;
     --colcon-ws)    COLCON_WS="$2"; shift 2 ;;
     -h|--help)
-      sed -n '2,28p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+      sed -n '2,30p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
       exit 0 ;;
     *) echo "Unknown arg: $1" >&2; exit 2 ;;
   esac
@@ -66,6 +69,11 @@ fi
 
 if [[ "$USE_NAV2" == "true" && "$ROBOT" != "amr" ]]; then
   echo "--nav2 is only supported with --robot amr" >&2
+  exit 2
+fi
+
+if [[ "$REAL_CAMERA" == "true" && "$ROBOT" != "amr" ]]; then
+  echo "--real-camera is only supported with --robot amr" >&2
   exit 2
 fi
 
@@ -102,7 +110,7 @@ fi
 
 log "ROS_DISTRO=$ROS_DISTRO"
 log "COLCON_WS=$COLCON_WS"
-log "robot=$ROBOT  namespace=${NAMESPACE:-<none>}  rviz=$USE_RVIZ  gui=$GUI  nav2=$USE_NAV2  moveit=$USE_MOVEIT"
+log "robot=$ROBOT  namespace=${NAMESPACE:-<none>}  rviz=$USE_RVIZ  gui=$GUI  nav2=$USE_NAV2  moveit=$USE_MOVEIT  real_camera=$REAL_CAMERA"
 
 # shellcheck disable=SC1090
 source "/opt/ros/$ROS_DISTRO/setup.bash"
@@ -137,6 +145,11 @@ for bin in gz ros2 rviz2; do
       continue
     fi
     err "Required binary '$bin' not found on PATH."
+    if [[ "$bin" == "gz" ]]; then
+      err "Gazebo Sim is required for sim-amr. On ROS 2 ${ROS_DISTRO}:"
+      err "  sudo apt install ros-${ROS_DISTRO}-ros-gz"
+      err "Then re-run: ./agenticros up sim-amr --real-camera"
+    fi
     exit 1
   fi
 done
@@ -173,6 +186,10 @@ LAUNCH_ARGS=(
   "use_rviz:=$USE_RVIZ"
   "gui:=$GUI"
 )
+
+if [[ "$REAL_CAMERA" == "true" ]]; then
+  LAUNCH_ARGS+=("real_camera:=true")
+fi
 
 # ---------- Pick launch file ----------
 case "$ROBOT" in
@@ -214,6 +231,32 @@ if ! ros2 launch --help >/dev/null 2>&1; then
   err "ros2 launch not available — is ROS sourced properly?"
   exit 1
 fi
+
+# OpenClaw / MCP talk to this sim over rosbridge (ws://localhost:9090).
+# local DDS via rclnodejs fails to rebuild on Node 22+ (Thor/Jetson), and
+# without a working transport the chat agent falls back to bash + turtlesim.
+start_sim_rosbridge() {
+  local pidfile="/tmp/agenticros-rosbridge.pid"
+  local logfile="/tmp/agenticros-rosbridge.log"
+  if [[ -f "$pidfile" ]]; then
+    local old
+    old="$(tr -d '[:space:]' < "$pidfile" 2>/dev/null || true)"
+    if [[ -n "$old" ]] && kill -0 "$old" 2>/dev/null; then
+      log "rosbridge already running (pid $old) — OpenClaw uses ws://localhost:9090"
+      return 0
+    fi
+  fi
+  if ! ros2 pkg prefix rosbridge_server >/dev/null 2>&1; then
+    err "rosbridge_server not found. OpenClaw cannot drive this sim without it."
+    err "  sudo apt install -y ros-${ROS_DISTRO}-rosbridge-suite"
+    return 0
+  fi
+  log "Starting rosbridge on ws://localhost:9090 (logs: $logfile)"
+  nohup ros2 launch rosbridge_server rosbridge_websocket_launch.xml >>"$logfile" 2>&1 &
+  echo $! > "$pidfile"
+  disown || true
+}
+start_sim_rosbridge
 
 log "Logging to $LOG_FILE"
 log "ros2 launch agenticros_sim $LAUNCH_FILE ${LAUNCH_ARGS[*]}"

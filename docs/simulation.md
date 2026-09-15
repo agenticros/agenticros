@@ -14,6 +14,7 @@ agenticros up sim-amr            # gzsim with GUI, namespace=sim_robot
 agenticros up sim-amr --rviz     # add RViz with sensible defaults
 agenticros up sim-amr --nav2     # Gazebo AMR + map + AMCL + Nav2
 agenticros up sim-amr --nav2 --headless
+agenticros up sim-amr --real-camera   # live RealSense + sim AMR body in RViz
 agenticros up sim-arm            # Gazebo 6-DOF arm (per-joint /arm/*/cmd_pos)
 agenticros up sim-arm --moveit --headless
 ```
@@ -35,6 +36,64 @@ namespace), switch it for sim with:
 
 This drops in `ros2_ws/src/agenticros_sim/config/agenticros-sim.config.json`
 and keeps your old config at `~/.agenticros/config.json.real.<ts>.bak`.
+
+## Shadow AMR (real RealSense + simulated body)
+
+Booth / Thor demo: a USB RealSense is the eyes, the Gazebo 2-wheel AMR is the
+body. RViz shows the robot with spinning wheels and the **live** depth cloud
+projected in front of the chassis, as if the camera were mounted on it.
+
+```bash
+agenticros up sim-amr --real-camera
+# Jetson/Thor already defaults Gazebo to headless; RViz is forced on.
+# Stop with: agenticros down
+```
+
+What that starts:
+
+1. RealSense on `/realsense/camera/...` (point cloud + aligned depth, no TF —
+   the AMR URDF already owns `camera_link` / `camera_optical_link`).
+2. Headless Gazebo AMR + ros_gz_bridge **without** the simulated RGB-D topics,
+   so they do not collide with the live camera.
+3. `real_camera_overlay.py` restamps RealSense onto `/camera/camera/...` using
+   **sim time** and `frame_id=camera_optical_link`.
+4. RViz (`amr_view_real_camera.rviz`): RobotModel, lidar, RealSense RGB, RGB-D
+   cloud.
+
+MCP / OpenClaw tools keep their usual names (`ros2_camera_snapshot`,
+`ros2_follow_me_start`, `ros2_publish` `/cmd_vel`). The sim profile points
+`robot.cameraTopic` at `/camera/camera/color/image_raw/compressed` and talks
+to ROS over **rosbridge** (`ws://localhost:9090`) — `run_sim.sh` starts it.
+Do not use `transport.mode=local` on Node 22+ (rclnodejs fails to rebuild;
+OpenClaw then falls back to bash and may launch turtlesim).
+
+### ~90 second script
+
+1. **“What do you see?”** — snapshot from the real D4xx.
+2. **“Follow that person.”** — `ros2_follow_me_start` (`depth` or `local`).
+   Walk left/right; the AMR steers in RViz.
+3. **“Stop. Do a victory spin.”** — Twist on `/cmd_vel`; wheels rotate.
+4. **E-stop.**
+
+The RealSense sits on the desk (it does not physically yaw). **Do not** lead
+with `ros2_find_object` — that tool rotates the *robot* then grabs a frame, so
+the camera would still see the same desk. Follow-me and snapshots are the
+right tools.
+
+Works with `--nav2` as well (`agenticros up sim-amr --real-camera --nav2`):
+Nav2 still plans in the indoor map; the cloud is the real room.
+
+### Direct launch
+
+```bash
+# Camera first (namespace realsense, no TF, pointcloud + align):
+AGENTICROS_REALSENSE_CAMERA_NAMESPACE=realsense \
+AGENTICROS_REALSENSE_PUBLISH_TF=false \
+AGENTICROS_REALSENSE_ALIGN_DEPTH=1 \
+agenticros start realsense --pointcloud --full
+
+ros2 launch agenticros_sim sim_amr.launch.py real_camera:=true use_rviz:=true gui:=false
+```
 
 ## Nav2 on sim-amr
 
@@ -111,11 +170,12 @@ Full pick/place with a gripper is out of scope for this bringup.
 | World     | `agenticros_sim/worlds/agenticros_indoor.sdf` | 12 m × 12 m indoor room, three obstacles, one "person" cylinder for follow-me. |
 | AMR model | `agenticros_sim/models/agenticros_amr/`       | Diff-drive base + RGBD camera (87° HFOV, D435-like) + 2D GPU lidar + IMU. |
 | Bridge    | `agenticros_sim/config/amr_bridge.yaml`       | gz ↔ ROS 2 topic mapping, renaming gz defaults to RealSense paths. |
+| Shadow AMR | `amr_bridge_no_camera.yaml`, `amr_view_real_camera.rviz`, `real_camera_overlay.py` | Live RealSense restamped onto the sim AMR (`--real-camera`). |
 | Map / Nav2 | `maps/`, `config/nav2_params.yaml`, `launch/sim_amr_nav2.launch.py` | Static map + AMCL + Nav2. |
 | Launch    | `agenticros_sim/launch/sim_amr.launch.py`     | One-shot `ros2 launch` entry point. |
 | Arm / MoveIt | `launch/sim_arm.launch.py`, `sim_arm_moveit.launch.py`, `agenticros_arm_moveit_config` | Per-joint jogging or MoveGroup + trajectory bridge. |
 | Worker    | `scripts/sim/run_sim.sh`                       | Bash wrapper the CLI uses (sources ROS, sets PIDs, logs to /tmp). |
-| CLI       | `agenticros up sim-amr [--rviz] [--nav2] [--headless]` / `up sim-arm [--moveit]` | Interactive + scripted entry. |
+| CLI       | `agenticros up sim-amr [--rviz] [--nav2] [--real-camera] [--headless]` / `up sim-arm [--moveit]` | Interactive + scripted entry. |
 
 ## Available tools in sim
 
@@ -127,7 +187,7 @@ against the sim AMR. Specifically:
 | `ros2_list_topics`         | (all)                                       | ✓ |
 | `ros2_publish` /cmd_vel    | `/cmd_vel`                                  | ✓ |
 | `ros2_subscribe_once`      | any bridged topic                           | ✓ |
-| `ros2_camera_snapshot`     | `/camera/camera/color/image_raw`            | ✓ |
+| `ros2_camera_snapshot`     | `/camera/camera/color/image_raw/compressed` | ✓ |
 | `ros2_depth_distance`      | `/camera/camera/depth/image_rect_raw`       | ✓ |
 | `ros2_follow_me_start` mode='depth' | depth blob in front of AMR         | ✓ (person cylinder at +2.5 m) |
 | `ros2_follow_me_start` mode='local' (YOLO) | RGB image                  | works if YOLO model is available |
@@ -199,6 +259,27 @@ When CPU-bound, drop the depth camera update rate from 30 → 15 Hz in
 | MoveIt `move_action` via `--moveit`                      | ✅ bringup shipped; run `scripts/test-moveit-sim.mjs` on a ROS + Gazebo host |
 
 ## Troubleshooting
+
+### OpenClaw lists ROS topics or launches turtlesim instead of seeing / driving
+
+RViz can look perfect while OpenClaw still has no robot tools. Two independent
+causes, both common on Thor:
+
+1. **`tools.profile = "coding"`** in `~/.openclaw/openclaw.json` is a strict
+   allowlist applied *before* plugin tools. AgenticROS can register
+   `ros2_camera_snapshot` / `ros2_publish` and the chat agent never sees them,
+   so it shells out (`ros2 topic list`, turtlesim). Fix:
+   `./agenticros skills sync` (writes those ids into `tools.alsoAllow`).
+2. **`transport.mode = local`** uses rclnodejs. On Node 22+ (including Node 26
+   on Thor) that native rebuild fails, so the plugin never connects to ROS.
+   The sim profile uses **rosbridge** at `ws://localhost:9090`; `run_sim.sh`
+   starts it. Confirm with `ss -ltn | grep 9090` and
+   `./agenticros logs rosbridge`.
+
+Restart the OpenClaw gateway after either change (`openclaw gateway restart`)
+and start a **new** chat. "What do you see?" should call `ros2_camera_snapshot`
+on the RealSense color stream; "drive forward / spin" should publish Twist on
+`/cmd_vel`.
 
 ### Jetson display rendering
 

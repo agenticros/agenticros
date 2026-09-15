@@ -58,6 +58,7 @@ export async function downCommand(opts: DownOptions): Promise<void> {
     ]);
   }
   await pkillAndWait(["gz sim", "ign gazebo", "rviz2", "parameter_bridge"]);
+  await pkillAndWait(["ros2 launch rosbridge_server"]);
 
   // Motor controllers started by `up real` / `agenticros start motors`.
   // Leave cloud comms.js alone — use `agenticros disconnect` for that.

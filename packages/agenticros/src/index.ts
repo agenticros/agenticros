@@ -93,7 +93,7 @@ export default {
     // Register safety validation hook (before_tool_call)
     registerSafetyHook(api, config);
 
-    // Register robot capability injection (before_agent_start)
+    // Register robot capability injection (before_prompt_build)
     registerRobotContext(api, config);
 
     // Register direct commands (bypass AI)

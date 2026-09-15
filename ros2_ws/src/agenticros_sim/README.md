@@ -20,8 +20,10 @@ agenticros_sim/
 │   └── agenticros_arm.urdf.xacro       URDF mirror for RViz (arm)
 ├── config/
 │   ├── amr_bridge.yaml                 gz <-> ROS topic mapping (AMR)
+│   ├── amr_bridge_no_camera.yaml       AMR bridge without Gazebo RGB-D
 │   ├── nav2_params.yaml                Nav2 / AMCL params for the AMR
 │   ├── amr_view.rviz                   RViz config: camera, scan, TF
+│   ├── amr_view_real_camera.rviz       RViz: live RealSense cloud on the AMR
 │   ├── arm_bridge.yaml                 gz <-> ROS topic mapping (arm)
 │   └── arm_view.rviz                   RViz config: RobotModel + TF
 ├── launch/
@@ -30,7 +32,8 @@ agenticros_sim/
 │   ├── sim_arm.launch.py               Gazebo arm
 │   └── sim_arm_moveit.launch.py        Gazebo arm + MoveIt2 + trajectory bridge
 ├── scripts/
-│   └── arm_trajectory_bridge.py        FollowJointTrajectory → /arm/*/cmd_pos
+│   ├── arm_trajectory_bridge.py        FollowJointTrajectory → /arm/*/cmd_pos
+│   └── real_camera_overlay.py          USB RealSense → /camera/camera (sim time)
 ├── env-hooks/                          Add the package's share/ to GZ_SIM_RESOURCE_PATH
 └── CMakeLists.txt + package.xml        Standard ament_cmake skeleton
 ```
@@ -43,6 +46,7 @@ agenticros up sim-amr            # AMR: GUI
 agenticros up sim-amr --rviz     # AMR: GUI + RViz panel
 agenticros up sim-amr --nav2     # AMR + Nav2 (map + AMCL + navigation)
 agenticros up sim-amr --nav2 --headless
+agenticros up sim-amr --real-camera   # live RealSense + sim AMR in RViz
 agenticros up sim-arm            # Arm: GUI
 agenticros up sim-arm --rviz     # Arm: GUI + RViz (RobotModel + TF)
 agenticros up sim-arm --moveit --headless
@@ -54,6 +58,7 @@ ros2 launch agenticros_sim sim_amr.launch.py
 ros2 launch agenticros_sim sim_amr_nav2.launch.py gui:=false
 ros2 launch agenticros_sim sim_amr.launch.py use_rviz:=true
 ros2 launch agenticros_sim sim_amr.launch.py gui:=false      # headless
+ros2 launch agenticros_sim sim_amr.launch.py real_camera:=true use_rviz:=true gui:=false
 ros2 launch agenticros_sim sim_arm.launch.py
 ros2 launch agenticros_sim sim_arm.launch.py use_rviz:=true
 ros2 launch agenticros_sim sim_arm_moveit.launch.py gui:=false

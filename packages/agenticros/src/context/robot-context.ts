@@ -28,8 +28,9 @@ export function clearDiscoveryCache(): void {
 }
 
 /**
- * Register the before_agent_start hook to inject robot capabilities
- * into the AI agent's system context.
+ * Register the before_prompt_build hook to inject robot capabilities
+ * into the AI agent's system context. OpenClaw 2026.8+ ignores
+ * `before_agent_start` on the plugin host (it is not a plugin hook).
  */
 export function registerRobotContext(api: OpenClawPluginApi, config: AgenticROSConfig): void {
   const robotName = config.robot.name;
@@ -40,7 +41,7 @@ export function registerRobotContext(api: OpenClawPluginApi, config: AgenticROSC
     const transport = getTransport();
     transport.onConnection((status: string) => {
       if (status === "connected") {
-        cache = null; // Force re-discovery on next agent start
+        cache = null; // Force re-discovery on next prompt
         api.logger.info("Transport reconnected — capability cache cleared");
       }
     });
@@ -49,7 +50,7 @@ export function registerRobotContext(api: OpenClawPluginApi, config: AgenticROSC
     // The onConnection handler will be registered when the hook fires.
   }
 
-  api.on("before_agent_start", async (_event, _ctx) => {
+  api.on("before_prompt_build", async (_event, _ctx) => {
     const capabilities = await discoverCapabilities(api, robotNamespace);
     let cameraTopicHint = "/camera/camera/color/image_raw/compressed";
     try {
@@ -68,6 +69,7 @@ export function registerRobotContext(api: OpenClawPluginApi, config: AgenticROSC
       buildRobotContext(config, robotName, robotNamespace, capabilities, cameraTopicHint) +
       memorySection +
       hiveSection;
+    api.logger.info("Injected robot context via before_prompt_build");
     return { prependContext: context };
   });
 }
@@ -366,10 +368,13 @@ function buildDynamicContext(
 - All velocity commands are validated before execution
 
 ### Camera / "What does the robot see?"
-- When the user asks what the robot sees (or for a photo, camera view, or snapshot), **always call \`ros2_camera_snapshot\`** (or \`ros2_subscribe_once\` on a camera topic). Prefer a topic from the list above that contains **color** and **compressed** (e.g. \`/camera/camera/color/image_raw/compressed\`) for RGB. Do not assume the transport cannot decode images—${imageTransportHint(config)} If the tool returns an error, report it; otherwise show or describe the image. **Do not paste \`data:\` URLs or raw base64** in your reply—the tool returns a proper image block for the UI; describe what you see in prose.
+- When the user asks what the robot sees (or for a photo, camera view, or snapshot), **immediately call \`ros2_camera_snapshot\` with no topic argument**. Do **not** answer with a topic list. Do **not** call \`ros2_subscribe_once\` on image topics. Do **not** use \`/camera/image_raw/compressed\` — that topic does not exist; the live stream is \`/camera/camera/color/image_raw/compressed\`. Do not assume the transport cannot decode images—${imageTransportHint(config)} If the tool returns an error, report it; otherwise describe the image in prose. **Do not paste \`data:\` URLs or raw base64** in your reply.
+
+### Motion / "drive / turn / spin"
+- Drive with **\`ros2_publish\`** of \`geometry_msgs/msg/Twist\` on \`/cmd_vel\` (or \`ros2_estop\` to stop). **Never** launch turtlesim, Gazebo, or the \`ros2\` CLI to move the robot.
 
 ### Tips
-- Use \`ros2_list_topics\` to discover all available topics
+- Use \`ros2_list_topics\` only when the user asks what topics exist
 - Use \`ros2_subscribe_once\` to read the current value of any topic
 - Use \`ros2_camera_snapshot\` to see what the robot sees
 - The user can say /estop at any time to immediately stop the robot`;
@@ -413,7 +418,7 @@ ${buildProfileSection(config)}${buildUserInterfaceBlurb(config)}
 
 - **You must call \`ros2_list_topics\`** and treat its return value as the **only** authoritative list. **Do not** tell the user that topics such as \`odom\`, \`scan\`, \`battery_state\`, or \`cmd_vel\` exist unless they appear in that tool output (or you successfully subscribe and get data).
 - If the user asks what topics exist, **run the tool first**, then summarize **only** what it returned. If the list is empty, say so plainly and suggest checking the robot stack, Zenoh bridge, and gateway logs.
-- For camera snapshots, after listing topics pick a **CompressedImage** (or Image) topic from the tool result; if none exist, say there is no camera topic. A common **default in plugin config** (not verified live) is \`${cameraTopicHint}\` — still confirm with \`ros2_list_topics\` before relying on it.
+- When the user asks what the robot sees, **immediately call \`ros2_camera_snapshot\`** (omit topic; default is \`${cameraTopicHint}\`). Do **not** answer with a topic list. Do **not** call \`ros2_subscribe_once\` on camera topics. If the snapshot fails, then call \`ros2_list_topics\` and retry.
 
 ${nsLine}${skillsSection}### Safety Limits
 - Maximum linear velocity: 1.0 m/s
@@ -421,15 +426,19 @@ ${nsLine}${skillsSection}### Safety Limits
 - All velocity commands are validated before execution
 
 ### Camera / "What does the robot see?"
-- When the user asks what the robot sees (or for a photo, camera view, or snapshot), **always call \`ros2_camera_snapshot\`** (or \`ros2_subscribe_once\` on a camera topic). Do not assume the transport cannot decode images—${imageTransportHint(config)} If the tool returns an error, report it; otherwise show or describe the image. **Do not paste \`data:\` URLs or raw base64** in your reply—the tool returns a proper image block for the UI; describe what you see in prose.
+- When the user asks what the robot sees (or for a photo, camera view, or snapshot), **immediately call \`ros2_camera_snapshot\` with no topic argument**. Do **not** answer with a topic list. Do **not** call \`ros2_subscribe_once\` on image topics. Do not assume the transport cannot decode images—${imageTransportHint(config)} If the tool returns an error, report it; otherwise describe the image in prose. **Do not paste \`data:\` URLs or raw base64** in your reply.
+
+### Motion / "drive / turn / spin"
+- Drive with **\`ros2_publish\`** of \`geometry_msgs/msg/Twist\` on \`/cmd_vel\` (or \`ros2_estop\` to stop). **Never** launch turtlesim, Gazebo, or the \`ros2\` CLI to move the robot.
 
 ### Distance / "How far am I?"
 - When the user asks how far they are from the robot (or depth / distance in meters), **call \`ros2_depth_distance\`** only on a depth Image topic that **\`ros2_list_topics\`** (or prior tool output) shows exists. Report the tool result or **quote the exact error text** if it fails (do not claim a generic "decode" failure without the tool message). If the result is valid, give **distance_m** as the measured answer (nearer-surface percentile; **median_m** is also returned and often reflects background if the person only fills part of the depth patch).
 
 ### Tips
-- Use \`ros2_list_topics\` to discover all available topics
+- Use \`ros2_list_topics\` only when the user asks what topics exist
 - Use \`ros2_subscribe_once\` to read the current value of any topic
 - Use \`ros2_camera_snapshot\` to see what the robot sees
+- Drive with \`ros2_publish\` on \`/cmd_vel\`; never launch turtlesim
 - The user can say /estop at any time to immediately stop the robot
 `.trim();
 }

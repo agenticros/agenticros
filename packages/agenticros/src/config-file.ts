@@ -113,22 +113,65 @@ export function writeAgenticROSConfig(pluginConfig: Record<string, unknown>): vo
   }
 }
 
-/**
- * Read the current AgenticROS plugin config from the OpenClaw config file.
- * Use this when handling requests so teleop/tools use the latest saved config (e.g. robot.namespace)
- * without requiring a gateway restart.
- * Preserves webrtc.robotKey from the file if set.
- */
-export function readAgenticROSConfigFromFile(): AgenticROSConfig {
+/** Path the CLI / MCP already use: `$AGENTICROS_CONFIG_PATH` or `~/.agenticros/config.json`. */
+export function agenticrosHomeConfigPath(): string {
+  const env = process.env.AGENTICROS_CONFIG_PATH;
+  if (env && env.trim().length > 0) {
+    return path.resolve(env);
+  }
+  return path.join(os.homedir(), ".agenticros", "config.json");
+}
+
+function tryReadJsonObject(filePath: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(filePath, "utf8")) as unknown;
+    if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    // missing / unreadable / invalid — caller falls through
+  }
+  return null;
+}
+
+function pluginConfigFromOpenClawFile(): Record<string, unknown> {
   const full = readOpenClawConfig();
   const plugins = full.plugins as Record<string, unknown> | undefined;
   const entries = plugins?.entries as Record<string, unknown> | undefined;
   const agenticrosEntry = entries?.agenticros as Record<string, unknown> | undefined;
   const raw = agenticrosEntry?.config;
-  const obj = raw && typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : {};
+  return raw && typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : {};
+}
+
+/**
+ * Read AgenticROS config the same way MCP / `agenticros up` do:
+ *   1. `$AGENTICROS_CONFIG_PATH` or `~/.agenticros/config.json` (mode profiles)
+ *   2. `plugins.entries.agenticros.config` in the OpenClaw config file
+ *
+ * Empty OpenClaw plugin config used to win and default `transport.mode` to
+ * `local`, which breaks OpenClaw on Node 22+ (rclnodejs) even after the CLI
+ * switched the sim profile to rosbridge.
+ *
+ * Preserves webrtc.robotKey from the OpenClaw plugin slice if set.
+ */
+export function readAgenticROSConfigFromFile(): AgenticROSConfig {
+  const homePath = agenticrosHomeConfigPath();
+  const fromHome = tryReadJsonObject(homePath);
+  let obj: Record<string, unknown>;
+  let openclawSlice: Record<string, unknown> = {};
+  if (fromHome) {
+    obj = fromHome;
+    try {
+      openclawSlice = pluginConfigFromOpenClawFile();
+    } catch {
+      openclawSlice = {};
+    }
+  } else {
+    openclawSlice = pluginConfigFromOpenClawFile();
+    obj = openclawSlice;
+  }
   const parsed = parseConfig(obj);
-  const existing = agenticrosEntry?.config as Record<string, unknown> | undefined;
-  const existingKey = (existing?.webrtc as Record<string, unknown> | undefined)?.robotKey;
+  const existingKey = (openclawSlice.webrtc as Record<string, unknown> | undefined)?.robotKey;
   if (typeof existingKey === "string" && existingKey.length > 0) {
     parsed.webrtc.robotKey = existingKey;
   }

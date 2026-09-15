@@ -374,6 +374,18 @@ echo "  Plugin registered (log: $LOG)."
 if [[ "$SAW_SUCCESS" != true ]]; then
   echo "  (Success inferred from OpenClaw config pointing at $DEPLOY_DIR.)"
 fi
+# OpenClaw 2026 copies a linked install into ~/.openclaw/extensions/<id> and
+# loads THAT tree, not the -l source. Without this copy, `plugin-deploy` is
+# fresh and the gateway keeps running a weeks-old snapshot (no ros2_* tools
+# in chat, stale transport).
+EXT_DIR="${OPENCLAW_HOME:-$HOME/.openclaw}/extensions/agenticros"
+if [[ -d "$DEPLOY_DIR/dist" ]]; then
+  mkdir -p "$EXT_DIR"
+  rm -rf "$EXT_DIR/dist"
+  cp -a "$DEPLOY_DIR/dist" "$EXT_DIR/"
+  cp -a "$DEPLOY_DIR/openclaw.plugin.json" "$DEPLOY_DIR/package.json" "$EXT_DIR/"
+  echo "  Synced live plugin dist into $EXT_DIR (OpenClaw actually loads this path)."
+fi
 echo ""
 
 # 5. Optionally patch plugin config block in ~/.openclaw/openclaw.json.

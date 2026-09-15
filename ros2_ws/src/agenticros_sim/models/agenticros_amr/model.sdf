@@ -100,9 +100,9 @@
         </lidar>
         <always_on>true</always_on>
         <visualize>false</visualize>
+        <gz_frame_id>lidar_link</gz_frame_id>
       </sensor>
 
-      <!-- ============ IMU ============ -->
       <sensor name="imu_sensor" type="imu">
         <pose>0 0 0 0 0 0</pose>
         <topic>imu</topic>

@@ -8,7 +8,7 @@
     model (depth camera + GPU lidar + IMU), ros_gz_bridge config that exposes
     topics on AgenticROS real-robot topic names, Nav2 bringup for the indoor
     map (sim_amr_nav2.launch.py), and launch files that wire it all together.
-    Use with the agenticros CLI: agenticros up sim-amr [--nav2] or
+    Use with the agenticros CLI: agenticros up sim-amr [--nav2] [--real-camera] or
     agenticros up sim-arm [--moveit].
   </description>
   <maintainer email="hello@plaipin.com">PlaiPin</maintainer>
@@ -38,6 +38,7 @@
   <exec_depend>rclpy</exec_depend>
   <exec_depend>control_msgs</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>trajectory_msgs</exec_depend>
 

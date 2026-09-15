@@ -4,6 +4,7 @@ import type { AgenticROSConfig } from "@agenticros/core";
 import { toNamespacedTopic } from "@agenticros/core";
 import { getTransportForRobot } from "../service.js";
 import { ROBOT_ID_SCHEMA, resolveRobotForTool } from "./_robot-helpers.js";
+import { executeCameraSnapshot, shouldRedirectToCameraSnapshot } from "./ros2-camera.js";
 
 /**
  * Register the ros2_subscribe_once tool with the AI agent.
@@ -16,9 +17,11 @@ export function registerSubscribeTool(api: OpenClawPluginApi, config: AgenticROS
     description:
       "Subscribe to a ROS2 topic and return the next message. Use this to read sensor data, " +
       "check robot state, or get the current value of a topic. " +
+      "Do not use this for camera/image topics — call ros2_camera_snapshot instead " +
+      "(image payloads are truncated here). " +
       "Pass robot_id (from ros2_list_robots) to target a specific robot.",
     parameters: Type.Object({
-      topic: Type.String({ description: "The ROS2 topic name (e.g., '/battery_state')" }),
+      topic: Type.String({ description: "The ROS2 topic name (e.g., '/battery_state'). Not for camera images." }),
       type: Type.Optional(Type.String({ description: "The ROS2 message type (e.g., 'sensor_msgs/msg/BatteryState')" })),
       timeout: Type.Optional(Type.Number({ description: "Timeout in milliseconds (default: 5000)" })),
       ...ROBOT_ID_SCHEMA,
@@ -30,6 +33,13 @@ export function registerSubscribeTool(api: OpenClawPluginApi, config: AgenticROS
       const { robot } = resolved;
 
       const rawTopic = params["topic"] as string;
+      if (shouldRedirectToCameraSnapshot(rawTopic)) {
+        const timeout = (params["timeout"] as number | undefined) ?? 10000;
+        return executeCameraSnapshot(api, config, {
+          ...params,
+          timeout: timeout < 10000 ? 10000 : timeout,
+        });
+      }
       const topic = toNamespacedTopic(robot.namespace, rawTopic);
       let msgType = params["type"] as string | undefined;
       const timeout = (params["timeout"] as number | undefined) ?? 5000;

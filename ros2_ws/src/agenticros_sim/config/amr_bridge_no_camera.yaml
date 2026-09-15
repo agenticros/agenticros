@@ -1,0 +1,65 @@
+# amr_bridge_no_camera.yaml
+#
+# Same as amr_bridge.yaml but WITHOUT the Gazebo RGB-D camera bridges.
+# Used by the shadow-AMR demo (`agenticros up sim-amr --real-camera`):
+# RealSense owns /camera/camera/... after real_camera_overlay.py restamps
+# it into the sim AMR's camera_optical_link frame. Bridging gz camera
+# topics onto those names would fight the live camera.
+#
+# Field reference: https://github.com/gazebosim/ros_gz/blob/humble/ros_gz_bridge/README.md
+
+# ---------------- cmd_vel (ROS -> GZ) ----------------
+- ros_topic_name: "/cmd_vel"
+  gz_topic_name: "/model/agenticros_amr/cmd_vel"
+  ros_type_name: "geometry_msgs/msg/Twist"
+  gz_type_name: "gz.msgs.Twist"
+  direction: ROS_TO_GZ
+
+# ---------------- odometry (GZ -> ROS) ----------------
+- ros_topic_name: "/odom"
+  gz_topic_name: "/odometry_with_covariance"
+  ros_type_name: "nav_msgs/msg/Odometry"
+  gz_type_name: "gz.msgs.OdometryWithCovariance"
+  direction: GZ_TO_ROS
+
+# ---------------- /tf  (GZ -> ROS) ----------------
+- ros_topic_name: "/tf"
+  gz_topic_name: "/tf"
+  ros_type_name: "tf2_msgs/msg/TFMessage"
+  gz_type_name: "gz.msgs.Pose_V"
+  direction: GZ_TO_ROS
+
+# ---------------- pose info (GZ -> ROS) ----------------
+- ros_topic_name: "/tf_static"
+  gz_topic_name: "/model/agenticros_amr/pose_static"
+  ros_type_name: "tf2_msgs/msg/TFMessage"
+  gz_type_name: "gz.msgs.Pose_V"
+  direction: GZ_TO_ROS
+
+# ---------------- joint states (GZ -> ROS) ----------------
+- ros_topic_name: "/joint_states"
+  gz_topic_name: "/joint_states"
+  ros_type_name: "sensor_msgs/msg/JointState"
+  gz_type_name: "gz.msgs.Model"
+  direction: GZ_TO_ROS
+
+# ---------------- 2D LIDAR (GZ -> ROS) ----------------
+- ros_topic_name: "/scan"
+  gz_topic_name: "/scan"
+  ros_type_name: "sensor_msgs/msg/LaserScan"
+  gz_type_name: "gz.msgs.LaserScan"
+  direction: GZ_TO_ROS
+
+# ---------------- IMU (GZ -> ROS) ----------------
+- ros_topic_name: "/imu/data"
+  gz_topic_name: "/imu"
+  ros_type_name: "sensor_msgs/msg/Imu"
+  gz_type_name: "gz.msgs.IMU"
+  direction: GZ_TO_ROS
+
+# ---------------- Clock (GZ -> ROS) ----------------
+- ros_topic_name: "/clock"
+  gz_topic_name: "/clock"
+  ros_type_name: "rosgraph_msgs/msg/Clock"
+  gz_type_name: "gz.msgs.Clock"
+  direction: GZ_TO_ROS

@@ -35,6 +35,8 @@ export interface UpOptions {
   wheelOdom?: boolean;
   camera?: boolean;
   motors?: boolean;
+  /** sim-amr only: USB RealSense as eyes, Gazebo AMR as the body (RViz overlay). */
+  realCamera?: boolean;
   /** Start @agenticros/eyes after the stack comes up (real / sim). */
   eyes?: boolean;
   /** With --eyes: gaze-only, no WASD publish. */
@@ -51,6 +53,10 @@ type UpTarget = "real" | "sim-amr" | "sim-arm";
 
 export async function upCommand(opts: UpOptions): Promise<void> {
   const target = await resolveTarget(opts.target);
+  if (opts.realCamera === true && target !== "sim-amr") {
+    err("--real-camera is only supported with sim-amr.");
+    process.exit(2);
+  }
   writeState({ lastMode: target, lastUpAt: new Date().toISOString() });
 
   // Make sure ~/.agenticros/config.json points at the right profile for
@@ -70,14 +76,20 @@ export async function upCommand(opts: UpOptions): Promise<void> {
         wheelOdom: opts.wheelOdom === true,
       });
       break;
-    case "sim-amr":
+    case "sim-amr": {
+      const realCamera = opts.realCamera === true;
+      if (realCamera && opts.rviz !== true) {
+        info("--real-camera turns on RViz so you can see the live RealSense cloud on the AMR.");
+      }
       await runSimAmr({
         namespace: opts.namespace,
-        useRviz: opts.rviz === true,
+        useRviz: opts.rviz === true || realCamera,
         headless: resolveHeadless(opts.headless),
         nav2: opts.nav2 === true,
+        realCamera,
       });
       break;
+    }
     case "sim-arm":
       await runSimArm({
         namespace: opts.namespace,
@@ -208,7 +220,7 @@ async function resolveTarget(raw: string | undefined): Promise<UpTarget> {
     message: "What do you want to bring up?",
     choices: [
       { name: "Real robot (RealSense + motors + MCP)", value: "real" },
-      { name: "Sim AMR (Gazebo + 2-wheel diff-drive; add --nav2 for Nav2)", value: "sim-amr" },
+      { name: "Sim AMR (Gazebo + 2-wheel diff-drive; add --nav2 / --real-camera)", value: "sim-amr" },
       { name: "Sim Arm (Gazebo + UR5e-shaped; add --moveit for MoveIt2)", value: "sim-arm" },
     ],
     default: "real",

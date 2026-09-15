@@ -38,7 +38,7 @@ Bring up a robot stack. Targets:
 | Target    | What it does |
 |-----------|-----|
 | `real`    | Runs `scripts/start_demo.sh`: RealSense camera (unless `--no-camera`), MCP build, and local motor controller via `@agenticros/robot` (unless `--no-motors`). Add `--map` for RTAB-Map + Nav2. |
-| `sim-amr` | Launches the simulated 2-wheel AMR (`scripts/sim/run_sim.sh`). Add `--nav2` for map + AMCL + Nav2. |
+| `sim-amr` | Launches the simulated 2-wheel AMR (`scripts/sim/run_sim.sh`). Add `--nav2` for map + AMCL + Nav2. Add `--real-camera` for a live RealSense overlay on the sim body (implies `--rviz`). |
 | `sim-arm` | Launches the simulated UR5e-shaped arm (per-joint `/arm/*/cmd_pos`). Add `--moveit` for MoveIt2 move_group + FollowJointTrajectory bridge. |
 
 Flags:
@@ -47,6 +47,7 @@ Flags:
 - `--rviz` open RViz alongside the sim
 - `--headless` / `--no-headless` control gz GUI (auto-headless on Jetson / no `$DISPLAY`)
 - `--nav2` sim-amr only: also launch Nav2 (`sim_amr_nav2.launch.py`)
+- `--real-camera` sim-amr only: USB RealSense as eyes, Gazebo AMR as the body in RViz (see [simulation.md](simulation.md#shadow-amr-real-realsense--simulated-body))
 - `--moveit` sim-arm only: also launch MoveIt2 (`sim_arm_moveit.launch.py`)
 - `--map` real only: also launch RTAB-Map + Nav2 (`scripts/start_mapping.sh`)
 - `--wheel-odom` with `--map`: use wheel `/odom` instead of visual odometry

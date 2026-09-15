@@ -42,10 +42,18 @@ export function buildRosSourcedShellCmd(
   return parts.join(" && ");
 }
 
-/** True when Gazebo Harmonic (`gz sim`) is installed. */
+/** True when Gazebo Sim (`gz sim`) is installed (system or ROS vendor). */
 export function hasGazeboHarmonic(): boolean {
   for (const dir of ["/usr/bin", "/usr/local/bin"]) {
     if (existsSync(join(dir, "gz"))) return true;
+  }
+  for (const distro of KNOWN_DISTROS) {
+    if (
+      existsSync(`/opt/ros/${distro}/opt/gz_tools_vendor/bin/gz`) ||
+      existsSync(`/opt/ros/${distro}/opt/gz_sim_vendor/bin/gz`)
+    ) {
+      return true;
+    }
   }
   return false;
 }

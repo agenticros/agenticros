@@ -102,6 +102,25 @@ export type BeforeAgentStartHandler = (
   ctx: BeforeAgentStartContext,
 ) => Promise<BeforeAgentStartResult | void> | BeforeAgentStartResult | void;
 
+/** OpenClaw 2026.8+ typed hook — `before_agent_start` is not in the plugin hook catalog. */
+export interface BeforePromptBuildEvent {
+  prompt: string;
+  messages?: unknown[];
+  systemPrompt?: string;
+}
+
+export interface BeforePromptBuildResult {
+  prependContext?: string;
+  appendContext?: string;
+  prependSystemContext?: string;
+  appendSystemContext?: string;
+}
+
+export type BeforePromptBuildHandler = (
+  event: BeforePromptBuildEvent,
+  ctx: BeforeAgentStartContext,
+) => Promise<BeforePromptBuildResult | void> | BeforePromptBuildResult | void;
+
 export interface BeforeToolCallEvent {
   toolName: string;
   params: Record<string, unknown>;
@@ -169,5 +188,6 @@ export interface OpenClawPluginApi {
   registerHttpRoute?(options: HttpRouteOptions): void;
 
   on(hookName: "before_agent_start", handler: BeforeAgentStartHandler): void;
+  on(hookName: "before_prompt_build", handler: BeforePromptBuildHandler): void;
   on(hookName: "before_tool_call", handler: BeforeToolCallHandler): void;
 }

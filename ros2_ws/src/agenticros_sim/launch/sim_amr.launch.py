@@ -7,6 +7,8 @@ plumbing:
                                                   already baked into the world)
   * ros_gz_bridge parameter_bridge config_file    (gz <-> ROS topic bridge)
   * Optional RViz (--rviz launch arg)
+  * Optional real RealSense overlay (`real_camera:=true`) — skips the Gazebo
+    RGB-D bridge, restamps USB RealSense onto camera_optical_link
 
 Launch args:
   world       (default 'agenticros_indoor.sdf')    Override the world file.
@@ -16,11 +18,13 @@ Launch args:
   x, y, z, yaw                                    Spawn pose for the AMR.
   bridge_config_file                              Override the bridge YAML.
   gui         (default 'true')                    Headless if 'false' (CI / docker).
+  real_camera (default 'false')                   Live RealSense + sim AMR body.
 
 Examples:
   ros2 launch agenticros_sim sim_amr.launch.py
   ros2 launch agenticros_sim sim_amr.launch.py use_rviz:=true
   ros2 launch agenticros_sim sim_amr.launch.py gui:=false       # headless
+  ros2 launch agenticros_sim sim_amr.launch.py real_camera:=true use_rviz:=true gui:=false
 """
 
 from __future__ import annotations
@@ -82,6 +86,13 @@ def generate_launch_description() -> LaunchDescription:
     rviz_config_arg = DeclareLaunchArgument(
         "rviz_config", default_value=default_rviz,
         description="RViz config path (used when use_rviz is true).",
+    )
+    real_camera_arg = DeclareLaunchArgument(
+        "real_camera", default_value="false",
+        description=(
+            "If true, do not bridge Gazebo RGB-D; restamp a USB RealSense "
+            "onto /camera/camera/... in the AMR's camera_optical_link frame."
+        ),
     )
 
     # ---------- Spawn the AMR ----------
@@ -145,6 +156,20 @@ def generate_launch_description() -> LaunchDescription:
         parameters=[{"use_sim_time": LaunchConfiguration("use_sim_time")}],
     )
 
+    overlay = Node(
+        package="agenticros_sim",
+        executable="real_camera_overlay.py",
+        name="real_camera_overlay",
+        output="screen",
+        condition=IfCondition(LaunchConfiguration("real_camera")),
+        parameters=[{
+            "use_sim_time": LaunchConfiguration("use_sim_time"),
+            "input_ns": "/realsense/camera",
+            "output_ns": "/camera/camera",
+            "frame_id": "camera_optical_link",
+        }],
+    )
+
     # The gz sim launcher needs a single space-separated `gz_args` string. We
     # build it inside an OpaqueFunction so the conditional headless flag is
     # evaluated at launch-time (substitutions can't do string concatenation).
@@ -156,12 +181,35 @@ def generate_launch_description() -> LaunchDescription:
         bridge_arg,
         gui_arg,
         rviz_config_arg,
+        real_camera_arg,
+        OpaqueFunction(function=_apply_real_camera_defaults),
         OpaqueFunction(function=_launch_gz_sim),
         spawn_amr,
         bridge,
         rsp,
+        overlay,
         rviz,
     ])
+
+
+def _apply_real_camera_defaults(context: LaunchContext, *_, **__):
+    """When real_camera:=true, swap in the no-camera bridge + RViz overlay config
+    unless the user already passed a custom bridge_config_file / rviz_config.
+    """
+    if context.launch_configurations.get("real_camera", "false").lower() != "true":
+        return []
+    pkg_share = get_package_share_directory(PKG_NAME)
+    default_bridge = os.path.join(pkg_share, "config", "amr_bridge.yaml")
+    default_rviz = os.path.join(pkg_share, "config", "amr_view.rviz")
+    if context.launch_configurations.get("bridge_config_file", default_bridge) == default_bridge:
+        context.launch_configurations["bridge_config_file"] = os.path.join(
+            pkg_share, "config", "amr_bridge_no_camera.yaml",
+        )
+    if context.launch_configurations.get("rviz_config", default_rviz) == default_rviz:
+        context.launch_configurations["rviz_config"] = os.path.join(
+            pkg_share, "config", "amr_view_real_camera.rviz",
+        )
+    return []
 
 
 def _launch_gz_sim(context: LaunchContext, *_, **__):

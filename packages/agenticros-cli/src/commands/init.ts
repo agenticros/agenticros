@@ -502,11 +502,14 @@ async function promptAndWriteRobotConfig(): Promise<void> {
   const userData = getCliPaths().userDataDir;
   mkdirSync(userData, { recursive: true });
   const cfg = {
-    transport: { mode: "local" },
+    transport: { mode: isSim ? "rosbridge" : "local" },
+    ...(isSim ? { rosbridge: { url: "ws://localhost:9090" } } : {}),
     robot: {
       namespace,
       name: isSim ? "Sim Robot" : "My Robot",
-      cameraTopic: "/camera/camera/color/image_raw",
+      cameraTopic: isSim
+        ? "/camera/camera/color/image_raw/compressed"
+        : "/camera/camera/color/image_raw",
     },
     safety: {
       maxLinearVelocity: isSim ? 0.5 : 1.0,

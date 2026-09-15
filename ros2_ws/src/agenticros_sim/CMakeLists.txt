@@ -19,8 +19,10 @@ install(DIRECTORY
 )
 
 # FollowJointTrajectory → /arm/*/cmd_pos (used by sim_arm_moveit.launch.py).
+# RealSense → sim AMR optical frame (used by sim_amr.launch.py real_camera:=true).
 install(PROGRAMS
   scripts/arm_trajectory_bridge.py
+  scripts/real_camera_overlay.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

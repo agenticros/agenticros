@@ -93,6 +93,11 @@ program
   .option("--headless", "Run gz-sim with no GUI (auto-enabled on Jetson or when $DISPLAY is unset)")
   .option("--no-headless", "Force gz-sim GUI on (override Jetson auto-headless)")
   .option("--nav2", "sim-amr only: also launch Nav2 (map + AMCL + navigation)", false)
+  .option(
+    "--real-camera",
+    "sim-amr only: live RealSense eyes on the simulated AMR body (implies --rviz)",
+    false,
+  )
   .option("--moveit", "sim-arm only: also launch MoveIt2 move_group + trajectory bridge", false)
   .option("--map", "real only: also launch RTAB-Map + Nav2 (agenticros_bringup)", false)
   .option("--wheel-odom", "real --map: use wheel /odom instead of RTAB-Map visual odom", false)
@@ -111,6 +116,7 @@ program
     await upCommand({
       target,
       ...opts,
+      realCamera: opts.realCamera === true,
       eyesNoTeleop: opts.eyesNoTeleop === true,
       eyesNoBrowser: opts.eyesNoBrowser === true,
       eyesNoSound: opts.eyesNoSound === true,

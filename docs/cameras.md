@@ -53,3 +53,5 @@ Then re-launch the real-robot demo. If recovery fails, unplug USB for 10 seconds
 ### Zenoh + robot namespace
 
 When using Zenoh with **robot.namespace** set (e.g. for cmd_vel), camera topics are usually **not** under that namespace—they stay under `/camera/...`. The plugin now includes camera topics in discovery and defaults **ros2_camera_snapshot** to `/camera/camera/color/image_raw/compressed` (RealSense). To override, set **robot.cameraTopic** in the plugin config to your camera topic (e.g. `/camera/camera/color/image_raw/compressed`).
+
+To put a **USB RealSense on a simulated AMR** in RViz (live cloud, simulated wheels), use `agenticros up sim-amr --real-camera`. See [Shadow AMR](simulation.md#shadow-amr-real-realsense--simulated-body).

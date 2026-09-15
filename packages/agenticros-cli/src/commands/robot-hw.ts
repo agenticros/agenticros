@@ -268,6 +268,8 @@ export async function startRealsenseCommand(opts: {
   pointcloud?: boolean;
   full?: boolean;
   model?: string;
+  extraEnv?: Record<string, string>;
+  softFail?: boolean;
 }): Promise<void> {
   const script = resolveScriptPath("start_realsense.sh");
   if (!existsSync(script)) {
@@ -289,10 +291,14 @@ export async function startRealsenseCommand(opts: {
   if (model) args.push(`--model=${model}`);
 
   try {
-    await execa("bash", args, { stdio: "inherit" });
+    await execa("bash", args, {
+      stdio: "inherit",
+      env: { ...process.env, ...opts.extraEnv },
+    });
     ok("Robot realsense started.");
   } catch (e) {
     warn(`start realsense failed: ${e instanceof Error ? e.message : String(e)}`);
+    if (opts.softFail) return;
     process.exit(1);
   }
 }

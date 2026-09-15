@@ -253,7 +253,7 @@ export async function runDoctorChecks(opts: DoctorOptions = {}): Promise<DoctorR
     severity: hasGazeboHarmonic() ? "green" : "yellow",
     hint: hasGazeboHarmonic()
       ? undefined
-      : "Required only for simulation. Install with: sudo apt install gz-harmonic ros-humble-ros-gz",
+      : `Required only for simulation. Install with: sudo apt install ros-${ros.distro ?? "jazzy"}-ros-gz`,
   });
 
   // Mode profile + namespace shadowing. Each mode (real / sim) needs its own
@@ -585,7 +585,7 @@ export async function runDoctorChecks(opts: DoctorOptions = {}): Promise<DoctorR
   try {
     const { stdout: lsusbOut, exitCode: lsusbRc } = await execa("lsusb", { reject: false });
     const usbHit =
-      lsusbRc === 0 && /Intel.*RealSense|8086:0b/i.test(lsusbOut);
+      lsusbRc === 0 && /Intel.*RealSense|RealSense|8086:0b|38e5:/i.test(lsusbOut);
     let recoveryMode = false;
     let enumerateDetail: string | undefined;
     try {

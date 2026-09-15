@@ -14,6 +14,7 @@ import { join } from "node:path";
 
 import { execa } from "execa";
 
+import { startRealsenseCommand } from "../commands/robot-hw.js";
 import { getCliPaths } from "../util/paths.js";
 import { err, header, info, warn } from "../util/logger.js";
 import { writeState } from "../util/state.js";
@@ -27,6 +28,8 @@ export interface SimRunOptions {
   nav2?: boolean;
   /** Arm only: launch MoveIt2 move_group + trajectory bridge via sim_arm_moveit.launch.py. */
   moveit?: boolean;
+  /** AMR only: USB RealSense overlay (shadow AMR). Starts the camera node first. */
+  realCamera?: boolean;
 }
 
 async function runSim(robot: "amr" | "arm", opts: SimRunOptions): Promise<void> {
@@ -56,6 +59,24 @@ async function runSim(robot: "amr" | "arm", opts: SimRunOptions): Promise<void> 
       process.exit(2);
     }
     args.push("--nav2");
+  }
+  if (opts.realCamera) {
+    if (robot !== "amr") {
+      err("--real-camera is only supported with sim-amr.");
+      process.exit(2);
+    }
+    info("Starting RealSense on /realsense/camera (overlay will republish to /camera/camera)…");
+    await startRealsenseCommand({
+      pointcloud: true,
+      full: true,
+      extraEnv: {
+        AGENTICROS_REALSENSE_CAMERA_NAMESPACE: "realsense",
+        AGENTICROS_REALSENSE_PUBLISH_TF: "false",
+        AGENTICROS_REALSENSE_ALIGN_DEPTH: "1",
+      },
+      softFail: true,
+    });
+    args.push("--real-camera");
   }
   if (opts.moveit) {
     if (robot !== "arm") {

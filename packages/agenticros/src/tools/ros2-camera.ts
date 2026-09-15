@@ -1,5 +1,5 @@
 import { Type } from "@sinclair/typebox";
-import type { OpenClawPluginApi } from "../plugin-api.js";
+import type { OpenClawPluginApi, ToolResult } from "../plugin-api.js";
 import type { AgenticROSConfig } from "@agenticros/core";
 import { resolveCameraSubscribeTopic, resolveBinding } from "@agenticros/core";
 import {
@@ -24,6 +24,49 @@ export const REALSENSE_CAMERA_TOPICS = {
   aligned_depth: "/camera/camera/aligned_depth_to_color/image_raw",
 } as const;
 
+/** TurtleBot / schema examples models copy. None exist on AgenticROS RealSense. */
+const HALLUCINATED_CAMERA_TOPICS = new Set([
+  "/camera/image_raw",
+  "/camera/image_raw/compressed",
+  "/camera/rgb/image_raw",
+  "/camera/rgb/image_raw/compressed",
+  "/usb_cam/image_raw",
+  "/usb_cam/image_raw/compressed",
+  "/camera",
+]);
+
+export function configuredRgbTopic(robot: {
+  namespace: string;
+  cameraTopic: string;
+}): string {
+  return resolveBinding(robot, "camera.rgb") || REALSENSE_CAMERA_TOPICS.color_compressed;
+}
+
+export function looksLikeImageTopic(topic: string): boolean {
+  return /image_raw|image_rect|compressed|\/color\/image|\/camera\//i.test(topic);
+}
+
+/** True when ros2_subscribe_once should capture a camera frame instead of JSON. */
+export function shouldRedirectToCameraSnapshot(topic: string): boolean {
+  const n = (topic.startsWith("/") ? topic : `/${topic}`).replace(/\/+$/, "") || topic;
+  if (HALLUCINATED_CAMERA_TOPICS.has(n)) return true;
+  return /image_raw|image_rect|\/compressed$|\/color\/image/i.test(n);
+}
+
+/** Prefer the configured RealSense topic; rewrite common LLM-hallucinated names. */
+export function resolveSnapshotTopic(
+  robot: { namespace: string; cameraTopic: string },
+  requested?: string,
+): string {
+  const configured = configuredRgbTopic(robot);
+  if (!requested || !requested.trim()) return configured;
+  let t = requested.trim();
+  if (!t.startsWith("/")) t = `/${t}`;
+  t = t.replace(/\/+$/, "") || t;
+  if (HALLUCINATED_CAMERA_TOPICS.has(t)) return configured;
+  return resolveCameraSubscribeTopic(robot.namespace, requested);
+}
+
 /**
  * Register the ros2_camera_snapshot tool with the AI agent.
  * Grabs a single frame from a ROS2 camera topic.
@@ -36,7 +79,10 @@ export function registerCameraTool(api: OpenClawPluginApi, config: AgenticROSCon
     "Use when the user asks what the robot sees or requests a photo. " +
     "Do not paste raw base64 or data: URLs in your reply—describe the scene from the image you receive. " +
     "The tool also embeds an HTTP snapshot link in the text (same kind of URL as teleop) for the chat UI. " +
-    "Supports sensor_msgs/CompressedImage (e.g. /camera/image_raw/compressed, optional zstd) and sensor_msgs/Image (raw encodings are encoded to PNG).";
+    "Supports sensor_msgs/CompressedImage and sensor_msgs/Image. " +
+    "Omit `topic` to use the robot's configured camera " +
+    "(`/camera/camera/color/image_raw/compressed` on the sim/RealSense overlay). " +
+    "Do not pass `/camera/image_raw/compressed` — that topic does not exist here.";
   const describerHint =
     " A `Vision description:` section is appended automatically to the result text when a vision describer is configured; " +
     "treat that paragraph as the authoritative description of what the camera sees and quote/paraphrase it in your reply.";
@@ -49,7 +95,7 @@ export function registerCameraTool(api: OpenClawPluginApi, config: AgenticROSCon
       topic: Type.Optional(
         Type.String({
           description:
-            "Camera image topic. Examples: '/camera/image_raw/compressed', RealSense color '/camera/camera/color/image_raw', RealSense depth '/camera/camera/depth/image_rect_raw'. Default: '/camera/image_raw/compressed'.",
+            "Optional. Omit this to use the configured RealSense topic `/camera/camera/color/image_raw/compressed`. Do not use `/camera/image_raw/compressed`.",
         }),
       ),
       message_type: Type.Optional(
@@ -69,159 +115,167 @@ export function registerCameraTool(api: OpenClawPluginApi, config: AgenticROSCon
     }),
 
     async execute(_toolCallId, params) {
-      const resolved = resolveRobotForTool(config, params);
-      if ("error" in resolved) return resolved.error;
-      const { robot } = resolved;
+      return executeCameraSnapshot(api, config, params);
+    },
+  });
+}
 
-      const defaultTopic =
-        resolveBinding(robot, "camera.rgb") || "/camera/camera/color/image_raw/compressed";
-      const rawTopic = (params["topic"] as string | undefined) ?? defaultTopic;
-      const topic = resolveCameraSubscribeTopic(robot.namespace, rawTopic);
-      const rawMsgType = params["message_type"] as string | undefined;
-      const messageType: "CompressedImage" | "Image" =
-        rawMsgType === "Image" ? "Image" : "CompressedImage";
-      const timeout = (params["timeout"] as number | undefined) ?? 10000;
+export async function executeCameraSnapshot(
+  api: OpenClawPluginApi,
+  config: AgenticROSConfig,
+  params: Record<string, unknown>,
+): Promise<ToolResult> {
+  const resolved = resolveRobotForTool(config, params);
+  if ("error" in resolved) return resolved.error;
+  const { robot } = resolved;
 
+  const topic = resolveSnapshotTopic(robot, params["topic"] as string | undefined);
+  const rawMsgType = params["message_type"] as string | undefined;
+  const messageType: "CompressedImage" | "Image" =
+    rawMsgType === "Image" ||
+    (rawMsgType !== "CompressedImage" && !topic.includes("compressed"))
+      ? "Image"
+      : "CompressedImage";
+  const timeout = (params["timeout"] as number | undefined) ?? 10000;
+
+  try {
+    const transport = await getTransportForRobot(config, robot);
+    const typeSel = messageType === "Image" ? ROS_MSG_IMAGE : ROS_MSG_COMPRESSED_IMAGE;
+
+    const result = await new Promise<{
+      success: boolean;
+      topic: string;
+      format: string;
+      data: string;
+      width?: unknown;
+      height?: unknown;
+    }>((resolve, reject) => {
+      let subscription: { unsubscribe: () => void };
+      let timer: ReturnType<typeof setTimeout>;
       try {
-        const transport = await getTransportForRobot(config, robot);
-        const typeSel = messageType === "Image" ? ROS_MSG_IMAGE : ROS_MSG_COMPRESSED_IMAGE;
-
-        const result = await new Promise<{
-          success: boolean;
-          topic: string;
-          format: string;
-          data: string;
-          width?: unknown;
-          height?: unknown;
-        }>((resolve, reject) => {
-          let subscription: { unsubscribe: () => void };
-          let timer: ReturnType<typeof setTimeout>;
+        subscription = transport.subscribe({ topic, type: typeSel }, (msg: Record<string, unknown>) => {
           try {
-            subscription = transport.subscribe({ topic, type: typeSel }, (msg: Record<string, unknown>) => {
-              try {
-                clearTimeout(timer);
-                subscription.unsubscribe();
-                const payload = cameraSnapshotFromPlainMessage(messageType, msg);
-                resolve({
-                  success: true,
-                  topic,
-                  format: payload.formatLabel,
-                  data: payload.dataBase64,
-                  width: payload.width,
-                  height: payload.height,
-                });
-              } catch (err) {
-                clearTimeout(timer);
-                try {
-                  subscription.unsubscribe();
-                } catch {
-                  // ignore
-                }
-                reject(err instanceof Error ? err : new Error(String(err)));
-              }
+            clearTimeout(timer);
+            subscription.unsubscribe();
+            const payload = cameraSnapshotFromPlainMessage(messageType, msg);
+            resolve({
+              success: true,
+              topic,
+              format: payload.formatLabel,
+              data: payload.dataBase64,
+              width: payload.width,
+              height: payload.height,
             });
           } catch (err) {
-            reject(err instanceof Error ? err : new Error(String(err)));
-            return;
-          }
-          timer = setTimeout(() => {
+            clearTimeout(timer);
             try {
               subscription.unsubscribe();
             } catch {
               // ignore
             }
-            reject(new Error(`Timeout waiting for camera frame on ${topic}`));
-          }, timeout);
+            reject(err instanceof Error ? err : new Error(String(err)));
+          }
         });
-
-        const rawB64 = (result.data as string) ?? "";
-        let base64 = normalizePluginToolImageBase64(rawB64);
-        const formatLabel = String((result.format as string) ?? "jpeg").toLowerCase();
-        let mimeType = base64 ? mimeTypeForSnapshotBase64(base64, formatLabel) : "image/jpeg";
-
-        let buf: Buffer | null = base64 ? Buffer.from(base64, "base64") : null;
-        if (buf && buf.length >= 2 && buf[0] === 0xff && buf[1] === 0xd8) {
-          buf = trimJpegToLastEoi(buf);
-          base64 = buf.toString("base64");
-          mimeType = mimeTypeForSnapshotBase64(base64, formatLabel);
-        }
-
-        const wNum =
-          result.width != null ? rosNumericField(result.width, "width") : undefined;
-        const hNum =
-          result.height != null ? rosNumericField(result.height, "height") : undefined;
-        let summary = `Captured one frame from ${topic}${wNum != null && hNum != null ? ` (${wNum}×${hNum})` : ""}.`;
-
-        let snapshotId: string | undefined;
-        const minDecodedBytes = 80;
-        const decodedLen = buf ? buf.length : 0;
-        if (buf && decodedLen >= minDecodedBytes) {
-          try {
-            snapshotId = storeCameraSnapshot(buf, mimeType);
-          } catch {
-            /* ignore oversized / cache errors */
-          }
-        }
-        if (snapshotId) {
-          const snapPath = `/plugins/agenticros/camera/snapshot?id=${encodeURIComponent(snapshotId)}`;
-          const origin = (process.env.AGENTICROS_GATEWAY_PUBLIC_URL ?? "").trim().replace(/\/$/, "");
-          const snapUrl = origin ? `${origin}${snapPath}` : snapPath;
-          summary += `\n\n![camera snapshot](${snapUrl})`;
-        }
-
-        if (
-          config.describer?.enabled === true &&
-          base64 &&
-          buf &&
-          decodedLen >= minDecodedBytes
-        ) {
-          try {
-            const described = await describeImageBestEffort({
-              config,
-              base64,
-              mimeType,
-              logger: api.logger,
-            });
-            if (described) {
-              summary += `\n\n**Vision description** (auto-generated by ${described.model} in ${described.latencyMs}ms — quote or paraphrase this when reporting what the robot sees):\n${described.description.trim()}`;
-            } else {
-              summary +=
-                "\n\n_(Vision description was requested but the describer endpoint did not respond — the camera image was captured successfully; see the snapshot link above. Report this to the operator if the user needs a description.)_";
-            }
-          } catch {
-            /* describeImageBestEffort never throws; this is just defense in depth */
-          }
-        }
-
-        const content: Array<
-          { type: "text"; text: string } | { type: "image"; data: string; mimeType: string }
-        > = [{ type: "text", text: summary }];
-        if (base64 && buf && decodedLen >= minDecodedBytes) {
-          content.push({ type: "image", data: base64, mimeType });
-        } else if (rawB64 && (!base64 || decodedLen < minDecodedBytes)) {
-          content.push({
-            type: "text",
-            text:
-              " (Image payload was missing, not valid base64 after normalization, or too small—check topic, message_type, or transport.)",
-          });
-        } else if (!rawB64) {
-          content.push({
-            type: "text",
-            text: " (No image data received—topic may be idle or transport returned empty.)",
-          });
-        }
-
-        return {
-          content,
-          details: { success: result.success, topic, width: result.width, height: result.height },
-        };
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        return {
-          content: [{ type: "text", text: `ros2_camera_snapshot failed: ${msg}` }],
-          details: { success: false, topic: rawTopic, error: msg },
-        };
+        reject(err instanceof Error ? err : new Error(String(err)));
+        return;
       }
-    },
-  });
+      timer = setTimeout(() => {
+        try {
+          subscription.unsubscribe();
+        } catch {
+          // ignore
+        }
+        reject(new Error(`Timeout waiting for camera frame on ${topic}`));
+      }, timeout);
+    });
+
+    const rawB64 = (result.data as string) ?? "";
+    let base64 = normalizePluginToolImageBase64(rawB64);
+    const formatLabel = String((result.format as string) ?? "jpeg").toLowerCase();
+    let mimeType = base64 ? mimeTypeForSnapshotBase64(base64, formatLabel) : "image/jpeg";
+
+    let buf: Buffer | null = base64 ? Buffer.from(base64, "base64") : null;
+    if (buf && buf.length >= 2 && buf[0] === 0xff && buf[1] === 0xd8) {
+      buf = trimJpegToLastEoi(buf);
+      base64 = buf.toString("base64");
+      mimeType = mimeTypeForSnapshotBase64(base64, formatLabel);
+    }
+
+    const wNum =
+      result.width != null ? rosNumericField(result.width, "width") : undefined;
+    const hNum =
+      result.height != null ? rosNumericField(result.height, "height") : undefined;
+    let summary = `Captured one frame from ${topic}${wNum != null && hNum != null ? ` (${wNum}×${hNum})` : ""}.`;
+
+    let snapshotId: string | undefined;
+    const minDecodedBytes = 80;
+    const decodedLen = buf ? buf.length : 0;
+    if (buf && decodedLen >= minDecodedBytes) {
+      try {
+        snapshotId = storeCameraSnapshot(buf, mimeType);
+      } catch {
+        /* ignore oversized / cache errors */
+      }
+    }
+    if (snapshotId) {
+      const snapPath = `/plugins/agenticros/camera/snapshot?id=${encodeURIComponent(snapshotId)}`;
+      const origin = (process.env.AGENTICROS_GATEWAY_PUBLIC_URL ?? "").trim().replace(/\/$/, "");
+      const snapUrl = origin ? `${origin}${snapPath}` : snapPath;
+      summary += `\n\n![camera snapshot](${snapUrl})`;
+    }
+
+    if (
+      config.describer?.enabled === true &&
+      base64 &&
+      buf &&
+      decodedLen >= minDecodedBytes
+    ) {
+      try {
+        const described = await describeImageBestEffort({
+          config,
+          base64,
+          mimeType,
+          logger: api.logger,
+        });
+        if (described) {
+          summary += `\n\n**Vision description** (auto-generated by ${described.model} in ${described.latencyMs}ms — quote or paraphrase this when reporting what the robot sees):\n${described.description.trim()}`;
+        } else {
+          summary +=
+            "\n\n_(Vision description was requested but the describer endpoint did not respond — the camera image was captured successfully; see the snapshot link above. Report this to the operator if the user needs a description.)_";
+        }
+      } catch {
+        /* describeImageBestEffort never throws; this is just defense in depth */
+      }
+    }
+
+    const content: Array<
+      { type: "text"; text: string } | { type: "image"; data: string; mimeType: string }
+    > = [{ type: "text", text: summary }];
+    if (base64 && buf && decodedLen >= minDecodedBytes) {
+      content.push({ type: "image", data: base64, mimeType });
+    } else if (rawB64 && (!base64 || decodedLen < minDecodedBytes)) {
+      content.push({
+        type: "text",
+        text:
+          " (Image payload was missing, not valid base64 after normalization, or too small—check topic, message_type, or transport.)",
+      });
+    } else if (!rawB64) {
+      content.push({
+        type: "text",
+        text: " (No image data received—topic may be idle or transport returned empty.)",
+      });
+    }
+
+    return {
+      content,
+      details: { success: result.success, topic, width: result.width, height: result.height },
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return {
+      content: [{ type: "text", text: `ros2_camera_snapshot failed: ${msg}` }],
+      details: { success: false, topic, error: msg },
+    };
+  }
 }

@@ -43,8 +43,8 @@ realsense_preflight() {
         realsense_print_recovery_help
         return 1
     fi
-    if ! rs-enumerate-devices 2>/dev/null | grep -qi 'Intel RealSense'; then
-        echo "   WARN: no Intel RealSense detected on USB." >&2
+    if ! rs-enumerate-devices 2>/dev/null | grep -qiE 'RealSense'; then
+        echo "   WARN: no RealSense detected on USB." >&2
         echo "         Camera launch will likely fail — check cable/port." >&2
     fi
     return 0
@@ -75,6 +75,9 @@ realsense_verify_started() {
 #   pointcloud | AGENTICROS_REALSENSE_POINTCLOUD=1
 #   full | AGENTICROS_REALSENSE_FULL=1
 #   AGENTICROS_REALSENSE_MODEL=D421|D435|… (portal camera field)
+#   AGENTICROS_REALSENSE_CAMERA_NAMESPACE  → camera_namespace:=
+#   AGENTICROS_REALSENSE_PUBLISH_TF=false  → publish_tf:=false (shadow AMR overlay)
+#   AGENTICROS_REALSENSE_ALIGN_DEPTH=1     → align_depth.enable:=true + enable_sync:=true
 realsense_launch_args() {
     local enable_pointcloud=0
     local use_full=0
@@ -127,6 +130,19 @@ realsense_launch_args() {
     if [[ "$enable_pointcloud" == "1" ]]; then
         launch_args+=("pointcloud.enable:=true")
         echo "   pointcloud.enabled:=true" >&2
+    fi
+
+    if [[ -n "${AGENTICROS_REALSENSE_CAMERA_NAMESPACE:-}" ]]; then
+        launch_args+=("camera_namespace:=${AGENTICROS_REALSENSE_CAMERA_NAMESPACE}")
+        echo "   camera_namespace:=${AGENTICROS_REALSENSE_CAMERA_NAMESPACE}" >&2
+    fi
+    if [[ "${AGENTICROS_REALSENSE_PUBLISH_TF:-}" == "false" ]]; then
+        launch_args+=("publish_tf:=false")
+        echo "   publish_tf:=false" >&2
+    fi
+    if [[ "${AGENTICROS_REALSENSE_ALIGN_DEPTH:-}" == "1" ]]; then
+        launch_args+=("align_depth.enable:=true" "enable_sync:=true")
+        echo "   align_depth.enable:=true  enable_sync:=true" >&2
     fi
 
     # Print space-separated for caller (bash array rebuild via eval is awkward;

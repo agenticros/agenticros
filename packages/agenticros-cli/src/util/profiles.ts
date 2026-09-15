@@ -83,14 +83,20 @@ function realProfileDefaults(namespaceFallback?: string): Record<string, unknown
  * bridge in amr_bridge.yaml publishes /cmd_vel, /odom, etc. at the graph
  * root (no robot prefix). Setting a namespace here means Claude publishes
  * into a void during simulation.
+ *
+ * Transport is rosbridge (not local DDS): OpenClaw/Node 22+ cannot rebuild
+ * rclnodejs from source on Jetson/Thor, so `transport.mode=local` silently
+ * fails and the chat agent falls back to bash (topic lists, turtlesim).
+ * `scripts/sim/run_sim.sh` starts rosbridge on ws://localhost:9090.
  */
 function simProfileDefaults(): Record<string, unknown> {
   return {
-    transport: { mode: "local" },
+    transport: { mode: "rosbridge" },
+    rosbridge: { url: "ws://localhost:9090" },
     robot: {
       namespace: "",
       name: "Sim AMR",
-      cameraTopic: "/camera/camera/color/image_raw",
+      cameraTopic: "/camera/camera/color/image_raw/compressed",
     },
     safety: { maxLinearVelocity: 0.5, maxAngularVelocity: 1.0 },
     teleop: { cmdVelTopic: "/cmd_vel", speedDefault: 0.2 },
