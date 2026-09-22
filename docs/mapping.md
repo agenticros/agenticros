@@ -30,6 +30,20 @@ Skills:
 
 `agenticros up sim-amr --nav2` is a **static map + AMCL** stack. Use it for `navigate_to` / `wander` against a known grid. It will **not** exercise live RTAB-Map.
 
+## Drive the map from ARC
+
+CLI **0.7.23** or newer streams `/map` to the [AgenticROS Cloud](https://cloud.agenticros.com) control page while you teleop.
+
+```bash
+npm install -g agenticros@0.7.23   # skip if this robot is already on 0.7.23+
+agenticros connect
+agenticros up real --map
+```
+
+Open that robot’s control page and drive with the joystick, WASD, or a gamepad. About once a second the page draws the occupancy grid (free, unknown, occupied) and a pose arrow. Click a free cell to send a Nav2 `navigate_to_pose` goal in the `map` frame. Occupied and unknown cells are rejected. Moving the joystick cancels the goal.
+
+`--map` is what publishes `/map` and starts the `navigate_to_pose` action. See [mapping bringup](#bringup-physical-rgb-d-robot) if the grid never appears.
+
 ## Install
 
 Nav2’s metapackage (`navigation2`) is required in addition to `nav2-bringup`. Without it, `navigate_to_pose` / costmaps are missing and `@agenticros/explore` cannot run. Jazzy:

@@ -20,7 +20,7 @@ Robot ID and API token live in `configstore('agenticros')`. Legacy values from
 
 | File | Purpose |
 |------|---------|
-| `comms.js` | Cloud P2P + ROS bridge (`agenticros connect`) |
+| `comms.js` | Cloud P2P + ROS bridge (`agenticros connect`). Streams a throttled `/map` preview to ARC and forwards a click to Nav2 `navigate_to_pose`. |
 | `start-motors.js` | Pick backend and spawn a motor controller (fails if the child dies; logs: `/tmp/agenticros-motors.log`) |
 | `motors-rpi5.js` | Raspberry Pi GPIO motors |
 | `motors-firmata.js` | Firmata / Arduino motors (default for non-Pi, including Jetson+Arduino) |

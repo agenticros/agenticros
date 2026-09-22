@@ -45,7 +45,7 @@ premium skills — never on the real-time control path.
 | Skills marketplace (metadata + git/npm install) | Live at [skills.agenticros.com](https://skills.agenticros.com) (robot skills). Third-party Agent Skills: [skills.sh/official](https://www.skills.sh/official) |
 | Cross-adapter memory (local / mem0) | Shipped, off by default |
 | Safety (per-robot velocity, optional `workspaceLimits`, fail-safe stop, `doctor --live`) | Shipped (`@agenticros/core` 0.8.5); MCP/Gemini `ros2_estop` shipped; `blocks_base` mutex still open |
-| AgenticROS Cloud (ARC) — P2P teleop, register, presence | Live at [cloud.agenticros.com](https://cloud.agenticros.com) |
+| AgenticROS Cloud (ARC) — P2P teleop, live map, click-to-navigate, register, presence | Live at [cloud.agenticros.com](https://cloud.agenticros.com) (CLI 0.7.23) |
 | ARC organizations + teams (invite by GitHub, shared fleet) | Shipped on Teams / Enterprise |
 | Published packages | `@agenticros/core` **0.8.9**, CLI `agenticros` **0.7.23** |
 | Parallel mission steps + true hot-reload + paid licenses | Planned |
@@ -177,7 +177,7 @@ empty market.
 
 ### Tier B — Cloud control plane (fleet SaaS)
 
-[AgenticROS Cloud (ARC)](https://cloud.agenticros.com) is live: P2P teleop, robot
+[AgenticROS Cloud (ARC)](https://cloud.agenticros.com) is live: P2P teleop with a live occupancy map and click-to-navigate (CLI 0.7.23), robot
 register / presence, CLI `login` / `register` / `connect` / `remote`.
 **Organizations and teams** shipped on Teams / Enterprise — create an org,
 invite teammates by GitHub username, share teleop, APIs, and dashboards
@@ -275,4 +275,4 @@ Hosted / spatial memory + multi-agent mesh
 - [Simulation](simulation.md) — Gazebo AMR / arm status and sharp edges
 - [Architecture](architecture.md) — transports and deployment modes
 - [CLI](cli.md) — `agenticros` commands including robots, skills, and Cloud login
-- [AgenticROS Cloud](https://cloud.agenticros.com) — P2P teleop, orgs/teams, remote ops
+- [AgenticROS Cloud](https://cloud.agenticros.com) — P2P teleop, live map, orgs/teams, remote ops
