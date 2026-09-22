@@ -83,6 +83,15 @@ const COMM_JS_PATH = fileURLToPath(import.meta.url);
 
 import { getRobotId, getApiToken } from './robot-config.js';
 import { fetchRobotConfig, resolveTopic, toClientTopic, getCmdVelTopic, fetchIceServers } from './ros-topics.js';
+import {
+    cellAt,
+    isNavigable,
+    classifyOccupancy,
+    readOccupancy,
+    rememberTransforms,
+    renderOccupancy,
+    robotPoseOnMap,
+} from './lib/map-preview.js';
 
 const robotId = getRobotId();
 const apiToken = getApiToken();
@@ -279,6 +288,217 @@ function formatLog(message) {
     return `[${timestamp}] ${message}`;
 }
 
+const tfEdges = new Map();
+let latestOccupancy = null;
+let mapSubscriptionsReady = false;
+let navClient = null;
+let activeNavGoal = null;
+let navGoalSeq = 0;
+let mapStatusConnection = null;
+
+function publishTeleopTwist(twist) {
+    if (!twist || !velocityPub) return;
+    try {
+        velocityPub.publish(twist);
+    } catch (error) {
+        console.log(formatLog(`twist publish failed: ${error}`));
+        return;
+    }
+    const lin = Number(twist.linear?.x) || 0;
+    const ang = Number(twist.angular?.z) || 0;
+    if (Math.abs(lin) > 0.01 || Math.abs(ang) > 0.01) {
+        void invalidateNavGoal('Teleop canceled navigation.');
+    }
+}
+
+function navStatus(connection, payload) {
+    const target = connection || mapStatusConnection;
+    if (!target || typeof target.updateLatestMessage !== 'function') return;
+    target.updateLatestMessage('/nav_status', {
+        robotId,
+        topic: '/nav_status',
+        timestamp: Date.now(),
+        ...payload,
+    });
+}
+
+async function cancelActiveNavGoal() {
+    const handle = activeNavGoal;
+    activeNavGoal = null;
+    if (!handle || typeof handle.cancelGoal !== 'function') return;
+    try {
+        await handle.cancelGoal();
+    } catch (error) {
+        console.warn(formatLog(`nav cancel: ${error?.message || error}`));
+    }
+}
+
+async function invalidateNavGoal(reason) {
+    navGoalSeq += 1;
+    const hadGoal = Boolean(activeNavGoal);
+    await cancelActiveNavGoal();
+    if (hadGoal && reason) {
+        navStatus(null, { ok: false, state: 'canceled', error: reason });
+    }
+}
+
+async function handleNavGoalCommand(dataObj, connection) {
+    const seq = ++navGoalSeq;
+    mapStatusConnection = connection || mapStatusConnection;
+    const x = Number(dataObj?.x);
+    const y = Number(dataObj?.y);
+    const yaw = Number.isFinite(Number(dataObj?.yaw)) ? Number(dataObj.yaw) : 0;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+        navStatus(connection, { ok: false, error: 'Goal needs finite x and y.' });
+        return;
+    }
+    const value = cellAt(latestOccupancy, x, y);
+    if (value == null) {
+        navStatus(connection, { ok: false, error: 'That point is outside the map.' });
+        return;
+    }
+    if (!isNavigable(value)) {
+        const kind = classifyOccupancy(value);
+        navStatus(connection, {
+            ok: false,
+            error: kind === 'unknown'
+                ? 'That cell is still unknown. Drive closer and try again.'
+                : 'That cell is occupied.',
+        });
+        return;
+    }
+    if (!rosNode) {
+        navStatus(connection, { ok: false, error: 'ROS is not running on the robot.' });
+        return;
+    }
+    try {
+        if (!navClient) {
+            navClient = new rclnodejs.ActionClient(
+                rosNode,
+                'nav2_msgs/action/NavigateToPose',
+                'navigate_to_pose',
+            );
+        }
+        const ready = typeof navClient.waitForServer === 'function'
+            ? await navClient.waitForServer(2500)
+            : true;
+        if (seq !== navGoalSeq) return;
+        if (!ready) {
+            navStatus(connection, {
+                ok: false,
+                error: 'Nav2 is not running. Start it with agenticros up real --map.',
+            });
+            return;
+        }
+        await cancelActiveNavGoal();
+        if (seq !== navGoalSeq) return;
+        const half = yaw / 2;
+        const goal = {
+            pose: {
+                header: { frame_id: 'map' },
+                pose: {
+                    position: { x, y, z: 0 },
+                    orientation: { x: 0, y: 0, z: Math.sin(half), w: Math.cos(half) },
+                },
+            },
+            behavior_tree: '',
+        };
+        const handle = await navClient.sendGoal(goal);
+        if (seq !== navGoalSeq) {
+            try { await handle?.cancelGoal?.(); } catch { /* replaced */ }
+            return;
+        }
+        const accepted = typeof handle?.isAccepted === 'function'
+            ? handle.isAccepted()
+            : handle?.accepted !== false;
+        if (!accepted) {
+            navStatus(connection, { ok: false, error: 'Nav2 rejected the goal.' });
+            return;
+        }
+        activeNavGoal = handle;
+        navStatus(connection, { ok: true, state: 'navigating', x, y, yaw });
+        Promise.resolve(handle.getResult?.()).then((result) => {
+            if (activeNavGoal !== handle) return;
+            activeNavGoal = null;
+            const status = Number(result?.status);
+            const succeeded = status === 4 || (typeof handle.isSucceeded === 'function' && handle.isSucceeded());
+            const canceled = status === 5 || (typeof handle.isCanceled === 'function' && handle.isCanceled());
+            if (succeeded) {
+                navStatus(connection, { ok: true, state: 'arrived', x, y });
+            } else if (canceled) {
+                navStatus(connection, { ok: false, state: 'canceled', error: 'Navigation canceled.' });
+            } else if (status === 6 || (typeof handle.isAborted === 'function' && handle.isAborted())) {
+                navStatus(connection, { ok: false, state: 'failed', error: 'Nav2 aborted the goal.' });
+            } else {
+                navStatus(connection, { ok: true, state: 'arrived', x, y });
+            }
+        }).catch((error) => {
+            if (activeNavGoal === handle) activeNavGoal = null;
+            navStatus(connection, { ok: false, state: 'failed', error: error?.message || 'Navigation failed.' });
+        });
+    } catch (error) {
+        navStatus(connection, {
+            ok: false,
+            error: error?.message || 'Could not send the Nav2 goal. Is navigation running?',
+        });
+    }
+}
+
+function subscribeRos(type, topic, callback, transientLocal) {
+    if (transientLocal && rclnodejs.QoS) {
+        try {
+            const qos = new rclnodejs.QoS(
+                rclnodejs.QoS.HistoryPolicy.RMW_QOS_POLICY_HISTORY_KEEP_LAST,
+                1,
+                rclnodejs.QoS.ReliabilityPolicy.RMW_QOS_POLICY_RELIABILITY_RELIABLE,
+                rclnodejs.QoS.DurabilityPolicy.RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL,
+            );
+            return rosNode.createSubscription(type, topic, { qos }, callback);
+        } catch (error) {
+            console.warn(formatLog(`QoS subscribe failed for ${topic}, using defaults: ${error?.message || error}`));
+        }
+    }
+    return rosNode.createSubscription(type, topic, callback);
+}
+
+function ensureMapSubscriptions() {
+    if (!rosNode || mapSubscriptionsReady) return;
+    const onTf = (msg) => {
+        try { rememberTransforms(tfEdges, msg); } catch { /* ignore a bad TF sample */ }
+    };
+    let mapOk = false;
+    let tfOk = false;
+    try {
+        subscribeRos('nav_msgs/msg/OccupancyGrid', '/map', (msg) => {
+            try {
+                const grid = readOccupancy(msg);
+                if (grid.width > 0 && grid.height > 0 && grid.resolution > 0) {
+                    latestOccupancy = grid;
+                }
+            } catch (error) {
+                console.warn(formatLog(`map parse failed: ${error?.message || error}`));
+            }
+        }, true);
+        mapOk = true;
+    } catch (error) {
+        console.warn(formatLog(`Occupancy /map subscription unavailable: ${error?.message || error}`));
+    }
+    try {
+        subscribeRos('tf2_msgs/msg/TFMessage', '/tf', onTf, false);
+        subscribeRos('tf2_msgs/msg/TFMessage', '/tf_static', onTf, true);
+        tfOk = true;
+    } catch (error) {
+        console.warn(formatLog(`TF subscription unavailable: ${error?.message || error}`));
+    }
+    if (mapOk && tfOk) {
+        mapSubscriptionsReady = true;
+        console.log(formatLog('Subscribed to /map, /tf, and /tf_static for ARC map teleop'));
+    } else if (mapOk) {
+        mapSubscriptionsReady = true;
+        console.log(formatLog('Subscribed to /map for ARC map teleop (TF pose unavailable)'));
+    }
+}
+
 // When stdout is redirected to a file (agenticros connect), Node block-buffers
 // console.log so boot lines can stay invisible in /tmp/agenticros-comms.log.
 // Force synchronous line writes for operational logs.
@@ -452,6 +672,8 @@ class P2PServer {
                 }
             });
 
+            ensureMapSubscriptions();
+
             // Start ROS node spin if not already running
             if (rosNode && !rosNode.isSpinning) {
                 console.log(formatLog('Starting standalone ROS node spin...'));
@@ -619,7 +841,7 @@ class P2PServer {
             this.socket.on("twist", (data, callback) => {
               // console.log("TWIST:", data);
               try{
-            	   velocityPub.publish(data);
+            	   publishTeleopTwist(data);
               } catch(error){
               	exec(`ros2 topic pub --once ${cmdVel} geometry_msgs/Twist "{linear: {x: 0.0, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}"`);
               	console.log('aborted', error);
@@ -1621,7 +1843,7 @@ class P2PConnection {
         }
         
         const now = Date.now();
-        const isCameraTopic = topic.includes('camera') || topic === '/camera2d';
+        const isCameraTopic = topic.includes('camera') || topic === '/camera2d' || topic === '/map' || topic === '/nav_status';
         if (!isCameraTopic) {
             console.log(formatLog(`📋 updateLatestMessage called for topic: ${topic}`));
         }
@@ -1728,7 +1950,7 @@ class P2PConnection {
             
             // Send immediately for all messages (no priority delays)
             await this.sendMessageImmediate(messageData.message);
-            if (!(topic.includes('camera') || topic === '/camera2d')) {
+            if (!(topic.includes('camera') || topic === '/camera2d' || topic === '/map' || topic === '/nav_status')) {
                 console.log(formatLog(`✅ Message sent successfully for topic: ${topic}`));
             }
             this.pendingMessages.delete(topic); // Remove after sending
@@ -1854,6 +2076,7 @@ class P2PConnection {
                     if (isBrowserPeer) {
                         this.setupRosSubscriptions(dc);
                         this.startBrowserVideoBridge();
+                        this.startMapBridge();
                     } else {
                         this.setupRosSubscriptions(dc);
                     }
@@ -1970,13 +2193,15 @@ class P2PConnection {
                                         }
                                         
                                         // Handle twist commands
-                                        if (dataObj.topic === "twist") {
+                                        if (dataObj.topic === "nav_goal") {
+                                            void handleNavGoalCommand(dataObj, this);
+                                        } else if (dataObj.topic === "twist") {
                                             console.log(formatLog(`Processing twist command from peer ${this.peerId}: ${JSON.stringify(dataObj.twist)}`));
-                                            velocityPub.publish(dataObj.twist);
+                                            publishTeleopTwist(dataObj.twist);
                                         } else if (dataObj.twist) {
                                             // Direct twist object
                                             console.log(formatLog(`Processing direct twist object from peer ${this.peerId}: ${JSON.stringify(dataObj.twist)}`));
-                                            velocityPub.publish(dataObj.twist);
+                                            publishTeleopTwist(dataObj.twist);
                                         }
                                         
                                         // Handle speak commands
@@ -1991,7 +2216,7 @@ class P2PConnection {
                                             try {
                                                 const twistData = JSON.parse(completeMessage.slice(6));
                                                 console.log(formatLog(`Processing direct twist command from peer ${this.peerId}: ${JSON.stringify(twistData)}`));
-                                                velocityPub.publish(twistData);
+                                                publishTeleopTwist(twistData);
                                             } catch (e) {
                                                 console.error(formatLog(`Failed to parse twist command from peer ${this.peerId}: ${e.message}`));
                                             }
@@ -2027,13 +2252,15 @@ class P2PConnection {
                                     console.log(formatLog(`📥 Parsed message as JSON from peer ${this.peerId}: ${JSON.stringify(dataObj)}`));
                                     
                                     // Handle twist commands
-                                    if (dataObj.topic === "twist") {
+                                    if (dataObj.topic === "nav_goal") {
+                                        void handleNavGoalCommand(dataObj, this);
+                                    } else if (dataObj.topic === "twist") {
                                         console.log(formatLog(`Processing twist command from peer ${this.peerId}: ${JSON.stringify(dataObj.twist)}`));
-                                        velocityPub.publish(dataObj.twist);
+                                        publishTeleopTwist(dataObj.twist);
                                     } else if (dataObj.twist) {
                                         // Direct twist object
                                         console.log(formatLog(`Processing direct twist object from peer ${this.peerId}: ${JSON.stringify(dataObj.twist)}`));
-                                        velocityPub.publish(dataObj.twist);
+                                        publishTeleopTwist(dataObj.twist);
                                     }
                                     
                                     // Handle speak commands
@@ -2048,7 +2275,7 @@ class P2PConnection {
                                         try {
                                             const twistData = JSON.parse(msg.slice(6));
                                             console.log(formatLog(`Processing direct twist command from peer ${this.peerId}: ${JSON.stringify(twistData)}`));
-                                            velocityPub.publish(twistData);
+                                            publishTeleopTwist(twistData);
                                         } catch (e) {
                                             console.error(formatLog(`Failed to parse twist command from peer ${this.peerId}: ${e.message}`));
                                         }
@@ -2133,13 +2360,15 @@ class P2PConnection {
                                     }
                                     
                                     // Handle twist commands
-                                    if (dataObj.topic === "twist") {
+                                    if (dataObj.topic === "nav_goal") {
+                                        void handleNavGoalCommand(dataObj, this);
+                                    } else if (dataObj.topic === "twist") {
                                         console.log(formatLog(`Processing twist command: ${JSON.stringify(dataObj.twist)}`));
-                                        velocityPub.publish(dataObj.twist);
+                                        publishTeleopTwist(dataObj.twist);
                                     } else if (dataObj.twist) {
                                         // Direct twist object
                                         console.log(formatLog(`Processing direct twist object: ${JSON.stringify(dataObj.twist)}`));
-                                        velocityPub.publish(dataObj.twist);
+                                        publishTeleopTwist(dataObj.twist);
                                     }
                                     
                                     // Handle speak commands
@@ -2154,7 +2383,7 @@ class P2PConnection {
                                         try {
                                             const twistData = JSON.parse(completeMessage.slice(6));
                                             console.log(formatLog(`Processing direct twist command: ${JSON.stringify(twistData)}`));
-                                            velocityPub.publish(twistData);
+                                            publishTeleopTwist(twistData);
                                         } catch (e) {
                                             console.error(formatLog(`Failed to parse twist command: ${e.message}`));
                                         }
@@ -2371,12 +2600,14 @@ class P2PConnection {
             // Check if ROS is already initialized by standalone subscriptions
             if (rosNode) {
                 console.log(formatLog('ROS node already initialized, setting up P2P-specific subscriptions...'));
+                ensureMapSubscriptions();
 
                 const isBrowserPeer = this.peerId.startsWith('browser-');
                 if (isBrowserPeer) {
                     this._browserMediaReady = true;
                     this.setupRosSubscriptions(dc);
                     this.startBrowserVideoBridge();
+                    this.startMapBridge();
                 } else {
                     this.setupRosSubscriptions(dc);
                 }
@@ -2402,6 +2633,7 @@ class P2PConnection {
                 console.log(formatLog('ROS node created successfully'));
                 velocityPub = rosNode.createPublisher('geometry_msgs/msg/Twist', `${cmdVel}`);
                 console.log(formatLog('Velocity publisher created successfully'));
+                ensureMapSubscriptions();
 
                 // Setup subscriptions after ROS node is fully initialized
                 console.log(formatLog('Setting up ROS subscriptions...'));
@@ -2409,6 +2641,7 @@ class P2PConnection {
                 this.setupRosSubscriptions(dc);
                 if (this.peerId.startsWith('browser-')) {
                     this.startBrowserVideoBridge();
+                    this.startMapBridge();
                 }
 
                 console.log(formatLog('Starting ROS node spin...'));
@@ -2474,6 +2707,72 @@ class P2PConnection {
         if (this._videoBridgeTimer) {
             clearInterval(this._videoBridgeTimer);
             this._videoBridgeTimer = null;
+        }
+    }
+
+    /**
+     * Push a downsampled /map JPEG plus the robot pose about once a second.
+     * Full occupancy grids do not fit the teleop data channel.
+     */
+    startMapBridge() {
+        this.stopMapBridge();
+        mapStatusConnection = this;
+        console.log(formatLog('Starting ARC map bridge'));
+        this._mapBridgeTimer = setInterval(() => {
+            void this.pushMapFrame();
+        }, 1000);
+    }
+
+    stopMapBridge() {
+        if (this._mapBridgeTimer) {
+            clearInterval(this._mapBridgeTimer);
+            this._mapBridgeTimer = null;
+        }
+    }
+
+    async pushMapFrame() {
+        if (this.rosPaused || !this.dataChannelOpen) return;
+        if (this._mapRendering || !latestOccupancy) return;
+        if (this.sendingMessages?.has('/map')) return;
+        this._mapRendering = true;
+        try {
+            let preview = renderOccupancy(latestOccupancy);
+            if (!preview) return;
+            let jpeg = await sharp(preview.rgba, {
+                raw: { width: preview.width, height: preview.height, channels: 4 },
+            }).jpeg({ quality: 60 }).toBuffer();
+            if (jpeg.length > 40 * 1024) {
+                preview = renderOccupancy(latestOccupancy, 200);
+                if (!preview) return;
+                jpeg = await sharp(preview.rgba, {
+                    raw: { width: preview.width, height: preview.height, channels: 4 },
+                }).jpeg({ quality: 45 }).toBuffer();
+            }
+            if (jpeg.length > 48 * 1024) return;
+            const pose = robotPoseOnMap(tfEdges);
+            this.updateLatestMessage('/map', {
+                robotId,
+                topic: '/map',
+                encoding: 'base64',
+                data: jpeg.toString('base64'),
+                width: preview.width,
+                height: preview.height,
+                resolution: preview.resolution,
+                scale: preview.scale,
+                gridWidth: preview.gridWidth,
+                gridHeight: preview.gridHeight,
+                origin: preview.origin,
+                pose,
+                timestamp: Date.now(),
+            });
+        } catch (error) {
+            const now = Date.now();
+            if (now - (this._lastMapErrAt || 0) > 5000) {
+                this._lastMapErrAt = now;
+                console.warn(formatLog(`Map frame dropped: ${error?.message || error}`));
+            }
+        } finally {
+            this._mapRendering = false;
         }
     }
 
@@ -2564,6 +2863,7 @@ class P2PConnection {
     cleanup() {
         this.clearAllTimers();
         this.stopBrowserVideoBridge();
+        this.stopMapBridge();
         this._browserMediaReady = false;
         this.cleanupSubscriptions();
         this.dataChannels.forEach((channel, index) => {
