@@ -111,7 +111,7 @@ Default cloud host: **`cloud.agenticros.com`** (REST + WebSocket).
 | `agenticros hive on` / `off` / `doctor` / `recipes` | Optional fleet hive (off by default). |
 | `agenticros register` | Wizard to register this robot on ARC (name, camera, compute). |
 | `agenticros remote list` | List ARC account robots + online/offline. |
-| `agenticros remote <action> [--robot <id>]` | Preset remote CLI via `POST /robot/:id/cli` (`start_motors`, `stop_motors`, `start_realsense`, `stop_realsense`, `start_camera`, `stop_camera`, `status`). |
+| `agenticros remote <action> [--robot <id>]` | Preset remote CLI via `POST /robot/:id/cli` (`start_motors`, `stop_motors`, `start_realsense`, `stop_realsense`, `start_camera`, `stop_camera`, `start_mapping`, `stop_mapping`, `navigate_to`, `status`). |
 | `agenticros connect [-s host]` | Start cloud P2P + ROS bridge (`comms.js`). Default `wss://cloud.agenticros.com`. |
 | `agenticros disconnect` | Stop `comms.js`. |
 | `agenticros id` | Print (or create) robot UUID. |

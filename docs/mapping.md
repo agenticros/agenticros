@@ -32,15 +32,17 @@ Skills:
 
 ## Drive the map from ARC
 
-CLI **0.7.23** or newer streams `/map` to the [AgenticROS Cloud](https://cloud.agenticros.com) control page while you teleop.
+CLI **0.7.24** or newer streams `/map` to the [AgenticROS Cloud](https://cloud.agenticros.com) control page while you teleop, and accepts remote start-mapping and navigate commands.
 
 ```bash
-npm install -g agenticros@0.7.23   # skip if this robot is already on 0.7.23+
+npm install -g agenticros@0.7.24   # skip if this robot is already on 0.7.24+
 agenticros connect
 agenticros up real --map
 ```
 
 Open that robot’s control page and drive with the joystick, WASD, or a gamepad. About once a second the page draws the occupancy grid (free, unknown, occupied) and a pose arrow. Click a free cell to send a Nav2 `navigate_to_pose` goal in the `map` frame. Occupied and unknown cells are rejected. Moving the joystick cancels the goal.
+
+You can start the stack from ARC without an SSH session. On the control page, **Start mapping** runs `agenticros start mapping`. The [Remote CLI](https://cloud.agenticros.com/remote) page has the same start/stop pair, plus a **Navigate to** form (map-frame x, y, yaw). Missions adds **Map the room** and **Navigate to**, which dispatch those same commands when you run them. The robot must be on CLI **0.7.24** or newer (`agenticros start mapping` and `agenticros navigate`), then `agenticros disconnect && agenticros connect`.
 
 `--map` is what publishes `/map` and starts the `navigate_to_pose` action. See [mapping bringup](#bringup-physical-rgb-d-robot) if the grid never appears.
 

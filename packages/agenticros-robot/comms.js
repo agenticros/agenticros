@@ -939,7 +939,7 @@ class P2PServer {
             });
             
             // Preset remote CLI actions (ARC POST /robot/:id/cli). Exact match after trim,
-            // plus one parameterized pattern for skills_remove (server validates skillId).
+            // plus parameterized patterns the server builds from validated params.
             const ALLOWED_CLI_COMMANDS = new Set([
               'agenticros start motors',
               'agenticros stop motors',
@@ -947,6 +947,8 @@ class P2PServer {
               'agenticros stop realsense',
               'agenticros start camera',
               'agenticros stop camera',
+              'agenticros start mapping',
+              'agenticros stop mapping',
               'agenticros status --json',
               'agenticros skills list --json',
               'agenticros skills sync --no-restart',
@@ -954,6 +956,7 @@ class P2PServer {
             ]);
             const ALLOWED_CLI_COMMAND_PATTERNS = [
               /^agenticros skills remove [a-zA-Z0-9][a-zA-Z0-9._-]* --yes --no-restart$/,
+              /^agenticros navigate --x -?\d+\.\d{3} --y -?\d+\.\d{3} --yaw -?\d+\.\d{3}$/,
             ];
             const isAllowedCliCommand = (command) => {
               if (ALLOWED_CLI_COMMANDS.has(command)) return true;

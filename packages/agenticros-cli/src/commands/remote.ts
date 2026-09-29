@@ -33,6 +33,10 @@ export interface RemoteOptions {
   robot?: string;
   /** --skill <id> for skills_remove */
   skill?: string;
+  /** --x / --y / --yaw for navigate_to */
+  x?: string;
+  y?: string;
+  yaw?: string;
   /** --json */
   json?: boolean;
 }
@@ -44,6 +48,9 @@ const ACTION_LABELS: Record<RemoteCliAction, string> = {
   stop_realsense: "Stop RealSense",
   start_camera: "Start 2D camera",
   stop_camera: "Stop 2D camera",
+  start_mapping: "Start mapping (RTAB-Map + Nav2)",
+  stop_mapping: "Stop mapping",
+  navigate_to: "Navigate to a map pose (needs --x --y)",
   status: "Show status (JSON)",
   skills_list: "List skills (JSON)",
   skills_sync: "Sync skill tools allowlist (no gateway restart)",
@@ -70,7 +77,7 @@ export async function remoteCommand(opts: RemoteOptions): Promise<void> {
   }
 
   const robotId = await resolveRobotId(opts.robot);
-  const params = await resolveParams(action, opts.skill);
+  const params = await resolveParams(action, opts);
   await runAction(robotId, action, opts.json === true, params);
 }
 
@@ -169,13 +176,63 @@ async function resolveRobotId(explicit?: string): Promise<string> {
   });
 }
 
+function parseRemoteNumber(raw: string | undefined, label: string): number | undefined {
+  if (raw === undefined || raw.trim() === "") return undefined;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) {
+    err(`${label} must be a number.`);
+    process.exit(2);
+  }
+  return n;
+}
+
 async function resolveParams(
   action: RemoteCliAction,
-  skillOpt?: string,
+  opts: { skill?: string; x?: string; y?: string; yaw?: string } = {},
 ): Promise<RemoteCliParams | undefined> {
+  if (action === "navigate_to") {
+    let x = parseRemoteNumber(opts.x, "--x");
+    let y = parseRemoteNumber(opts.y, "--y");
+    let yaw = parseRemoteNumber(opts.yaw, "--yaw");
+    if (x === undefined || y === undefined) {
+      if (!isTty) {
+        err("navigate_to requires --x and --y (optional --yaw, radians).");
+        process.exit(2);
+      }
+      if (x === undefined) {
+        x = Number(
+          await input({
+            message: "Map x (meters):",
+            validate: (v) => Number.isFinite(Number(v)) || "Enter a number",
+          }),
+        );
+      }
+      if (y === undefined) {
+        y = Number(
+          await input({
+            message: "Map y (meters):",
+            validate: (v) => Number.isFinite(Number(v)) || "Enter a number",
+          }),
+        );
+      }
+      if (yaw === undefined) {
+        const raw = await input({
+          message: "Yaw (radians, blank = 0):",
+          default: "0",
+        });
+        yaw = Number(raw);
+        if (!Number.isFinite(yaw)) {
+          err("Yaw must be a number.");
+          process.exit(2);
+        }
+      }
+    }
+    return { x, y, yaw: yaw ?? 0 };
+  }
+
   if (action !== "skills_remove") return undefined;
 
-  let skillId = skillOpt?.trim() ?? "";
+  let skillId = opts.skill?.trim() ?? "";
   if (!skillId) {
     if (!isTty) {
       err("skills_remove requires --skill <id>.");
@@ -267,6 +324,6 @@ export async function remoteControlInteractive(): Promise<void> {
     ],
   });
   if (action === "__back__") return;
-  const params = await resolveParams(action);
+  const params = await resolveParams(action, {});
   await runAction(robotId, action, false, params);
 }

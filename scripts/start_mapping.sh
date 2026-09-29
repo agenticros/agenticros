@@ -9,6 +9,7 @@
 #   AGENTICROS_ROBOT_NAMESPACE   forwarded as robot_namespace:=
 #   AGENTICROS_WHEEL_ODOM=1      visual_odometry:=false odom_topic:=/odom
 #   AGENTICROS_KEEP_MAP=1        delete_db_on_start:=false
+#   AGENTICROS_NO_REALSENSE=1    use_realsense:=false (camera already running)
 #
 # Usage: ./scripts/start_mapping.sh [jazzy|humble]
 
@@ -56,14 +57,18 @@ NS="${AGENTICROS_ROBOT_NAMESPACE:-}"
 VO="true"
 ODOM="/odom"
 DELETE_DB="true"
+USE_RS="true"
 if [[ "${AGENTICROS_WHEEL_ODOM:-}" == "1" ]]; then
   VO="false"
 fi
 if [[ "${AGENTICROS_KEEP_MAP:-}" == "1" ]]; then
   DELETE_DB="false"
 fi
+if [[ "${AGENTICROS_NO_REALSENSE:-}" == "1" ]]; then
+  USE_RS="false"
+fi
 
-echo "==> Launching RTAB-Map + Nav2 (robot_namespace='${NS}' visual_odometry=${VO})"
+echo "==> Launching RTAB-Map + Nav2 (robot_namespace='${NS}' visual_odometry=${VO} use_realsense=${USE_RS})"
 echo "    Next: agenticros skills install --bundle mapping"
 echo "    Then chat: \"map the room\" / \"save this place as kitchen\" / \"go to the kitchen\""
 
@@ -71,4 +76,5 @@ exec ros2 launch agenticros_bringup rtabmap_nav2.launch.py \
   "robot_namespace:=${NS}" \
   "visual_odometry:=${VO}" \
   "odom_topic:=${ODOM}" \
-  "delete_db_on_start:=${DELETE_DB}"
+  "delete_db_on_start:=${DELETE_DB}" \
+  "use_realsense:=${USE_RS}"

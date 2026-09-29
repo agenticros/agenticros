@@ -98,7 +98,9 @@ live in `configstore('agenticros')` (`ROBOT_ID`, `API_TOKEN`); legacy
 | `agenticros whoami` | Show cloud account and whether this robot is registered. |
 | `agenticros register` | Interactive wizard (required: name, camera, compute). Mints/reuses local UUID and `POST /robots` to ARC. |
 | `agenticros remote list` | List robots on your ARC account with online/offline presence. |
-| `agenticros remote <action> [--robot <id>] [--skill <id>]` | Run a preset CLI action on an online robot via `POST /robot/:id/cli`. Actions: `start_motors`, `stop_motors`, `start_realsense`, `stop_realsense`, `start_camera`, `stop_camera`, `status`, `skills_list`, `skills_sync`, `skills_remove` (requires `--skill`), `gateway_restart`. |
+| `agenticros remote <action> [--robot <id>] [--skill <id>]` | Run a preset CLI action on an online robot via `POST /robot/:id/cli`. Actions: `start_motors`, `stop_motors`, `start_realsense`, `stop_realsense`, `start_camera`, `stop_camera`, `start_mapping`, `stop_mapping`, `navigate_to` (requires `--x` and `--y`, optional `--yaw`), `status`, `skills_list`, `skills_sync`, `skills_remove` (requires `--skill`), `gateway_restart`. |
+| `agenticros start mapping` / `agenticros stop mapping` | Start or stop RTAB-Map + Nav2 (`scripts/start_mapping.sh`). Skips a second RealSense launch when the camera node is already up. |
+| `agenticros navigate --x <m> --y <m> [--yaw <rad>]` | Send one Nav2 `navigate_to_pose` goal in the `map` frame. |
 | `agenticros gateway restart [--json]` | Restart the local OpenClaw gateway (`systemctl --user` then `openclaw gateway restart`). Also available remotely as `agenticros remote gateway_restart`. |
 | `agenticros connect [-s host]` | Start cloud P2P/ROS bridge (`comms.js`). Default `wss://cloud.agenticros.com`. |
 | `agenticros disconnect` | Stop `comms.js`. |

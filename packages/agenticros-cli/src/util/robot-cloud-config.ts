@@ -301,6 +301,9 @@ export const REMOTE_CLI_ACTIONS = [
   "stop_realsense",
   "start_camera",
   "stop_camera",
+  "start_mapping",
+  "stop_mapping",
+  "navigate_to",
   "status",
   "skills_list",
   "skills_sync",
@@ -320,6 +323,12 @@ export function isRemoteCliAction(value: string): value is RemoteCliAction {
 export interface RemoteCliParams {
   /** Required for skills_remove. */
   skillId?: string;
+  /** Required for navigate_to (map frame, meters). */
+  x?: number;
+  /** Required for navigate_to (map frame, meters). */
+  y?: number;
+  /** Optional for navigate_to (radians). Defaults to 0. */
+  yaw?: number;
 }
 
 function authHeaders(apiToken: string): Record<string, string> {
@@ -414,6 +423,22 @@ export async function runRemoteCli(
       );
     }
     body.params = { skillId };
+  }
+  if (action === "navigate_to") {
+    const x = params?.x;
+    const y = params?.y;
+    const yaw = params?.yaw ?? 0;
+    if (
+      typeof x !== "number" ||
+      typeof y !== "number" ||
+      typeof yaw !== "number" ||
+      !Number.isFinite(x) ||
+      !Number.isFinite(y) ||
+      !Number.isFinite(yaw)
+    ) {
+      throw new Error("navigate_to requires numeric --x and --y (optional --yaw, radians).");
+    }
+    body.params = { x, y, yaw };
   }
 
   const response = await fetch(`${CLOUD_REST}/robot/${robotId}/cli`, {

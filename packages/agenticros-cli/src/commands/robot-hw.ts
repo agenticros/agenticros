@@ -19,6 +19,7 @@ import {
 } from "../util/robot-pkg.js";
 import { getCliPaths, resolveScriptPath } from "../util/paths.js";
 import { detectRosDistro } from "../util/env.js";
+import { getActiveRobotId, readConfigObject, readRobots } from "../util/robot-config.js";
 import {
   CLOUD_REST,
   ensureRobotId,
@@ -55,7 +56,7 @@ async function listCommsPids(): Promise<string[]> {
 function spawnDetached(
   command: string,
   args: string[],
-  opts?: { cwd?: string; logFile?: string },
+  opts?: { cwd?: string; logFile?: string; env?: NodeJS.ProcessEnv },
 ): number | undefined {
   const stdio: ("ignore" | number)[] = opts?.logFile
     ? ["ignore", openSync(opts.logFile, "a"), openSync(opts.logFile, "a")]
@@ -64,6 +65,7 @@ function spawnDetached(
     detached: true,
     stdio,
     cwd: opts?.cwd,
+    env: opts?.env,
   });
   child.unref();
   return child.pid;
@@ -315,6 +317,112 @@ export async function stopRealsenseCommand(): Promise<void> {
   ok("Robot realsense stopped.");
 }
 
+function configuredNamespace(): string {
+  const obj = readConfigObject();
+  const { robots } = readRobots(obj);
+  const activeId = getActiveRobotId(obj);
+  const match = robots.find((r) => r.id === activeId);
+  const fromRobot = (obj["robot"] as { namespace?: string } | undefined)?.namespace;
+  return (match?.namespace ?? fromRobot ?? "").trim();
+}
+
+const MAPPING_LOG = "/tmp/agenticros-mapping.log";
+const NAVIGATE_LOG = "/tmp/agenticros-navigate.log";
+
+export async function startMappingCommand(): Promise<void> {
+  const script = resolveScriptPath("start_mapping.sh");
+  if (!existsSync(script)) {
+    err(`start_mapping.sh not found at ${script}`);
+    err("Upgrade the CLI (`npm i -g agenticros@latest`) or run `agenticros init --force`.");
+    process.exit(1);
+  }
+  const ros = detectRosDistro();
+  if (!ros.distro) {
+    err("No ROS 2 installation detected under /opt/ros/. Install ROS 2 Humble or Jazzy first.");
+    process.exit(1);
+  }
+  const { exitCode } = await execa("pgrep", ["-f", "[r]ealsense2_camera_node"], { reject: false });
+  const realsenseUp = exitCode === 0;
+  const ns = configuredNamespace();
+  const pid = spawnDetached("bash", [script, ros.distro], {
+    logFile: MAPPING_LOG,
+    env: {
+      ...process.env,
+      AGENTICROS_ROBOT_NAMESPACE: ns,
+      ...(realsenseUp ? { AGENTICROS_NO_REALSENSE: "1" } : {}),
+    },
+  });
+  ok(`Mapping stack starting${pid ? ` (pid ${pid})` : ""}. Log: ${MAPPING_LOG}`);
+  if (realsenseUp) {
+    info("RealSense is already running, so this launch will not start a second camera.");
+  }
+}
+
+export async function stopMappingCommand(): Promise<void> {
+  const patterns = [
+    "rtabmap_nav2.launch.py",
+    "start_mapping.sh",
+    "rtabmap",
+    "nav2_container",
+    "bt_navigator",
+    "controller_server",
+    "planner_server",
+    "behavior_server",
+    "smoother_server",
+    "waypoint_follower",
+    "velocity_smoother",
+    "agenticros_explore",
+    "camera_stamp_fix",
+    "cmd_vel_relay",
+  ];
+  for (const pattern of patterns) {
+    await pkill(pattern);
+  }
+  ok("Mapping stack stopped.");
+}
+
+function finiteCoord(value: number, label: string, limit: number): number {
+  if (!Number.isFinite(value) || Math.abs(value) > limit) {
+    err(`${label} must be a finite number within ±${limit}.`);
+    process.exit(2);
+  }
+  return value;
+}
+
+export async function navigateCommand(opts: { x: number; y: number; yaw?: number }): Promise<void> {
+  const script = resolveScriptPath("navigate_to.sh");
+  if (!existsSync(script)) {
+    err(`navigate_to.sh not found at ${script}`);
+    err("Upgrade the CLI (`npm i -g agenticros@latest`) or run `agenticros init --force`.");
+    process.exit(1);
+  }
+  const ros = detectRosDistro();
+  if (!ros.distro) {
+    err("No ROS 2 installation detected under /opt/ros/. Install ROS 2 Humble or Jazzy first.");
+    process.exit(1);
+  }
+  const x = finiteCoord(opts.x, "x", 500);
+  const y = finiteCoord(opts.y, "y", 500);
+  const yaw = finiteCoord(opts.yaw ?? 0, "yaw", 6.3);
+  const z = Math.sin(yaw / 2);
+  const w = Math.cos(yaw / 2);
+  const ns = configuredNamespace();
+  const pid = spawnDetached(
+    "bash",
+    [script, ros.distro, x.toFixed(3), y.toFixed(3), z.toFixed(6), w.toFixed(6)],
+    {
+      logFile: NAVIGATE_LOG,
+      env: {
+        ...process.env,
+        AGENTICROS_ROBOT_NAMESPACE: ns,
+      },
+    },
+  );
+  ok(
+    `Navigate goal sent (${x.toFixed(3)}, ${y.toFixed(3)}, yaw ${yaw.toFixed(3)})${pid ? ` pid ${pid}` : ""}. Log: ${NAVIGATE_LOG}`,
+  );
+}
+
 /** Dispatch for `agenticros start <target>` / `stop <target>`. */
 export async function startServiceCommand(
   target: string,
@@ -341,8 +449,11 @@ export async function startServiceCommand(
     case "camera":
       await startCameraCommand(opts);
       break;
+    case "mapping":
+      await startMappingCommand();
+      break;
     default:
-      err(`Unknown start target "${target}". Use motors | realsense | camera.`);
+      err(`Unknown start target "${target}". Use motors | realsense | camera | mapping.`);
       process.exit(1);
   }
 }
@@ -358,8 +469,11 @@ export async function stopServiceCommand(target: string): Promise<void> {
     case "camera":
       await stopCameraCommand();
       break;
+    case "mapping":
+      await stopMappingCommand();
+      break;
     default:
-      err(`Unknown stop target "${target}". Use motors | realsense | camera.`);
+      err(`Unknown stop target "${target}". Use motors | realsense | camera | mapping.`);
       process.exit(1);
   }
 }

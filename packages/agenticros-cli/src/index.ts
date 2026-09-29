@@ -37,6 +37,7 @@ import {
   setCommand,
   startServiceCommand,
   stopServiceCommand,
+  navigateCommand,
 } from "./commands/robot-hw.js";
 import {
   loginCommand,
@@ -261,20 +262,26 @@ program
   )
   .argument(
     "[action]",
-    "list | start_motors | stop_motors | start_realsense | stop_realsense | start_camera | stop_camera | status | skills_list | skills_sync | skills_remove | gateway_restart",
+    "list | start_motors | stop_motors | start_realsense | stop_realsense | start_camera | stop_camera | start_mapping | stop_mapping | navigate_to | status | skills_list | skills_sync | skills_remove | gateway_restart",
   )
   .option("--robot <id>", "Target robot UUID (default: prompt, or sole/local robot)")
   .option("--skill <id>", "Skill id for skills_remove (e.g. followme)")
+  .option("--x <meters>", "navigate_to: map-frame x")
+  .option("--y <meters>", "navigate_to: map-frame y")
+  .option("--yaw <radians>", "navigate_to: map-frame yaw (default 0)")
   .option("--json", "Emit JSON instead of human-readable output", false)
   .action(
     async (
       action: string | undefined,
-      opts: { robot?: string; skill?: string; json?: boolean },
+      opts: { robot?: string; skill?: string; x?: string; y?: string; yaw?: string; json?: boolean },
     ) => {
       await remoteCommand({
         action,
         robot: opts.robot,
         skill: opts.skill,
+        x: opts.x,
+        y: opts.y,
+        yaw: opts.yaw,
         json: opts.json,
       });
     },
@@ -333,7 +340,7 @@ program
 program
   .command("start <target>")
   .description(
-    "Start an on-robot service. target = motors | realsense | camera",
+    "Start an on-robot service. target = motors | realsense | camera | mapping",
   )
   .option(
     "-b, --backend <name>",
@@ -403,10 +410,24 @@ program
 program
   .command("stop <target>")
   .description(
-    "Stop an on-robot service. target = motors | realsense | camera",
+    "Stop an on-robot service. target = motors | realsense | camera | mapping",
   )
   .action(async (target: string) => {
     await stopServiceCommand(target);
+  });
+
+program
+  .command("navigate")
+  .description("Send a Nav2 navigate_to_pose goal in the map frame. Requires the mapping stack.")
+  .requiredOption("--x <meters>", "map-frame x")
+  .requiredOption("--y <meters>", "map-frame y")
+  .option("--yaw <radians>", "map-frame yaw", "0")
+  .action(async (opts: { x: string; y: string; yaw: string }) => {
+    await navigateCommand({
+      x: Number(opts.x),
+      y: Number(opts.y),
+      yaw: Number(opts.yaw),
+    });
   });
 
 // robotics-style aliases: `agenticros motors start` / `agenticros camera stop`
