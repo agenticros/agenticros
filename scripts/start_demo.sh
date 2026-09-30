@@ -72,11 +72,12 @@ fi
 
 echo "==> Building TypeScript workspace (@agenticros/core, ros-camera, claude-code, ...)"
 cd "$REPO_ROOT"
-# Build claude-code AND all its dependencies (@agenticros/core, ros-camera).
-# Without the leading dots we'd only build claude-code itself and TS would
-# fail to resolve @agenticros/core because the dependency has no dist/ yet.
+# pnpm 9: `<pkg>...` is the package plus its workspace dependencies.
+# `...<pkg>` is dependents. claude-code is a leaf, so the leading-dots
+# form builds only claude-code and tsc then sees a stale @agenticros/core dist.
 # `--workspace-concurrency=1` keeps logs readable on slow Jetson SDs.
-if ! pnpm --filter '...@agenticros/claude-code' --workspace-concurrency=1 build; then
+# Order is topological: core, ros-camera, object-detection, then claude-code.
+if ! pnpm --filter '@agenticros/claude-code...' --workspace-concurrency=1 build; then
   echo ""
   echo "    Workspace build failed. If this is your first run, do:" >&2
   echo "      agenticros init     # installs deps + builds workspace" >&2

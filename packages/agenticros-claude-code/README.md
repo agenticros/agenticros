@@ -183,9 +183,9 @@ agenticros agy doctor
 agenticros agy run "List ROS 2 topics"
 ```
 
-`agenticros agy setup` writes `mcpServers.agenticros` to `~/.gemini/config/mcp_config.json` (and `.agents/mcp_config.json` inside a repo) with an absolute path to this server and `AGENTICROS_ROBOT_NAMESPACE` set to `""`. It also installs a short skill at `~/.gemini/antigravity-cli/skills/agenticros/SKILL.md`.
+`agenticros agy setup` writes `mcpServers.agenticros` to `~/.gemini/config/mcp_config.json` (and `.agents/mcp_config.json` inside a repo) with an absolute path to this server and `AGENTICROS_ROBOT_NAMESPACE` set to `""`. It also installs a short skill at `~/.gemini/antigravity-cli/skills/agenticros/SKILL.md`, and allows `mcp(agenticros/*)` in `~/.gemini/antigravity-cli/settings.json` so headless runs can call the robot tools.
 
-Sign in once with interactive `agy`, then check `/mcp`. Pass `--yes` on `agenticros agy run` only when tool calls, including motion, should auto-approve.
+Sign in once with interactive `agy`, then check `/mcp`. Pass `--yes` on `agenticros agy run` only when every tool, including shell commands, should auto-approve.
 
 Full guide: [docs/agy-setup.md](../../docs/agy-setup.md).
 

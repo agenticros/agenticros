@@ -217,7 +217,7 @@ See **[docs/hermes-setup.md](hermes-setup.md)** for the full Hermes onboarding g
 
 Register the AgenticROS MCP server for **[Google Antigravity CLI](https://antigravity.google/docs/cli/)** (`agy`):
 
-Writes `mcpServers.agenticros` to `~/.gemini/config/mcp_config.json` and, when run inside a repo, `.agents/mcp_config.json`. Also installs a short AgenticROS skill at `~/.gemini/antigravity-cli/skills/agenticros/SKILL.md` (and `.agents/skills/agenticros/SKILL.md` in a repo). Uses an **absolute path** to the MCP server binary and `AGENTICROS_ROBOT_NAMESPACE: ""` so `agenticros mode real|sim` drives the active robot namespace.
+Writes `mcpServers.agenticros` to `~/.gemini/config/mcp_config.json` and, when run inside a repo, `.agents/mcp_config.json`. Also installs a short AgenticROS skill at `~/.gemini/antigravity-cli/skills/agenticros/SKILL.md` (and `.agents/skills/agenticros/SKILL.md` in a repo), and adds `mcp(agenticros/*)` to `permissions.allow` in `~/.gemini/antigravity-cli/settings.json` so headless `agy` can call the robot tools. Uses an **absolute path** to the MCP server binary and `AGENTICROS_ROBOT_NAMESPACE: ""` so `agenticros mode real|sim` drives the active robot namespace.
 
 This uses your Antigravity subscription. It does not need `GEMINI_API_KEY`. Sign in once with interactive `agy` before headless runs.
 
@@ -227,7 +227,7 @@ Validate Antigravity MCP configuration and the AgenticROS skill. Exits non-zero 
 
 ### `agenticros agy run <prompt...> [--yes] [--model <model>]`
 
-Run one prompt through `agy -p` and exit. Stdio is inherited so the session stays attached to your terminal. `--yes` passes `--dangerously-skip-permissions`, which auto-approves every tool call, including robot motion. Omit it to approve tools yourself.
+Run one prompt through `agy -p` and exit. Stdio is inherited so the session stays attached to your terminal. After `agenticros agy setup`, AgenticROS MCP tools are allowed in headless mode. `--yes` passes `--dangerously-skip-permissions`, which auto-approves every tool call, including shell commands. Omit it to leave non-MCP tools on Ask.
 
 See **[docs/agy-setup.md](agy-setup.md)** for the full Antigravity onboarding guide.
 

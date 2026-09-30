@@ -33,6 +33,8 @@ import {
   projectAgyMcpConfigPath,
   projectAgySkillPath,
   writeAgyAgenticrosConfig,
+  globalAgySettingsPath,
+  writeAgyMcpAllowRule,
   writeAgySkill,
 } from "./agy-config.js";
 import { findMcpEntry } from "./mcp-discovery.js";
@@ -220,6 +222,9 @@ export async function mcpSetupCommand(opts: McpSetupOptions = {}): Promise<void>
     if (opts.project || (isFullSetup && repoRoot)) {
       written.push(...setupAgyMcp(mcpEntry, "project", repoRoot ?? cwd));
     }
+    const settingsPath = globalAgySettingsPath();
+    writeAgyMcpAllowRule(settingsPath);
+    written.push(settingsPath);
   }
 
   for (const path of written) {
@@ -255,6 +260,7 @@ export async function mcpSetupCommand(opts: McpSetupOptions = {}): Promise<void>
     const hasAgy = await agyOnPath();
     if (hasAgy) {
       info("Antigravity CLI detected — verify with `/mcp` in an `agy` session.");
+      info("Headless `agenticros agy run` can call AgenticROS MCP tools. Other tools still need approval, or pass `--yes`.");
       info("Sign in once with interactive `agy` before `agenticros agy run`.");
     } else {
       warn("Antigravity CLI (agy) not on PATH.");

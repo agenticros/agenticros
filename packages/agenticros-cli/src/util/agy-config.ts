@@ -54,6 +54,18 @@ export function globalAgySkillPath(): string {
   return join(homedir(), ".gemini", "antigravity-cli", "skills", "agenticros", "SKILL.md");
 }
 
+/**
+ * Global Antigravity CLI settings.
+ * Headless `agy -p` cannot prompt, so MCP tools (Ask by default) are denied
+ * unless this file allows them.
+ */
+export function globalAgySettingsPath(): string {
+  return join(homedir(), ".gemini", "antigravity-cli", "settings.json");
+}
+
+/** Allow every tool on the AgenticROS MCP server. Other tools stay Ask/Deny. */
+export const AGY_MCP_ALLOW_RULE = "mcp(agenticros/*)";
+
 /** Workspace Antigravity skill. */
 export function projectAgySkillPath(cwd = process.cwd()): string {
   return join(cwd, ".agents", "skills", "agenticros", "SKILL.md");
@@ -140,6 +152,63 @@ export function writeAgyAgenticrosConfig(
 export function writeAgySkill(skillPath: string): void {
   mkdirSync(dirname(skillPath), { recursive: true });
   writeFileSync(skillPath, generateAgySkillContent(), "utf8");
+}
+
+/**
+ * Merge `mcp(agenticros/*)` into `permissions.allow`, preserving every other
+ * settings key and any allow rules already present.
+ */
+export function upsertAgyMcpAllowRule(existingContent: string | null): string {
+  let root: Record<string, unknown> = {};
+  if (existingContent?.trim()) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(existingContent);
+    } catch {
+      throw new Error("Antigravity settings.json is not valid JSON");
+    }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("Antigravity settings.json must be a JSON object");
+    }
+    root = { ...(parsed as Record<string, unknown>) };
+  }
+
+  const permissions =
+    root["permissions"] && typeof root["permissions"] === "object" && !Array.isArray(root["permissions"])
+      ? { ...(root["permissions"] as Record<string, unknown>) }
+      : {};
+
+  const allow = Array.isArray(permissions["allow"]) ? [...permissions["allow"]] : [];
+  if (!allow.includes(AGY_MCP_ALLOW_RULE)) {
+    allow.push(AGY_MCP_ALLOW_RULE);
+  }
+  permissions["allow"] = allow;
+  root["permissions"] = permissions;
+
+  return `${JSON.stringify(root, null, 2)}\n`;
+}
+
+export function writeAgyMcpAllowRule(settingsPath: string): void {
+  const existing = existsSync(settingsPath) ? readFileSync(settingsPath, "utf8") : null;
+  const merged = upsertAgyMcpAllowRule(existing);
+  mkdirSync(dirname(settingsPath), { recursive: true });
+  writeFileSync(settingsPath, merged, "utf8");
+}
+
+/** True when settings.json already allows the AgenticROS MCP server. */
+export function agySettingsAllowsMcp(settingsPath: string): boolean {
+  if (!existsSync(settingsPath)) return false;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(settingsPath, "utf8"));
+  } catch {
+    return false;
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return false;
+  const permissions = (parsed as Record<string, unknown>)["permissions"];
+  if (!permissions || typeof permissions !== "object" || Array.isArray(permissions)) return false;
+  const allow = (permissions as Record<string, unknown>)["allow"];
+  return Array.isArray(allow) && allow.includes(AGY_MCP_ALLOW_RULE);
 }
 
 export function readAgyAgenticrosConfig(configPath: string): AgyAgenticrosConfig {
@@ -348,6 +417,24 @@ export function buildAgyDoctorChecks(
         detail: skill.path,
       });
     }
+  }
+
+  const settingsPath = globalAgySettingsPath();
+  if (agySettingsAllowsMcp(settingsPath)) {
+    checks.push({
+      id: "agy-mcp-allow",
+      label: "Antigravity allows AgenticROS MCP tools",
+      severity: "green",
+      detail: settingsPath,
+    });
+  } else {
+    checks.push({
+      id: "agy-mcp-allow",
+      label: "Antigravity headless MCP allow rule missing",
+      severity: "yellow",
+      hint: "Run `agenticros agy setup` so `agy -p` can call AgenticROS tools without a prompt.",
+      detail: settingsPath,
+    });
   }
 
   return checks;

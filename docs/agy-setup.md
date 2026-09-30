@@ -31,6 +31,7 @@ In an `agy` session, `/mcp` should list `agenticros`. You can also add the serve
 - `<repo>/.agents/mcp_config.json` — workspace MCP servers, when setup runs inside an AgenticROS repo
 - `~/.gemini/antigravity-cli/skills/agenticros/SKILL.md` — when to use the robot tools
 - `<repo>/.agents/skills/agenticros/SKILL.md` — the same skill for this workspace
+- `~/.gemini/antigravity-cli/settings.json` — adds `mcp(agenticros/*)` to `permissions.allow` so headless `agy` can call the robot tools
 
 The server entry uses this machine's Node binary, an absolute path to the MCP server, and `AGENTICROS_ROBOT_NAMESPACE` set to `""` so `agenticros mode real|sim` selects the robot.
 
@@ -45,7 +46,7 @@ agenticros agy run "List active ROS 2 topics"
 agenticros agy run --model gemini-2.5-pro "What is in front of the robot?"
 ```
 
-Tool calls, including `ros2_publish`, wait for approval. Pass `--yes` only when you want every tool auto-approved for that run (`agy --dangerously-skip-permissions`):
+Headless `agy` cannot prompt. `agenticros agy setup` allows the AgenticROS MCP server (`mcp(agenticros/*)`), so `ros2_list_topics` and the other robot tools run. Velocity is still clamped by AgenticROS safety limits. Shell commands and other tools stay on Ask and are denied in headless mode unless you allow them yourself. Pass `--yes` only when every tool, including shell commands, should auto-approve for that run (`agy --dangerously-skip-permissions`):
 
 ```bash
 agenticros agy run --yes "Drive forward slowly, then stop"
@@ -73,5 +74,6 @@ Put that in `~/.gemini/config/mcp_config.json` or `.agents/mcp_config.json`. `ag
 
 - **`agy doctor` says the config is missing** — run `agenticros agy setup`. Antigravity reads `~/.gemini/config/mcp_config.json` and `.agents/mcp_config.json`.
 - **`/mcp` does not list agenticros** — confirm the absolute path in `mcp_config.json` and restart `agy`.
+- **`agy run` says a tool required the `mcp` permission** — headless mode cannot prompt, so MCP is denied until `permissions.allow` contains `mcp(agenticros/*)`. Run `agenticros agy setup` again. That writes `~/.gemini/antigravity-cli/settings.json` and leaves your other allow rules in place.
 - **`agenticros agy run` exits with authentication required** — run interactive `agy` once on this machine so credentials are cached.
 - **Headless output is empty when piped** — `agy -p` is unreliable when stdout is not a terminal. `agenticros agy run` inherits your terminal. Capture output from an interactive terminal, or check current `agy` release notes if you script it.
