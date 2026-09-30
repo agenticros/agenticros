@@ -3,7 +3,7 @@
 > agentic AI for ROS-powered robots
 
 `agenticros` is the unified command-line tool for AgenticROS — bring up a real
-robot or a simulated one, drive it from Claude Code, OpenAI Codex, Hermes Agent, or OpenClaw
+robot or a simulated one, drive it from Claude Code, OpenAI Codex, Hermes Agent, Antigravity CLI, or OpenClaw
 (with **local Ollama VLMs** or cloud models),
 connect to [AgenticROS Cloud](https://cloud.agenticros.com), and keep your workspace
 healthy from a single binary.

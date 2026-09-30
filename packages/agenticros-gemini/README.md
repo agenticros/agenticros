@@ -1,6 +1,8 @@
 # AgenticROS Gemini adapter
 
-CLI that uses **Google Gemini** to chat with your ROS2 robot. Same tool set as the Claude Code adapter (list topics, publish, estop, subscribe, services, actions, params, camera snapshot, depth, named places). No MCP — Gemini function calling is used directly.
+CLI that uses **Google Gemini** to chat with your ROS2 robot. Same tool set as the Claude Code adapter (list topics, publish, estop, subscribe, services, actions, params, camera snapshot, depth, named places). No MCP — Gemini function calling is used directly. This path needs `GEMINI_API_KEY`.
+
+For the Antigravity CLI (`agy`) and an Antigravity subscription with no API key, use `agenticros agy setup` instead. See [docs/agy-setup.md](../../docs/agy-setup.md).
 
 ## Prerequisites
 

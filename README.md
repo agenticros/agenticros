@@ -31,7 +31,8 @@ With AgenticROS, your robot can describe what it sees, follow intent ("go check 
 - **[Anthropic Claude](https://www.anthropic.com/claude)** — A single MCP server powers **Claude Code** (terminal), **Claude Desktop** (macOS / Windows), and **Claude Dispatch** (iOS, paired to your Mac). Ask Claude what your robot sees, and it answers with a live camera snapshot and depth reading.
 - **[OpenAI Codex CLI](https://developers.openai.com/codex/)** — Same MCP server as Claude Code. One command registers Codex: `agenticros codex setup` (writes `~/.codex/config.toml` with an absolute path to the MCP binary). Full tool surface: missions, follow-me, find-object, memory. Setup guide: [docs/codex-setup.md](docs/codex-setup.md).
 - **[Hermes Agent](https://github.com/NousResearch/hermes-agent)** — Model-agnostic agent gateway (OpenRouter, Ollama, 200+ providers) with MCP client support. Same MCP server as Codex: `agenticros hermes setup` writes `~/.hermes/config.yaml`. Setup guide: [docs/hermes-setup.md](docs/hermes-setup.md).
-- **[Google Gemini](https://ai.google.dev/)** — Standalone CLI that uses Gemini function calling against the same ROS 2 tools (no MCP required) — ideal for scripting and headless agents.
+- **[Google Antigravity CLI](https://antigravity.google/docs/cli/)** (`agy`) — Same MCP server, using your Antigravity subscription (no `GEMINI_API_KEY`). `agenticros agy setup` writes `~/.gemini/config/mcp_config.json` and installs the AgenticROS skill. Run a prompt with `agenticros agy run`. Setup guide: [docs/agy-setup.md](docs/agy-setup.md).
+- **[Google Gemini](https://ai.google.dev/)** — Standalone CLI that uses Gemini function calling against the same ROS 2 tools (no MCP required) — ideal for scripting and headless agents. This path needs `GEMINI_API_KEY`. Antigravity CLI is the subscription path above.
 
 AgenticROS is built so that new adapters (LangGraph, OpenAI, local models, voice stacks, etc.) can be added without touching the ROS 2 layer. The core transport and tool contract are platform-agnostic; adapters are thin shims that surface those tools to each agent runtime.
 
@@ -63,7 +64,7 @@ Then chat in OpenClaw web UI or Hermes: *"List ROS topics"*, *"drive forward slo
 ![AgenticROS system flow: chat and Jarvis voice → agent platforms → AgenticROS tools, missions, transports, and skills → ROS robot sensing and actuation](docs/images/agenticros-architecture.png)
 
 - **Core** (`packages/core`): Platform-agnostic ROS2 transport (Zenoh, rosbridge, local DDS, WebRTC), capability/mission runtime, shared memory, config schema, and types. No dependency on any specific AI platform.
-- **Adapters**: OpenClaw plugin (`packages/agenticros`, including [NemoClaw](docs/nemoclaw.md)); MCP server (`packages/agenticros-claude-code`) for **Claude Code / Desktop / Dispatch**, **Codex CLI**, and **Hermes Agent**; Gemini CLI (`packages/agenticros-gemini`) via function calling. See [packages/agenticros-claude-code/README.md](packages/agenticros-claude-code/README.md), [docs/codex-setup.md](docs/codex-setup.md), and [docs/hermes-setup.md](docs/hermes-setup.md).
+- **Adapters**: OpenClaw plugin (`packages/agenticros`, including [NemoClaw](docs/nemoclaw.md)); MCP server (`packages/agenticros-claude-code`) for **Claude Code / Desktop / Dispatch**, **Codex CLI**, **Hermes Agent**, and **Antigravity CLI** (`agy`); Gemini API CLI (`packages/agenticros-gemini`) via function calling. See [packages/agenticros-claude-code/README.md](packages/agenticros-claude-code/README.md), [docs/codex-setup.md](docs/codex-setup.md), [docs/hermes-setup.md](docs/hermes-setup.md), and [docs/agy-setup.md](docs/agy-setup.md).
 - **Perception**: `@agenticros/ros-camera` (Image / CompressedImage snapshots) and `@agenticros/object-detection` (YOLOv8n find-object), shared by every adapter.
 
 ```
@@ -71,12 +72,13 @@ User (messaging app) → OpenClaw Gateway → AgenticROS OpenClaw plugin → Cor
 Claude (Code / desktop / Dispatch) → agenticros MCP server → Core → ROS2 robots (Zenoh/rosbridge)
 Codex CLI → agenticros MCP server → Core → ROS2 robots (Zenoh/rosbridge)
 Hermes Agent → agenticros MCP server → Core → ROS2 robots (Zenoh/rosbridge)
+Antigravity CLI (agy) → agenticros MCP server → Core → ROS2 robots (Zenoh/rosbridge)
 Gemini CLI → @agenticros/gemini (function calling) → Core → ROS2 robots
 ```
 
 ## A shared mission language for robots
 
-The same tool surface across every adapter — Claude Code, Codex, Gemini, OpenClaw — so two different agents on two different stacks can both speak the same dialect when controlling the same robot. Built around five capabilities.
+The same tool surface across every adapter — Claude Code, Codex, Hermes, Antigravity CLI, Gemini, OpenClaw — so two different agents on two different stacks can both speak the same dialect when controlling the same robot. Built around five capabilities.
 
 ### Capability manifests — robots advertise *verbs*
 
@@ -135,8 +137,8 @@ Full architecture + design trade-offs: **[docs/strategy-ai-agents-plus-ros.md](d
 
 - `**packages/core**` — Transport, types, config (Zod). Used by all adapters.
 - `**packages/agenticros**` — OpenClaw plugin: tools, commands, config page, teleop routes.
-- `**packages/agenticros-claude-code**` — MCP server for Claude Code + Claude desktop / Dispatch (tools only; no config UI).
-- `**packages/agenticros-gemini**` — Gemini CLI (function calling; no MCP).
+- `**packages/agenticros-claude-code**` — MCP server for Claude Code, Claude desktop / Dispatch, Codex, Hermes, and Antigravity CLI (tools only; no config UI).
+- `**packages/agenticros-gemini**` — Gemini API CLI (function calling; needs `GEMINI_API_KEY`). Separate from Antigravity CLI.
 - `**packages/robot-eyes**` — On-robot face display (`agenticros eyes`): animated eyes follow `cmd_vel` turns; when idle, follow a person in the RealSense camera if YOLO is already installed. Optional WASD. See [docs/eyes.md](docs/eyes.md).
 - `**ros2_ws/**` — ROS2 workspace: `agenticros_msgs`, `agenticros_bringup` (Gazebo + RViz + rosbridge launches), `agenticros_discovery`, `agenticros_agent`, `agenticros_follow_me`.
 - `**docs/**` — Architecture, **[hardware getting started](docs/hardware.md)**, skills, robot setup, Zenoh (`npx zenoh-fleet` for Mode D fleets), teleop, eyes, **[local VLM / Ollama](docs/local-vlm.md)**.
@@ -184,18 +186,22 @@ idempotent). **Using local Ollama instead of OpenAI?** Skip the API key step —
 | Demo a **simulated 6-DOF arm** (UR5e-shaped, per-joint position control) | **Launch with simulation → 6-DOF arm** |
 
 Once a stack is up, point any of the supported agents — OpenClaw, Claude Code,
-OpenAI Codex, Hermes Agent, Claude Desktop / Dispatch, or Gemini CLI — at the same robot and start talking
+OpenAI Codex, Hermes Agent, Antigravity CLI, Claude Desktop / Dispatch, or Gemini CLI — at the same robot and start talking
 to it. The CLI tracks what it spawned (pidfiles + logs under `/tmp/agenticros-*`),
 so **Stop everything** cleanly tears the demo down.
 
 Prefer scripted invocations? Every menu item maps to a direct command:
 
 ```bash
-npx agenticros init             # one-time workspace + plugin + Codex/Hermes MCP (+ optional API key)
+npx agenticros init             # one-time workspace + plugin + MCP clients (+ optional API key)
+agenticros mcp setup            # Codex, Hermes, Claude, and Antigravity
 agenticros codex setup          # register AgenticROS MCP for OpenAI Codex CLI
 agenticros codex doctor         # validate ~/.codex/config.toml
 agenticros hermes setup         # register AgenticROS MCP for Hermes Agent
 agenticros hermes doctor        # validate ~/.hermes/config.yaml
+agenticros agy setup            # register AgenticROS MCP for Antigravity CLI
+agenticros agy doctor           # validate mcp_config.json + skill
+agenticros agy run "list topics"  # one prompt on your Antigravity subscription
 agenticros up real              # real robot stack
 agenticros up real --map        # real robot + RTAB-Map + Nav2
 agenticros up real --eyes       # real robot + on-display robot eyes
@@ -458,6 +464,43 @@ In Hermes, run `/reload-mcp` or restart, then `hermes mcp test agenticros`. Ask 
 
 Full guide: **[docs/hermes-setup.md](docs/hermes-setup.md)**.
 
+## Antigravity CLI + AgenticROS (MCP)
+
+**[Google Antigravity CLI](https://antigravity.google/docs/cli/)** (`agy`) is an MCP client. It uses the same `@agenticros/claude-code` server as Claude Code, Codex, and Hermes. Quota comes from the Antigravity subscription you sign in with. There is no `GEMINI_API_KEY` and no separate adapter package. The Gemini API CLI further down is a different path.
+
+### Quick setup
+
+```bash
+pnpm install && pnpm build          # or: npx agenticros init
+agenticros agy setup                # ~/.gemini/config/mcp_config.json + skill
+agenticros agy doctor               # validate absolute MCP path, namespace, skill
+```
+
+Sign in once with interactive `agy`. In that session, `/mcp` should list **agenticros**. Then:
+
+```bash
+agenticros agy run "List ROS 2 topics"
+agenticros agy run --yes "Drive forward slowly, then stop"   # auto-approve tools
+```
+
+### Config files
+
+| File | Scope |
+|------|--------|
+| `~/.gemini/config/mcp_config.json` | Global MCP servers |
+| `<repo>/.agents/mcp_config.json` | Workspace MCP servers |
+| `~/.gemini/antigravity-cli/skills/agenticros/SKILL.md` | When to use the robot tools |
+
+`agenticros agy setup` writes an **absolute path** to the MCP server and leaves `AGENTICROS_ROBOT_NAMESPACE` empty so `agenticros mode real|sim` drives the active robot.
+
+### Troubleshooting
+
+- **`/mcp` does not list agenticros** → run `agenticros agy setup`; Antigravity reads `mcp_config.json`
+- **`agy run` asks you to authenticate** → open interactive `agy` once on this machine
+- **Transport timeout** → bring up Zenoh/rosbridge or run `agenticros up sim-amr` / `agenticros up real`
+
+Full guide: **[docs/agy-setup.md](docs/agy-setup.md)**.
+
 ## Gemini CLI
 
 Use **Google Gemini** to chat with your robot from the terminal (same ROS2 tools as Claude Code, no MCP).
@@ -473,7 +516,7 @@ See **[packages/agenticros-gemini/README.md](packages/agenticros-gemini/README.m
 
 ## Memory (optional)
 
-AgenticROS can give every adapter a **shared, persistent, cross-process** long-term memory so facts you teach the robot from one agent are immediately available in the others — Claude Desktop, Claude Code, OpenAI Codex, Hermes Agent, Gemini CLI, OpenClaw chat. Off by default. Two backends:
+AgenticROS can give every adapter a **shared, persistent, cross-process** long-term memory so facts you teach the robot from one agent are immediately available in the others — Claude Desktop, Claude Code, OpenAI Codex, Hermes Agent, Antigravity CLI, Gemini CLI, OpenClaw chat. Off by default. Two backends:
 
 - **`local`** — zero deps, JSON-on-disk at `~/.agenticros/memory.json`, keyword + recency search. Enable with one config flag.
 - **`mem0`** — semantic search via the pure-Node [`mem0ai`](https://www.npmjs.com/package/mem0ai) package (`pnpm add mem0ai`); file-backed vector store at `~/.mem0/vector_store.db` (shared across all processes on the host, no server to run); embedder auto-detects Ollama (`http://localhost:11434`) → `OPENAI_API_KEY` → clear error.

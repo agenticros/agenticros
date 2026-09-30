@@ -173,6 +173,22 @@ Hermes-specific notes:
 
 Full guide: [docs/hermes-setup.md](../../docs/hermes-setup.md).
 
+## Antigravity CLI (`agy`)
+
+The same MCP server works with **[Google Antigravity CLI](https://antigravity.google/docs/cli/)**. `agy` uses your Antigravity subscription. It does not need `GEMINI_API_KEY`.
+
+```bash
+agenticros agy setup
+agenticros agy doctor
+agenticros agy run "List ROS 2 topics"
+```
+
+`agenticros agy setup` writes `mcpServers.agenticros` to `~/.gemini/config/mcp_config.json` (and `.agents/mcp_config.json` inside a repo) with an absolute path to this server and `AGENTICROS_ROBOT_NAMESPACE` set to `""`. It also installs a short skill at `~/.gemini/antigravity-cli/skills/agenticros/SKILL.md`.
+
+Sign in once with interactive `agy`, then check `/mcp`. Pass `--yes` on `agenticros agy run` only when tool calls, including motion, should auto-approve.
+
+Full guide: [docs/agy-setup.md](../../docs/agy-setup.md).
+
 ## Claude desktop app + Claude Dispatch (iOS)
 
 The Claude **desktop** app uses a different MCP config file than Claude Code:

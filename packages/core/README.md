@@ -12,8 +12,8 @@ It contains:
 You don't normally use it directly — you use one of the adapters that depends on it:
 
 - [`agenticros`](https://github.com/agenticros/agenticros) — OpenClaw plugin
-- [`@agenticros/claude-code`](https://github.com/agenticros/agenticros) — MCP server for Claude Code / Codex CLI / Claude Desktop
-- [`@agenticros/gemini`](https://github.com/agenticros/agenticros) — Gemini CLI adapter
+- [`@agenticros/claude-code`](https://github.com/agenticros/agenticros) — MCP server for Claude Code, Codex CLI, Hermes, Antigravity CLI, and Claude Desktop
+- [`@agenticros/gemini`](https://github.com/agenticros/agenticros) — Gemini API CLI adapter (`GEMINI_API_KEY`; separate from Antigravity CLI)
 
 …or you build a **skill** for one of them.
 
