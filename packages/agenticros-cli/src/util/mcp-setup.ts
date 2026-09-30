@@ -1,5 +1,5 @@
 /**
- * Unified MCP host setup for Codex, Hermes, and Claude (Option C).
+ * Unified MCP host setup for Codex, Hermes, Claude, and Antigravity CLI (Option C).
  *
  * All hosts register the same `@agenticros/claude-code` stdio server with an
  * absolute path and empty AGENTICROS_ROBOT_NAMESPACE.
@@ -26,10 +26,21 @@ import {
   projectMcpJsonPath,
   writeClaudeAgenticrosConfig,
 } from "./claude-config.js";
+import {
+  buildAgyDoctorChecks,
+  globalAgyMcpConfigPath,
+  globalAgySkillPath,
+  projectAgyMcpConfigPath,
+  projectAgySkillPath,
+  writeAgyAgenticrosConfig,
+  writeAgySkill,
+} from "./agy-config.js";
 import { findMcpEntry } from "./mcp-discovery.js";
 import { colors, info, ok, warn, err } from "./logger.js";
 
-export type McpHostId = "codex" | "hermes" | "claude";
+export type McpHostId = "codex" | "hermes" | "claude" | "agy";
+
+const MCP_HOSTS = ["codex", "hermes", "claude", "agy"] as const satisfies readonly McpHostId[];
 
 export interface McpSetupOptions {
   /** Configure all hosts (default when no host flags). */
@@ -37,7 +48,8 @@ export interface McpSetupOptions {
   codex?: boolean;
   hermes?: boolean;
   claude?: boolean;
-  /** Codex project `.codex/config.toml` and/or Claude `.mcp.json` in repo root. */
+  agy?: boolean;
+  /** Codex project `.codex/config.toml`, Claude `.mcp.json`, and/or Antigravity `.agents/mcp_config.json`. */
   project?: boolean;
   /** Claude Desktop `claude_desktop_config.json` only (with --claude). */
   desktop?: boolean;
@@ -78,6 +90,15 @@ export async function hermesOnPath(): Promise<boolean> {
   }
 }
 
+export async function agyOnPath(): Promise<boolean> {
+  try {
+    const { exitCode } = await execa("agy", ["--version"], { reject: false });
+    return exitCode === 0;
+  } catch {
+    return false;
+  }
+}
+
 export async function claudeOnPath(): Promise<boolean> {
   try {
     const { exitCode } = await execa("claude", ["--version"], { reject: false });
@@ -96,10 +117,10 @@ export function resolveMcpHosts(opts: McpSetupOptions): McpHostId[] {
   if (opts.codexScope === "project" && opts.codex !== false) {
     return ["codex"];
   }
-  const explicit = (["codex", "hermes", "claude"] as const).filter((h) => opts[h]);
+  const explicit = MCP_HOSTS.filter((h) => opts[h]);
   if (explicit.length > 0) return [...explicit];
-  if (opts.all !== false) return ["codex", "hermes", "claude"];
-  return ["codex", "hermes", "claude"];
+  if (opts.all !== false) return [...MCP_HOSTS];
+  return [...MCP_HOSTS];
 }
 
 export function requireMcpEntry(): string {
@@ -135,6 +156,23 @@ export function setupClaudeMcp(
   return configPath;
 }
 
+/** Write Antigravity MCP config and the AgenticROS skill for one scope. */
+export function setupAgyMcp(mcpEntry: string, scope: "global" | "project", cwd?: string): string[] {
+  if (scope === "global") {
+    const configPath = globalAgyMcpConfigPath();
+    const skillPath = globalAgySkillPath();
+    writeAgyAgenticrosConfig(configPath, mcpEntry, { namespace: "" });
+    writeAgySkill(skillPath);
+    return [configPath, skillPath];
+  }
+  const root = cwd ?? process.cwd();
+  const configPath = projectAgyMcpConfigPath(root);
+  const skillPath = projectAgySkillPath(root);
+  writeAgyAgenticrosConfig(configPath, mcpEntry, { namespace: "" });
+  writeAgySkill(skillPath);
+  return [configPath, skillPath];
+}
+
 export async function mcpSetupCommand(opts: McpSetupOptions = {}): Promise<void> {
   const mcpEntry = requireMcpEntry();
   const hosts = resolveMcpHosts(opts);
@@ -147,8 +185,8 @@ export async function mcpSetupCommand(opts: McpSetupOptions = {}): Promise<void>
   }
 
   const written: string[] = [];
-  const explicitHosts = (["codex", "hermes", "claude"] as const).filter((h) => opts[h]);
-  const isFullSetup = explicitHosts.length === 0 || explicitHosts.length === 3;
+  const explicitHosts = MCP_HOSTS.filter((h) => opts[h]);
+  const isFullSetup = explicitHosts.length === 0 || explicitHosts.length === MCP_HOSTS.length;
 
   if (hosts.includes("codex")) {
     if (opts.codexScope === "project") {
@@ -174,6 +212,13 @@ export async function mcpSetupCommand(opts: McpSetupOptions = {}): Promise<void>
     }
     if (!desktopOnly && (opts.project || (isFullSetup && repoRoot) || projectOnly)) {
       written.push(setupClaudeMcp(mcpEntry, "project", repoRoot ?? cwd));
+    }
+  }
+
+  if (hosts.includes("agy")) {
+    written.push(...setupAgyMcp(mcpEntry, "global"));
+    if (opts.project || (isFullSetup && repoRoot)) {
+      written.push(...setupAgyMcp(mcpEntry, "project", repoRoot ?? cwd));
     }
   }
 
@@ -206,6 +251,15 @@ export async function mcpSetupCommand(opts: McpSetupOptions = {}): Promise<void>
     }
     info("Restart Claude Desktop fully (Cmd+Q) after desktop config changes.");
   }
+  if (hosts.includes("agy")) {
+    const hasAgy = await agyOnPath();
+    if (hasAgy) {
+      info("Antigravity CLI detected — verify with `/mcp` in an `agy` session.");
+      info("Sign in once with interactive `agy` before `agenticros agy run`.");
+    } else {
+      warn("Antigravity CLI (agy) not on PATH.");
+    }
+  }
 }
 
 export function buildMcpDoctorChecks(
@@ -213,7 +267,7 @@ export function buildMcpDoctorChecks(
   repoRoot?: string,
   hosts?: McpHostId[],
 ): Array<{ id: string; label: string; severity: "green" | "yellow" | "red"; hint?: string; detail?: string }> {
-  const active = hosts ?? (["codex", "hermes", "claude"] as McpHostId[]);
+  const active = hosts ?? [...MCP_HOSTS];
   const checks: Array<{
     id: string;
     label: string;
@@ -231,6 +285,9 @@ export function buildMcpDoctorChecks(
   if (active.includes("claude")) {
     checks.push(...buildClaudeDoctorChecks(mcpEntryExpected, repoRoot));
   }
+  if (active.includes("agy")) {
+    checks.push(...buildAgyDoctorChecks(mcpEntryExpected, repoRoot));
+  }
 
   return checks;
 }
@@ -244,7 +301,7 @@ export interface McpDoctorResult {
 
 export async function mcpDoctorCommand(opts: McpDoctorOptions = {}): Promise<number> {
   const mcpEntry = findMcpEntry();
-  const hosts = opts.hosts ?? (["codex", "hermes", "claude"] as McpHostId[]);
+  const hosts = opts.hosts ?? [...MCP_HOSTS];
   const checks = buildMcpDoctorChecks(mcpEntry, opts.repoRoot, hosts);
 
   const cliChecks: Array<{ id: string; label: string; severity: "green" | "yellow"; hint?: string }> = [];
@@ -273,6 +330,15 @@ export async function mcpDoctorCommand(opts: McpDoctorOptions = {}): Promise<num
       label: on ? "Claude Code CLI installed" : "Claude Code CLI not detected",
       severity: on ? "green" : "yellow",
       hint: on ? undefined : "Install from https://claude.com/product/claude-code",
+    });
+  }
+  if (hosts.includes("agy")) {
+    const on = await agyOnPath();
+    cliChecks.push({
+      id: "agy-cli",
+      label: on ? "Antigravity CLI installed" : "Antigravity CLI not detected",
+      severity: on ? "green" : "yellow",
+      hint: on ? undefined : "Install from https://antigravity.google/docs/cli/",
     });
   }
 

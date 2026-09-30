@@ -8,10 +8,11 @@ AgenticROS connects AI agent platforms to ROS2 robots through a shared core, tra
 - [Architecture](architecture.md) - system layers, deployment modes, transport abstraction, and data flow.
 - [Robot setup](robot-setup.md) - robot-side ROS 2, launch steps, OpenClaw plugin setup, and quick checks.
 - [Local VLM / Ollama](local-vlm.md) - run OpenClaw or Hermes with local vision models (no cloud API keys).
-- [MCP client setup](mcp-setup.md) - unified `agenticros mcp setup` for Codex, Hermes, and Claude.
+- [MCP client setup](mcp-setup.md) - unified `agenticros mcp setup` for Codex, Hermes, Claude, and Antigravity.
 - [Codex CLI setup](codex-setup.md) - register the AgenticROS MCP server for OpenAI Codex (`agenticros codex setup`).
 - [Hermes Agent setup](hermes-setup.md) - register the AgenticROS MCP server for Hermes (`agenticros hermes setup`).
-- [CLI reference](cli.md) - `agenticros` commands (including `mcp setup` / `mcp doctor`, `codex`, `hermes`, `claude`), state locations, environment variables, and troubleshooting.
+- [Antigravity CLI setup](agy-setup.md) - register the AgenticROS MCP server for `agy` (`agenticros agy setup`). Uses your Antigravity subscription; no `GEMINI_API_KEY`.
+- [CLI reference](cli.md) - `agenticros` commands (including `mcp setup` / `mcp doctor`, `codex`, `hermes`, `claude`, `agy`), state locations, environment variables, and troubleshooting.
 - [Simulation](simulation.md) - local simulation workflow, available simulated tools, sensor formats, and CI notes.
 
 ## Core features
@@ -55,8 +56,8 @@ The main packages are organized as:
 - `packages/ros-camera` - shared camera snapshot encoding.
 - `packages/object-detection` - shared YOLOv8n detector and find-object scan.
 - `packages/agenticros` - OpenClaw plugin, config UI, tools, routes, and teleop.
-- `packages/agenticros-claude-code` - MCP server used by Codex, Hermes, and other MCP clients.
-- `packages/agenticros-gemini` - Gemini CLI adapter.
+- `packages/agenticros-claude-code` - MCP server used by Codex, Hermes, Antigravity CLI, and other MCP clients.
+- `packages/agenticros-gemini` - Gemini API CLI adapter (`GEMINI_API_KEY`). Separate from Antigravity CLI.
 - `ros2_ws/src` - ROS2 messages, discovery, WebRTC agent, and robot-side mission nodes.
 
 For build commands and contributor conventions, see the repository root instructions and package READMEs.

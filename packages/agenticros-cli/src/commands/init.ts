@@ -10,7 +10,7 @@
  *   5. Robot config      -> prompt namespace + transport, write ~/.agenticros/config.json
  *   6. AgenticROS Cloud  -> login (device code) + register robot (skippable)
  *   7. OpenAI key        -> prompt + scripts/configure_agenticros.sh
- *   8. MCP clients       -> agenticros mcp setup (Codex, Hermes, Claude — optional)
+ *   8. MCP clients       -> agenticros mcp setup (Codex, Hermes, Claude, Antigravity — optional)
  *   9. Doctor summary
  *
  * Reuses the existing shell scripts as subprocesses (no logic duplication).
@@ -35,7 +35,7 @@ import { execa } from "execa";
 import { runDoctorChecks } from "./doctor.js";
 import { loginCommand } from "./cloud-auth.js";
 import { registerCommand } from "./register.js";
-import { claudeOnPath, codexOnPath, hermesOnPath, mcpSetupCommand } from "../util/mcp-setup.js";
+import { agyOnPath, claudeOnPath, codexOnPath, hermesOnPath, mcpSetupCommand } from "../util/mcp-setup.js";
 import { detectRosDistro, hasBin, isWindows } from "../util/env.js";
 import { getCliPaths, isAgenticrosMonorepo, resetPathsCache } from "../util/paths.js";
 import {
@@ -261,16 +261,17 @@ export async function initCommand(opts: InitOptions): Promise<void> {
     ok("OpenAI API key already configured (skip).");
   }
 
-  // Step: MCP clients (Codex, Hermes, Claude — same stdio server).
+  // Step: MCP clients (Codex, Hermes, Claude, Antigravity — same stdio server).
   const hasCodexCli = await codexOnPath();
   const hasHermesCli = await hermesOnPath();
   const hasClaudeCli = await claudeOnPath();
-  const hasAnyMcpClient = hasCodexCli || hasHermesCli || hasClaudeCli;
+  const hasAgyCli = await agyOnPath();
+  const hasAnyMcpClient = hasCodexCli || hasHermesCli || hasClaudeCli || hasAgyCli;
   if (hasAnyMcpClient || opts.force) {
     const wantMcp = await confirm({
       message: hasAnyMcpClient
-        ? "Configure MCP clients (Codex, Hermes, Claude) for AgenticROS?"
-        : "Write MCP config for Codex/Hermes/Claude? (no MCP CLI on PATH yet)",
+        ? "Configure MCP clients (Codex, Hermes, Claude, Antigravity) for AgenticROS?"
+        : "Write MCP config for Codex/Hermes/Claude/Antigravity? (no MCP CLI on PATH yet)",
       default: hasAnyMcpClient,
     });
     if (wantMcp) {

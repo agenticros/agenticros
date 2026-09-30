@@ -28,6 +28,7 @@ import { robotsCommand } from "./commands/robots.js";
 import { claudeDoctorCommand, claudeSetupCommand } from "./commands/claude.js";
 import { codexDoctorCommand, codexSetupCommand } from "./commands/codex.js";
 import { hermesDoctorCommand, hermesSetupCommand } from "./commands/hermes.js";
+import { agyDoctorCommand, agyRunCommand, agySetupCommand } from "./commands/agy.js";
 import { mcpDoctorCliCommand, mcpSetupCliCommand } from "./commands/mcp.js";
 import { runMenu } from "./menu.js";
 import {
@@ -573,33 +574,36 @@ program
 
 const mcpCmd = program
   .command("mcp")
-  .description("Configure all MCP clients (Codex, Hermes, Claude) for AgenticROS.");
+  .description("Configure all MCP clients (Codex, Hermes, Claude, Antigravity) for AgenticROS.");
 
 mcpCmd
   .command("setup")
   .description(
-    "Register agenticros MCP in Codex, Hermes, and Claude configs (default: all hosts).",
+    "Register agenticros MCP in Codex, Hermes, Claude, and Antigravity configs (default: all hosts).",
   )
   .option("--all", "Configure all hosts (default)", true)
   .option("--codex", "Configure Codex only (~/.codex/config.toml)", false)
   .option("--hermes", "Configure Hermes only (~/.hermes/config.yaml)", false)
   .option("--claude", "Configure Claude only (desktop + project .mcp.json)", false)
-  .option("--project", "Also write project-scoped configs (.codex/config.toml, .mcp.json)", false)
+  .option("--agy", "Configure Antigravity only (~/.gemini/config/mcp_config.json)", false)
+  .option("--project", "Also write project-scoped configs (.codex/config.toml, .mcp.json, .agents/mcp_config.json)", false)
   .option("--desktop", "Claude Desktop config only (with --claude)", false)
   .action(async (opts: {
     all?: boolean;
     codex?: boolean;
     hermes?: boolean;
     claude?: boolean;
+    agy?: boolean;
     project?: boolean;
     desktop?: boolean;
   }) => {
-    const hostFlags = opts.codex || opts.hermes || opts.claude;
+    const hostFlags = opts.codex || opts.hermes || opts.claude || opts.agy;
     await mcpSetupCliCommand({
       all: hostFlags ? false : opts.all,
       codex: opts.codex,
       hermes: opts.hermes,
       claude: opts.claude,
+      agy: opts.agy,
       project: opts.project,
       desktop: opts.desktop,
     });
@@ -607,16 +611,18 @@ mcpCmd
 
 mcpCmd
   .command("doctor")
-  .description("Validate MCP configs for Codex, Hermes, and Claude.")
+  .description("Validate MCP configs for Codex, Hermes, Claude, and Antigravity.")
   .option("--json", "Emit JSON instead of a table", false)
   .option("--codex", "Check Codex only", false)
   .option("--hermes", "Check Hermes only", false)
   .option("--claude", "Check Claude only", false)
+  .option("--agy", "Check Antigravity only", false)
   .action(async (opts: {
     json?: boolean;
     codex?: boolean;
     hermes?: boolean;
     claude?: boolean;
+    agy?: boolean;
   }) => {
     const exitCode = await mcpDoctorCliCommand(opts);
     if (exitCode !== 0) process.exit(exitCode);
@@ -683,6 +689,37 @@ hermesCmd
   .action(async (opts: { json?: boolean }) => {
     const exitCode = await hermesDoctorCommand(opts);
     if (exitCode !== 0) process.exit(exitCode);
+  });
+
+const agyCmd = program
+  .command("agy")
+  .description("Configure Google Antigravity CLI (agy) to use the AgenticROS MCP server.");
+
+agyCmd
+  .command("setup")
+  .description(
+    "Register agenticros in ~/.gemini/config/mcp_config.json (and .agents/ in a repo) and install the AgenticROS skill.",
+  )
+  .action(async () => {
+    await agySetupCommand();
+  });
+
+agyCmd
+  .command("doctor")
+  .description("Validate Antigravity MCP config (path, namespace policy, skill).")
+  .option("--json", "Emit JSON instead of a table", false)
+  .action(async (opts: { json?: boolean }) => {
+    const exitCode = await agyDoctorCommand(opts);
+    if (exitCode !== 0) process.exit(exitCode);
+  });
+
+agyCmd
+  .command("run <prompt...>")
+  .description("Run one prompt through agy using your Antigravity subscription (no GEMINI_API_KEY).")
+  .option("--model <model>", "Model slug for this run (see `agy models`)")
+  .option("--yes", "Auto-approve every tool call, including robot motion", false)
+  .action(async (promptParts: string[], opts: { model?: string; yes?: boolean }) => {
+    await agyRunCommand(promptParts.join(" "), { model: opts.model, yes: opts.yes === true });
   });
 
 program

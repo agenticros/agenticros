@@ -228,7 +228,9 @@ agenticros start camera -d /dev/video4
 | `agenticros status` | Running components (+ comms/motors/camera/realsense). |
 | `agenticros logs [target]` | Tail logs. |
 | `agenticros config` / `mode` | Edit `~/.agenticros/config.json`. |
-| `agenticros mcp setup` | Codex + Hermes + Claude MCP. |
+| `agenticros mcp setup` | Codex + Hermes + Claude + Antigravity MCP. |
+| `agenticros agy setup` | Antigravity MCP config and AgenticROS skill. |
+| `agenticros agy run "<prompt>"` | One `agy` prompt (add `--yes` to auto-approve tools). |
 | `agenticros web` | Open cloud config/teleop dashboard URL. |
 | `agenticros skills …` | Skill marketplace / local skills. Robot skills only — see [docs/skills.md](https://github.com/agenticros/agenticros/blob/main/docs/skills.md). |
 | `agenticros skills install --bundle mapping` | Install `@agenticros/start-slam`, `explore`, and `navigate-to`. |

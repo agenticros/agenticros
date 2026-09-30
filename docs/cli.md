@@ -154,19 +154,20 @@ binding against the ROS graph (declared `cmd_vel` / camera / actions must exist)
 Without `--live`, profile checks are static (schema + required bindings only).
 
 Checks include MCP server build status, OpenClaw plugin health, **MCP client configs**
-(Codex, Hermes, Claude — path and namespace policy), and CLI presence on `PATH`.
+(Codex, Hermes, Claude, Antigravity — path and namespace policy), and CLI presence on `PATH`.
 
-### `agenticros mcp setup [--codex] [--hermes] [--claude] [--project] [--desktop]`
+### `agenticros mcp setup [--codex] [--hermes] [--claude] [--agy] [--project] [--desktop]`
 
 **Primary command** — register the AgenticROS MCP server for all MCP clients at once:
 
 | Flag | Effect |
 |---|---|
-| (default) | Codex (`~/.codex/config.toml` + project `.codex/config.toml`), Hermes (`~/.hermes/config.yaml`), Claude Desktop + project `.mcp.json` |
+| (default) | Codex (`~/.codex/config.toml` + project `.codex/config.toml`), Hermes (`~/.hermes/config.yaml`), Claude Desktop + project `.mcp.json`, Antigravity (`~/.gemini/config/mcp_config.json` + project `.agents/mcp_config.json`) |
 | `--codex` | Codex global config only |
 | `--hermes` | Hermes global config only |
 | `--claude` | Claude Desktop + project `.mcp.json` |
-| `--project` | Also write project-scoped Codex / Claude configs |
+| `--agy` | Antigravity global config only |
+| `--project` | Also write project-scoped Codex / Claude / Antigravity configs |
 | `--desktop` | With `--claude`, Claude Desktop config only |
 
 Uses an **absolute path** to the MCP server binary. Sets `AGENTICROS_ROBOT_NAMESPACE` empty so `agenticros mode real|sim` drives the active robot namespace.
@@ -175,9 +176,9 @@ Also offered as an optional step during `agenticros init`.
 
 See **[docs/mcp-setup.md](mcp-setup.md)** for the unified onboarding guide.
 
-### `agenticros mcp doctor [--json] [--codex] [--hermes] [--claude]`
+### `agenticros mcp doctor [--json] [--codex] [--hermes] [--claude] [--agy]`
 
-Validate MCP configuration for Codex, Hermes, and Claude. Exits non-zero on red checks.
+Validate MCP configuration for Codex, Hermes, Claude, and Antigravity. Exits non-zero on red checks.
 
 ### `agenticros codex setup [--project]`
 
@@ -211,6 +212,24 @@ Also offered as an optional step during `agenticros init`. After setup, run `/re
 Validate Hermes MCP configuration: `~/.hermes/config.yaml`, MCP binary path, and namespace policy. Exits non-zero on red checks. With `--json`, emits structured output for scripting.
 
 See **[docs/hermes-setup.md](hermes-setup.md)** for the full Hermes onboarding guide.
+
+### `agenticros agy setup`
+
+Register the AgenticROS MCP server for **[Google Antigravity CLI](https://antigravity.google/docs/cli/)** (`agy`):
+
+Writes `mcpServers.agenticros` to `~/.gemini/config/mcp_config.json` and, when run inside a repo, `.agents/mcp_config.json`. Also installs a short AgenticROS skill at `~/.gemini/antigravity-cli/skills/agenticros/SKILL.md` (and `.agents/skills/agenticros/SKILL.md` in a repo). Uses an **absolute path** to the MCP server binary and `AGENTICROS_ROBOT_NAMESPACE: ""` so `agenticros mode real|sim` drives the active robot namespace.
+
+This uses your Antigravity subscription. It does not need `GEMINI_API_KEY`. Sign in once with interactive `agy` before headless runs.
+
+### `agenticros agy doctor [--json]`
+
+Validate Antigravity MCP configuration and the AgenticROS skill. Exits non-zero on red checks (wrong binary path or a hardcoded namespace). With `--json`, emits structured output for scripting.
+
+### `agenticros agy run <prompt...> [--yes] [--model <model>]`
+
+Run one prompt through `agy -p` and exit. Stdio is inherited so the session stays attached to your terminal. `--yes` passes `--dangerously-skip-permissions`, which auto-approves every tool call, including robot motion. Omit it to approve tools yourself.
+
+See **[docs/agy-setup.md](agy-setup.md)** for the full Antigravity onboarding guide.
 
 ### `agenticros claude setup [--desktop] [--project]`
 
@@ -281,6 +300,10 @@ Optional fleet hive (off by default). See [hive.md](hive.md).
 | `~/.config/configstore/agenticros.json` | CLI | Cloud `ROBOT_ID` + `API_TOKEN` (`login` / `set` / `id` / `register`). |
 | `~/.agenticros/cli-state.json` | CLI | Last-used mode/namespace for the menu's "(yesterday)" hint. |
 | `~/.hermes/config.yaml` | Hermes Agent | MCP server registrations (written by `agenticros mcp setup` or `agenticros hermes setup`). |
+| `~/.gemini/config/mcp_config.json` | Antigravity CLI | MCP server registrations (written by `agenticros mcp setup` or `agenticros agy setup`). |
+| `~/.gemini/antigravity-cli/skills/agenticros/SKILL.md` | Antigravity CLI | When to use the AgenticROS MCP tools. |
+| `.agents/mcp_config.json` | Antigravity CLI | Project-scoped MCP config (written by `agenticros agy setup` or `agenticros mcp setup` inside a repo). |
+| `.agents/skills/agenticros/SKILL.md` | Antigravity CLI | Project-scoped AgenticROS skill. |
 | `~/.codex/config.toml` | Codex CLI | MCP server registrations (written by `agenticros mcp setup` or `agenticros codex setup`). |
 | `.codex/config.toml` | Codex CLI | Project-scoped MCP config (written by `agenticros mcp setup` or `agenticros codex setup --project`). |
 | `.mcp.json` | Claude Code | Project-scoped MCP config (written by `agenticros mcp setup` or `agenticros claude setup`). |
@@ -321,12 +344,14 @@ Robot skills only. Third-party Agent Skills (`SKILL.md`) are not installed throu
 
 - **`doctor` shows red checks** → run `agenticros init` to walk through every
   step. Re-run `doctor` afterward. For MCP-specific issues, run
-  `agenticros mcp doctor` (or `agenticros codex doctor`, `agenticros hermes doctor`, `agenticros claude doctor`).
+  `agenticros mcp doctor` (or `agenticros codex doctor`, `agenticros hermes doctor`, `agenticros claude doctor`, `agenticros agy doctor`).
 - **MCP tools missing in any client** → run `agenticros mcp setup`. See [mcp-setup.md](mcp-setup.md).
 - **Codex `/mcp` does not list agenticros** → run `agenticros mcp setup --codex`
   (absolute MCP path required). See [codex-setup.md](codex-setup.md).
 - **Hermes MCP tools missing** → run `agenticros mcp setup --hermes`, then `/reload-mcp`
   in Hermes. See [hermes-setup.md](hermes-setup.md).
+- **Antigravity `/mcp` does not list agenticros** → run `agenticros agy setup`.
+  Antigravity reads `~/.gemini/config/mcp_config.json` and `.agents/mcp_config.json`. See [agy-setup.md](agy-setup.md).
 - **`up` exits immediately** → `agenticros logs <component>` (the CLI now
   records where every child wrote its output) and read the error in context.
 - **`up sim-amr` warns "scripts/sim/run_sim.sh not found"** → simulation

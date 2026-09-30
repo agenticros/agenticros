@@ -47,7 +47,8 @@ premium skills — never on the real-time control path.
 | Safety (per-robot velocity, optional `workspaceLimits`, fail-safe stop, `doctor --live`) | Shipped (`@agenticros/core` 0.8.5); MCP/Gemini `ros2_estop` shipped; `blocks_base` mutex still open |
 | AgenticROS Cloud (ARC) — P2P teleop, live map, click-to-navigate, start mapping, navigate-to missions, register, presence | Live at [cloud.agenticros.com](https://cloud.agenticros.com) (CLI 0.7.24) |
 | ARC organizations + teams (invite by GitHub, shared fleet) | Shipped on Teams / Enterprise |
-| Published packages | `@agenticros/core` **0.8.9**, CLI `agenticros` **0.7.24** |
+| Antigravity CLI (`agy`) as an MCP host | Shipped (CLI 0.7.25) |
+| Published packages | `@agenticros/core` **0.8.9**, CLI `agenticros` **0.7.25** |
 | Parallel mission steps + true hot-reload + paid licenses | Planned |
 | Spatial memory | Planned |
 | ACP / A2A multi-agent mesh | Planned |

@@ -1,5 +1,5 @@
 /**
- * `agenticros mcp` — configure all MCP hosts (Codex, Hermes, Claude) at once.
+ * `agenticros mcp` — configure all MCP hosts (Codex, Hermes, Claude, Antigravity) at once.
  */
 
 import { header } from "../util/logger.js";
@@ -11,6 +11,7 @@ export interface McpCommandSetupOptions {
   codex?: boolean;
   hermes?: boolean;
   claude?: boolean;
+  agy?: boolean;
   project?: boolean;
   desktop?: boolean;
 }
@@ -20,6 +21,7 @@ export interface McpCommandDoctorOptions {
   codex?: boolean;
   hermes?: boolean;
   claude?: boolean;
+  agy?: boolean;
 }
 
 export async function mcpSetupCliCommand(opts: McpCommandSetupOptions = {}): Promise<void> {
@@ -30,6 +32,7 @@ export async function mcpSetupCliCommand(opts: McpCommandSetupOptions = {}): Pro
     codex: opts.codex,
     hermes: opts.hermes,
     claude: opts.claude,
+    agy: opts.agy,
     project: opts.project,
     desktop: opts.desktop,
     repoRoot: paths.repoRoot,
@@ -39,11 +42,12 @@ export async function mcpSetupCliCommand(opts: McpCommandSetupOptions = {}): Pro
 export async function mcpDoctorCliCommand(opts: McpCommandDoctorOptions = {}): Promise<number> {
   const paths = getCliPaths();
   const hosts: McpHostId[] | undefined =
-    opts.codex || opts.hermes || opts.claude
+    opts.codex || opts.hermes || opts.claude || opts.agy
       ? ([
           opts.codex && "codex",
           opts.hermes && "hermes",
           opts.claude && "claude",
+          opts.agy && "agy",
         ].filter(Boolean) as McpHostId[])
       : undefined;
 

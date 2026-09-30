@@ -35,6 +35,7 @@ import {
 } from "../util/robot-profile.js";
 import { findMcpEntry } from "../util/mcp-discovery.js";
 import {
+  agyOnPath,
   buildMcpDoctorChecks,
   claudeOnPath,
   codexOnPath,
@@ -306,12 +307,12 @@ export async function runDoctorChecks(opts: DoctorOptions = {}): Promise<DoctorR
         : `AGENTICROS_ROBOT_NAMESPACE env overrides config (set to '${envNs}')`,
       severity: shadowsSim ? "red" : "yellow",
       hint: shadowsSim
-        ? "Unset that env var (or set it to \"\" in .mcp.json / ~/.codex/config.toml / claude_desktop_config.json) so the active mode profile drives the namespace."
+        ? "Unset that env var (or set it to \"\" in .mcp.json / ~/.codex/config.toml / claude_desktop_config.json / ~/.gemini/config/mcp_config.json) so the active mode profile drives the namespace."
         : "Fine for real-robot mode if the value matches your robot's namespace.",
     });
   }
 
-  // MCP client configs (Codex, Hermes, Claude).
+  // MCP client configs (Codex, Hermes, Claude, Antigravity).
   const mcpEntry = findMcpEntry();
   checks.push(...buildMcpDoctorChecks(mcpEntry, paths.repoRoot));
 
@@ -343,6 +344,16 @@ export async function runDoctorChecks(opts: DoctorOptions = {}): Promise<DoctorR
     hint: hasClaude
       ? undefined
       : "Install from https://claude.com/product/claude-code then run `agenticros mcp setup --claude`.",
+  });
+
+  const hasAgy = await agyOnPath();
+  checks.push({
+    id: "agy-cli",
+    label: hasAgy ? "Antigravity CLI installed" : "Antigravity CLI not detected",
+    severity: hasAgy ? "green" : "yellow",
+    hint: hasAgy
+      ? undefined
+      : "Install from https://antigravity.google/docs/cli/ then run `agenticros mcp setup --agy`.",
   });
 
   // OpenAI key.
