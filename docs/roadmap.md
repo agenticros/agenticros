@@ -48,7 +48,7 @@ premium skills — never on the real-time control path.
 | AgenticROS Cloud (ARC) — P2P teleop, live map, click-to-navigate, start mapping, navigate-to missions, register, presence | Live at [cloud.agenticros.com](https://cloud.agenticros.com) (CLI 0.7.24) |
 | ARC organizations + teams (invite by GitHub, shared fleet) | Shipped on Teams / Enterprise |
 | Antigravity CLI (`agy`) as an MCP host | Shipped (CLI 0.7.25) |
-| Published packages | `@agenticros/core` **0.8.9**, CLI `agenticros` **0.7.25** |
+| Published packages | `@agenticros/core` **0.8.9**, CLI `agenticros` **0.7.26** |
 | Parallel mission steps + true hot-reload + paid licenses | Planned |
 | Spatial memory | Planned |
 | ACP / A2A multi-agent mesh | Planned |
