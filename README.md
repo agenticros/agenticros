@@ -210,6 +210,9 @@ agenticros up sim-amr --nav2    # AMR + Nav2 for navigate_to missions
 agenticros up sim-arm           # simulated 6-DOF arm (per-joint /arm/*/cmd_pos)
 agenticros up sim-arm --moveit  # arm + MoveIt2 move_group + trajectory bridge
 agenticros skills install --bundle mapping   # start-slam + explore + navigate-to
+agenticros maps list                          # room maps on this robot
+agenticros maps create --label Kitchen --start
+agenticros maps use <id>                      # switch rooms and localize
 agenticros eyes                 # fullscreen robot eyes on a tablet / head unit
 agenticros mode <real|sim>      # swap the active config profile (namespace, transport)
 agenticros robots               # list / add / remove robots in the fleet (kind, sensors, capabilities)
