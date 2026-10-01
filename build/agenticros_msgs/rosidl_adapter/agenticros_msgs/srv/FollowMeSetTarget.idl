@@ -1,0 +1,21 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from agenticros_msgs/srv/FollowMeSetTarget.srv
+// generated code does not contain a copyright notice
+
+
+module agenticros_msgs {
+  module srv {
+    struct FollowMeSetTarget_Request {
+      string description;
+    };
+    struct FollowMeSetTarget_Response {
+      boolean success;
+
+      int32 person_id;
+
+      float confidence;
+
+      string message;
+    };
+  };
+};

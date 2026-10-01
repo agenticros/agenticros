@@ -1,0 +1,17 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from agenticros_msgs/srv/FollowMeStop.srv
+// generated code does not contain a copyright notice
+
+
+module agenticros_msgs {
+  module srv {
+    struct FollowMeStop_Request {
+      uint8 structure_needs_at_least_one_member;
+    };
+    struct FollowMeStop_Response {
+      boolean success;
+
+      string message;
+    };
+  };
+};

@@ -33,11 +33,14 @@ if [[ ! -f "/opt/ros/${ROS_DISTRO}/setup.bash" ]]; then
   exit 1
 fi
 
+# ROS setup scripts reference unset AMENT_* vars. Nounset would abort the goal.
+set +u
 source "/opt/ros/${ROS_DISTRO}/setup.bash"
 REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 if [[ -f "$REPO_ROOT/ros2_ws/install/setup.bash" ]]; then
   source "$REPO_ROOT/ros2_ws/install/setup.bash"
 fi
+set -u
 
 ACTION="navigate_to_pose"
 if [[ -n "$NS" ]]; then

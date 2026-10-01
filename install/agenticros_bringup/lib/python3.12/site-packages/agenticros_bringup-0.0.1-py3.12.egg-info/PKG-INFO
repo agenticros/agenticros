@@ -1,0 +1,7 @@
+Metadata-Version: 2.1
+Name: agenticros-bringup
+Version: 0.0.1
+Summary: AgenticROS-friendly simulation and RViz bringup.
+Maintainer: PlaiPin
+Maintainer-email: team@plaipin.com
+License: Apache-2.0

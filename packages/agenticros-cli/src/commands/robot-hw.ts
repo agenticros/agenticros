@@ -341,21 +341,32 @@ export async function startMappingCommand(): Promise<void> {
     err("No ROS 2 installation detected under /opt/ros/. Install ROS 2 Humble or Jazzy first.");
     process.exit(1);
   }
+  // A second launch stacks Nav2 nodes until bt_navigator crashes.
+  const { exitCode: mappingUp } = await execa("pgrep", ["-f", "[r]tabmap_nav2.launch.py"], {
+    reject: false,
+  });
+  if (mappingUp === 0) {
+    info("Stopping the mapping stack already running.");
+    await stopMappingCommand();
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  // Teleop RealSense is low-res and does not align depth to color, and it
+  // holds the camera so this launch cannot start its own aligned stream.
   const { exitCode } = await execa("pgrep", ["-f", "[r]ealsense2_camera_node"], { reject: false });
-  const realsenseUp = exitCode === 0;
+  if (exitCode === 0) {
+    info("Stopping the current RealSense so mapping can start an aligned camera.");
+    await stopRealsenseCommand();
+    await new Promise((r) => setTimeout(r, 1500));
+  }
   const ns = configuredNamespace();
   const pid = spawnDetached("bash", [script, ros.distro], {
     logFile: MAPPING_LOG,
     env: {
       ...process.env,
       AGENTICROS_ROBOT_NAMESPACE: ns,
-      ...(realsenseUp ? { AGENTICROS_NO_REALSENSE: "1" } : {}),
     },
   });
   ok(`Mapping stack starting${pid ? ` (pid ${pid})` : ""}. Log: ${MAPPING_LOG}`);
-  if (realsenseUp) {
-    info("RealSense is already running, so this launch will not start a second camera.");
-  }
 }
 
 export async function stopMappingCommand(): Promise<void> {
@@ -371,8 +382,13 @@ export async function stopMappingCommand(): Promise<void> {
     "smoother_server",
     "waypoint_follower",
     "velocity_smoother",
+    "route_server",
+    "collision_monitor",
+    "docking_server",
+    "lifecycle_manager_navigation",
     "agenticros_explore",
     "camera_stamp_fix",
+    "static_tf_base_link",
     "cmd_vel_relay",
   ];
   for (const pattern of patterns) {

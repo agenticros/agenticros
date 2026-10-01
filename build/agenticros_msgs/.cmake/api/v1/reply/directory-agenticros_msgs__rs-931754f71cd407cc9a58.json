@@ -1,0 +1,14 @@
+{
+	"backtraceGraph" : 
+	{
+		"commands" : [],
+		"files" : [],
+		"nodes" : []
+	},
+	"installers" : [],
+	"paths" : 
+	{
+		"build" : "agenticros_msgs__rs",
+		"source" : "/home/nvidia/Projects/agenticros/build/agenticros_msgs/agenticros_msgs__rs"
+	}
+}

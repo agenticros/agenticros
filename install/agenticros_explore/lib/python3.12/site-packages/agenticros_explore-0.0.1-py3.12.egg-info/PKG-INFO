@@ -1,0 +1,7 @@
+Metadata-Version: 2.1
+Name: agenticros-explore
+Version: 0.0.1
+Summary: Frontier exploration and wander actions for AgenticROS (Nav2 NavigateToPose client)
+Maintainer: PlaiPin
+Maintainer-email: team@plaipin.com
+License: Apache-2.0

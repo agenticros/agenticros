@@ -13,7 +13,7 @@ import threading
 
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import qos_profile_sensor_data
+from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
 from sensor_msgs.msg import CameraInfo, Image
 
 
@@ -43,13 +43,20 @@ class CameraStampFix(Node):
         self._info: CameraInfo | None = None
         self._n = 0
 
-        qos = qos_profile_sensor_data
-        self.create_subscription(Image, rgb_in, self._on_rgb, qos)
-        self.create_subscription(Image, depth_in, self._on_depth, qos)
-        self.create_subscription(CameraInfo, info_in, self._on_info, qos)
-        self._rgb_pub = self.create_publisher(Image, rgb_out, 10)
-        self._depth_pub = self.create_publisher(Image, depth_out, 10)
-        self._info_pub = self.create_publisher(CameraInfo, info_out, 10)
+        # The RealSense node on this robot publishes RELIABLE. A best-effort
+        # subscription never connects to that. RTAB-Map subscribes best-effort,
+        # so the republished topics use sensor_data QoS.
+        qos_in = QoSProfile(
+            reliability=ReliabilityPolicy.RELIABLE,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=10,
+        )
+        self.create_subscription(Image, rgb_in, self._on_rgb, qos_in)
+        self.create_subscription(Image, depth_in, self._on_depth, qos_in)
+        self.create_subscription(CameraInfo, info_in, self._on_info, qos_in)
+        self._rgb_pub = self.create_publisher(Image, rgb_out, qos_profile_sensor_data)
+        self._depth_pub = self.create_publisher(Image, depth_out, qos_profile_sensor_data)
+        self._info_pub = self.create_publisher(CameraInfo, info_out, qos_profile_sensor_data)
         self.create_timer(period, self._tick)
         self.get_logger().info(
             "Rewriting stamps: %s + %s + %s -> %s / %s / %s (%.1f Hz)"

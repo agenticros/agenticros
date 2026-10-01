@@ -1,0 +1,26 @@
+{
+  "type_description_msg": {
+    "type_description": {
+      "type_name": "agenticros_msgs/srv/FollowMeGetStatus_Request",
+      "fields": [
+        {
+          "name": "structure_needs_at_least_one_member",
+          "type": {
+            "type_id": 3,
+            "capacity": 0,
+            "string_capacity": 0,
+            "nested_type_name": ""
+          },
+          "default_value": ""
+        }
+      ]
+    },
+    "referenced_type_descriptions": []
+  },
+  "type_hashes": [
+    {
+      "type_name": "agenticros_msgs/srv/FollowMeGetStatus_Request",
+      "hash_string": "RIHS01_5069bbf8d42565e001932a0641b5488fce7309701cdf64a923b1f1c52b7063a4"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from agenticros_msgs/srv/FollowMeSetDistance.srv
+// generated code does not contain a copyright notice
+
+
+module agenticros_msgs {
+  module srv {
+    struct FollowMeSetDistance_Request {
+      float distance;
+    };
+    struct FollowMeSetDistance_Response {
+      boolean success;
+
+      float target_distance;
+    };
+  };
+};

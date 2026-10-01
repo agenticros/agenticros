@@ -1,0 +1,2 @@
+[console_scripts]
+explore_node = agenticros_explore.explore_node:main

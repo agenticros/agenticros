@@ -1,0 +1,6 @@
+source;share/agenticros_explore/hook/pythonpath.ps1
+source;share/agenticros_explore/hook/pythonpath.dsv
+source;share/agenticros_explore/hook/pythonpath.sh
+source;share/agenticros_explore/hook/ament_prefix_path.ps1
+source;share/agenticros_explore/hook/ament_prefix_path.dsv
+source;share/agenticros_explore/hook/ament_prefix_path.sh

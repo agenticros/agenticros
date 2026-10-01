@@ -1,0 +1,26 @@
+{
+  "type_description_msg": {
+    "type_description": {
+      "type_name": "agenticros_msgs/srv/FollowMeStart_Request",
+      "fields": [
+        {
+          "name": "target_description",
+          "type": {
+            "type_id": 17,
+            "capacity": 0,
+            "string_capacity": 0,
+            "nested_type_name": ""
+          },
+          "default_value": ""
+        }
+      ]
+    },
+    "referenced_type_descriptions": []
+  },
+  "type_hashes": [
+    {
+      "type_name": "agenticros_msgs/srv/FollowMeStart_Request",
+      "hash_string": "RIHS01_8bf9fdb09d4cdce0c6074307a353a2aa889cfdb7d8bda0213de45b8ba5e9bf13"
+    }
+  ]
+}

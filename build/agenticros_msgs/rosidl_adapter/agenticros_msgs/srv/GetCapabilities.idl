@@ -1,0 +1,20 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from agenticros_msgs/srv/GetCapabilities.srv
+// generated code does not contain a copyright notice
+
+#include "agenticros_msgs/msg/CapabilityManifest.idl"
+
+module agenticros_msgs {
+  module srv {
+    struct GetCapabilities_Request {
+      string robot_namespace;
+    };
+    struct GetCapabilities_Response {
+      agenticros_msgs::msg::CapabilityManifest manifest;
+
+      boolean success;
+
+      string error_message;
+    };
+  };
+};

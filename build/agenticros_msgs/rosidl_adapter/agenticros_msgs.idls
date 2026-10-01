@@ -1,0 +1,9 @@
+/home/nvidia/Projects/agenticros/build/agenticros_msgs/rosidl_adapter/agenticros_msgs:msg/CapabilityManifest.idl
+/home/nvidia/Projects/agenticros/build/agenticros_msgs/rosidl_adapter/agenticros_msgs:msg/RobotInfo.idl
+/home/nvidia/Projects/agenticros/build/agenticros_msgs/rosidl_adapter/agenticros_msgs:srv/GetCapabilities.idl
+/home/nvidia/Projects/agenticros/build/agenticros_msgs/rosidl_adapter/agenticros_msgs:srv/FollowMeStart.idl
+/home/nvidia/Projects/agenticros/build/agenticros_msgs/rosidl_adapter/agenticros_msgs:srv/FollowMeStop.idl
+/home/nvidia/Projects/agenticros/build/agenticros_msgs/rosidl_adapter/agenticros_msgs:srv/FollowMeSetDistance.idl
+/home/nvidia/Projects/agenticros/build/agenticros_msgs/rosidl_adapter/agenticros_msgs:srv/FollowMeGetStatus.idl
+/home/nvidia/Projects/agenticros/build/agenticros_msgs/rosidl_adapter/agenticros_msgs:srv/FollowMeSetTarget.idl
+/home/nvidia/Projects/agenticros/build/agenticros_msgs/rosidl_adapter/agenticros_msgs:action/Explore.idl

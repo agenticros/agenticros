@@ -1,0 +1,19 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from agenticros_msgs/srv/FollowMeStart.srv
+// generated code does not contain a copyright notice
+
+
+module agenticros_msgs {
+  module srv {
+    @verbatim (language="comment", text=
+      "Start following. Empty target_description = follow closest person.")
+    struct FollowMeStart_Request {
+      string target_description;
+    };
+    struct FollowMeStart_Response {
+      boolean success;
+
+      string message;
+    };
+  };
+};

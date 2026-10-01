@@ -1,0 +1,44 @@
+// generated from rosidl_adapter/resource/action.idl.em
+// with input from agenticros_msgs/action/Explore.action
+// generated code does not contain a copyright notice
+
+
+module agenticros_msgs {
+  module action {
+    @verbatim (language="comment", text=
+      "Goal" "\n"
+      "explore = frontier coverage; wander = random free-space poses." "\n"
+      "Empty mode is filled by the action server (explore vs wander).")
+    struct Explore_Goal {
+      string mode;
+
+      float timeout_s;
+
+      float min_frontier_m;
+
+      int32 max_goals;
+    };
+    @verbatim (language="comment", text=
+      "Result")
+    struct Explore_Result {
+      boolean success;
+
+      string message;
+
+      float coverage_ratio;
+
+      uint32 goals_sent;
+    };
+    @verbatim (language="comment", text=
+      "Feedback")
+    struct Explore_Feedback {
+      string state;
+
+      float coverage_ratio;
+
+      uint32 goals_sent;
+
+      float elapsed_s;
+    };
+  };
+};

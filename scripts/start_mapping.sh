@@ -23,10 +23,14 @@ if [[ ! -f "/opt/ros/${ROS_DISTRO}/setup.bash" ]]; then
   exit 1
 fi
 
+# ROS setup scripts reference AMENT_TRACE_SETUP_FILES and other vars that are
+# unset under `set -u`, which aborts this script before RTAB-Map launches.
+set +u
 source "/opt/ros/${ROS_DISTRO}/setup.bash"
 if [[ -f "$REPO_ROOT/ros2_ws/install/setup.bash" ]]; then
   source "$REPO_ROOT/ros2_ws/install/setup.bash"
 fi
+set -u
 
 missing=()
 if [[ ! -d "/opt/ros/${ROS_DISTRO}/share/rtabmap_ros" && ! -d "/opt/ros/${ROS_DISTRO}/share/rtabmap_launch" ]]; then
@@ -72,9 +76,26 @@ echo "==> Launching RTAB-Map + Nav2 (robot_namespace='${NS}' visual_odometry=${V
 echo "    Next: agenticros skills install --bundle mapping"
 echo "    Then chat: \"map the room\" / \"save this place as kitchen\" / \"go to the kitchen\""
 
-exec ros2 launch agenticros_bringup rtabmap_nav2.launch.py \
-  "robot_namespace:=${NS}" \
-  "visual_odometry:=${VO}" \
-  "odom_topic:=${ODOM}" \
-  "delete_db_on_start:=${DELETE_DB}" \
+# An empty `name:=` is rejected by `ros2 launch` ("malformed launch argument").
+# The launch file already defaults robot_namespace to "" and skips the cmd_vel relay.
+launch_args=(
+  "visual_odometry:=${VO}"
+  "odom_topic:=${ODOM}"
+  "delete_db_on_start:=${DELETE_DB}"
   "use_realsense:=${USE_RS}"
+  # No URDF on this robot, so base_link does not exist and visual odometry
+  # cannot look up base_link -> camera_color_optical_frame.
+  "use_static_robot_tf:=true"
+  # RealSense hardware stamps arrive out of order on this Jetson.
+  "rewrite_camera_stamps:=true"
+)
+# An already-running teleop camera publishes unaligned depth. The mapping
+# launch's own camera enables align_depth and should keep the default topic.
+if [[ "${USE_RS}" != "true" ]]; then
+  launch_args+=("depth_topic:=/camera/camera/depth/image_rect_raw")
+fi
+if [[ -n "${NS}" ]]; then
+  launch_args+=("robot_namespace:=${NS}")
+fi
+
+exec ros2 launch agenticros_bringup rtabmap_nav2.launch.py "${launch_args[@]}"

@@ -1,0 +1,34 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from agenticros_msgs/srv/FollowMeGetStatus.srv
+// generated code does not contain a copyright notice
+
+#include "geometry_msgs/msg/Twist.idl"
+
+module agenticros_msgs {
+  module srv {
+    struct FollowMeGetStatus_Request {
+      uint8 structure_needs_at_least_one_member;
+    };
+    struct FollowMeGetStatus_Response {
+      boolean success;
+
+      boolean enabled;
+
+      boolean tracking;
+
+      float target_distance;
+
+      float current_distance;
+
+      int32 target_person_id;
+
+      string target_description;
+
+      int32 persons_detected;
+
+      geometry_msgs::msg::Twist twist;
+
+      string error_message;
+    };
+  };
+};

@@ -1,0 +1,14 @@
+{
+  "package_name": "agenticros_msgs",
+  "non_idl_tuples": [
+    "/home/nvidia/Projects/agenticros/ros2_ws/src/agenticros_msgs:msg/CapabilityManifest.msg",
+    "/home/nvidia/Projects/agenticros/ros2_ws/src/agenticros_msgs:msg/RobotInfo.msg",
+    "/home/nvidia/Projects/agenticros/ros2_ws/src/agenticros_msgs:srv/GetCapabilities.srv",
+    "/home/nvidia/Projects/agenticros/ros2_ws/src/agenticros_msgs:srv/FollowMeStart.srv",
+    "/home/nvidia/Projects/agenticros/ros2_ws/src/agenticros_msgs:srv/FollowMeStop.srv",
+    "/home/nvidia/Projects/agenticros/ros2_ws/src/agenticros_msgs:srv/FollowMeSetDistance.srv",
+    "/home/nvidia/Projects/agenticros/ros2_ws/src/agenticros_msgs:srv/FollowMeGetStatus.srv",
+    "/home/nvidia/Projects/agenticros/ros2_ws/src/agenticros_msgs:srv/FollowMeSetTarget.srv",
+    "/home/nvidia/Projects/agenticros/ros2_ws/src/agenticros_msgs:action/Explore.action"
+  ]
+}

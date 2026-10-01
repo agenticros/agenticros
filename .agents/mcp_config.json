@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "agenticros": {
+      "command": "/home/nvidia/.nvm/versions/node/v22.23.2/bin/node",
+      "args": [
+        "/home/nvidia/Projects/agenticros/packages/agenticros-claude-code/dist/index.js"
+      ],
+      "env": {
+        "AGENTICROS_ROBOT_NAMESPACE": ""
+      }
+    }
+  }
+}

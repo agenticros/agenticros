@@ -1,0 +1,267 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"childIndexes" : 
+					[
+						1,
+						2
+					],
+					"hasInstallRule" : true,
+					"jsonFile" : "directory-.-1791c7768859c30c1e7d.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.20"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						3,
+						4,
+						5,
+						6,
+						7,
+						8,
+						9,
+						10,
+						11,
+						13,
+						14,
+						15,
+						16,
+						17,
+						18,
+						19
+					]
+				},
+				{
+					"build" : "agenticros_msgs__py",
+					"jsonFile" : "directory-agenticros_msgs__py-6fe6b2a2035b7de58a89.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.20"
+					},
+					"parentIndex" : 0,
+					"projectIndex" : 0,
+					"source" : "/home/nvidia/Projects/agenticros/build/agenticros_msgs/agenticros_msgs__py",
+					"targetIndexes" : 
+					[
+						2
+					]
+				},
+				{
+					"build" : "agenticros_msgs__rs",
+					"jsonFile" : "directory-agenticros_msgs__rs-931754f71cd407cc9a58.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.20"
+					},
+					"parentIndex" : 0,
+					"projectIndex" : 0,
+					"source" : "/home/nvidia/Projects/agenticros/build/agenticros_msgs/agenticros_msgs__rs",
+					"targetIndexes" : 
+					[
+						12
+					]
+				}
+			],
+			"name" : "",
+			"projects" : 
+			[
+				{
+					"directoryIndexes" : 
+					[
+						0,
+						1,
+						2
+					],
+					"name" : "agenticros_msgs",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2,
+						3,
+						4,
+						5,
+						6,
+						7,
+						8,
+						9,
+						10,
+						11,
+						12,
+						13,
+						14,
+						15,
+						16,
+						17,
+						18,
+						19
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "agenticros_msgs::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-agenticros_msgs-803c0c3ba55af17b8eb8.json",
+					"name" : "agenticros_msgs",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "agenticros_msgs__cpp::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-agenticros_msgs__cpp-3d87b4460472854a1bb2.json",
+					"name" : "agenticros_msgs__cpp",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 1,
+					"id" : "agenticros_msgs__py::@cc1d305b71a6378fd0dc",
+					"jsonFile" : "target-agenticros_msgs__py-7a01d03e1e6d8888945f.json",
+					"name" : "agenticros_msgs__py",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "agenticros_msgs__rosidl_generator_c::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-agenticros_msgs__rosidl_generator_c-ffa8b001e20bcc2e32ff.json",
+					"name" : "agenticros_msgs__rosidl_generator_c",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "agenticros_msgs__rosidl_generator_py::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-agenticros_msgs__rosidl_generator_py-138b57ded31cd35657d4.json",
+					"name" : "agenticros_msgs__rosidl_generator_py",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "agenticros_msgs__rosidl_generator_type_description::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-agenticros_msgs__rosidl_generator_type_description-2dd96a09c40ad61b239d.json",
+					"name" : "agenticros_msgs__rosidl_generator_type_description",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "agenticros_msgs__rosidl_typesupport_c::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-agenticros_msgs__rosidl_typesupport_c-c7c05770c40857b469c1.json",
+					"name" : "agenticros_msgs__rosidl_typesupport_c",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "agenticros_msgs__rosidl_typesupport_cpp::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-agenticros_msgs__rosidl_typesupport_cpp-0fe41adc1aa3f6e04c1f.json",
+					"name" : "agenticros_msgs__rosidl_typesupport_cpp",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "agenticros_msgs__rosidl_typesupport_fastrtps_c::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-agenticros_msgs__rosidl_typesupport_fastrtps_c-03ca10dc06290b914c0b.json",
+					"name" : "agenticros_msgs__rosidl_typesupport_fastrtps_c",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "agenticros_msgs__rosidl_typesupport_fastrtps_cpp::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-agenticros_msgs__rosidl_typesupport_fastrtps_cpp-f79dedcfb558eaa32059.json",
+					"name" : "agenticros_msgs__rosidl_typesupport_fastrtps_cpp",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "agenticros_msgs__rosidl_typesupport_introspection_c::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-agenticros_msgs__rosidl_typesupport_introspection_c-80627cd01aaad1f116c1.json",
+					"name" : "agenticros_msgs__rosidl_typesupport_introspection_c",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "agenticros_msgs__rosidl_typesupport_introspection_cpp::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-agenticros_msgs__rosidl_typesupport_introspection_cpp-4b6d86d068221e5e9f00.json",
+					"name" : "agenticros_msgs__rosidl_typesupport_introspection_cpp",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 2,
+					"id" : "agenticros_msgs__rs::@c6feae46103d1c550ddd",
+					"jsonFile" : "target-agenticros_msgs__rs-bcdf5f3c86fed19877c8.json",
+					"name" : "agenticros_msgs__rs",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "agenticros_msgs_s__rosidl_typesupport_c::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-agenticros_msgs_s__rosidl_typesupport_c-31b17174d940bec3442d.json",
+					"name" : "agenticros_msgs_s__rosidl_typesupport_c",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "agenticros_msgs_s__rosidl_typesupport_fastrtps_c::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-agenticros_msgs_s__rosidl_typesupport_fastrtps_c-0c7a67ab3982b0796bbb.json",
+					"name" : "agenticros_msgs_s__rosidl_typesupport_fastrtps_c",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "agenticros_msgs_s__rosidl_typesupport_introspection_c::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-agenticros_msgs_s__rosidl_typesupport_introspection_c-d8d66e6b7762baee382b.json",
+					"name" : "agenticros_msgs_s__rosidl_typesupport_introspection_c",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "agenticros_msgs_uninstall::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-agenticros_msgs_uninstall-ca92eebfc08df895bf76.json",
+					"name" : "agenticros_msgs_uninstall",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "ament_cmake_python_build_agenticros_msgs_egg::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-ament_cmake_python_build_agenticros_msgs_egg-834e203cc0bb21a5c440.json",
+					"name" : "ament_cmake_python_build_agenticros_msgs_egg",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "ament_cmake_python_copy_agenticros_msgs::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-ament_cmake_python_copy_agenticros_msgs-bc54526aa80845f18bbd.json",
+					"name" : "ament_cmake_python_copy_agenticros_msgs",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "uninstall::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-uninstall-e59170d066ca4e81334a.json",
+					"name" : "uninstall",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "/home/nvidia/Projects/agenticros/build/agenticros_msgs",
+		"source" : "/home/nvidia/Projects/agenticros/ros2_ws/src/agenticros_msgs"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 6
+	}
+}

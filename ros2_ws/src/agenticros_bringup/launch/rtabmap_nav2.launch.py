@@ -163,6 +163,8 @@ def _launch_setup(context, *args, **kwargs):
                 "camera_namespace": "camera",
                 "enable_color": True,
                 "enable_depth": True,
+                "enable_infra1": False,
+                "enable_infra2": False,
                 "enable_sync": True,
                 "align_depth.enable": True,
                 "pointcloud.enable": False,
@@ -171,6 +173,10 @@ def _launch_setup(context, *args, **kwargs):
                 "initial_reset": True,
                 "rgb_camera.color_profile": LaunchConfiguration("color_profile"),
                 "depth_module.depth_profile": LaunchConfiguration("depth_profile"),
+                # Default infra is 1280x720@30. On this Jetson that plus
+                # 640x480 color/depth makes realsense2_camera_node SIGSEGV
+                # right after "Node Is Up".
+                "depth_module.infra_profile": LaunchConfiguration("depth_profile"),
             }
         ],
     )
@@ -206,7 +212,13 @@ def _launch_setup(context, *args, **kwargs):
             # Absolute so explore/Nav2 get /map (not /rtabmap/map under ns).
             "map_topic": LaunchConfiguration("rtabmap_map_topic"),
             "database_path": LaunchConfiguration("database_path"),
-            "delete_db_on_start": LaunchConfiguration("delete_db_on_start"),
+            # jazzy rtabmap.launch.py has no delete_db_on_start arg; the
+            # node only wipes the db when this flag is in args.
+            "args": (
+                "--delete_db_on_start"
+                if _bool_cfg(context, "delete_db_on_start")
+                else ""
+            ),
             # Keep RTAB-Map nodes under /rtabmap without leaking this into Nav2.
             "namespace": "rtabmap",
             "rviz": "false",

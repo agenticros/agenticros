@@ -1,0 +1,2 @@
+[console_scripts]
+cmd_vel_relay = agenticros_bringup.cmd_vel_relay:main

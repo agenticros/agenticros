@@ -1,0 +1,65 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from agenticros_msgs/msg/RobotInfo.msg
+// generated code does not contain a copyright notice
+
+#include "builtin_interfaces/msg/Time.idl"
+
+module agenticros_msgs {
+  module msg {
+    @verbatim (language="comment", text=
+      "Phase 1.e robot heartbeat — published on `<namespace>/agenticros/robot_info`" "\n"
+      "by agenticros_discovery at 1 Hz. Mirrors the TS-side RobotEntry shape so" "\n"
+      "the discovery service can self-advertise without TS-side static config," "\n"
+      "and so a future Phase 4 ACP/A2A agent-card payload is a strict superset" "\n"
+      "of these fields. See docs/strategy-ai-agents-plus-ros.md §4(d)." "\n"
+      "" "\n"
+      "Required fields are at the top. Optional fields (sensors, battery, pose)" "\n"
+      "are below — Phase 1.e ships id/name/kind/namespace/capabilities/sensors" "\n"
+      "and leaves the others as forward-compatible placeholders so consumers" "\n"
+      "don't have to handle a schema bump for Phase 3 spatial memory.")
+    struct RobotInfo {
+      @verbatim (language="comment", text=
+        "Stable, human-readable identifier — the same `id` the TS side uses as" "\n"
+        "`robot_id` in tool calls (`ros2_publish(robot_id, …)`). Falls back to" "\n"
+        "`robot_namespace` when not set.")
+      string id;
+
+      @verbatim (language="comment", text=
+        "Display name shown to users / the chat agent (e.g. \"Kitchen Bot\").")
+      string name;
+
+      @verbatim (language="comment", text=
+        "Robot kind — \"amr\" | \"arm\" | \"drone\" | \"rover\" | (free-form). Used by" "\n"
+        "`ros2_find_robots_for(kind=…)` to partition heterogeneous fleets.")
+      string kind;
+
+      @verbatim (language="comment", text=
+        "ROS2 topic namespace prefix (e.g. \"robot3946b404…\"). Without leading" "\n"
+        "slash — consumers prepend \"/\" + this when computing topic paths.")
+      string robot_namespace;
+
+      @verbatim (language="comment", text=
+        "Capability ids the robot advertises (matches the verbs returned by" "\n"
+        "`ros2_list_capabilities`, e.g. \"drive_base\", \"follow_person\"," "\n"
+        "\"arm_grasp\"). When empty, consumers fall back to the gateway-wide" "\n"
+        "global registry — same precedence as the TS-side per-robot allowlist.")
+      sequence<string> capability_ids;
+
+      @verbatim (language="comment", text=
+        "Sensor / hardware flags. Three slots match the Phase 1.e schema; add" "\n"
+        "new ones additively (default-false at the consumer when absent) so old" "\n"
+        "subscribers don't break.")
+      boolean has_realsense;
+
+      boolean has_lidar;
+
+      boolean has_arm;
+
+      @verbatim (language="comment", text=
+        "Heartbeat timestamp — consumers treat the robot as offline when the" "\n"
+        "last observed stamp is older than ~5 s (per the strategy memo's" "\n"
+        "\"1 Hz + 5 s staleness window\" recommendation).")
+      builtin_interfaces::msg::Time stamp;
+    };
+  };
+};

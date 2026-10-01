@@ -1,0 +1,19 @@
+# Goal
+# explore = frontier coverage; wander = random free-space poses.
+# Empty mode is filled by the action server (explore vs wander).
+string mode
+float32 timeout_s
+float32 min_frontier_m
+int32 max_goals
+---
+# Result
+bool success
+string message
+float32 coverage_ratio
+uint32 goals_sent
+---
+# Feedback
+string state
+float32 coverage_ratio
+uint32 goals_sent
+float32 elapsed_s

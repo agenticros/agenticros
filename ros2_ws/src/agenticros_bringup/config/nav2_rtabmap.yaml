@@ -58,6 +58,12 @@ bt_navigator:
     bt_loop_duration: 10
     default_server_timeout: 20
     wait_for_service_timeout: 1000
+    # Both default navigators load the same BT plugins into one factory.
+    # The second create throws "ID [ComputePathToPose] already registered"
+    # and bt_navigator exits -11, so the lifecycle manager never activates.
+    navigators: ["navigate_to_pose"]
+    navigate_to_pose:
+      plugin: "nav2_bt_navigator::NavigateToPoseNavigator"
     plugin_lib_names:
       - nav2_compute_path_to_pose_action_bt_node
       - nav2_compute_path_through_poses_action_bt_node
@@ -240,7 +246,7 @@ planner_server:
     expected_planner_frequency: 20.0
     planner_plugins: [GridBased]
     GridBased:
-      plugin: nav2_navfn_planner/NavfnPlanner
+      plugin: nav2_navfn_planner::NavfnPlanner
       tolerance: 0.5
       use_astar: false
       allow_unknown: true
@@ -263,15 +269,15 @@ behavior_server:
     cycle_frequency: 10.0
     behavior_plugins: [spin, backup, drive_on_heading, assisted_teleop, wait]
     spin:
-      plugin: nav2_behaviors/Spin
+      plugin: nav2_behaviors::Spin
     backup:
-      plugin: nav2_behaviors/BackUp
+      plugin: nav2_behaviors::BackUp
     drive_on_heading:
-      plugin: nav2_behaviors/DriveOnHeading
+      plugin: nav2_behaviors::DriveOnHeading
     wait:
-      plugin: nav2_behaviors/Wait
+      plugin: nav2_behaviors::Wait
     assisted_teleop:
-      plugin: nav2_behaviors/AssistedTeleop
+      plugin: nav2_behaviors::AssistedTeleop
     global_frame: odom
     robot_base_frame: base_link
     transform_tolerance: 0.1
@@ -306,12 +312,14 @@ velocity_smoother:
     deadband_velocity: [0.0, 0.0, 0.0]
     velocity_timeout: 1.0
 
-# Jazzy navigation_launch.py always starts these. Empty sources: this robot
-# has no lidar; RTAB-Map /map is the obstacle source (global static layer).
+# Jazzy navigation_launch.py always starts these. This robot has no lidar;
+# RTAB-Map /map is the obstacle source (global static layer).
+# An empty YAML sequence ([]) is rejected as "no value". Omitting
+# observation_sources makes collision_monitor fail configure with
+# "parameter is not initialized", so the scan source is present and disabled.
 route_server:
   ros__parameters:
     use_sim_time: false
-    operations: []
     edge_cost_functions: ["DistanceScorer"]
     DistanceScorer:
       plugin: "nav2_route::DistanceScorer"
@@ -325,8 +333,21 @@ collision_monitor:
     cmd_vel_out_topic: "cmd_vel"
     transform_tolerance: 0.2
     source_timeout: 2.0
-    polygons: []
-    observation_sources: []
+    polygons: ["FootprintApproach"]
+    FootprintApproach:
+      type: "polygon"
+      action_type: "approach"
+      footprint_topic: "/local_costmap/published_footprint"
+      time_before_collision: 1.2
+      simulation_time_step: 0.1
+      min_points: 6
+      visualize: false
+      enabled: true
+    observation_sources: ["scan"]
+    scan:
+      type: "scan"
+      topic: "/scan"
+      enabled: false
 
 docking_server:
   ros__parameters:

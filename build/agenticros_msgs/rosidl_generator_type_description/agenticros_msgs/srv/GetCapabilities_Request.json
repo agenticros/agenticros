@@ -1,0 +1,26 @@
+{
+  "type_description_msg": {
+    "type_description": {
+      "type_name": "agenticros_msgs/srv/GetCapabilities_Request",
+      "fields": [
+        {
+          "name": "robot_namespace",
+          "type": {
+            "type_id": 17,
+            "capacity": 0,
+            "string_capacity": 0,
+            "nested_type_name": ""
+          },
+          "default_value": ""
+        }
+      ]
+    },
+    "referenced_type_descriptions": []
+  },
+  "type_hashes": [
+    {
+      "type_name": "agenticros_msgs/srv/GetCapabilities_Request",
+      "hash_string": "RIHS01_afd5bf811efb1bdda023fc27f107b21019f130dc47d285298f1d2766bf2d8772"
+    }
+  ]
+}
