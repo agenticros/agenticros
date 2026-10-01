@@ -221,9 +221,36 @@ export {
   getPlace,
   savePlace,
   forgetPlace,
+  forgetPlacesForMap,
   poseFromLocalizationMessage,
 } from "./places.js";
 export type { SavedPlace, PlacesStore } from "./places.js";
+
+export {
+  MAP_ID_RE,
+  MAP_LABEL_RE,
+  activeMap,
+  assertMapLabel,
+  createMap,
+  defaultCatalogPath,
+  defaultMapsDir,
+  deleteMap,
+  ensureActiveMap,
+  findMap,
+  loadCatalog,
+  publicCatalog,
+  renameMap,
+  saveCatalog,
+  setActiveMap,
+  toPublicCatalog,
+} from "./maps.js";
+export type {
+  MapCatalog,
+  MapStorePaths,
+  PublicMapCatalog,
+  PublicRobotMap,
+  RobotMap,
+} from "./maps.js";
 export {
   readCurrentMapPose,
   savePlaceFromArgs,

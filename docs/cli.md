@@ -98,8 +98,13 @@ live in `configstore('agenticros')` (`ROBOT_ID`, `API_TOKEN`); legacy
 | `agenticros whoami` | Show cloud account and whether this robot is registered. |
 | `agenticros register` | Interactive wizard (required: name, camera, compute). Mints/reuses local UUID and `POST /robots` to ARC. |
 | `agenticros remote list` | List robots on your ARC account with online/offline presence. |
-| `agenticros remote <action> [--robot <id>] [--skill <id>]` | Run a preset CLI action on an online robot via `POST /robot/:id/cli`. Actions: `start_motors`, `stop_motors`, `start_realsense`, `stop_realsense`, `start_camera`, `stop_camera`, `start_mapping`, `stop_mapping`, `navigate_to` (requires `--x` and `--y`, optional `--yaw`), `status`, `skills_list`, `skills_sync`, `skills_remove` (requires `--skill`), `gateway_restart`. |
-| `agenticros start mapping` / `agenticros stop mapping` | Start or stop RTAB-Map + Nav2 (`scripts/start_mapping.sh`). Skips a second RealSense launch when the camera node is already up. |
+| `agenticros remote <action> [--robot <id>] [--skill <id>]` | Run a preset CLI action on an online robot via `POST /robot/:id/cli`. Actions: `start_motors`, `stop_motors`, `start_realsense`, `stop_realsense`, `start_camera`, `stop_camera`, `start_mapping`, `stop_mapping`, `navigate_to` (requires `--x` and `--y`, optional `--yaw`), `list_maps`, `create_map` (requires `--label`), `rename_map` / `use_map` / `delete_map` (require `--map`), `status`, `skills_list`, `skills_sync`, `skills_remove` (requires `--skill`), `gateway_restart`. |
+| `agenticros start mapping` / `agenticros stop mapping` | Start or stop RTAB-Map + Nav2 (`scripts/start_mapping.sh`). The first start creates a room map named Room. Later starts resume that database. Skips a second RealSense launch when the camera node is already up. |
+| `agenticros maps list` | List room maps on this robot. `--json` prints `{ activeId, maps }`. |
+| `agenticros maps create --label <name> [--start]` | Add a room. `--start` launches a fresh database for it. |
+| `agenticros maps rename <id> --label <name>` | Rename a room. |
+| `agenticros maps use <id>` | Make that room active and relaunch it in localization mode. |
+| `agenticros maps delete <id> [--yes]` | Delete the database and places saved on that map. |
 | `agenticros navigate --x <m> --y <m> [--yaw <rad>]` | Send one Nav2 `navigate_to_pose` goal in the `map` frame. |
 | `agenticros gateway restart [--json]` | Restart the local OpenClaw gateway (`systemctl --user` then `openclaw gateway restart`). Also available remotely as `agenticros remote gateway_restart`. |
 | `agenticros connect [-s host]` | Start cloud P2P/ROS bridge (`comms.js`). Default `wss://cloud.agenticros.com`. |

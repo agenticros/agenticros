@@ -15,6 +15,8 @@ export interface SavedPlace {
   yaw: number;
   frame: string;
   robot_id?: string;
+  /** Room map this pose belongs to. Missing on places saved before multi-map. */
+  map_id?: string;
   updated_at: string;
 }
 
@@ -69,10 +71,16 @@ export function listPlaces(path = defaultPlacesPath()): SavedPlace[] {
   return loadPlaces(path).places;
 }
 
-export function getPlace(name: string, path = defaultPlacesPath()): SavedPlace | undefined {
+export function getPlace(
+  name: string,
+  path = defaultPlacesPath(),
+  mapId?: string,
+): SavedPlace | undefined {
   const key = normalizeName(name);
   if (!key) return undefined;
-  return loadPlaces(path).places.find((p) => normalizeName(p.name) === key);
+  const matches = loadPlaces(path).places.filter((p) => normalizeName(p.name) === key);
+  if (!mapId) return matches[0];
+  return matches.find((p) => p.map_id === mapId) ?? matches.find((p) => !p.map_id);
 }
 
 export function savePlace(
@@ -83,6 +91,7 @@ export function savePlace(
     yaw?: number;
     frame?: string;
     robot_id?: string;
+    map_id?: string;
   },
   path = defaultPlacesPath(),
 ): SavedPlace {
@@ -91,6 +100,7 @@ export function savePlace(
   if (!Number.isFinite(place.x) || !Number.isFinite(place.y)) {
     throw new Error("save_place requires finite x and y.");
   }
+  const mapId = place.map_id?.trim() || undefined;
   const record: SavedPlace = {
     name,
     x: place.x,
@@ -98,11 +108,16 @@ export function savePlace(
     yaw: Number.isFinite(place.yaw) ? (place.yaw as number) : 0,
     frame: (place.frame ?? "map").trim() || "map",
     ...(place.robot_id ? { robot_id: place.robot_id } : {}),
+    ...(mapId ? { map_id: mapId } : {}),
     updated_at: new Date().toISOString(),
   };
   const store = loadPlaces(path);
   const key = normalizeName(name);
-  store.places = store.places.filter((p) => normalizeName(p.name) !== key);
+  store.places = store.places.filter((p) => {
+    if (normalizeName(p.name) !== key) return true;
+    if (mapId) return p.map_id !== mapId;
+    return Boolean(p.map_id);
+  });
   store.places.push(record);
   savePlaces(store, path);
   return record;
@@ -116,6 +131,18 @@ export function forgetPlace(name: string, path = defaultPlacesPath()): boolean {
   store.places = next;
   savePlaces(store, path);
   return true;
+}
+
+/** Drop poses saved against a deleted room map. */
+export function forgetPlacesForMap(mapId: string, path = defaultPlacesPath()): number {
+  if (!mapId) return 0;
+  const store = loadPlaces(path);
+  const next = store.places.filter((p) => p.map_id !== mapId);
+  const removed = store.places.length - next.length;
+  if (removed === 0) return 0;
+  store.places = next;
+  savePlaces(store, path);
+  return removed;
 }
 
 /** Extract x/y/yaw from PoseWithCovarianceStamped, PoseStamped, or Pose. */

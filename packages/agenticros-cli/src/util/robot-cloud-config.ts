@@ -9,6 +9,7 @@
  * Legacy: if keys are missing, copy once from configstore('robotics').
  */
 
+import { MAP_ID_RE, MAP_LABEL_RE } from "@agenticros/core";
 import Configstore from "configstore";
 
 export const CLOUD_REST = "https://cloud.agenticros.com";
@@ -304,6 +305,11 @@ export const REMOTE_CLI_ACTIONS = [
   "start_mapping",
   "stop_mapping",
   "navigate_to",
+  "list_maps",
+  "create_map",
+  "rename_map",
+  "use_map",
+  "delete_map",
   "status",
   "skills_list",
   "skills_sync",
@@ -329,6 +335,12 @@ export interface RemoteCliParams {
   y?: number;
   /** Optional for navigate_to (radians). Defaults to 0. */
   yaw?: number;
+  /** Map id for rename_map, use_map, and delete_map. */
+  mapId?: string;
+  /** Room label for create_map and rename_map. */
+  label?: string;
+  /** create_map: start mapping the new room. Defaults to true. */
+  start?: boolean;
 }
 
 function authHeaders(apiToken: string): Record<string, string> {
@@ -439,6 +451,20 @@ export async function runRemoteCli(
       throw new Error("navigate_to requires numeric --x and --y (optional --yaw, radians).");
     }
     body.params = { x, y, yaw };
+  }
+  if (action === "create_map" || action === "rename_map" || action === "use_map" || action === "delete_map") {
+    const mapId = params?.mapId?.trim() ?? "";
+    const label = params?.label?.trim().replace(/\s+/g, " ") ?? "";
+    if (action !== "create_map" && !MAP_ID_RE.test(mapId)) {
+      throw new Error(`${action} requires --map <id> (a map UUID from \`agenticros maps list\`).`);
+    }
+    if ((action === "create_map" || action === "rename_map") && !MAP_LABEL_RE.test(label)) {
+      throw new Error("Pass --label <name> (1–40 characters: letters, numbers, spaces, . _ -).");
+    }
+    body.params = {
+      ...(action === "create_map" ? { start: params?.start !== false } : { mapId }),
+      ...((action === "create_map" || action === "rename_map") ? { label } : {}),
+    };
   }
 
   const response = await fetch(`${CLOUD_REST}/robot/${robotId}/cli`, {

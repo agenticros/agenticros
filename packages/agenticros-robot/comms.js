@@ -949,6 +949,7 @@ class P2PServer {
               'agenticros stop camera',
               'agenticros start mapping',
               'agenticros stop mapping',
+              'agenticros maps list --json',
               'agenticros status --json',
               'agenticros skills list --json',
               'agenticros skills sync --no-restart',
@@ -957,6 +958,10 @@ class P2PServer {
             const ALLOWED_CLI_COMMAND_PATTERNS = [
               /^agenticros skills remove [a-zA-Z0-9][a-zA-Z0-9._-]* --yes --no-restart$/,
               /^agenticros navigate --x -?\d+\.\d{3} --y -?\d+\.\d{3} --yaw -?\d+\.\d{3}$/,
+              /^agenticros maps create --label '[A-Za-z0-9][A-Za-z0-9 ._-]{0,39}'(?: --start)? --json$/,
+              /^agenticros maps rename [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12} --label '[A-Za-z0-9][A-Za-z0-9 ._-]{0,39}' --json$/i,
+              /^agenticros maps use [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12} --json$/i,
+              /^agenticros maps delete [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12} --yes --json$/i,
             ];
             const isAllowedCliCommand = (command) => {
               if (ALLOWED_CLI_COMMANDS.has(command)) return true;
@@ -1074,7 +1079,10 @@ class P2PServer {
                 execTimeout = 15000;
               } else if (
                 command.startsWith('agenticros gateway restart') ||
-                command.startsWith('agenticros skills sync')
+                command.startsWith('agenticros skills sync') ||
+                command.startsWith('agenticros maps use') ||
+                command.startsWith('agenticros maps create') ||
+                command.startsWith('agenticros maps delete')
               ) {
                 execTimeout = 22000;
               }

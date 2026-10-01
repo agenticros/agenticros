@@ -48,6 +48,7 @@ import {
 import { registerCommand } from "./commands/register.js";
 import { hiveCommand } from "./commands/hive.js";
 import { remoteCommand } from "./commands/remote.js";
+import { mapsCommand } from "./commands/maps.js";
 import { gatewayCommand } from "./commands/gateway.js";
 import { err } from "./util/logger.js";
 import { readFileSync } from "node:fs";
@@ -263,18 +264,29 @@ program
   )
   .argument(
     "[action]",
-    "list | start_motors | stop_motors | start_realsense | stop_realsense | start_camera | stop_camera | start_mapping | stop_mapping | navigate_to | status | skills_list | skills_sync | skills_remove | gateway_restart",
+    "list | start_motors | stop_motors | start_realsense | stop_realsense | start_camera | stop_camera | start_mapping | stop_mapping | navigate_to | list_maps | create_map | rename_map | use_map | delete_map | status | skills_list | skills_sync | skills_remove | gateway_restart",
   )
   .option("--robot <id>", "Target robot UUID (default: prompt, or sole/local robot)")
   .option("--skill <id>", "Skill id for skills_remove (e.g. followme)")
   .option("--x <meters>", "navigate_to: map-frame x")
   .option("--y <meters>", "navigate_to: map-frame y")
   .option("--yaw <radians>", "navigate_to: map-frame yaw (default 0)")
+  .option("--map <id>", "Map id for rename_map, use_map, and delete_map")
+  .option("--label <name>", "Room label for create_map and rename_map")
   .option("--json", "Emit JSON instead of human-readable output", false)
   .action(
     async (
       action: string | undefined,
-      opts: { robot?: string; skill?: string; x?: string; y?: string; yaw?: string; json?: boolean },
+      opts: {
+        robot?: string;
+        skill?: string;
+        x?: string;
+        y?: string;
+        yaw?: string;
+        map?: string;
+        label?: string;
+        json?: boolean;
+      },
     ) => {
       await remoteCommand({
         action,
@@ -283,10 +295,58 @@ program
         x: opts.x,
         y: opts.y,
         yaw: opts.yaw,
+        map: opts.map,
+        label: opts.label,
         json: opts.json,
       });
     },
   );
+
+const maps = program.command("maps").description("Name, switch, and delete room maps on this robot.");
+maps
+  .command("list", { isDefault: true })
+  .description("List room maps. The active map is marked.")
+  .option("--json", "Emit the public catalog as JSON", false)
+  .action(async (opts: { json?: boolean }) => {
+    await mapsCommand({ action: "list", json: opts.json });
+  });
+maps
+  .command("create")
+  .description("Add a room map. --start launches mapping into a fresh database.")
+  .requiredOption("--label <name>", "Room name (letters, numbers, spaces, . _ -)")
+  .option("--start", "Start mapping this room now", false)
+  .option("--json", "Emit the public catalog as JSON", false)
+  .action(async (opts: { label: string; start?: boolean; json?: boolean }) => {
+    await mapsCommand({
+      action: "create",
+      label: opts.label,
+      start: opts.start === true,
+      json: opts.json,
+    });
+  });
+maps
+  .command("rename <id>")
+  .description("Rename a room map by id or current label.")
+  .requiredOption("--label <name>", "New room name")
+  .option("--json", "Emit the public catalog as JSON", false)
+  .action(async (id: string, opts: { label: string; json?: boolean }) => {
+    await mapsCommand({ action: "rename", target: id, label: opts.label, json: opts.json });
+  });
+maps
+  .command("use <id>")
+  .description("Make a room the active map and relaunch it in localization mode.")
+  .option("--json", "Emit the public catalog as JSON", false)
+  .action(async (id: string, opts: { json?: boolean }) => {
+    await mapsCommand({ action: "use", target: id, json: opts.json });
+  });
+maps
+  .command("delete <id>")
+  .description("Delete a room map and the places saved on it.")
+  .option("-y, --yes", "Skip the confirmation prompt", false)
+  .option("--json", "Emit the public catalog as JSON", false)
+  .action(async (id: string, opts: { yes?: boolean; json?: boolean }) => {
+    await mapsCommand({ action: "delete", target: id, yes: opts.yes === true, json: opts.json });
+  });
 
 program
   .command("gateway [action]")

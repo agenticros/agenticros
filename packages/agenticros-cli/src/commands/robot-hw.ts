@@ -9,6 +9,7 @@ import { spawn } from "node:child_process";
 import { existsSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { ensureActiveMap, type RobotMap } from "@agenticros/core";
 import { execa } from "execa";
 
 import {
@@ -306,15 +307,18 @@ export async function startRealsenseCommand(opts: {
   }
 }
 
-export async function stopRealsenseCommand(): Promise<void> {
+export async function stopRealsenseCommand(opts: { quiet?: boolean } = {}): Promise<void> {
   const script = resolveScriptPath("stop_realsense.sh");
   if (existsSync(script)) {
-    await execa("bash", [script], { stdio: "inherit", reject: false });
+    await execa("bash", [script], {
+      stdio: opts.quiet ? "ignore" : "inherit",
+      reject: false,
+    });
   } else {
     await pkill("realsense2_camera_node");
     await pkill("ros2 launch realsense2_camera");
   }
-  ok("Robot realsense stopped.");
+  if (!opts.quiet) ok("Robot realsense stopped.");
 }
 
 function configuredNamespace(): string {
@@ -329,7 +333,18 @@ function configuredNamespace(): string {
 const MAPPING_LOG = "/tmp/agenticros-mapping.log";
 const NAVIGATE_LOG = "/tmp/agenticros-navigate.log";
 
-export async function startMappingCommand(): Promise<void> {
+export interface MappingLaunchOptions {
+  /** Room map to launch. Default: the active map, creating "Room" when none exist. */
+  map?: RobotMap;
+  /** Keep the database. Default: true when that database file already exists. */
+  keep?: boolean;
+  /** Launch RTAB-Map in localization mode (room switch). */
+  localize?: boolean;
+  /** Skip human status lines so --json stdout stays a single object. */
+  quiet?: boolean;
+}
+
+export async function startMappingCommand(opts: MappingLaunchOptions = {}): Promise<void> {
   const script = resolveScriptPath("start_mapping.sh");
   if (!existsSync(script)) {
     err(`start_mapping.sh not found at ${script}`);
@@ -341,21 +356,26 @@ export async function startMappingCommand(): Promise<void> {
     err("No ROS 2 installation detected under /opt/ros/. Install ROS 2 Humble or Jazzy first.");
     process.exit(1);
   }
+  const map = opts.map ?? ensureActiveMap();
+  const keep = opts.keep ?? existsSync(map.databasePath);
+  const say = (message: string) => {
+    if (!opts.quiet) info(message);
+  };
   // A second launch stacks Nav2 nodes until bt_navigator crashes.
   const { exitCode: mappingUp } = await execa("pgrep", ["-f", "[r]tabmap_nav2.launch.py"], {
     reject: false,
   });
   if (mappingUp === 0) {
-    info("Stopping the mapping stack already running.");
-    await stopMappingCommand();
+    say("Stopping the mapping stack already running.");
+    await stopMappingCommand({ quiet: true });
     await new Promise((r) => setTimeout(r, 1000));
   }
   // Teleop RealSense is low-res and does not align depth to color, and it
   // holds the camera so this launch cannot start its own aligned stream.
   const { exitCode } = await execa("pgrep", ["-f", "[r]ealsense2_camera_node"], { reject: false });
   if (exitCode === 0) {
-    info("Stopping the current RealSense so mapping can start an aligned camera.");
-    await stopRealsenseCommand();
+    say("Stopping the current RealSense so mapping can start an aligned camera.");
+    await stopRealsenseCommand({ quiet: opts.quiet });
     await new Promise((r) => setTimeout(r, 1500));
   }
   const ns = configuredNamespace();
@@ -364,12 +384,20 @@ export async function startMappingCommand(): Promise<void> {
     env: {
       ...process.env,
       AGENTICROS_ROBOT_NAMESPACE: ns,
+      AGENTICROS_MAP_DATABASE: map.databasePath,
+      AGENTICROS_KEEP_MAP: keep ? "1" : "0",
+      AGENTICROS_MAP_LOCALIZE: opts.localize ? "1" : "0",
     },
   });
-  ok(`Mapping stack starting${pid ? ` (pid ${pid})` : ""}. Log: ${MAPPING_LOG}`);
+  if (!opts.quiet) {
+    const mode = opts.localize ? "localizing" : keep ? "resuming" : "mapping";
+    ok(
+      `${map.label}: ${mode}${pid ? ` (pid ${pid})` : ""}. Log: ${MAPPING_LOG}`,
+    );
+  }
 }
 
-export async function stopMappingCommand(): Promise<void> {
+export async function stopMappingCommand(opts: { quiet?: boolean } = {}): Promise<void> {
   const patterns = [
     "rtabmap_nav2.launch.py",
     "start_mapping.sh",
@@ -394,7 +422,7 @@ export async function stopMappingCommand(): Promise<void> {
   for (const pattern of patterns) {
     await pkill(pattern);
   }
-  ok("Mapping stack stopped.");
+  if (!opts.quiet) ok("Mapping stack stopped.");
 }
 
 function finiteCoord(value: number, label: string, limit: number): number {

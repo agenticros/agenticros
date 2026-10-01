@@ -5,6 +5,7 @@
 import type { AgenticROSConfig } from "./config.js";
 import { listCapabilitiesForRobot, type Capability } from "./capabilities.js";
 import { executeExternalCapability } from "./external-capability.js";
+import { activeMap } from "./maps.js";
 import { getPlace, poseFromLocalizationMessage, savePlace, type SavedPlace } from "./places.js";
 import { resolveSafetyForRobot } from "./safety.js";
 import { toNamespacedTopicFull } from "./topic-utils.js";
@@ -70,6 +71,7 @@ export async function savePlaceFromArgs(
     y = pose.y;
     yaw = Number.isFinite(args["yaw"] as number) ? (args["yaw"] as number) : pose.yaw;
   }
+  const map = activeMap();
   return savePlace({
     name,
     x,
@@ -77,6 +79,7 @@ export async function savePlaceFromArgs(
     yaw,
     frame: typeof args["frame"] === "string" ? args["frame"] : "map",
     robot_id: opts.robot.id,
+    ...(map ? { map_id: map.id } : {}),
   });
 }
 
@@ -91,7 +94,7 @@ export async function executeNavigateToPlace(
   transport: RosTransport,
   signal?: AbortSignal,
 ): Promise<{ text: string; isError?: boolean; place?: SavedPlace }> {
-  const place = getPlace(name);
+  const place = getPlace(name, undefined, activeMap()?.id);
   if (!place) {
     return {
       text: `Unknown place "${name}". Use ros2_list_places or ros2_save_place first.`,

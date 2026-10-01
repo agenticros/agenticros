@@ -37,6 +37,10 @@ export interface RemoteOptions {
   x?: string;
   y?: string;
   yaw?: string;
+  /** --map <id> for rename_map, use_map, delete_map */
+  map?: string;
+  /** --label <name> for create_map and rename_map */
+  label?: string;
   /** --json */
   json?: boolean;
 }
@@ -51,6 +55,11 @@ const ACTION_LABELS: Record<RemoteCliAction, string> = {
   start_mapping: "Start mapping (RTAB-Map + Nav2)",
   stop_mapping: "Stop mapping",
   navigate_to: "Navigate to a map pose (needs --x --y)",
+  list_maps: "List room maps (JSON)",
+  create_map: "Create a room map and start mapping (needs --label)",
+  rename_map: "Rename a room map (needs --map and --label)",
+  use_map: "Switch the robot to a room map (needs --map)",
+  delete_map: "Delete a room map (needs --map)",
   status: "Show status (JSON)",
   skills_list: "List skills (JSON)",
   skills_sync: "Sync skill tools allowlist (no gateway restart)",
@@ -188,7 +197,7 @@ function parseRemoteNumber(raw: string | undefined, label: string): number | und
 
 async function resolveParams(
   action: RemoteCliAction,
-  opts: { skill?: string; x?: string; y?: string; yaw?: string } = {},
+  opts: { skill?: string; x?: string; y?: string; yaw?: string; map?: string; label?: string } = {},
 ): Promise<RemoteCliParams | undefined> {
   if (action === "navigate_to") {
     let x = parseRemoteNumber(opts.x, "--x");
@@ -228,6 +237,40 @@ async function resolveParams(
       }
     }
     return { x, y, yaw: yaw ?? 0 };
+  }
+
+  if (action === "create_map" || action === "rename_map" || action === "use_map" || action === "delete_map") {
+    let mapId = opts.map?.trim() ?? "";
+    let label = opts.label?.trim() ?? "";
+    if (action !== "create_map" && !mapId) {
+      if (!isTty) {
+        err(`${action} requires --map <id>.`);
+        process.exit(2);
+      }
+      mapId = (
+        await input({
+          message: "Map id:",
+          validate: (v) => v.trim().length > 0 || "Enter a map id from list_maps",
+        })
+      ).trim();
+    }
+    if ((action === "create_map" || action === "rename_map") && !label) {
+      if (!isTty) {
+        err(`${action} requires --label <name>.`);
+        process.exit(2);
+      }
+      label = (
+        await input({
+          message: "Room name:",
+          validate: (v) => v.trim().length > 0 || "Enter a room name",
+        })
+      ).trim();
+    }
+    return {
+      ...(mapId ? { mapId } : {}),
+      ...(label ? { label } : {}),
+      ...(action === "create_map" ? { start: true } : {}),
+    };
   }
 
   if (action !== "skills_remove") return undefined;

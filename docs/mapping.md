@@ -46,6 +46,22 @@ You can start the stack from ARC without an SSH session. On the control page, **
 
 `--map` is what publishes `/map` and starts the `navigate_to_pose` action. See [mapping bringup](#bringup-physical-rgb-d-robot) if the grid never appears.
 
+## Several rooms
+
+Each room is its own RTAB-Map database under `~/.agenticros/maps/<id>.db`, listed in `~/.agenticros/maps/index.json`. The first `agenticros start mapping` creates a map named **Room** (and moves an existing `~/.ros/rtabmap.db` onto it). Starting again resumes that file instead of wiping it. Delete the map to throw it away and map the room over.
+
+```bash
+agenticros maps list
+agenticros maps create --label Kitchen --start
+agenticros maps use <id>          # switch rooms; relaunches in localization mode
+agenticros maps rename <id> --label "Living Room"
+agenticros maps delete <id>
+```
+
+Places saved with `ros2_save_place` are stored against the active map. Deleting a map removes those places.
+
+On [AgenticROS Cloud](https://cloud.agenticros.com/maps) the **Maps** page does the same thing, with a confirmation step before delete. Free keeps **1 map per robot**. Nerd is 10, Teams 25, Enterprise is a higher cap. The control page room menu switches the active map when the robot is online. Switching restarts the mapping stack on that database (`AGENTICROS_MAP_LOCALIZE=1` once `agenticros_bringup` is rebuilt).
+
 ## Install
 
 Nav2’s metapackage (`navigation2`) is required in addition to `nav2-bringup`. Without it, `navigate_to_pose` / costmaps are missing and `@agenticros/explore` cannot run. Jazzy:
@@ -84,7 +100,8 @@ Calibrated extrinsics, a `base_link` / `base_footprint` TF tree, and (ideally) w
 
 ```bash
 # Default: camera + SLAM + Nav2 + explore action server (does not drive until a mission).
-# Wipes ~/.ros/rtabmap.db unless delete_db_on_start:=false. Pass robot_namespace if needed.
+# Direct launch still wipes ~/.ros/rtabmap.db unless delete_db_on_start:=false.
+# `agenticros start mapping` uses ~/.agenticros/maps/<id>.db and resumes it when the file exists.
 ros2 launch agenticros_bringup rtabmap_nav2.launch.py
 
 # Wheel odom instead of visual odometry:

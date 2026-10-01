@@ -8,7 +8,9 @@
 # Environment:
 #   AGENTICROS_ROBOT_NAMESPACE   forwarded as robot_namespace:=
 #   AGENTICROS_WHEEL_ODOM=1      visual_odometry:=false odom_topic:=/odom
-#   AGENTICROS_KEEP_MAP=1        delete_db_on_start:=false
+#   AGENTICROS_KEEP_MAP=1        delete_db_on_start:=false (resume the active room)
+#   AGENTICROS_MAP_DATABASE      database_path:= (default ~/.ros/rtabmap.db)
+#   AGENTICROS_MAP_LOCALIZE=1    localization mode (new bringup; ignored by older launches)
 #   AGENTICROS_NO_REALSENSE=1    use_realsense:=false (camera already running)
 #
 # Usage: ./scripts/start_mapping.sh [jazzy|humble]
@@ -72,7 +74,13 @@ if [[ "${AGENTICROS_NO_REALSENSE:-}" == "1" ]]; then
   USE_RS="false"
 fi
 
-echo "==> Launching RTAB-Map + Nav2 (robot_namespace='${NS}' visual_odometry=${VO} use_realsense=${USE_RS})"
+MAP_DB="${AGENTICROS_MAP_DATABASE:-}"
+LOCALIZE="${AGENTICROS_MAP_LOCALIZE:-0}"
+
+echo "==> Launching RTAB-Map + Nav2 (robot_namespace='${NS}' visual_odometry=${VO} use_realsense=${USE_RS} keep_map=${AGENTICROS_KEEP_MAP:-0} localize=${LOCALIZE})"
+if [[ -n "${MAP_DB}" ]]; then
+  echo "    database: ${MAP_DB}"
+fi
 echo "    Next: agenticros skills install --bundle mapping"
 echo "    Then chat: \"map the room\" / \"save this place as kitchen\" / \"go to the kitchen\""
 
@@ -96,6 +104,9 @@ if [[ "${USE_RS}" != "true" ]]; then
 fi
 if [[ -n "${NS}" ]]; then
   launch_args+=("robot_namespace:=${NS}")
+fi
+if [[ -n "${MAP_DB}" ]]; then
+  launch_args+=("database_path:=${MAP_DB}")
 fi
 
 exec ros2 launch agenticros_bringup rtabmap_nav2.launch.py "${launch_args[@]}"

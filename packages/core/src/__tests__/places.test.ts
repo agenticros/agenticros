@@ -6,6 +6,7 @@ import { join } from "node:path";
 
 import {
   forgetPlace,
+  forgetPlacesForMap,
   getPlace,
   listPlaces,
   poseFromLocalizationMessage,
@@ -26,6 +27,24 @@ test("places: save, get (case-insensitive), list, forget", async () => {
     assert.equal(forgetPlace("kitchen", path), true);
     assert.equal(listPlaces(path).length, 0);
     assert.equal(forgetPlace("kitchen", path), false);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("places: same name can exist on two maps", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "agenticros-places-"));
+  const path = join(dir, "places.json");
+  try {
+    savePlace({ name: "Door", x: 1, y: 1, map_id: "map-a" }, path);
+    savePlace({ name: "Door", x: 9, y: 9, map_id: "map-b" }, path);
+    assert.equal(listPlaces(path).length, 2);
+    assert.equal(getPlace("door", path, "map-a")?.x, 1);
+    assert.equal(getPlace("door", path, "map-b")?.x, 9);
+    assert.equal(forgetPlacesForMap("map-a", path), 1);
+    assert.equal(listPlaces(path).length, 1);
+    assert.equal(getPlace("door", path, "map-a"), undefined);
+    assert.equal(getPlace("door", path)?.x, 9);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

@@ -214,10 +214,19 @@ def _launch_setup(context, *args, **kwargs):
             "database_path": LaunchConfiguration("database_path"),
             # jazzy rtabmap.launch.py has no delete_db_on_start arg; the
             # node only wipes the db when this flag is in args.
-            "args": (
-                "--delete_db_on_start"
-                if _bool_cfg(context, "delete_db_on_start")
-                else ""
+            # AGENTICROS_MAP_LOCALIZE=1 is read here so older installs that
+            # do not know the env var still accept database_path.
+            "args": " ".join(
+                part
+                for part in (
+                    "--delete_db_on_start"
+                    if _bool_cfg(context, "delete_db_on_start")
+                    else "",
+                    "--Mem/IncrementalMemory false"
+                    if os.environ.get("AGENTICROS_MAP_LOCALIZE") == "1"
+                    else "",
+                )
+                if part
             ),
             # Keep RTAB-Map nodes under /rtabmap without leaking this into Nav2.
             "namespace": "rtabmap",
