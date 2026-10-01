@@ -69,7 +69,7 @@ importers:
   packages/agenticros-cli:
     dependencies:
       '@agenticros/core':
-        specifier: workspace:*
+        specifier: ^0.8.10
         version: link:../core
       '@inquirer/prompts':
         specifier: ^7.0.0
