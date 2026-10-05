@@ -17,6 +17,7 @@ import type {
 } from "../types.js";
 import { EntityCache } from "./entities.js";
 import { toRosMessage, fromRosMessage, loadMessageClass, clearTypeCache } from "./conversion.js";
+import { waitForStableTopics } from "./graph-discovery.js";
 
 const require = createRequire(import.meta.url);
 
@@ -50,6 +51,15 @@ export class LocalTransport implements RosTransport {
   private node: any = null;
   private entityCache: EntityCache | null = null;
   private activeGoals = new Map<string, any>();
+  /**
+   * True after the first stable DDS graph snapshot. Later listTopics() calls
+   * read getTopicNamesAndTypes() once. The node keeps discovery state, so a
+   * second 0.9–6s poll only delays the agent.
+   */
+  private graphReady = false;
+  /** Bumped on disconnect so an in-flight warmup cannot mark a dead node ready. */
+  private discoverGeneration = 0;
+  private listTopicsInflight: Promise<TopicInfo[]> | null = null;
 
   /** Singleton guard — rclnodejs.init() must only be called once per process. */
   private static rclInitialized = false;
@@ -98,6 +108,8 @@ export class LocalTransport implements RosTransport {
       await new Promise<void>((resolve) => setTimeout(resolve, 1500));
 
       this.setStatus("connected");
+      // Pay the DDS settle cost at connect time, not on the first user turn.
+      void this.listTopics().catch(() => {});
     } catch (err) {
       this.setStatus("disconnected");
       throw err;
@@ -106,6 +118,10 @@ export class LocalTransport implements RosTransport {
 
   async disconnect(): Promise<void> {
     if (this.status === "disconnected") return;
+
+    this.discoverGeneration++;
+    this.graphReady = false;
+    this.listTopicsInflight = null;
 
     // Cancel any active action goals
     for (const [action] of this.activeGoals) {
@@ -284,49 +300,50 @@ export class LocalTransport implements RosTransport {
   async listTopics(): Promise<TopicInfo[]> {
     this.ensureConnected();
 
-    // DDS discovery is asynchronous AND stateful. On a freshly-connected
-    // node, getTopicNamesAndTypes() trickles in results as peers respond -
-    // the first call may return 0, the second 2, the third all of them.
-    //
-    // Two issues motivated the current tuning:
-    //
-    //   1. A short single-stable-hit policy (600ms) was returning truncated
-    //      views to Claude: e.g. with the AMR sim alone it'd see /cmd_vel
-    //      etc. on first call, then a second call 2s later would see all
-    //      29 topics including /arm/*/cmd_pos. Claude only calls
-    //      list_topics once and was missing arm joint topics entirely.
-    //
-    //   2. DDS multicast announcements on Jetson take longer than on x86 -
-    //      we routinely see /arm/* topics appear ~1.5s after first call.
-    //
-    // Fix: require 3 consecutive matching polls (2 stable hits at 300ms
-    // intervals = ~900ms of stability), with a 6 s deadline. Worst case
-    // ~900ms latency on a steady graph, ~5s+ if discovery is still
-    // streaming. The min-count guard (>=3) avoids exiting early when only
-    // /clock + /tf + /tf_static have come through.
-    const externalFilter = (t: { name: string; types: string[] }) =>
-      !INTERNAL_TOPIC_PREFIXES.some((prefix) => t.name.startsWith(prefix));
+    // After the first stable snapshot, the rcl node already holds the graph.
+    // A live read is the current topic list; another settle loop (and the
+    // parallel one from listActions) is what made every prompt and every
+    // ros2_list_topics call wait up to 6s.
+    if (this.graphReady) return this.snapshotTopics();
 
-    const deadline = Date.now() + 6000;
-    const MIN_STABLE_COUNT = 3;
-    const REQUIRED_STABLE_HITS = 2;
-    let raw: Array<{ name: string; types: string[] }> = [];
-    let prevCount = -1;
-    let stableHits = 0;
-    while (Date.now() < deadline) {
-      raw = this.node.getTopicNamesAndTypes();
-      const externalCount = raw.filter(externalFilter).length;
-      if (externalCount === prevCount && externalCount >= MIN_STABLE_COUNT) {
-        stableHits++;
-        if (stableHits >= REQUIRED_STABLE_HITS) break;
-      } else {
-        stableHits = 0;
-        prevCount = externalCount;
-      }
-      await new Promise<void>((resolve) => setTimeout(resolve, 300));
+    if (!this.listTopicsInflight) {
+      const generation = this.discoverGeneration;
+      this.listTopicsInflight = this.discoverTopics(generation).finally(() => {
+        this.listTopicsInflight = null;
+      });
     }
+    return this.listTopicsInflight;
+  }
 
-    return raw.filter(externalFilter).map((t) => ({ name: t.name, type: t.types[0] ?? "" }));
+  private snapshotTopics(): TopicInfo[] {
+    const raw = this.node.getTopicNamesAndTypes() as Array<{ name: string; types: string[] }>;
+    return this.toTopicInfos(raw);
+  }
+
+  /**
+   * First snapshot after connect. DDS peers announce over a few hundred
+   * milliseconds (longer on Jetson), and a single early read used to hide
+   * arm topics from a model that only calls list_topics once. Wait until the
+   * external-topic count holds, then mark the graph ready.
+   */
+  private async discoverTopics(generation: number): Promise<TopicInfo[]> {
+    const raw = await waitForStableTopics(() => this.readExternalTopics());
+    if (generation === this.discoverGeneration && this.node) {
+      this.graphReady = true;
+    }
+    return this.toTopicInfos(raw);
+  }
+
+  private readExternalTopics(): Array<{ name: string; types: string[] }> {
+    if (!this.node) return [];
+    const raw = this.node.getTopicNamesAndTypes() as Array<{ name: string; types: string[] }>;
+    return raw.filter((t) => !INTERNAL_TOPIC_PREFIXES.some((prefix) => t.name.startsWith(prefix)));
+  }
+
+  private toTopicInfos(raw: Array<{ name: string; types: string[] }>): TopicInfo[] {
+    return raw
+      .filter((t) => !INTERNAL_TOPIC_PREFIXES.some((prefix) => t.name.startsWith(prefix)))
+      .map((t) => ({ name: t.name, type: t.types[0] ?? "" }));
   }
 
   async listServices(): Promise<ServiceInfo[]> {

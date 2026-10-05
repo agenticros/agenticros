@@ -1,6 +1,27 @@
 import { Type } from "@sinclair/typebox";
 import type { OpenClawPluginApi } from "../plugin-api.js";
-import { getTransport } from "../service.js";
+import { getTransport, getTransportMode } from "../service.js";
+
+function emptyTopicsHint(mode: ReturnType<typeof getTransportMode>): string {
+  if (mode === "zenoh") {
+    return (
+      "No Zenoh keys were sampled. OpenClaw uses WebSocket to the zenohd remote-api (not tcp://ROBOT_IP). " +
+      "If you see traffic with `zenoh subscribe -k '**' -e tcp/ROBOT_IP:7447`, that is often the robot's router — " +
+      "the bridge must peer to the same router as OpenClaw. " +
+      "Retry after confirming topology; optionally set AGENTICROS_ZENOH_LIST_TOPICS_MS for a longer sample window."
+    );
+  }
+  if (mode === "local") {
+    return (
+      "Local DDS returned no external topics. The gateway is on the graph, but no other ROS 2 nodes are visible. " +
+      "Start the robot stack in the same ROS_DOMAIN_ID as this gateway (default 0). This is not a Zenoh sample."
+    );
+  }
+  if (mode === "rosbridge") {
+    return "rosbridge returned no topics. Confirm rosbridge_server is running and connected to the same ROS graph.";
+  }
+  return "The transport returned no topics.";
+}
 
 /**
  * Register the ros2_list_topics tool with the AI agent.
@@ -18,6 +39,7 @@ export function registerIntrospectTool(api: OpenClawPluginApi): void {
 
     async execute(_toolCallId, _params) {
       const transport = getTransport();
+      const mode = getTransportMode();
       const topics = await transport.listTopics();
 
       // Cap output size to avoid rate limits / token burn when robot has many topics
@@ -32,15 +54,7 @@ export function registerIntrospectTool(api: OpenClawPluginApi): void {
         topics: truncated,
         total: topics.length,
         truncated: topics.length > MAX_TOPICS_IN_RESPONSE,
-        ...(topics.length === 0
-          ? {
-              hint:
-                "No Zenoh keys were sampled. OpenClaw uses WebSocket to the Mac zenohd remote-api (not tcp://ROBOT_IP). " +
-                "If you see traffic with `zenoh subscribe -k '**' -e tcp/ROBOT_IP:7447`, that is often the robot's router — " +
-                "the bridge must peer to the same router as OpenClaw, and CLI garbled output is usually CDR/binary payloads, not topic names. " +
-                "Retry after confirming topology; optionally set AGENTICROS_ZENOH_LIST_TOPICS_MS for a longer sample window.",
-            }
-          : {}),
+        ...(topics.length === 0 ? { transport: mode, hint: emptyTopicsHint(mode) } : {}),
       };
       let text = JSON.stringify(result);
       if (text.length > MAX_CHARS) {
