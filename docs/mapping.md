@@ -42,6 +42,8 @@ agenticros up real --map
 
 Open that robot’s control page and drive with the joystick, WASD, or a gamepad. About once a second the page draws the occupancy grid (free, unknown, occupied) and a pose arrow. Click a free cell to send a Nav2 `navigate_to_pose` goal in the `map` frame. Occupied and unknown cells are rejected. Moving the joystick cancels the goal.
 
+Do the [Nav2 apt install and the rclnodejs binding refresh](#node-bindings-for-click-to-navigate) on the robot before the first click. The joystick only needs `geometry_msgs/Twist`, which `agenticros init` already generated. The click needs `nav2_msgs/action/NavigateToPose`, which is generated only after the Nav2 packages are installed.
+
 You can start the stack from ARC without an SSH session. On the control page, **Start mapping** runs `agenticros start mapping`. The [Remote CLI](https://cloud.agenticros.com/remote) page has the same start/stop pair, plus a **Navigate to** form (map-frame x, y, yaw). Missions adds **Map the room** and **Navigate to**, which dispatch those same commands when you run them. The robot must be on CLI **0.7.24** or newer (`agenticros start mapping` and `agenticros navigate`), then `agenticros disconnect && agenticros connect`.
 
 `--map` is what publishes `/map` and starts the `navigate_to_pose` action. See [mapping bringup](#bringup-physical-rgb-d-robot) if the grid never appears.
@@ -75,6 +77,30 @@ sudo apt-get install -y \
 ```
 
 Humble: replace `jazzy` with `humble`. `nav2-bringup` alone does **not** pull the full Nav2 stack on Jazzy.
+
+### Node bindings for click-to-navigate
+
+ARC map clicks go through `comms.js` and rclnodejs. `agenticros init` generates those JavaScript bindings during `pnpm install`. If that install ran before the Nav2 apt packages above, `generated/` has no `nav2_msgs/action/NavigateToPose`, and a click fails with:
+
+```text
+The message required does not exist: nav2_msgs, action, NavigateToPose
+```
+
+Regenerate once on the robot, with ROS sourced, then reconnect. Source ROS first: `npm run generate-messages` rewrites the whole `rclnodejs/generated/` directory, including `geometry_msgs/Twist`.
+
+```bash
+source /opt/ros/${ROS_DISTRO:-jazzy}/setup.bash   # humble: source /opt/ros/humble/setup.bash
+ls /opt/ros/$ROS_DISTRO/share/nav2_msgs/action/NavigateToPose.action
+
+RCLN=$(find "$HOME/agenticros/node_modules/.pnpm" -maxdepth 3 -type d -name rclnodejs -print -quit)
+cd "$RCLN"
+npm run generate-messages
+
+agenticros disconnect
+agenticros connect
+```
+
+`NavigateToPose.action` must exist before `generate-messages`. If `ls` fails, install the apt packages above and run this block again. On a git checkout, point `find` at that repo’s `node_modules/.pnpm` instead of `$HOME/agenticros`. Generation can take a few minutes on a Jetson.
 
 If RTAB-Map / Nav2 fails at startup with `libdiagnostic_updater.so: cannot open shared object file` (or undefined `diagnostic_updater::Updater` symbols), the apt package is headers-only on some distros. Build the shared library into this workspace once:
 
@@ -111,6 +137,8 @@ ros2 launch agenticros_bringup rtabmap_nav2.launch.py visual_odometry:=false odo
 ros2 launch agenticros_bringup rtabmap_nav2.launch.py \
   use_realsense:=false use_rtabmap:=false
 ```
+
+The launch always passes RTAB-Map a height-based ground cut: points below 5 cm in `base_link` are floor, points from 5 cm to 1.5 m are obstacles, and ray tracing marks the space in front of the camera as free. A room database mapped with the old normal segmentation stays a black blob. Delete that map, or start a new one, after rebuilding `agenticros_bringup`. `camera_z` (default `0.15`) and `camera_pitch` (default `0`) still have to match the RealSense mount, or the 5 cm cut misses the floor.
 
 ### Jetson / D457 (GMSL) notes
 
@@ -213,6 +241,10 @@ RTAB-Map is CPU-heavy. On a small Jetson, lower RGB-D rate, tighten voxel size, 
 ## Troubleshooting (Jetson)
 
 The FastRTPS `Failed init_port fastrtps_port7006` lines are noisy but not fatal — DDS falls back to UDP.
+
+### `The message required does not exist: nav2_msgs, action, NavigateToPose`
+
+The map click reached the robot, and rclnodejs has no generated `NavigateToPose` binding. Teleop can still work. Follow [Node bindings for click-to-navigate](#node-bindings-for-click-to-navigate), then click a free cell again.
 
 ### `Parameter 'use_realsense' is not supported`
 

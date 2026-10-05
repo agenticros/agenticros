@@ -216,9 +216,22 @@ def _launch_setup(context, *args, **kwargs):
             # node only wipes the db when this flag is in args.
             # AGENTICROS_MAP_LOCALIZE=1 is read here so older installs that
             # do not know the env var still accept database_path.
+            #
+            # Grid/* : the default normal segmentation treats a tilted floor
+            # as obstacles, so /map is a black blob and ARC reports
+            # "That cell is occupied." z=0 is base_link. Points below 5 cm
+            # are ground, 5 cm–1.5 m are obstacles, and ray tracing fills
+            # the free cells between the camera and those obstacles.
+            # rtabmap.launch.py also forwards `args` to rgbd_odometry; that
+            # node accepts Grid/* and does not use them.
             "args": " ".join(
                 part
                 for part in (
+                    "--Grid/NormalsSegmentation false",
+                    "--Grid/MaxGroundHeight 0.05",
+                    "--Grid/MaxObstacleHeight 1.5",
+                    "--Grid/RayTracing true",
+                    "--Grid/3D false",
                     "--delete_db_on_start"
                     if _bool_cfg(context, "delete_db_on_start")
                     else "",

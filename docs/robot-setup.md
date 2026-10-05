@@ -361,4 +361,4 @@ sudo apt-get install -y \
   ros-jazzy-rtabmap-ros
 ```
 
-See **[Mapping a room](mapping.md)**.
+After that apt install, regenerate rclnodejs bindings so an ARC map click can send `NavigateToPose`. See **[Mapping a room](mapping.md#node-bindings-for-click-to-navigate)**.
