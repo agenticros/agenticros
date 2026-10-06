@@ -217,18 +217,20 @@ def _launch_setup(context, *args, **kwargs):
             # AGENTICROS_MAP_LOCALIZE=1 is read here so older installs that
             # do not know the env var still accept database_path.
             #
-            # Grid/* : the default normal segmentation treats a tilted floor
-            # as obstacles, so /map is a black blob and ARC reports
-            # "That cell is occupied." z=0 is base_link. Points below 5 cm
-            # are ground, 5 cm–1.5 m are obstacles, and ray tracing fills
-            # the free cells between the camera and those obstacles.
+            # Grid/* : z=0 is base_link and camera_pitch defaults to 0, but the
+            # RealSense looks down, so nearby floor is projected up to about
+            # camera_z (0.15 m). A 5 cm cut kept that floor as obstacles
+            # (the black blob; the white speckles were the steepest rays).
+            # Treat everything below 20 cm as ground. Taller returns
+            # (stool, desk, person) stay obstacles, and ray tracing fills
+            # the free cells in front of them.
             # rtabmap.launch.py also forwards `args` to rgbd_odometry; that
             # node accepts Grid/* and does not use them.
             "args": " ".join(
                 part
                 for part in (
                     "--Grid/NormalsSegmentation false",
-                    "--Grid/MaxGroundHeight 0.05",
+                    "--Grid/MaxGroundHeight 0.20",
                     "--Grid/MaxObstacleHeight 1.5",
                     "--Grid/RayTracing true",
                     "--Grid/3D false",

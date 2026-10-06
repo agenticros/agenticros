@@ -138,7 +138,7 @@ ros2 launch agenticros_bringup rtabmap_nav2.launch.py \
   use_realsense:=false use_rtabmap:=false
 ```
 
-The launch always passes RTAB-Map a height-based ground cut: points below 5 cm in `base_link` are floor, points from 5 cm to 1.5 m are obstacles, and ray tracing marks the space in front of the camera as free. A room database mapped with the old normal segmentation stays a black blob. Delete that map, or start a new one, after rebuilding `agenticros_bringup`. `camera_z` (default `0.15`) and `camera_pitch` (default `0`) still have to match the RealSense mount, or the 5 cm cut misses the floor.
+The launch always passes RTAB-Map a height-based ground cut: points below 20 cm in `base_link` are floor, points from 20 cm to 1.5 m are obstacles, and ray tracing marks the space in front of the camera as free. The RealSense looks down while `camera_pitch` defaults to 0, so nearby floor is projected up near `camera_z` (15 cm). A 5 cm cut left that floor black and only the steepest rays white. Cells already stored in the room database stay occupied. Delete that map, or start a new one, after rebuilding `agenticros_bringup`. If the camera sits higher than 20 cm, raise `Grid/MaxGroundHeight` above `camera_z`, or set `camera_pitch` to the real downward tilt.
 
 ### Jetson / D457 (GMSL) notes
 
