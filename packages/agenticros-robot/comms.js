@@ -295,19 +295,21 @@ let latestOccupancy = null;
 let mapPreviewSuppressed = false;
 
 function noteMapCommand(command, exitCode) {
+    // Unsuppress even when start's exec times out. The launch is detached, so
+    // /map can already exist while the CLI command is reported as failed.
+    const starting =
+        command === 'agenticros start mapping' ||
+        command.startsWith('agenticros maps use ') ||
+        (command.startsWith('agenticros maps create ') && command.includes(' --start'));
+    if (starting) {
+        mapPreviewSuppressed = false;
+        return 'resume';
+    }
     if (exitCode !== 0) return null;
     if (command === 'agenticros stop mapping' || command.startsWith('agenticros maps delete ')) {
         mapPreviewSuppressed = true;
         latestOccupancy = null;
         return 'clear';
-    }
-    if (
-        command === 'agenticros start mapping' ||
-        command.startsWith('agenticros maps create ') ||
-        command.startsWith('agenticros maps use ')
-    ) {
-        mapPreviewSuppressed = false;
-        return 'resume';
     }
     return null;
 }
@@ -491,7 +493,9 @@ function ensureMapSubscriptions() {
     let tfOk = false;
     try {
         subscribeRos('nav_msgs/msg/OccupancyGrid', '/map', (msg) => {
-            if (mapPreviewSuppressed) return;
+            // Keep the sample even while the preview is hidden. RTAB-Map's
+            // occupancy grid is latched, so dropping this callback loses the
+            // only copy and the teleop page stays blank after Start mapping.
             try {
                 const grid = readOccupancy(msg);
                 if (grid.width > 0 && grid.height > 0 && grid.resolution > 0) {
