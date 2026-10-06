@@ -99,6 +99,13 @@ import {
     findStartMappingScript,
     launchMappingStack,
 } from './lib/map-catalog.js';
+import {
+    cruiseFromSlider,
+    navCruiseCommand,
+    navCruiseQos,
+    navCruiseTopic,
+    noteTeleopCruise,
+} from './lib/nav-speed.js';
 import { existsSync } from 'node:fs';
 
 const robotId = getRobotId();
@@ -328,18 +335,51 @@ let navClient = null;
 let activeNavGoal = null;
 let navGoalSeq = 0;
 let mapStatusConnection = null;
+/** Last ARC slider fraction (0–1). Null until a stick command or a click that includes speed. */
+let teleopCruise = null;
+let navCruisePub = null;
+let publishedNavCruise = null;
+
+function publishNavCruise(fraction) {
+    if (!rosNode) return;
+    const value = fraction == null ? 0 : navCruiseCommand(fraction);
+    if (publishedNavCruise === value) return;
+    try {
+        if (!navCruisePub) {
+            const qos = navCruiseQos(rclnodejs);
+            const topic = navCruiseTopic(cmdVel);
+            navCruisePub = qos
+                ? rosNode.createPublisher('std_msgs/msg/Float64', topic, { qos })
+                : rosNode.createPublisher('std_msgs/msg/Float64', topic);
+        }
+        navCruisePub.publish({ data: value });
+        publishedNavCruise = value;
+        console.log(formatLog(
+            value > 0
+                ? `nav speed ${value.toFixed(2)} from the remote speed slider`
+                : 'nav speed back to the Nav2 limits',
+        ));
+    } catch (error) {
+        console.log(formatLog(`nav cruise publish failed: ${error}`));
+    }
+}
 
 function publishTeleopTwist(twist) {
     if (!twist || !velocityPub) return;
+    const lin = Number(twist.linear?.x) || 0;
+    const ang = Number(twist.angular?.z) || 0;
+    teleopCruise = noteTeleopCruise(teleopCruise, lin, ang);
+    const driving = Math.abs(lin) > 0.01 || Math.abs(ang) > 0.01;
+    // Drop the nav scale before this twist hits the motors, or a 0.5 stick
+    // command would be multiplied by the last navigation cruise.
+    if (driving) publishNavCruise(null);
     try {
         velocityPub.publish(twist);
     } catch (error) {
         console.log(formatLog(`twist publish failed: ${error}`));
         return;
     }
-    const lin = Number(twist.linear?.x) || 0;
-    const ang = Number(twist.angular?.z) || 0;
-    if (Math.abs(lin) > 0.01 || Math.abs(ang) > 0.01) {
+    if (driving) {
         void invalidateNavGoal('Teleop canceled navigation.');
     }
 }
@@ -368,6 +408,7 @@ async function cancelActiveNavGoal() {
 
 async function invalidateNavGoal(reason) {
     navGoalSeq += 1;
+    publishNavCruise(null);
     const hadGoal = Boolean(activeNavGoal);
     await cancelActiveNavGoal();
     if (hadGoal && reason) {
@@ -435,6 +476,9 @@ async function handleNavGoalCommand(dataObj, connection) {
         }
         await cancelActiveNavGoal();
         if (seq !== navGoalSeq) return;
+        const requested = cruiseFromSlider(dataObj?.speed);
+        if (requested != null) teleopCruise = requested;
+        publishNavCruise(teleopCruise);
         const half = yaw / 2;
         const goal = {
             pose: {
@@ -455,6 +499,7 @@ async function handleNavGoalCommand(dataObj, connection) {
             ? handle.isAccepted()
             : handle?.accepted !== false;
         if (!accepted) {
+            publishNavCruise(null);
             navStatus(connection, { ok: false, error: 'Nav2 rejected the goal.' });
             return;
         }
@@ -463,6 +508,7 @@ async function handleNavGoalCommand(dataObj, connection) {
         Promise.resolve(handle.getResult?.()).then((result) => {
             if (activeNavGoal !== handle) return;
             activeNavGoal = null;
+            publishNavCruise(null);
             const status = Number(result?.status);
             const succeeded = status === 4 || (typeof handle.isSucceeded === 'function' && handle.isSucceeded());
             const canceled = status === 5 || (typeof handle.isCanceled === 'function' && handle.isCanceled());
@@ -481,10 +527,14 @@ async function handleNavGoalCommand(dataObj, connection) {
                 navStatus(connection, { ok: true, state: 'arrived', x, y });
             }
         }).catch((error) => {
-            if (activeNavGoal === handle) activeNavGoal = null;
+            if (activeNavGoal === handle) {
+                activeNavGoal = null;
+                publishNavCruise(null);
+            }
             navStatus(connection, { ok: false, state: 'failed', error: error?.message || 'Navigation failed.' });
         });
     } catch (error) {
+        publishNavCruise(null);
         navStatus(connection, {
             ok: false,
             error: error?.message || 'Could not send the Nav2 goal. Is navigation running?',

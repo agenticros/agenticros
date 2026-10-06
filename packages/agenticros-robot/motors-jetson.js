@@ -5,6 +5,7 @@ import { getRobotId, getApiToken } from './robot-config.js';
 import { fetchRobotConfig, getCmdVelTopic, resolveTopic } from './ros-topics.js';
 import { createOdometry, resolveOdomSetup } from './lib/odometry.js';
 import { twistToWheelDuty } from './lib/twist-duty.js';
+import { scaleTwistToCruise, subscribeNavCruise } from './lib/nav-speed.js';
 import * as gpio from './lib/jetson-gpio.js';
 
 var robotId = getRobotId();
@@ -76,10 +77,16 @@ async function main() {
     console.log(`Odometry: ${odomSetup.mode} → ${odomTopic}`);
   }
 
-  node.createSubscription('geometry_msgs/msg/Twist', cmdVelTopic, (msg) => {
-    odom?.setCmdVel(msg.linear.x, msg.angular.z);
+  let navCruise = 0;
+  subscribeNavCruise(node, cmdVelTopic, (speed) => {
+    navCruise = speed;
+  }, rclnodejs);
 
-    const { left, right } = twistToWheelDuty(-msg.linear.x, msg.angular.z);
+  node.createSubscription('geometry_msgs/msg/Twist', cmdVelTopic, (msg) => {
+    const scaled = scaleTwistToCruise(msg.linear.x, msg.angular.z, navCruise);
+    odom?.setCmdVel(scaled.linearX, scaled.angularZ);
+
+    const { left, right } = twistToWheelDuty(-scaled.linearX, scaled.angularZ);
     setMotorSpeed(LEFT_MOTOR_PIN1, LEFT_MOTOR_PIN2, left);
     setMotorSpeed(RIGHT_MOTOR_PIN1, RIGHT_MOTOR_PIN2, right);
   });

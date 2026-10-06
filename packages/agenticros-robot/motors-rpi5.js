@@ -5,6 +5,7 @@ import { getRobotId, getApiToken } from './robot-config.js';
 import { fetchRobotConfig, getCmdVelTopic, resolveTopic } from './ros-topics.js';
 import { createOdometry, resolveOdomSetup } from './lib/odometry.js';
 import { twistToWheelDuty } from './lib/twist-duty.js';
+import { scaleTwistToCruise, subscribeNavCruise } from './lib/nav-speed.js';
 
 var robotId = getRobotId();
 var apiToken = getApiToken();
@@ -79,10 +80,16 @@ async function main() {
     }
 
     // Subscribe to cmd_vel topic
-    node.createSubscription('geometry_msgs/msg/Twist', cmdVelTopic, (msg) => {
-        odom?.setCmdVel(msg.linear.x, msg.angular.z);
+    let navCruise = 0;
+    subscribeNavCruise(node, cmdVelTopic, (speed) => {
+        navCruise = speed;
+    }, rclnodejs);
 
-        const { left: leftSpeed, right: rightSpeed } = twistToWheelDuty(-msg.linear.x, msg.angular.z);
+    node.createSubscription('geometry_msgs/msg/Twist', cmdVelTopic, (msg) => {
+        const scaled = scaleTwistToCruise(msg.linear.x, msg.angular.z, navCruise);
+        odom?.setCmdVel(scaled.linearX, scaled.angularZ);
+
+        const { left: leftSpeed, right: rightSpeed } = twistToWheelDuty(-scaled.linearX, scaled.angularZ);
 
         // Set motor speeds
         setMotorSpeed(LEFT_MOTOR_PIN1, LEFT_MOTOR_PIN2, leftSpeed);

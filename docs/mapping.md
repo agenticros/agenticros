@@ -40,7 +40,7 @@ agenticros connect
 agenticros up real --map
 ```
 
-Open that robot’s control page and drive with the joystick, WASD, or a gamepad. About once a second the page draws the occupancy grid (free, unknown, occupied) and a pose arrow. Click a free cell to send a Nav2 `navigate_to_pose` goal in the `map` frame. Occupied and unknown cells are rejected. Moving the joystick cancels the goal.
+Open that robot’s control page and drive with the joystick, WASD, or a gamepad. About once a second the page draws the occupancy grid (free, unknown, occupied) and a pose arrow. Click a free cell to send a Nav2 `navigate_to_pose` goal in the `map` frame. Occupied and unknown cells are rejected. Moving the joystick cancels the goal. The Speed slider on that page sets how fast the goal is driven: 100 is full duty, and anything under 35 still uses the 0.35 duty floor so the TT motors can start.
 
 Do the [Nav2 apt install and the rclnodejs binding refresh](#node-bindings-for-click-to-navigate) on the robot before the first click. The joystick only needs `geometry_msgs/Twist`, which `agenticros init` already generated. The click needs `nav2_msgs/action/NavigateToPose`, which is generated only after the Nav2 packages are installed.
 

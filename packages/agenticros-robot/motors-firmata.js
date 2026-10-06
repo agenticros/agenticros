@@ -5,6 +5,7 @@ import { getRobotId, getApiToken } from './robot-config.js';
 import { fetchRobotConfig, getCmdVelTopic, resolveTopic } from './ros-topics.js';
 import { createOdometry, resolveOdomSetup } from './lib/odometry.js';
 import { twistToWheelDuty } from './lib/twist-duty.js';
+import { scaleTwistToCruise, subscribeNavCruise } from './lib/nav-speed.js';
 import { startFirmataEncoderPoller } from './lib/firmata-encoders.js';
 import { Motor } from './lib/firmata-motor.js';
 import { FirmataSerialPort } from './lib/firmata-serialport.js';
@@ -120,10 +121,16 @@ board.on("ready", async () => {
       motors.b.stop();
   }
 
-  node.createSubscription('geometry_msgs/msg/Twist', cmdVelTopic, (msg) => {
-        odom?.setCmdVel(msg.linear.x, msg.angular.z);
+  let navCruise = 0;
+  subscribeNavCruise(node, cmdVelTopic, (speed) => {
+    navCruise = speed;
+  }, rclnodejs);
 
-        const duty = twistToWheelDuty(-msg.linear.x, -msg.angular.z);
+  node.createSubscription('geometry_msgs/msg/Twist', cmdVelTopic, (msg) => {
+        const scaled = scaleTwistToCruise(msg.linear.x, msg.angular.z, navCruise);
+        odom?.setCmdVel(scaled.linearX, scaled.angularZ);
+
+        const duty = twistToWheelDuty(-scaled.linearX, -scaled.angularZ);
         const leftSpeed = Math.round(duty.left * 255);
         const rightSpeed = Math.round(duty.right * 255);
 
