@@ -9,6 +9,7 @@ import {
   poseInFrame,
   readOccupancy,
   rememberTransforms,
+  blankOccupancyPreview,
   renderOccupancy,
   robotPoseOnMap,
   worldToPixel,
@@ -25,6 +26,15 @@ test("classifyOccupancy treats uint8 255 as unknown", () => {
   assert.equal(isNavigable(0), true);
   assert.equal(isNavigable(-1), false);
   assert.equal(isNavigable(80), false);
+});
+
+test("blankOccupancyPreview is a gray square", () => {
+  const preview = blankOccupancyPreview(4);
+  assert.equal(preview.width, 4);
+  assert.equal(preview.height, 4);
+  assert.equal(preview.rgba.length, 64);
+  assert.equal(preview.rgba[0], 96);
+  assert.equal(preview.rgba[3], 255);
 });
 
 test("renderOccupancy puts cell (0,0) at the bottom-left of the image", () => {

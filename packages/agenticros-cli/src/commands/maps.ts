@@ -11,7 +11,6 @@
 import { existsSync } from "node:fs";
 
 import { confirm } from "@inquirer/prompts";
-import { execa } from "execa";
 
 import {
   createMap,
@@ -54,11 +53,6 @@ function printList(catalog: PublicMapCatalog): void {
     const mark = map.active ? "*" : " ";
     process.stdout.write(`  ${mark}  ${map.label}  ${map.id}${map.active ? "  active" : ""}\n`);
   }
-}
-
-async function mappingIsRunning(): Promise<boolean> {
-  const { exitCode } = await execa("pgrep", ["-f", "[r]tabmap_nav2.launch.py"], { reject: false });
-  return exitCode === 0;
 }
 
 function requireTarget(action: string, target?: string): string {
@@ -142,7 +136,10 @@ export async function mapsCommand(opts: MapsOptions): Promise<void> {
             return;
           }
         }
-        if (catalog.activeId === map.id && (await mappingIsRunning())) {
+        // Stop whenever this is the live room. pgrep on the launch file misses
+        // an orphaned rtabmap node, which keeps publishing the grid from memory
+        // after the database file is gone.
+        if (catalog.activeId === map.id) {
           await stopMappingCommand({ quiet: asJson });
         }
         const next = deleteMap(map.id);

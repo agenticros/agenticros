@@ -247,7 +247,7 @@ export function ensureActiveMap(opts?: MapStorePaths & { label?: string }): Robo
 }
 
 function removeDatabase(databasePath: string): void {
-  for (const suffix of ["", "-journal", "-wal", "-shm"]) {
+  for (const suffix of ["", "-journal", "-wal", "-shm", ".back"]) {
     const file = `${databasePath}${suffix}`;
     if (!existsSync(file)) continue;
     unlinkSync(file);

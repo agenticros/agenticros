@@ -12,6 +12,20 @@ const COLOR_UNKNOWN = [96, 96, 96];
 const COLOR_OCCUPIED = [20, 20, 20];
 const COLOR_FREE = [240, 240, 240];
 
+/** Gray stand-in so ARC replaces a deleted map instead of keeping the last JPEG. */
+export function blankOccupancyPreview(edge = 64) {
+  const size = Math.max(1, edge | 0);
+  const rgba = Buffer.alloc(size * size * 4);
+  for (let i = 0; i < size * size; i++) {
+    const o = i * 4;
+    rgba[o] = COLOR_UNKNOWN[0];
+    rgba[o + 1] = COLOR_UNKNOWN[1];
+    rgba[o + 2] = COLOR_UNKNOWN[2];
+    rgba[o + 3] = 255;
+  }
+  return { rgba, width: size, height: size };
+}
+
 export function stripFrame(id) {
   return String(id || "").replace(/^\/+/, "");
 }

@@ -91,6 +91,7 @@ import {
     rememberTransforms,
     renderOccupancy,
     robotPoseOnMap,
+    blankOccupancyPreview,
 } from './lib/map-preview.js';
 
 const robotId = getRobotId();
@@ -290,6 +291,26 @@ function formatLog(message) {
 
 const tfEdges = new Map();
 let latestOccupancy = null;
+/** Drop latched /map samples after delete/stop so the teleop page does not keep the last grid. */
+let mapPreviewSuppressed = false;
+
+function noteMapCommand(command, exitCode) {
+    if (exitCode !== 0) return null;
+    if (command === 'agenticros stop mapping' || command.startsWith('agenticros maps delete ')) {
+        mapPreviewSuppressed = true;
+        latestOccupancy = null;
+        return 'clear';
+    }
+    if (
+        command === 'agenticros start mapping' ||
+        command.startsWith('agenticros maps create ') ||
+        command.startsWith('agenticros maps use ')
+    ) {
+        mapPreviewSuppressed = false;
+        return 'resume';
+    }
+    return null;
+}
 let mapSubscriptionsReady = false;
 let navClient = null;
 let activeNavGoal = null;
@@ -470,6 +491,7 @@ function ensureMapSubscriptions() {
     let tfOk = false;
     try {
         subscribeRos('nav_msgs/msg/OccupancyGrid', '/map', (msg) => {
+            if (mapPreviewSuppressed) return;
             try {
                 const grid = readOccupancy(msg);
                 if (grid.width > 0 && grid.height > 0 && grid.resolution > 0) {
@@ -1022,6 +1044,9 @@ class P2PServer {
                   console.log(formatLog(`BASH: failed exit=${exitCode}: ${stderr || error.message}`));
                 } else {
                   console.log(formatLog(`BASH: ok exit=0`));
+                }
+                if (noteMapCommand(command, exitCode) === 'clear') {
+                  void this.pushClearedMapFrame();
                 }
                 const result = {
                   requestId,
@@ -2741,10 +2766,42 @@ class P2PConnection {
         }
     }
 
+    async pushClearedMapFrame() {
+        if (this.rosPaused || !this.dataChannelOpen) return;
+        if (this.sendingMessages?.has('/map')) return;
+        const preview = blankOccupancyPreview();
+        const jpeg = await sharp(preview.rgba, {
+            raw: { width: preview.width, height: preview.height, channels: 4 },
+        }).jpeg({ quality: 60 }).toBuffer();
+        this.updateLatestMessage('/map', {
+            robotId,
+            topic: '/map',
+            encoding: 'base64',
+            data: jpeg.toString('base64'),
+            width: preview.width,
+            height: preview.height,
+            cleared: true,
+            pose: null,
+            timestamp: Date.now(),
+        });
+    }
+
     async pushMapFrame() {
         if (this.rosPaused || !this.dataChannelOpen) return;
-        if (this._mapRendering || !latestOccupancy) return;
+        if (this._mapRendering) return;
         if (this.sendingMessages?.has('/map')) return;
+        if (mapPreviewSuppressed) {
+            this._mapRendering = true;
+            try {
+                await this.pushClearedMapFrame();
+            } catch (error) {
+                console.warn(formatLog(`Map clear dropped: ${error?.message || error}`));
+            } finally {
+                this._mapRendering = false;
+            }
+            return;
+        }
+        if (!latestOccupancy) return;
         this._mapRendering = true;
         try {
             let preview = renderOccupancy(latestOccupancy);
