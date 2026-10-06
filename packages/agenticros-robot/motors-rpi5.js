@@ -4,6 +4,7 @@ const require = createRequire(import.meta.url);
 import { getRobotId, getApiToken } from './robot-config.js';
 import { fetchRobotConfig, getCmdVelTopic, resolveTopic } from './ros-topics.js';
 import { createOdometry, resolveOdomSetup } from './lib/odometry.js';
+import { twistToWheelDuty } from './lib/twist-duty.js';
 
 var robotId = getRobotId();
 var apiToken = getApiToken();
@@ -81,20 +82,7 @@ async function main() {
     node.createSubscription('geometry_msgs/msg/Twist', cmdVelTopic, (msg) => {
         odom?.setCmdVel(msg.linear.x, msg.angular.z);
 
-        const linear_x = -msg.linear.x;  // Forward/backward motion (inverted)
-        const angular_z = msg.angular.z; // Rotation
-
-        // Convert twist to motor speeds (range -1 to 1)
-        let leftSpeed = linear_x - angular_z;
-        let rightSpeed = linear_x + angular_z;
-
-        // Clamp values between -1 and 1
-        leftSpeed = Math.max(-1, Math.min(1, leftSpeed));
-        rightSpeed = Math.max(-1, Math.min(1, rightSpeed));
-
-        // Truncate to 2 decimal places
-        leftSpeed = Number(leftSpeed.toFixed(2));
-        rightSpeed = Number(rightSpeed.toFixed(2));
+        const { left: leftSpeed, right: rightSpeed } = twistToWheelDuty(-msg.linear.x, msg.angular.z);
 
         // Set motor speeds
         setMotorSpeed(LEFT_MOTOR_PIN1, LEFT_MOTOR_PIN2, leftSpeed);

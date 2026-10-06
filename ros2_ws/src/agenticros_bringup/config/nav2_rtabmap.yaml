@@ -99,12 +99,14 @@ controller_server:
     FollowPath:
       plugin: "dwb_core::DWBLocalPlanner"
       debug_trajectory_details: false
-      min_vel_x: 0.0
+      # TT motors stall below ~0.3 duty, and the mixer treats m/s as duty.
+      # Slower samples never leave the spot, so the progress checker aborts.
+      min_vel_x: 0.35
       min_vel_y: 0.0
       max_vel_x: 0.65
       max_vel_y: 0.0
       max_vel_theta: 1.0
-      min_speed_xy: 0.0
+      min_speed_xy: 0.35
       max_speed_xy: 0.65
       min_speed_theta: 0.0
       acc_lim_x: 2.5

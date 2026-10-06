@@ -4,6 +4,7 @@ const require = createRequire(import.meta.url);
 import { getRobotId, getApiToken } from './robot-config.js';
 import { fetchRobotConfig, getCmdVelTopic, resolveTopic } from './ros-topics.js';
 import { createOdometry, resolveOdomSetup } from './lib/odometry.js';
+import { twistToWheelDuty } from './lib/twist-duty.js';
 import { startFirmataEncoderPoller } from './lib/firmata-encoders.js';
 import { Motor } from './lib/firmata-motor.js';
 import { FirmataSerialPort } from './lib/firmata-serialport.js';
@@ -122,14 +123,9 @@ board.on("ready", async () => {
   node.createSubscription('geometry_msgs/msg/Twist', cmdVelTopic, (msg) => {
         odom?.setCmdVel(msg.linear.x, msg.angular.z);
 
-        const linear_x = -msg.linear.x;  // Forward/backward motion (inverted)
-        const angular_z = -msg.angular.z; // Rotation (inverted)
-
-        let leftSpeed = (linear_x - angular_z) * 255;
-        let rightSpeed = (linear_x + angular_z) * 255;
-
-        leftSpeed = Math.round(Math.max(-255, Math.min(255, leftSpeed)));
-        rightSpeed = Math.round(Math.max(-255, Math.min(255, rightSpeed)));
+        const duty = twistToWheelDuty(-msg.linear.x, -msg.angular.z);
+        const leftSpeed = Math.round(duty.left * 255);
+        const rightSpeed = Math.round(duty.right * 255);
 
         if (!motors || !motors.a || !motors.b) {
             console.error('Motors not properly initialized!');
