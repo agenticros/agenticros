@@ -121,7 +121,8 @@ live in `configstore('agenticros')` (`ROBOT_ID`, `API_TOKEN`); legacy
 Aliases: `agenticros motors start`, `agenticros camera stop`, etc.
 
 The interactive menu includes **AgenticROS Cloud** (login / register / whoami)
-and a **Robot hardware** submenu for connect/motors/camera.
+and a **Robot hardware** submenu for connect, motors, cameras, **Start mapping** /
+**Stop mapping**, and room maps (list, create, switch, rename, delete).
 
 ### `agenticros init [--force] [--install-dir <path>]`
 

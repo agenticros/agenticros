@@ -380,7 +380,17 @@ async function handleNavGoalCommand(dataObj, connection) {
     mapStatusConnection = connection || mapStatusConnection;
     const x = Number(dataObj?.x);
     const y = Number(dataObj?.y);
-    const yaw = Number.isFinite(Number(dataObj?.yaw)) ? Number(dataObj.yaw) : 0;
+    // A map click is "go to this cell", not "face east". Yaw 0 is map +X, so
+    // Nav2 rotates in place, the progress checker never sees translation, and
+    // the recovery behavior spins again and aborts.
+    const sentYaw = Number(dataObj?.yaw);
+    const poseYaw = robotPoseOnMap(tfEdges)?.yaw;
+    let yaw;
+    if (!Number.isFinite(sentYaw) || sentYaw === 0) {
+        yaw = Number.isFinite(poseYaw) ? poseYaw : 0;
+    } else {
+        yaw = sentYaw;
+    }
     if (!Number.isFinite(x) || !Number.isFinite(y)) {
         navStatus(connection, { ok: false, error: 'Goal needs finite x and y.' });
         return;
@@ -461,7 +471,12 @@ async function handleNavGoalCommand(dataObj, connection) {
             } else if (canceled) {
                 navStatus(connection, { ok: false, state: 'canceled', error: 'Navigation canceled.' });
             } else if (status === 6 || (typeof handle.isAborted === 'function' && handle.isAborted())) {
-                navStatus(connection, { ok: false, state: 'failed', error: 'Nav2 aborted the goal.' });
+                const detail = result?.result?.error_msg;
+                const error = detail
+                    ? `Nav2 aborted the goal: ${detail}`
+                    : 'Nav2 aborted the goal.';
+                console.warn(formatLog(error));
+                navStatus(connection, { ok: false, state: 'failed', error });
             } else {
                 navStatus(connection, { ok: true, state: 'arrived', x, y });
             }

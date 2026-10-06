@@ -43,7 +43,9 @@ import {
   whoamiCommand,
 } from "./commands/cloud-auth.js";
 import { registerCommand } from "./commands/register.js";
+import { mapsCommand } from "./commands/maps.js";
 import { remoteControlInteractive } from "./commands/remote.js";
+import { publicCatalog } from "@agenticros/core";
 import { CLOUD_REST, getApiToken } from "./util/robot-cloud-config.js";
 import { header, info, isTty, dim, ok } from "./util/logger.js";
 import { readState, formatAge } from "./util/state.js";
@@ -94,7 +96,7 @@ async function runMenuOnce(): Promise<boolean> {
   const baseChoices: MenuChoice[] = [
     { name: "Launch with real robot", value: "real" },
     { name: "Launch with simulation", value: "sim" },
-    { name: "Robot hardware (connect, motors, camera, realsense)", value: "hardware" },
+    { name: "Robot hardware (connect, motors, camera, mapping)", value: "hardware" },
     { name: "Start robot eyes (local display)", value: "eyes" },
     { name: "First-time setup (workspace + OpenClaw + Cloud login)", value: "init" },
     { name: `Manage skills${skillsSuffix}`, value: "skills" },
@@ -254,6 +256,9 @@ async function hardwareSubmenu(): Promise<void> {
         { name: "Stop RealSense", value: "stop-realsense" },
         { name: "Start 2D camera", value: "start-camera" },
         { name: "Stop 2D camera", value: "stop-camera" },
+        { name: "Start mapping", value: "start-mapping" },
+        { name: "Stop mapping", value: "stop-mapping" },
+        { name: "Room maps (list, create, switch, delete)", value: "maps" },
         { name: "Show robot ID", value: "id" },
         { name: "Advanced: set API token / robot ID manually", value: "set" },
         { name: "Back to main menu", value: BACK },
@@ -287,6 +292,15 @@ async function hardwareSubmenu(): Promise<void> {
         case "stop-camera":
           await stopServiceCommand("camera");
           break;
+        case "start-mapping":
+          await startServiceCommand("mapping", {});
+          break;
+        case "stop-mapping":
+          await stopServiceCommand("mapping");
+          break;
+        case "maps":
+          await mapsSubmenu();
+          break;
         case "id":
           await idCommand();
           break;
@@ -312,6 +326,92 @@ async function hardwareSubmenu(): Promise<void> {
       info(e instanceof Error ? e.message : String(e));
     }
   }
+}
+
+/**
+ * Room maps: the same actions as `agenticros maps` and `agenticros start|stop mapping`.
+ */
+async function mapsSubmenu(): Promise<void> {
+  while (true) {
+    const action = await select<string>({
+      message: "Room maps:",
+      choices: [
+        { name: "List maps", value: "list" },
+        { name: "Create a room and start mapping", value: "create" },
+        { name: "Start mapping (active room)", value: "start" },
+        { name: "Stop mapping", value: "stop" },
+        { name: "Switch to a room (localize)", value: "use" },
+        { name: "Rename a room", value: "rename" },
+        { name: "Delete a room", value: "delete" },
+        { name: "Back to robot hardware", value: BACK },
+      ],
+    });
+    if (action === BACK) return;
+    try {
+      if (action === "list") {
+        await mapsCommand({ action: "list" });
+        continue;
+      }
+      if (action === "start") {
+        await startServiceCommand("mapping", {});
+        continue;
+      }
+      if (action === "stop") {
+        await stopServiceCommand("mapping");
+        continue;
+      }
+      if (action === "create") {
+        const label = (
+          await input({
+            message: "Room name:",
+            validate: (v) => v.trim().length > 0 || "Enter a room name",
+          })
+        ).trim();
+        await mapsCommand({ action: "create", label, start: true });
+        continue;
+      }
+      const target = await pickRoomMap(
+        action === "use"
+          ? "Switch to which room?"
+          : action === "rename"
+            ? "Rename which room?"
+            : "Delete which room?",
+      );
+      if (!target) continue;
+      if (action === "rename") {
+        const label = (
+          await input({
+            message: "New room name:",
+            validate: (v) => v.trim().length > 0 || "Enter a room name",
+          })
+        ).trim();
+        await mapsCommand({ action: "rename", target, label });
+        continue;
+      }
+      await mapsCommand({ action, target });
+    } catch (e) {
+      info(e instanceof Error ? e.message : String(e));
+    }
+  }
+}
+
+async function pickRoomMap(message: string): Promise<string | undefined> {
+  const catalog = publicCatalog();
+  if (catalog.maps.length === 0) {
+    info("No room maps yet. Create one or start mapping.");
+    return undefined;
+  }
+  const id = await select<string>({
+    message,
+    choices: [
+      ...catalog.maps.map((map) => ({
+        name: `${map.active ? "* " : ""}${map.label}  ${map.id}`,
+        value: map.id,
+      })),
+      { name: "Back", value: BACK },
+    ],
+  });
+  return id === BACK ? undefined : id;
 }
 
 /**

@@ -84,13 +84,16 @@ controller_server:
     controller_plugins: ["FollowPath"]
     progress_checker:
       plugin: "nav2_controller::SimpleProgressChecker"
-      required_movement_radius: 0.5
-      movement_time_allowance: 10.0
+      # Smaller than a typical map click. 0.5 m meant a short goal, or a robot
+      # spinning to face yaw 0, was "no progress" and Nav2 aborted into Spin.
+      required_movement_radius: 0.08
+      movement_time_allowance: 20.0
     general_goal_checker:
       stateful: true
       plugin: "nav2_controller::SimpleGoalChecker"
       xy_goal_tolerance: 0.25
-      yaw_goal_tolerance: 0.25
+      # Open-loop TT motors do not hold a precise heading.
+      yaw_goal_tolerance: 1.0
     # DWB (default Nav2 humble) — RPP was failing configure with
     # "No critics defined for FollowPath" on this install.
     FollowPath:
@@ -145,14 +148,16 @@ local_costmap:
       width: 3
       height: 3
       resolution: 0.05
-      robot_radius: 0.28
+      # DFRobot MiniQ is ~14 cm across. 0.28 m plus 0.55 m inflation marked
+      # the robot as inside an obstacle, so a click failed and Nav2 spun.
+      robot_radius: 0.12
       # No lidar on this robot — obstacles come from RTAB-Map /map via
       # the global static layer. Local map is inflation-only for now.
       plugins: [inflation_layer]
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
-        inflation_radius: 0.55
+        inflation_radius: 0.25
       always_send_full_costmap: true
 
 global_costmap:
@@ -163,7 +168,7 @@ global_costmap:
       publish_frequency: 1.0
       global_frame: map
       robot_base_frame: base_link
-      robot_radius: 0.28
+      robot_radius: 0.12
       resolution: 0.05
       track_unknown_space: true
       plugins: [static_layer, inflation_layer]
@@ -173,7 +178,7 @@ global_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
-        inflation_radius: 0.55
+        inflation_radius: 0.25
       always_send_full_costmap: true
 
 map_server:
@@ -291,7 +296,9 @@ collision_monitor:
       simulation_time_step: 0.1
       min_points: 6
       visualize: false
-      enabled: true
+      # No lidar. An enabled approach polygon can zero forward cmd_vel while
+      # Spin recovery still turns the base: the click looks like a spin, then abort.
+      enabled: false
     observation_sources: ["scan"]
     scan:
       type: "scan"
