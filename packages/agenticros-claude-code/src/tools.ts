@@ -45,7 +45,9 @@ import {
   ROS_MSG_IMAGE,
   cameraSnapshotFromPlainMessage,
   mimeTypeForSnapshotBase64,
+  preferCompressedColorTopic,
   rosNumericField,
+  snapshotMessageKind,
 } from "@agenticros/ros-camera";
 import { resolveMemoryNamespace } from "@agenticros/core";
 import { getTransportForRobot } from "./transport.js";
@@ -1365,38 +1367,59 @@ export async function handleToolCall(
       const defaultTopic =
         resolveBinding(robot, "camera.rgb") || "/camera/camera/color/image_raw/compressed";
       const rawTopic = (args["topic"] as string | undefined) ?? defaultTopic;
-      const topic = resolveCameraSubscribeTopic(robot.namespace, rawTopic);
+      const topic = preferCompressedColorTopic(resolveCameraSubscribeTopic(robot.namespace, rawTopic));
       const rawMsgType = args["message_type"] as string | undefined;
-      const messageType: "CompressedImage" | "Image" = rawMsgType === "Image" ? "Image" : "CompressedImage";
+      const messageType = snapshotMessageKind(topic, rawMsgType);
       const timeout = (args["timeout"] as number | undefined) ?? 10000;
       const type = messageType === "Image" ? ROS_MSG_IMAGE : ROS_MSG_COMPRESSED_IMAGE;
 
       try {
         const result = await new Promise<Record<string, unknown>>((resolve, reject) => {
-          const subscription = transport.subscribe(
-            { topic, type },
-            (msg: Record<string, unknown>) => {
-              clearTimeout(timer);
-              subscription.unsubscribe();
-              try {
-                const payload = cameraSnapshotFromPlainMessage(messageType, msg);
-                resolve({
-                  success: true,
-                  topic,
-                  format: payload.formatLabel,
-                  data: payload.dataBase64,
-                  width: payload.width,
-                  height: payload.height,
-                });
-              } catch (e) {
-                reject(e instanceof Error ? e : new Error(String(e)));
-              }
-            },
-          );
+          let settled = false;
+          let subscription: { unsubscribe: () => void } | undefined;
           const timer = setTimeout(() => {
-            subscription.unsubscribe();
+            if (settled) return;
+            settled = true;
+            try {
+              subscription?.unsubscribe();
+            } catch {
+              // ignore
+            }
             reject(new Error(`Timeout waiting for camera frame on ${topic}`));
           }, timeout);
+          try {
+            subscription = transport.subscribe(
+              { topic, type },
+              (msg: Record<string, unknown>) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                try {
+                  subscription?.unsubscribe();
+                } catch {
+                  // ignore
+                }
+                try {
+                  const payload = cameraSnapshotFromPlainMessage(messageType, msg);
+                  resolve({
+                    success: true,
+                    topic,
+                    format: payload.formatLabel,
+                    data: payload.dataBase64,
+                    width: payload.width,
+                    height: payload.height,
+                  });
+                } catch (e) {
+                  reject(e instanceof Error ? e : new Error(String(e)));
+                }
+              },
+            );
+          } catch (e) {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            reject(e instanceof Error ? e : new Error(String(e)));
+          }
         });
 
         const base64 = (result.data as string) ?? "";

@@ -7,6 +7,7 @@ import {
   resolveBinding,
   listCapabilitiesForRobot,
 } from "@agenticros/core";
+import { preferCompressedColorTopic } from "@agenticros/ros-camera";
 import { getTransport } from "../service.js";
 import { getLoadedSkillIds } from "../skill-loader.js";
 import { getMemory } from "../memory.js";
@@ -55,13 +56,14 @@ export function registerRobotContext(api: OpenClawPluginApi, config: AgenticROSC
     let cameraTopicHint = "/camera/camera/color/image_raw/compressed";
     try {
       const robot = resolveRobot(config);
-      cameraTopicHint =
+      cameraTopicHint = preferCompressedColorTopic(
         resolveBinding(robot, "camera.rgb") ||
-        (config.robot?.cameraTopic ?? "").trim() ||
-        cameraTopicHint;
+          (config.robot?.cameraTopic ?? "").trim() ||
+          cameraTopicHint,
+      );
     } catch {
       const fallback = (config.robot?.cameraTopic ?? "").trim();
-      if (fallback) cameraTopicHint = fallback;
+      if (fallback) cameraTopicHint = preferCompressedColorTopic(fallback);
     }
     const memorySection = await buildMemorySection(config);
     const hiveSection = buildHiveSection(config);

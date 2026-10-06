@@ -10,6 +10,32 @@ import { PNG } from "pngjs";
 export const ROS_MSG_IMAGE = "sensor_msgs/msg/Image";
 export const ROS_MSG_COMPRESSED_IMAGE = "sensor_msgs/msg/CompressedImage";
 
+/**
+ * Color snapshots use the JPEG sibling of a raw `image_raw` topic.
+ * RealSense publishes both; the raw frame is multi-megabyte RGB and a
+ * long-lived local DDS node can miss it while `/compressed` still delivers.
+ * Depth and infra topics stay raw.
+ */
+export function preferCompressedColorTopic(topic: string): string {
+  const trimmed = topic.trim().replace(/\/+$/, "");
+  if (!trimmed) return trimmed;
+  if (/depth|infra|aligned_depth/i.test(trimmed)) return trimmed;
+  if (/\/compressed(?:\/|$)/i.test(trimmed) || /\/zstd(?:\/|$)/i.test(trimmed)) return trimmed;
+  if (/image_(?:raw|rect)(?:_color)?$/i.test(trimmed)) return `${trimmed}/compressed`;
+  return trimmed;
+}
+
+/** Message kind follows the topic after {@link preferCompressedColorTopic}. */
+export function snapshotMessageKind(
+  topic: string,
+  requested?: string,
+): "CompressedImage" | "Image" {
+  if (/compressed/i.test(topic)) return "CompressedImage";
+  if (requested === "Image") return "Image";
+  if (requested === "CompressedImage") return "CompressedImage";
+  return "Image";
+}
+
 const MAX_IMAGE_BYTES_UNWRAP_DEPTH = 3;
 
 export interface CameraSnapshotPayload {

@@ -7,7 +7,9 @@ import {
   ROS_MSG_IMAGE,
   cameraSnapshotFromPlainMessage,
   mimeTypeForSnapshotBase64,
+  preferCompressedColorTopic,
   rosNumericField,
+  snapshotMessageKind,
 } from "@agenticros/ros-camera";
 import { getTransportForRobot } from "../service.js";
 import { normalizePluginToolImageBase64 } from "../plugin-image-base64.js";
@@ -59,12 +61,12 @@ export function resolveSnapshotTopic(
   requested?: string,
 ): string {
   const configured = configuredRgbTopic(robot);
-  if (!requested || !requested.trim()) return configured;
+  if (!requested || !requested.trim()) return preferCompressedColorTopic(configured);
   let t = requested.trim();
   if (!t.startsWith("/")) t = `/${t}`;
   t = t.replace(/\/+$/, "") || t;
-  if (HALLUCINATED_CAMERA_TOPICS.has(t)) return configured;
-  return resolveCameraSubscribeTopic(robot.namespace, requested);
+  if (HALLUCINATED_CAMERA_TOPICS.has(t)) return preferCompressedColorTopic(configured);
+  return preferCompressedColorTopic(resolveCameraSubscribeTopic(robot.namespace, requested));
 }
 
 /**
@@ -131,11 +133,7 @@ export async function executeCameraSnapshot(
 
   const topic = resolveSnapshotTopic(robot, params["topic"] as string | undefined);
   const rawMsgType = params["message_type"] as string | undefined;
-  const messageType: "CompressedImage" | "Image" =
-    rawMsgType === "Image" ||
-    (rawMsgType !== "CompressedImage" && !topic.includes("compressed"))
-      ? "Image"
-      : "CompressedImage";
+  const messageType = snapshotMessageKind(topic, rawMsgType);
   const timeout = (params["timeout"] as number | undefined) ?? 10000;
 
   try {
@@ -150,15 +148,35 @@ export async function executeCameraSnapshot(
       width?: unknown;
       height?: unknown;
     }>((resolve, reject) => {
-      let subscription: { unsubscribe: () => void };
-      let timer: ReturnType<typeof setTimeout>;
+      let settled = false;
+      let subscription: { unsubscribe: () => void } | undefined;
+      const finish = (err?: unknown, value?: {
+        success: boolean;
+        topic: string;
+        format: string;
+        data: string;
+        width?: unknown;
+        height?: unknown;
+      }) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        try {
+          subscription?.unsubscribe();
+        } catch {
+          // ignore
+        }
+        if (err) reject(err instanceof Error ? err : new Error(String(err)));
+        else if (value) resolve(value);
+      };
+      const timer = setTimeout(() => {
+        finish(new Error(`Timeout waiting for camera frame on ${topic}`));
+      }, timeout);
       try {
         subscription = transport.subscribe({ topic, type: typeSel }, (msg: Record<string, unknown>) => {
           try {
-            clearTimeout(timer);
-            subscription.unsubscribe();
             const payload = cameraSnapshotFromPlainMessage(messageType, msg);
-            resolve({
+            finish(undefined, {
               success: true,
               topic,
               format: payload.formatLabel,
@@ -167,27 +185,12 @@ export async function executeCameraSnapshot(
               height: payload.height,
             });
           } catch (err) {
-            clearTimeout(timer);
-            try {
-              subscription.unsubscribe();
-            } catch {
-              // ignore
-            }
-            reject(err instanceof Error ? err : new Error(String(err)));
+            finish(err);
           }
         });
       } catch (err) {
-        reject(err instanceof Error ? err : new Error(String(err)));
-        return;
+        finish(err);
       }
-      timer = setTimeout(() => {
-        try {
-          subscription.unsubscribe();
-        } catch {
-          // ignore
-        }
-        reject(new Error(`Timeout waiting for camera frame on ${topic}`));
-      }, timeout);
     });
 
     const rawB64 = (result.data as string) ?? "";
