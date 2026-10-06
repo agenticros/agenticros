@@ -46,6 +46,8 @@ Do the [Nav2 apt install and the rclnodejs binding refresh](#node-bindings-for-c
 
 You can start the stack from ARC without an SSH session. On the control page, **Start mapping** runs `agenticros start mapping`. The [Remote CLI](https://cloud.agenticros.com/remote) page has the same start/stop pair, plus a **Navigate to** form (map-frame x, y, yaw). Missions adds **Map the room** and **Navigate to**, which dispatch those same commands when you run them. The robot must be on CLI **0.7.24** or newer (`agenticros start mapping` and `agenticros navigate`), then `agenticros disconnect && agenticros connect`.
 
+Start mapping replies immediately with the room catalog (`{ activeId, maps }`, creating **Room** when the list is empty) and launches RTAB-Map in the background. The Maps page stays at 0 if that reply never arrives — stopping RealSense and the previous stack used to run inside ARC's command timeout, so the button reported failure and the empty catalog from delete was left in place. After pulling, `agenticros disconnect && agenticros connect` reloads the bridge. The occupancy preview shows once `/map` is publishing (`/tmp/agenticros-mapping.log`).
+
 `--map` is what publishes `/map` and starts the `navigate_to_pose` action. See [mapping bringup](#bringup-physical-rgb-d-robot) if the grid never appears.
 
 ## Several rooms

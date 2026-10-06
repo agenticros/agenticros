@@ -19,6 +19,7 @@ const HW_PATTERNS: { name: string; pattern: string }[] = [
   { name: "motors", pattern: "motors-" },
   { name: "camera2d", pattern: "camera-2d-ros.js" },
   { name: "realsense", pattern: "realsense2_camera_node" },
+  { name: "mapping", pattern: "[r]tabmap_nav2.launch.py" },
 ];
 
 export interface StatusOptions {

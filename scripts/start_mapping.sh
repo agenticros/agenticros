@@ -77,6 +77,35 @@ fi
 MAP_DB="${AGENTICROS_MAP_DATABASE:-}"
 LOCALIZE="${AGENTICROS_MAP_LOCALIZE:-0}"
 
+# Stop a previous stack before this process becomes `ros2 launch ... rtabmap`.
+# Do not pkill start_mapping.sh — that pattern matches this script.
+# [r]tabmap keeps pkill from matching its own command line.
+stopped=0
+for pat in \
+  '[r]tabmap_nav2.launch.py' \
+  '[r]tabmap' \
+  nav2_container bt_navigator controller_server planner_server \
+  behavior_server smoother_server waypoint_follower velocity_smoother \
+  route_server collision_monitor docking_server \
+  lifecycle_manager_navigation agenticros_explore camera_stamp_fix \
+  static_tf_base_link cmd_vel_relay
+do
+  if pgrep -f "$pat" >/dev/null 2>&1; then
+    pkill -f "$pat" >/dev/null 2>&1 || true
+    stopped=1
+  fi
+done
+# Teleop RealSense is low-res and unaligned, and it holds the camera.
+if [[ "${USE_RS}" == "true" ]] && pgrep -f '[r]ealsense2_camera_node' >/dev/null 2>&1; then
+  echo "==> Stopping the current RealSense so mapping can start an aligned camera."
+  pkill -f '[r]ealsense2_camera_node' >/dev/null 2>&1 || true
+  pkill -f '[r]os2 launch realsense2_camera' >/dev/null 2>&1 || true
+  stopped=1
+fi
+if [[ "$stopped" == "1" ]]; then
+  sleep 1
+fi
+
 echo "==> Launching RTAB-Map + Nav2 (robot_namespace='${NS}' visual_odometry=${VO} use_realsense=${USE_RS} keep_map=${AGENTICROS_KEEP_MAP:-0} localize=${LOCALIZE})"
 if [[ -n "${MAP_DB}" ]]; then
   echo "    database: ${MAP_DB}"

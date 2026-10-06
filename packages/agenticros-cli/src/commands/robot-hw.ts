@@ -9,7 +9,7 @@ import { spawn } from "node:child_process";
 import { existsSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { ensureActiveMap, type RobotMap } from "@agenticros/core";
+import { ensureActiveMap, publicCatalog, type RobotMap } from "@agenticros/core";
 import { execa } from "execa";
 
 import {
@@ -29,7 +29,7 @@ import {
   setApiToken,
   setRobotId,
 } from "../util/robot-cloud-config.js";
-import { err, info, ok, warn } from "../util/logger.js";
+import { err, info, isTty, ok, warn } from "../util/logger.js";
 
 const COMMS_LOG = "/tmp/agenticros-comms.log";
 
@@ -358,27 +358,9 @@ export async function startMappingCommand(opts: MappingLaunchOptions = {}): Prom
   }
   const map = opts.map ?? ensureActiveMap();
   const keep = opts.keep ?? existsSync(map.databasePath);
-  const say = (message: string) => {
-    if (!opts.quiet) info(message);
-  };
-  // A second launch stacks Nav2 nodes until bt_navigator crashes.
-  const { exitCode: mappingUp } = await execa("pgrep", ["-f", "[r]tabmap_nav2.launch.py"], {
-    reject: false,
-  });
-  if (mappingUp === 0) {
-    say("Stopping the mapping stack already running.");
-    await stopMappingCommand({ quiet: true });
-    await new Promise((r) => setTimeout(r, 1000));
-  }
-  // Teleop RealSense is low-res and does not align depth to color, and it
-  // holds the camera so this launch cannot start its own aligned stream.
-  const { exitCode } = await execa("pgrep", ["-f", "[r]ealsense2_camera_node"], { reject: false });
-  if (exitCode === 0) {
-    say("Stopping the current RealSense so mapping can start an aligned camera.");
-    await stopRealsenseCommand({ quiet: opts.quiet });
-    await new Promise((r) => setTimeout(r, 1500));
-  }
   const ns = configuredNamespace();
+  // start_mapping.sh stops a previous stack and a teleop RealSense. Doing that
+  // here blocks ARC until the RPC times out, so the Maps page stays empty.
   const pid = spawnDetached("bash", [script, ros.distro], {
     logFile: MAPPING_LOG,
     env: {
@@ -389,12 +371,16 @@ export async function startMappingCommand(opts: MappingLaunchOptions = {}): Prom
       AGENTICROS_MAP_LOCALIZE: opts.localize ? "1" : "0",
     },
   });
-  if (!opts.quiet) {
-    const mode = opts.localize ? "localizing" : keep ? "resuming" : "mapping";
-    ok(
-      `${map.label}: ${mode}${pid ? ` (pid ${pid})` : ""}. Log: ${MAPPING_LOG}`,
-    );
+  if (opts.quiet) return;
+  const mode = opts.localize ? "localizing" : keep ? "resuming" : "mapping";
+  const line = `${map.label}: ${mode}${pid ? ` (pid ${pid})` : ""}. Log: ${MAPPING_LOG}`;
+  if (isTty) {
+    ok(line);
+    return;
   }
+  // ARC stores the catalog from stdout. Human text goes to stderr.
+  process.stdout.write(`${JSON.stringify(publicCatalog())}\n`);
+  process.stderr.write(`${line}\n`);
 }
 
 export async function stopMappingCommand(opts: { quiet?: boolean } = {}): Promise<void> {

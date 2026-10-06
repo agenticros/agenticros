@@ -93,6 +93,13 @@ import {
     robotPoseOnMap,
     blankOccupancyPreview,
 } from './lib/map-preview.js';
+import {
+    detectRosDistroName,
+    ensureRoomCatalog,
+    findStartMappingScript,
+    launchMappingStack,
+} from './lib/map-catalog.js';
+import { existsSync } from 'node:fs';
 
 const robotId = getRobotId();
 const apiToken = getApiToken();
@@ -105,6 +112,8 @@ const REMOTE_STATUS_HW = [
   { name: 'motors', pattern: 'motors-' },
   { name: 'camera2d', pattern: 'camera-2d-ros.js' },
   { name: 'realsense', pattern: 'realsense2_camera_node' },
+  // Bracket so pgrep does not match its own command line and report a false positive.
+  { name: 'mapping', pattern: '[r]tabmap_nav2.launch.py' },
 ];
 
 function pgrepFirst(pattern) {
@@ -303,6 +312,7 @@ function noteMapCommand(command, exitCode) {
         (command.startsWith('agenticros maps create ') && command.includes(' --start'));
     if (starting) {
         mapPreviewSuppressed = false;
+        latestOccupancy = null;
         return 'resume';
     }
     if (exitCode !== 0) return null;
@@ -1079,6 +1089,52 @@ class P2PServer {
                   '/usr/bin',
                 ].filter(Boolean).join(':'),
               };
+
+              if (command === 'agenticros start mapping') {
+                // ARC's waiter is ~25s. The CLI used to block on pkill + RealSense
+                // stop inside that window, so the button reported failure and the
+                // Maps page kept the empty catalog from the last delete.
+                let room;
+                try {
+                  room = ensureRoomCatalog();
+                } catch (e) {
+                  respond(e, '', e instanceof Error ? e.message : String(e));
+                  return;
+                }
+                const script = findStartMappingScript(COMM_JS_PATH);
+                const distro = detectRosDistroName();
+                const catalogJson = `${JSON.stringify(room.catalog)}\n`;
+                if (!script || !distro) {
+                  const shellCmd = `${command} >>/tmp/agenticros-remote-cli.log 2>&1 &`;
+                  exec(shellCmd, { timeout: 15000, env: execEnv }, (error, _stdout, stderr) => {
+                    const note = !script
+                      ? 'start_mapping.sh not found; started via agenticros CLI\n'
+                      : 'No ROS distro under /opt/ros; started via agenticros CLI\n';
+                    respond(error, catalogJson, `${stderr || ''}${note}`);
+                  });
+                  return;
+                }
+                try {
+                  const ns = typeof rosNamespace === 'string' ? rosNamespace : '';
+                  const pid = launchMappingStack({
+                    script,
+                    distro,
+                    databasePath: room.databasePath,
+                    keep: existsSync(room.databasePath),
+                    namespace: ns,
+                    env: execEnv,
+                  });
+                  console.log(formatLog(`BASH: mapping launch pid=${pid ?? '?'} map=${room.label} db=${room.databasePath}`));
+                  respond(
+                    null,
+                    catalogJson,
+                    `${room.label}: mapping${pid ? ` (pid ${pid})` : ''}. Log: /tmp/agenticros-mapping.log\n`,
+                  );
+                } catch (e) {
+                  respond(e, catalogJson, e instanceof Error ? e.message : String(e));
+                }
+                return;
+              }
 
               if (DETACHED_CLI_COMMANDS.has(command)) {
                 // Shell backgrounds the CLI and exits; child keeps running.
@@ -2835,6 +2891,7 @@ class P2PConnection {
                 gridHeight: preview.gridHeight,
                 origin: preview.origin,
                 pose,
+                cleared: false,
                 timestamp: Date.now(),
             });
         } catch (error) {
