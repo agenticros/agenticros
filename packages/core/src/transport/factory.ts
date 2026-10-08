@@ -21,8 +21,10 @@ export async function createTransport(config: TransportConfig): Promise<RosTrans
       } catch (e: any) {
         if (e?.code === "ERR_MODULE_NOT_FOUND" || e?.code === "MODULE_NOT_FOUND") {
           throw new Error(
-            'Mode A (local) requires the "rclnodejs" package. ' +
-              "Install it with: pnpm add rclnodejs (with ROS2 workspace sourced)",
+            'Mode A (local) requires the "rclnodejs" package (not bundled with @agenticros/core). ' +
+              "Install it where the gateway/MCP runs: `pnpm add -w rclnodejs` in the AgenticROS " +
+              "repo (with ROS 2 sourced), then redeploy the plugin; or `npm install rclnodejs` " +
+              "into the OpenClaw plugin deploy tree.",
           );
         }
         throw e;
@@ -36,8 +38,9 @@ export async function createTransport(config: TransportConfig): Promise<RosTrans
       } catch (e: any) {
         if (e?.code === "ERR_MODULE_NOT_FOUND" || e?.code === "MODULE_NOT_FOUND") {
           throw new Error(
-            'Mode C (webrtc) requires the "node-datachannel" package. ' +
-              "Install it with: pnpm add node-datachannel (requires native build tools or a prebuilt binary)",
+            'Mode C (webrtc) requires the "node-datachannel" package (not bundled with @agenticros/core). ' +
+              "Install it where the gateway runs: `pnpm add -w node-datachannel` (needs native " +
+              "build tools or a prebuilt binary), then redeploy the plugin.",
           );
         }
         throw e;

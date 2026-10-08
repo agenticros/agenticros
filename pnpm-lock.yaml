@@ -11,7 +11,14 @@ patchedDependencies:
 
 importers:
 
-  .: {}
+  .:
+    optionalDependencies:
+      node-datachannel:
+        specifier: ^0.12.0
+        version: 0.12.0
+      rclnodejs:
+        specifier: ^1.8.1
+        version: 1.9.0
 
   packages/agenticros:
     dependencies:
@@ -24,9 +31,6 @@ importers:
       '@agenticros/ros-camera':
         specifier: workspace:*
         version: link:../ros-camera
-      '@sinclair/typebox':
-        specifier: ^0.34.0
-        version: 0.34.48
     devDependencies:
       '@types/node':
         specifier: ^20.17.0
@@ -70,7 +74,7 @@ importers:
     dependencies:
       '@agenticros/core':
         specifier: ^0.8.14
-        version: link:../core
+        version: 0.8.14
       '@inquirer/prompts':
         specifier: ^7.0.0
         version: 7.10.1(@types/node@20.19.35)
@@ -203,13 +207,6 @@ importers:
       zod:
         specifier: ^3.24.0
         version: 3.25.76
-    optionalDependencies:
-      node-datachannel:
-        specifier: ^0.12.0
-        version: 0.12.0
-      rclnodejs:
-        specifier: ^1.8.1
-        version: 1.8.2
     devDependencies:
       '@types/node':
         specifier: ^20.17.0
@@ -273,6 +270,10 @@ importers:
         version: 5.9.3
 
 packages:
+
+  '@agenticros/core@0.8.14':
+    resolution: {integrity: sha512-Env5DA7FOwk7w9ZsrLJikoIFZjJ6uo5zTnzMlTT2aBjFS8FhSOJxKzOHBNjmW4kk0NwBthQSIKVj9n9zJiyZWA==}
+    engines: {node: '>=20'}
 
   '@babel/runtime@7.29.7':
     resolution: {integrity: sha512-Nq8OhGWiZIZGV6hLHoyAKLLcJihP/xFeBMGJoUrxTX2psI8dCifzLhZISFb+VWS3wFMRDmCGw5R+dOySCqPLhw==}
@@ -1000,9 +1001,6 @@ packages:
   '@serialport/stream@13.0.0':
     resolution: {integrity: sha512-F7xLJKsjGo2WuEWMSEO1SimRcOA+WtWICsY13r0ahx8s2SecPQH06338g28OT7cW7uRXI7oEQAk62qh5gHJW3g==}
     engines: {node: '>=20.0.0'}
-
-  '@sinclair/typebox@0.34.48':
-    resolution: {integrity: sha512-kKJTNuK3AQOrgjjotVxMrCn1sUJwM76wMszfq1kdU4uYVJjvEWuFQ6HgvLt4Xz3fSmZlTOxJ/Ie13KnIcWQXFA==}
 
   '@sindresorhus/merge-streams@4.0.0':
     resolution: {integrity: sha512-tlqY9xq5ukxTUZBmoOp+m61cqwQD5pHJtFY3Mn8CA8ps6yghLH/Hw8UPdqg4OLmFW3IFlcXnQNmo/dh8HzXYIQ==}
@@ -2196,11 +2194,6 @@ packages:
     resolution: {integrity: sha512-y3bGgqKj3QBdxLbLkomlohkvsA8gdAiUQlSBJnBhfn+BPxg4bc62d8TcBW15wavDfgexCgccckhcZvywyQYPOw==}
     hasBin: true
 
-  rclnodejs@1.8.2:
-    resolution: {integrity: sha512-3/zPbJ8FOhBbEgVsvVKWKBgBnfH+1mTZ1lOauA0Xkz9SdLn3abw0cR/hc//WT6sVGURyafTrylMxPEgjrjuJQw==}
-    engines: {node: '>= 16.13.0'}
-    hasBin: true
-
   rclnodejs@1.9.0:
     resolution: {integrity: sha512-5nQ39WCnfzYoC1nppBaJR5bzfMHWrRRLGltsS6WqGb8KFJnguOCDMC9tZSxK4YU0oAtciG3/GZqDgZmfAxgUDQ==}
     engines: {node: '>= 16.13.0'}
@@ -2606,6 +2599,23 @@ packages:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
 
 snapshots:
+
+  '@agenticros/core@0.8.14':
+    dependencies:
+      '@eclipse-zenoh/zenoh-ts': 1.9.0(patch_hash=pdjq6ms3zvqwikn6vpqzasydsy)
+      '@foxglove/cdr': 3.5.0
+      '@foxglove/rosmsg': 4.2.2
+      '@foxglove/rosmsg2-serialization': 3.1.0
+      ws: 8.21.2
+      zod: 3.25.76
+    optionalDependencies:
+      node-datachannel: 0.12.0
+      rclnodejs: 1.9.0
+    transitivePeerDependencies:
+      - bufferutil
+      - jiti
+      - supports-color
+      - utf-8-validate
 
   '@babel/runtime@7.29.7': {}
 
@@ -3377,8 +3387,6 @@ snapshots:
       debug: 4.4.0
     transitivePeerDependencies:
       - supports-color
-
-  '@sinclair/typebox@0.34.48': {}
 
   '@sindresorhus/merge-streams@4.0.0': {}
 
@@ -4613,20 +4621,6 @@ snapshots:
       ini: 1.3.8
       minimist: 1.2.8
       strip-json-comments: 2.0.1
-
-  rclnodejs@1.8.2:
-    dependencies:
-      '@rclnodejs/ref-array-di': 1.2.2
-      '@rclnodejs/ref-struct-di': 1.1.1
-      bindings: 1.5.0
-      debug: 4.4.3
-      json-bigint: 1.0.0
-      node-addon-api: 8.6.0
-      rxjs: 7.8.2
-      walk: 2.3.15
-    transitivePeerDependencies:
-      - supports-color
-    optional: true
 
   rclnodejs@1.9.0:
     dependencies:

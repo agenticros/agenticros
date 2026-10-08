@@ -16,7 +16,10 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {},
+  "dependencies": {
+    "fzstd": "^0.1.1",
+    "pngjs": "^7.0.0"
+  },
   "devDependencies": {
     "@types/node": "^20.17.0",
     "@types/pngjs": "^6.0.5",

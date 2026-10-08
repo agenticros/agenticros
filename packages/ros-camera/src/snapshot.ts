@@ -1,10 +1,31 @@
 /**
  * Normalizes sensor_msgs/Image and sensor_msgs/CompressedImage plain objects (from any transport)
  * into base64 + MIME-friendly format labels for chat UIs.
+ *
+ * pngjs / fzstd are loaded lazily (createRequire) so OpenClaw's static import
+ * walk of the plugin entry does not admit them until a raw Image or zstd
+ * CompressedImage path actually needs them.
  */
 
-import { decompress as zstdDecompress } from "fzstd";
-import { PNG } from "pngjs";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+
+type PngJs = typeof import("pngjs");
+type Fzstd = typeof import("fzstd");
+
+let pngjsMod: PngJs | null = null;
+let fzstdMod: Fzstd | null = null;
+
+function loadPngjs(): PngJs {
+  if (!pngjsMod) pngjsMod = require("pngjs") as PngJs;
+  return pngjsMod;
+}
+
+function loadFzstd(): Fzstd {
+  if (!fzstdMod) fzstdMod = require("fzstd") as Fzstd;
+  return fzstdMod;
+}
 
 /** ROS 2 type string for subscribe/publish calls. */
 export const ROS_MSG_IMAGE = "sensor_msgs/msg/Image";
@@ -233,6 +254,7 @@ function encodeRawRosImageToPng(params: {
     throw new Error(`Image data length ${data.length} < expected minimum ${minLen} for ${width}×${height} ${enc}`);
   }
 
+  const { PNG } = loadPngjs();
   const png = new PNG({ width, height });
   const d = png.data;
 
@@ -350,6 +372,7 @@ export function cameraSnapshotFromPlainMessage(
   let buf = coerceRosImageDataToBuffer(msg["data"]);
   if (rosFormat.toLowerCase().includes("zstd")) {
     try {
+      const { decompress: zstdDecompress } = loadFzstd();
       buf = Buffer.from(zstdDecompress(buf));
     } catch (e) {
       throw new Error(
@@ -379,6 +402,7 @@ export function bufferAndMimeFromCompressedImageMessage(
     let buf = coerceRosImageDataToBuffer(msg["data"]);
     if (!buf || buf.length === 0) return null;
     if (rosFormat.toLowerCase().includes("zstd")) {
+      const { decompress: zstdDecompress } = loadFzstd();
       buf = Buffer.from(zstdDecompress(buf));
     }
     if (!buf.length) return null;
