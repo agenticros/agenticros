@@ -2,7 +2,7 @@
  * Tool: mission_pause — pause a running mission at the next step boundary.
  */
 
-import { Type } from "@sinclair/typebox";
+import { Type } from "../schema.js";
 import type { OpenClawPluginApi } from "../plugin-api.js";
 import { getMissionRegistry } from "../mission-registry.js";
 

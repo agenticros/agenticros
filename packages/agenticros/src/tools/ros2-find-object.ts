@@ -3,7 +3,7 @@
  * detected by YOLOv8n in the camera feed, then stop.
  */
 
-import { Type } from "@sinclair/typebox";
+import { Type } from "../schema.js";
 import type { OpenClawPluginApi } from "../plugin-api.js";
 import type { AgenticROSConfig } from "@agenticros/core";
 import { findObject } from "@agenticros/object-detection";

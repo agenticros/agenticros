@@ -18,7 +18,7 @@
  * docs/strategy-ai-agents-plus-ros.md §4 Phase 1.c.
  */
 
-import { Type } from "@sinclair/typebox";
+import { Type } from "../schema.js";
 import type { AgentTool, OpenClawPluginApi } from "../plugin-api.js";
 import type {
   AgenticROSConfig,

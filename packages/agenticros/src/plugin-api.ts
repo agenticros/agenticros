@@ -6,7 +6,7 @@
  * without importing the SDK at build time (it is provided at runtime).
  */
 
-import type { TSchema } from "@sinclair/typebox";
+import type { Schema } from "./schema.js";
 
 // --- Logger ---
 
@@ -22,7 +22,7 @@ export interface AgentTool {
   name: string;
   label: string;
   description: string;
-  parameters: TSchema;
+  parameters: Schema;
   execute(
     toolCallId: string,
     params: Record<string, unknown>,
