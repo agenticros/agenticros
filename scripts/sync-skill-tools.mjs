@@ -60,6 +60,9 @@ const CORE_TOOLS = [
   "ros2_param_get",
   "ros2_param_set",
   "ros2_list_topics",
+  "ros2_save_place",
+  "ros2_list_places",
+  "ros2_navigate_to_place",
   "ros2_list_capabilities",
   "ros2_list_robots",
   "ros2_discover_robots",
@@ -68,8 +71,11 @@ const CORE_TOOLS = [
   "run_mission",
   // Phase 1.f mission control — cancel a running mission by id.
   "mission_cancel",
+  "mission_pause",
+  "mission_resume",
   "ros2_camera_snapshot",
   "ros2_depth_distance",
+  "ros2_find_object",
   // Memory tools (registered conditionally at runtime when memory.enabled=true).
   // Listed here so they remain in the allowlist after sync-skill-tools rewrites it.
   "memory_remember",
