@@ -2,7 +2,7 @@
  * Tool: mission_resume — resume a paused mission.
  */
 
-import { Type } from "@sinclair/typebox";
+import { Type } from "../schema.js";
 import type { OpenClawPluginApi } from "../plugin-api.js";
 import { getMissionRegistry } from "../mission-registry.js";
 

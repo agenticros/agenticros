@@ -161,6 +161,8 @@ This sources the workspace and starts `rosbridge_server`. In another terminal, r
 
 Mode A uses **local DDS** (`LocalTransport`): OpenClaw runs on the **same machine** as ROS 2, and the plugin talks to the ROS graph directly (no rosbridge or Zenoh router required). `ROS_DOMAIN_ID` must match your stack (often **`0`**). **This is the default** — `transport.mode` defaults to `local` in the plugin schema, so you can skip the transport block entirely on the robot.
 
+**Native transport packages:** `rclnodejs` (local DDS) and `node-datachannel` (WebRTC) are `optionalDependencies` of `@agenticros/core`, so a normal `pnpm install` / npm install pulls them in automatically (same as main). `./scripts/setup_gateway_plugin.sh` then strips those entries from the *deployed* core `package.json` while keeping the modules in the deploy tree — OpenClaw admission stays fast, Mode A/C still work at runtime.
+
 One-shot install with the helper script:
 
 ```bash

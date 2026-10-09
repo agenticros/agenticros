@@ -21,8 +21,8 @@ export async function createTransport(config: TransportConfig): Promise<RosTrans
       } catch (e: any) {
         if (e?.code === "ERR_MODULE_NOT_FOUND" || e?.code === "MODULE_NOT_FOUND") {
           throw new Error(
-            'Mode A (local) requires the "rclnodejs" package. ' +
-              "Install it with: pnpm add rclnodejs (with ROS2 workspace sourced)",
+            'Mode A (local) requires the optional "rclnodejs" package. ' +
+              "Install it with: pnpm add rclnodejs (with ROS 2 workspace sourced), then redeploy the plugin.",
           );
         }
         throw e;
@@ -36,8 +36,8 @@ export async function createTransport(config: TransportConfig): Promise<RosTrans
       } catch (e: any) {
         if (e?.code === "ERR_MODULE_NOT_FOUND" || e?.code === "MODULE_NOT_FOUND") {
           throw new Error(
-            'Mode C (webrtc) requires the "node-datachannel" package. ' +
-              "Install it with: pnpm add node-datachannel (requires native build tools or a prebuilt binary)",
+            'Mode C (webrtc) requires the optional "node-datachannel" package. ' +
+              "Install it with: pnpm add node-datachannel (requires native build tools or a prebuilt binary).",
           );
         }
         throw e;

@@ -9,6 +9,8 @@ It contains:
 - A Zod config schema (`AgenticROSConfig`) shared across all adapters.
 - Topic-namespace utilities, capability registry, a small long-term memory layer (`mem0` or local file backend), named places (`~/.agenticros/places.json`), and `emergencyStopRobot`.
 
+Transports load via dynamic `import()` in `createTransport()`. **`rclnodejs`** (local) and **`node-datachannel`** (WebRTC) are `optionalDependencies` so a normal install pulls them in automatically when the platform supports them. The OpenClaw plugin deploy script strips those entries from the *deployed* core manifest (modules stay installed) so gateway admission does not re-hash the native trees on every restart — see [openclaw-startup-performance.md](../../docs/openclaw-startup-performance.md).
+
 You don't normally use it directly — you use one of the adapters that depends on it:
 
 - [`agenticros`](https://github.com/agenticros/agenticros) — OpenClaw plugin

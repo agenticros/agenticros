@@ -3,7 +3,7 @@
  * Use when the user asks "how far am I" or "distance to the robot" / "distance from the robot".
  */
 
-import { Type } from "@sinclair/typebox";
+import { Type } from "../schema.js";
 import type { OpenClawPluginApi } from "../plugin-api.js";
 import type { AgenticROSConfig } from "@agenticros/core";
 import { toNamespacedTopic } from "@agenticros/core";

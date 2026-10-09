@@ -26,8 +26,6 @@ export default {
       api.logger.info(line);
     }
     api.logger.info("AgenticROS plugin loading...");
-    const imageSupported = isCdrTypeSupported("sensor_msgs/msg/CompressedImage");
-    api.logger.info(`AgenticROS: Zenoh CDR Image/CompressedImage supported=${imageSupported}`);
 
     let config: ReturnType<typeof parseConfig>;
     try {
@@ -48,6 +46,12 @@ export default {
     const mode = config.transport?.mode ?? "local";
     const zenohEndpoint = config.zenoh?.routerEndpoint ?? "";
     api.logger.info(`AgenticROS: transport mode=${mode}${mode === "zenoh" && zenohEndpoint ? ` endpoint=${zenohEndpoint}` : ""}`);
+
+    // Informational only — skip unless Zenoh is the active transport.
+    if (mode === "zenoh") {
+      const imageSupported = isCdrTypeSupported("sensor_msgs/msg/CompressedImage");
+      api.logger.info(`AgenticROS: Zenoh CDR Image/CompressedImage supported=${imageSupported}`);
+    }
 
     // Register HTTP routes before any await so OpenClaw gateways that don't await register() still mount them (e.g. 2026.3.11 "async registration is ignored")
     if (typeof api.registerHttpRoute === "function") {

@@ -18,7 +18,7 @@
  *     const ns = resolved.robot.namespace;
  */
 
-import { Type } from "@sinclair/typebox";
+import { Type, type Schema } from "../schema.js";
 import { resolveRobotFromArgs, type ResolvedRobot } from "@agenticros/core";
 import type { AgenticROSConfig } from "@agenticros/core";
 
@@ -26,7 +26,7 @@ import type { AgenticROSConfig } from "@agenticros/core";
  * TypeBox schema fragment — spread into a tool's parameters object to
  * advertise an optional `robot_id` argument.
  */
-export const ROBOT_ID_SCHEMA = {
+export const ROBOT_ID_SCHEMA: Record<string, Schema> = {
   robot_id: Type.Optional(
     Type.String({
       description:

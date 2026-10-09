@@ -20,7 +20,7 @@
  * `packages/agenticros-claude-code/src/tools.ts` for the canonical one.
  */
 
-import { Type } from "@sinclair/typebox";
+import { Type } from "../schema.js";
 import type { OpenClawPluginApi } from "../plugin-api.js";
 import { getMissionRegistry } from "../mission-registry.js";
 

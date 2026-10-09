@@ -3,10 +3,9 @@
  * detected by YOLOv8n in the camera feed, then stop.
  */
 
-import { Type } from "@sinclair/typebox";
+import { Type } from "../schema.js";
 import type { OpenClawPluginApi } from "../plugin-api.js";
 import type { AgenticROSConfig } from "@agenticros/core";
-import { findObject } from "@agenticros/object-detection";
 import { getTransportForRobot } from "../service.js";
 import { ROBOT_ID_SCHEMA, resolveRobotForTool } from "./_robot-helpers.js";
 
@@ -63,6 +62,9 @@ export function registerFindObjectTool(api: OpenClawPluginApi, config: AgenticRO
           };
         }
 
+        // Lazy-load ONNX/Sharp so OpenClaw startup admission does not capture
+        // the vision stack unless ros2_find_object is actually invoked.
+        const { findObject } = await import("@agenticros/object-detection");
         const result = await findObject(robot, config, transport, {
           target,
           angularSpeed: params["angular_speed"] as number | undefined,

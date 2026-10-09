@@ -1,4 +1,4 @@
-import { Type } from "@sinclair/typebox";
+import { Type } from "../schema.js";
 import type { OpenClawPluginApi, ToolContent } from "../plugin-api.js";
 import type { AgenticROSConfig, HiveRecipeId } from "@agenticros/core";
 import { HIVE_RECIPE_IDS, HiveUnavailableError, createHiveClient } from "@agenticros/core";

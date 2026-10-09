@@ -13,7 +13,7 @@
  * Gemini) — see docs/strategy-ai-agents-plus-ros.md §4.
  */
 
-import { Type } from "@sinclair/typebox";
+import { Type } from "../schema.js";
 import type { OpenClawPluginApi } from "../plugin-api.js";
 import type { AgenticROSConfig } from "@agenticros/core";
 import { listCapabilitiesWithDiscoverable } from "@agenticros/core";

@@ -31,8 +31,7 @@
   "dependencies": {
     "@agenticros/core": "workspace:*",
     "@agenticros/object-detection": "workspace:*",
-    "@agenticros/ros-camera": "workspace:*",
-    "@sinclair/typebox": "^0.34.0"
+    "@agenticros/ros-camera": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.17.0",
