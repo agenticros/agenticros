@@ -126,6 +126,8 @@ This happened even though neither dependency was required for the active `rosbri
 
 This is the most important production issue to address.
 
+**Production fix (source tree):** keep `rclnodejs` and `node-datachannel` as `@agenticros/core` `optionalDependencies` so install stays main-compatible (Mode A / Mode C work after a normal `pnpm install`). `scripts/setup_gateway_plugin.sh` reconstructs either package into the deploy tree if `pnpm deploy` omits it, then strips `optionalDependencies` from the *deployed* core `package.json` only (replacing the file inode so pnpm hardlinks do not mutate the workspace source). Modules remain on disk for runtime; OpenClaw admission no longer re-captures those native trees.
+
 ---
 
 # 5. Existing Transport Factory Is Good

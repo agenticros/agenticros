@@ -181,61 +181,67 @@ fi
 rm -rf "$DEPLOY_DIR/node_modules/.pnpm/node_modules/@agenticros/openclaw"
 rm -f  "$DEPLOY_DIR/node_modules/.pnpm/node_modules/agenticros"
 
-# `rclnodejs` is intentionally NOT an @agenticros/core dependency (keeps
-# OpenClaw plugin admission from capturing the native tree for rosbridge
-# users). The monorepo root lists it under optionalDependencies so a normal
-# `pnpm install` still materialises it in the workspace for Mode A deploys.
-# `pnpm deploy --prod` does not copy that root optional into $DEPLOY_DIR, so
-# we reconstruct it into @agenticros/core's deploy node_modules from the
-# workspace store. Without this, "local" transport fails later as
-# "Cannot find module 'rclnodejs'".
+# Native transport optionals (rclnodejs, node-datachannel) stay as
+# @agenticros/core optionalDependencies in source/npm so install is automatic
+# (main-compatible). `pnpm deploy --prod` sometimes fails to materialise them
+# inside $DEPLOY_DIR; reconstruct from the workspace store when missing.
+# After modules are present we strip optionalDependencies from the *deployed*
+# core package.json so OpenClaw plugin admission does not re-hash those native
+# trees on every gateway start (see docs/openclaw-startup-performance.md).
 CORE_DEPLOY_MOD=$(find "$DEPLOY_DIR/node_modules/.pnpm" -maxdepth 3 -type d -path "*@agenticros+core*/node_modules" 2>/dev/null | head -1)
-if [[ -n "$CORE_DEPLOY_MOD" && ! -e "$CORE_DEPLOY_MOD/rclnodejs" ]]; then
-  echo "  rclnodejs missing from deploy tree (pnpm deploy quirk) — reconstructing from workspace..."
-  if [[ -e "$REPO_ROOT/packages/core/node_modules/rclnodejs" ]]; then
-    RCLN_WS_PKG=$(cd "$REPO_ROOT/packages/core/node_modules/rclnodejs" && pwd -P)
-  else
-    RCLN_WS_PKG=$(find "$REPO_ROOT/node_modules/.pnpm" -maxdepth 3 -type d -name rclnodejs 2>/dev/null | head -1)
+
+# Reconstruct a missing native optional into CORE_DEPLOY_MOD from the workspace.
+# Usage: ensure_core_optional_native <pkg-name>
+ensure_core_optional_native() {
+  local pkg="$1"
+  [[ -z "$CORE_DEPLOY_MOD" ]] && return 0
+  if [[ -e "$CORE_DEPLOY_MOD/$pkg" ]]; then
+    return 0
   fi
-  if [[ -n "$RCLN_WS_PKG" && -f "$RCLN_WS_PKG/package.json" ]]; then
-    RCLN_STORE_DIR=$(dirname "$(dirname "$RCLN_WS_PKG")")
-    RCLN_STORE_NAME=$(basename "$RCLN_STORE_DIR")
-    if [[ ! -d "$DEPLOY_DIR/node_modules/.pnpm/$RCLN_STORE_NAME" ]]; then
-      cp -a "$RCLN_STORE_DIR" "$DEPLOY_DIR/node_modules/.pnpm/"
+  echo "  $pkg missing from deploy tree — reconstructing from workspace..."
+  local ws_pkg=""
+  if [[ -e "$REPO_ROOT/packages/core/node_modules/$pkg" ]]; then
+    ws_pkg=$(cd "$REPO_ROOT/packages/core/node_modules/$pkg" && pwd -P)
+  else
+    ws_pkg=$(find "$REPO_ROOT/node_modules/.pnpm" -maxdepth 3 -type d -name "$pkg" 2>/dev/null | head -1)
+  fi
+  if [[ -z "$ws_pkg" || ! -f "$ws_pkg/package.json" ]]; then
+    echo "  WARNING: $pkg not found in workspace node_modules — transport mode that needs it may fail. Run \`pnpm install\` at repo root first." >&2
+    return 0
+  fi
+  local store_dir store_name node_modules deps dep dep_glob dep_ws dep_store_name
+  store_dir=$(dirname "$(dirname "$ws_pkg")")
+  store_name=$(basename "$store_dir")
+  if [[ ! -d "$DEPLOY_DIR/node_modules/.pnpm/$store_name" ]]; then
+    cp -a "$store_dir" "$DEPLOY_DIR/node_modules/.pnpm/"
+  fi
+  ln -sfn "../../$store_name/node_modules/$pkg" "$CORE_DEPLOY_MOD/$pkg"
+  node_modules="$DEPLOY_DIR/node_modules/.pnpm/$store_name/node_modules"
+  deps=$(node -e "
+    const pkg = require('$ws_pkg/package.json');
+    console.log(Object.keys(pkg.dependencies || {}).join('\n'));
+  " 2>/dev/null)
+  while IFS= read -r dep; do
+    [[ -z "$dep" ]] && continue
+    dep_glob="${dep/\//+}"
+    dep_ws=$(find "$REPO_ROOT/node_modules/.pnpm" -maxdepth 1 -type d -name "${dep_glob}@*" 2>/dev/null | sort -V | tail -1)
+    [[ -z "$dep_ws" ]] && continue
+    dep_store_name=$(basename "$dep_ws")
+    if [[ ! -d "$DEPLOY_DIR/node_modules/.pnpm/$dep_store_name" ]]; then
+      cp -a "$dep_ws" "$DEPLOY_DIR/node_modules/.pnpm/"
     fi
-    ln -sfn "../../$RCLN_STORE_NAME/node_modules/rclnodejs" "$CORE_DEPLOY_MOD/rclnodejs"
-    # rclnodejs's own runtime deps (bindings, debug, rxjs, the two @rclnodejs/*
-    # scoped packages, etc.) — copy across whichever of these the workspace
-    # already has resolved, wiring the same relative symlinks pnpm's virtual
-    # store would normally create. Best-effort: a dep pnpm can't find in the
-    # workspace store either just gets skipped (matches this script's existing
-    # tolerant WARNING style elsewhere rather than hard-failing the deploy).
-    RCLN_NODE_MODULES="$DEPLOY_DIR/node_modules/.pnpm/$RCLN_STORE_NAME/node_modules"
-    RCLN_DEPS=$(node -e "
-      const pkg = require('$RCLN_WS_PKG/package.json');
-      console.log(Object.keys(pkg.dependencies || {}).join('\n'));
-    " 2>/dev/null)
-    while IFS= read -r dep; do
-      [[ -z "$dep" ]] && continue
-      dep_glob="${dep/\//+}"
-      dep_ws=$(find "$REPO_ROOT/node_modules/.pnpm" -maxdepth 1 -type d -name "${dep_glob}@*" 2>/dev/null | sort -V | tail -1)
-      [[ -z "$dep_ws" ]] && continue
-      dep_store_name=$(basename "$dep_ws")
-      if [[ ! -d "$DEPLOY_DIR/node_modules/.pnpm/$dep_store_name" ]]; then
-        cp -a "$dep_ws" "$DEPLOY_DIR/node_modules/.pnpm/"
-      fi
-      if [[ "$dep" == */* ]]; then
-        mkdir -p "$RCLN_NODE_MODULES/$(dirname "$dep")"
-        ln -sfn "../../../$dep_store_name/node_modules/$dep" "$RCLN_NODE_MODULES/$dep"
-      else
-        ln -sfn "../../$dep_store_name/node_modules/$dep" "$RCLN_NODE_MODULES/$dep"
-      fi
-    done <<< "$RCLN_DEPS"
-    echo "  rclnodejs reconstructed from workspace store ($RCLN_STORE_NAME)."
-  else
-    echo "  WARNING: rclnodejs not found in workspace node_modules either — 'local' transport will not work. Run \`pnpm install\` at repo root first, then re-run this script." >&2
-  fi
-fi
+    if [[ "$dep" == */* ]]; then
+      mkdir -p "$node_modules/$(dirname "$dep")"
+      ln -sfn "../../../$dep_store_name/node_modules/$dep" "$node_modules/$dep"
+    else
+      ln -sfn "../../$dep_store_name/node_modules/$dep" "$node_modules/$dep"
+    fi
+  done <<< "$deps"
+  echo "  $pkg reconstructed from workspace store ($store_name)."
+}
+
+ensure_core_optional_native rclnodejs
+ensure_core_optional_native node-datachannel
 
 # `pnpm deploy --prod` also skips lifecycle scripts, so rclnodejs's postinstall
 # (which runs `node scripts/generate_messages.js` to materialise ROS message
@@ -289,6 +295,42 @@ if [[ -n "$RCLN_DEPLOY" ]]; then
     echo "  WARNING: no rclnodejs/generated in workspace and no ROS distro found; the 'local' transport may not work."
   fi
 fi
+
+# Strip optionalDependencies from the deployed core manifest only. Modules stay
+# in node_modules for local/WebRTC runtime; OpenClaw's admission graph keys off
+# package.json and otherwise re-captures rclnodejs/node-datachannel (~50s).
+# IMPORTANT: pnpm deploy hardlinks package.json from the workspace — unlink
+# before write so we never mutate packages/core/package.json in the repo.
+CORE_PKG_JSON=""
+if [[ -n "$CORE_DEPLOY_MOD" && -f "$CORE_DEPLOY_MOD/@agenticros/core/package.json" ]]; then
+  CORE_PKG_JSON="$CORE_DEPLOY_MOD/@agenticros/core/package.json"
+else
+  CORE_PKG_JSON=$(find "$DEPLOY_DIR/node_modules/.pnpm" -path "*@agenticros+core*/node_modules/@agenticros/core/package.json" 2>/dev/null | head -1)
+fi
+if [[ -n "$CORE_PKG_JSON" ]]; then
+  node -e "
+    const fs = require('fs');
+    const path = require('path');
+    const p = process.argv[1];
+    const srcPkg = path.resolve(process.argv[2], 'package.json');
+    const before = JSON.parse(fs.readFileSync(p, 'utf8'));
+    if (!before.optionalDependencies) process.exit(0);
+    const pkg = { ...before };
+    delete pkg.optionalDependencies;
+    const body = JSON.stringify(pkg, null, 2) + '\n';
+    // pnpm deploy hardlinks (sometimes symlinks) package.json into the workspace —
+    // replace the path with a fresh inode so we never mutate packages/core.
+    fs.rmSync(p, { force: true });
+    fs.writeFileSync(p, body);
+    const srcStill = JSON.parse(fs.readFileSync(srcPkg, 'utf8'));
+    if (!srcStill.optionalDependencies) {
+      console.error('  ERROR: workspace packages/core/package.json lost optionalDependencies after deploy strip — aborting.');
+      process.exit(1);
+    }
+    console.log('  Stripped optionalDependencies from deployed @agenticros/core package.json (OpenClaw admission).');
+  " "$CORE_PKG_JSON" "$REPO_ROOT/packages/core"
+fi
+
 echo "  Deployment built."
 echo ""
 
@@ -497,6 +539,43 @@ for v in ROS_DISTRO ROS_VERSION ROS_PYTHON_VERSION ROS_DOMAIN_ID \\
   if [ -n "\$val" ]; then echo "\$v=\$val"; fi
 done
 EOSH
+      # OpenClaw native admission copies sharp's .node and libvips into separate
+      # capture dirs; the .node RPATH cannot see libvips unless it is on
+      # LD_LIBRARY_PATH at gateway process start (runtime env changes are ignored).
+      SHARP_VIPS_SO=""
+      for cand in \
+        "$DEPLOY_DIR/node_modules/.pnpm"/@img+sharp-libvips-linux-arm64@*/node_modules/@img/sharp-libvips-linux-arm64/lib/libvips-cpp.so.42 \
+        "$DEPLOY_DIR/node_modules/.pnpm"/@img+sharp-libvips-linux-arm64@*/node_modules/@img/sharp-libvips-linux-arm64/lib/libvips-cpp.so.*; do
+        if [[ -e "$cand" ]]; then SHARP_VIPS_SO="$cand"; break; fi
+      done
+      if [[ -n "$SHARP_VIPS_SO" ]]; then
+        VIPS_DIR="$(cd "$(dirname "$SHARP_VIPS_SO")" && pwd)"
+        python3 - "$ENV_FILE" "$VIPS_DIR" <<'PY'
+import sys
+from pathlib import Path
+path, vips = Path(sys.argv[1]), sys.argv[2]
+lines = path.read_text().splitlines() if path.exists() else []
+out = []
+seen_ld = False
+for line in lines:
+    if line.startswith("LD_LIBRARY_PATH="):
+        seen_ld = True
+        parts = [p for p in line.split("=", 1)[1].split(":") if p]
+        ordered = []
+        for p in [vips, *parts]:
+            if p and p not in ordered:
+                ordered.append(p)
+        out.append("LD_LIBRARY_PATH=" + ":".join(ordered))
+    else:
+        out.append(line)
+if not seen_ld:
+    out.append(f"LD_LIBRARY_PATH={vips}")
+path.write_text("\n".join(out) + "\n")
+PY
+        echo "  Prepended sharp libvips to LD_LIBRARY_PATH ($VIPS_DIR)."
+      else
+        echo "  WARN: sharp libvips not found under $DEPLOY_DIR; YOLO/find-object may fail under OpenClaw (libvips-cpp.so missing from admission RPATH)."
+      fi
       echo "  ROS env written to $ENV_FILE (sourced from $ROS_SETUP${OVERLAY:+ + $OVERLAY})."
 
       # 6b. Drop-in pointing the gateway at the env file.
