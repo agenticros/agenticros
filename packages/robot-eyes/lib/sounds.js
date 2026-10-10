@@ -28,6 +28,8 @@ let pendingExcitement = 0;
 /** @type {(() => void) | null} */
 let wakeSleep = null;
 let lastExciteAt = 0;
+/** True while a telepresence call should silence chirps. */
+let paused = false;
 /** @type {Promise<void> | null} */
 let loopPromise = null;
 
@@ -71,12 +73,28 @@ function stopCurrentPlayback() {
   }
 }
 
+/** Pause or resume chirps. Playback stops immediately while paused. */
+export function setSoundsPaused(next) {
+  const want = Boolean(next);
+  if (want === paused) return;
+  paused = want;
+  if (paused) {
+    pendingExcitement = 0;
+    stopCurrentPlayback();
+  }
+  if (wakeSleep) wakeSleep();
+}
+
+export function areSoundsPaused() {
+  return paused;
+}
+
 /**
  * Queue an excited burst (interrupt idle playback / gap).
- * Rate-limited by SOUND_EXCITE_COOLDOWN_MS.
+ * Rate-limited by SOUND_EXCITE_COOLDOWN_MS. Ignored while a call has paused sounds.
  */
 export function excite() {
-  if (!running) return;
+  if (!running || paused) return;
   const now = Date.now();
   if (now - lastExciteAt < EXCITE_COOLDOWN_MS) return;
   lastExciteAt = now;
@@ -163,6 +181,10 @@ async function playGesture(excited) {
 
 async function soundLoop() {
   while (running) {
+    if (paused) {
+      await sleepInterruptible(60_000);
+      continue;
+    }
     if (pendingExcitement > 0) {
       pendingExcitement -= 1;
       await playGesture(true);
@@ -204,6 +226,7 @@ export function startSoundLoop() {
 export async function stopSoundLoop() {
   if (!running) return;
   running = false;
+  paused = false;
   if (wakeSleep) wakeSleep();
   stopCurrentPlayback();
   if (loopPromise) {

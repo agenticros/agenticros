@@ -107,15 +107,29 @@ Priority, highest first:
 
 Disable person-follow: `--no-person-gaze`, `up --eyes-no-person-gaze`, or `AGENTICROS_EYES_NO_PERSON_GAZE=1`.
 
+## Telepresence
+
+The same kiosk page can show an ARC operator and carry a two-way call. Teleop (joystick, WASD, robot camera) stays on the existing data-channel session. Video and voice use a second WebRTC connection between the ARC control page and this browser. Eyes keeps animating underneath; a live operator camera covers the canvas, and hanging up (or turning video off) shows the face again. Mic-only leaves the eyes up, plays the operator through the tablet speakers, and shows "On a call".
+
+`agenticros connect` relays the call's signaling from ARC to `ws://127.0.0.1:8765`. Eyes has to be running or the ARC Video / Mic buttons report that the display is offline. The robot microphone is the kiosk browser's mic (`echoCancellation` on). R2D2 chirps pause while the call is up.
+
+Chromium is launched with `--autoplay-policy=no-user-gesture-required` and `--use-fake-ui-for-media-stream` so the unattended tablet can capture the mic and play the operator. `http://127.0.0.1` is a secure context, so `getUserMedia` is allowed. Firefox kiosk does not auto-grant the microphone; use Chromium for telepresence.
+
+Override the Eyes port with `EYES_PORT` on the `agenticros connect` process if it is not 8765.
+
 ## Architecture
 
 ```
-Browser (canvas + optional WASD)
+Browser (canvas + optional WASD + telepresence video/audio)
     ↕ WebSocket (127.0.0.1:8765)
 @agenticros/eyes (rclnodejs node /robot_eyes)
     ↕ local DDS                          ↕ synth → afplay/paplay/aplay
 cmd_vel Twist  ← also written by MCP / OpenClaw / motors consumers
 color CompressedImage  ← RealSense (idle person-follow if YOLO already installed)
+
+ARC control page  ←WebRTC media→  Eyes kiosk
+        ↕ signaling relay
+agenticros connect (comms.js) ── local WebSocket ── Eyes
 ```
 
 Package path: [`packages/robot-eyes`](../packages/robot-eyes).

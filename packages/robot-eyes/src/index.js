@@ -5,9 +5,11 @@
  * Subscribes to CMD_VEL_TOPIC for gaze (left/right turns). Optionally publishes
  * the same topic from invisible WASD keyboard teleop (disabled with --no-teleop).
  * Plays procedural R2D2 chirps (idle) and excited bursts on active cmd_vel
- * (disabled with --no-sound). When idle, opportunistically follows a person in
+ * (disabled with --no-sound; paused for the duration of a telepresence call).
+ * When idle, opportunistically follows a person in
  * the RealSense color frame if YOLO is already installed (never downloads it;
- * disable with --no-person-gaze).
+ * disable with --no-person-gaze). An ARC operator can share camera and mic
+ * onto this page; the robot microphone is sent back on the same call.
  *
  * Env (set by `agenticros eyes` from ~/.agenticros/config.json):
  *   CMD_VEL_TOPIC, CAMERA_TOPIC, MAX_LINEAR_VELOCITY, MAX_ANGULAR_VELOCITY, PORT, …
@@ -22,9 +24,11 @@ import { WebSocketServer } from "ws";
 
 import {
   exciteFromTwist,
+  setSoundsPaused,
   startSoundLoop,
   stopSoundLoop,
 } from "../lib/sounds.js";
+import { createTelepresenceHub } from "../lib/telepresence-relay.js";
 
 const require = createRequire(import.meta.url);
 let rclnodejs;
@@ -96,6 +100,17 @@ const teleop = {
   scale: 1,
   publishing: false,
 };
+
+const telepresence = createTelepresenceHub({
+  onCallActive(active) {
+    setSoundsPaused(active);
+    console.log(
+      active
+        ? "Telepresence call — R2D2 sounds paused"
+        : "Telepresence ended — R2D2 sounds resumed",
+    );
+  },
+});
 
 function mimeType(filePath) {
   const ext = path.extname(filePath).toLowerCase();
@@ -265,9 +280,19 @@ function launchKiosk(url) {
     return null;
   }
 
+  // Chromium kiosk must capture the mic and play the operator without a gesture.
+  // Firefox does not auto-grant getUserMedia; use Chromium for telepresence.
   const args = bin.includes("firefox")
     ? ["--kiosk", url]
-    : ["--kiosk", "--noerrdialogs", "--disable-infobars", `--app=${url}`, url];
+    : [
+        "--kiosk",
+        "--noerrdialogs",
+        "--disable-infobars",
+        "--autoplay-policy=no-user-gesture-required",
+        "--use-fake-ui-for-media-stream",
+        `--app=${url}`,
+        url,
+      ];
 
   console.log(`Launching ${bin} in kiosk mode → ${url}`);
   const child = spawn(bin, args, {
@@ -444,6 +469,7 @@ async function main() {
   }
 
   wss.on("connection", (ws) => {
+    telepresence.addClient(ws);
     if (!NO_TELEOP) {
       teleop.clients.set(ws, { w: false, a: false, s: false, d: false });
     }
@@ -459,13 +485,18 @@ async function main() {
     );
 
     ws.on("message", (raw) => {
-      if (NO_TELEOP) return;
       let msg;
       try {
         msg = JSON.parse(String(raw));
       } catch {
         return;
       }
+
+      const routed = telepresence.handleMessage(ws, msg);
+      if (routed.role === "agent") {
+        teleop.clients.delete(ws);
+      }
+      if (routed.handled || NO_TELEOP) return;
 
       if (msg.type === "keys" && msg.keys && typeof msg.keys === "object") {
         teleop.clients.set(ws, {
@@ -493,6 +524,7 @@ async function main() {
     });
 
     ws.on("close", () => {
+      telepresence.removeClient(ws);
       if (!NO_TELEOP) {
         teleop.clients.delete(ws);
         tickTeleop();

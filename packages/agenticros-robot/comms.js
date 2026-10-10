@@ -107,6 +107,7 @@ import {
     noteTeleopCruise,
 } from './lib/nav-speed.js';
 import { existsSync } from 'node:fs';
+import { createEyesTelepresenceBridge } from './lib/telepresence-bridge.js';
 
 const robotId = getRobotId();
 const apiToken = getApiToken();
@@ -653,9 +654,48 @@ class P2PServer {
         this.nextReconnectAt = 0; // honor server cooldown / retryAfter
         this.pendingReconnections = new Map();
         this.connectionAttempts = new Map(); // Track connection attempts per peer
+        this.telepresenceOperator = null;
+        this.telepresence = createEyesTelepresenceBridge({
+            iceServers: () => activeIceServers,
+            log: (line) => console.log(formatLog(line)),
+            onRelay: (msg) => {
+                if (!this.socket?.connected || !this.telepresenceOperator) return;
+                this.socket.emit('telepresence', {
+                    ...msg,
+                    targetPeer: this.telepresenceOperator,
+                    sourcePeer: this.socket.id,
+                });
+            },
+        });
         
         // Initialize ROS camera subscriptions immediately
         this.initStandaloneRosCameraSubscriptions();
+    }
+
+    async handleTelepresence(message) {
+        const sourcePeer = message?.sourcePeer;
+        if (!sourcePeer || !this.connections.has(sourcePeer)) {
+            console.log(formatLog(`Ignoring telepresence from ${sourcePeer || 'unknown'} (not the active teleop peer)`));
+            return;
+        }
+        const type = String(message.type || '').toLowerCase();
+        this.telepresenceOperator = sourcePeer;
+        if (type === 'end') {
+            this.telepresence.end();
+            return;
+        }
+        const ok = await this.telepresence.forward(message);
+        if (!ok && type === 'offer') {
+            console.log(formatLog('Eyes display is not running — telepresence unavailable'));
+            if (this.socket?.connected) {
+                this.socket.emit('telepresence', {
+                    type: 'unavailable',
+                    reason: 'eyes-offline',
+                    targetPeer: sourcePeer,
+                    sourcePeer: this.socket.id,
+                });
+            }
+        }
     }
 
     async start() {
@@ -867,6 +907,8 @@ class P2PServer {
                     // Also tear down *all* other peers — teleop is single-client; zombies
                     // from a previous browser session block answers on Nano.
                     if (msgType === 'offer') {
+                        this.telepresence?.end();
+                        this.telepresenceOperator = null;
                         for (const [peerId, conn] of [...this.connections.entries()]) {
                             console.log(formatLog(`Clearing peer ${peerId} before new offer from ${sourcePeer}`));
                             try { conn.cleanup(); } catch (e) {
@@ -905,6 +947,10 @@ class P2PServer {
                 } catch (error) {
                     console.error(formatLog(`Signal error: ${error.stack || error}`));
                 }
+            });
+
+            this.socket.on('telepresence', (message) => {
+                void this.handleTelepresence(message);
             });
 
             this.socket.on('peer-reconnect', async (data) => {

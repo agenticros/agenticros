@@ -20,3 +20,37 @@ canvas#eyes {
   height: 100vh;
   background: #000;
 }
+
+video#remote-video {
+  display: none;
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  object-fit: cover;
+  background: #000;
+  z-index: 2;
+}
+
+body.telepresence-video video#remote-video {
+  display: block;
+}
+
+#call-status {
+  display: none;
+  position: fixed;
+  bottom: 28px;
+  left: 0;
+  right: 0;
+  margin: 0;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.55);
+  font: 16px/1.4 system-ui, sans-serif;
+  letter-spacing: 0.04em;
+  z-index: 3;
+  pointer-events: none;
+}
+
+body.telepresence-call:not(.telepresence-video) #call-status {
+  display: block;
+}

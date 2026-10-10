@@ -13,7 +13,7 @@ agenticros eyes --no-person-gaze     # skip idle person-follow even if YOLO is p
 agenticros up real --eyes            # start eyes after the real-robot stack
 ```
 
-See [docs/eyes.md](../../docs/eyes.md) for setup, config, sounds, and keyboard teleop.
+See [docs/eyes.md](../../docs/eyes.md) for setup, config, sounds, keyboard teleop, and ARC telepresence (operator video and two-way audio on this page).
 
 ## Gaze
 

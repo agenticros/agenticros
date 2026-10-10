@@ -172,6 +172,9 @@ importers:
       uuid:
         specifier: ^11.1.0
         version: 11.1.1
+      ws:
+        specifier: ^8.18.0
+        version: 8.21.2
     optionalDependencies:
       '@iiot2k/gpiox':
         specifier: ^3.0.5
@@ -2716,7 +2719,7 @@ snapshots:
       google-auth-library: 10.6.2
       p-retry: 4.6.2
       protobufjs: 7.5.4
-      ws: 8.19.0
+      ws: 8.21.2
     optionalDependencies:
       '@modelcontextprotocol/sdk': 1.27.1(zod@3.25.76)
     transitivePeerDependencies:
