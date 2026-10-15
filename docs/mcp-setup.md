@@ -78,6 +78,7 @@ agenticros agy run "<prompt>" [--yes] [--model <model>]
 | Claude Code | `claude` from the project directory (reads `.mcp.json`) |
 | Claude Desktop | Restart the app fully (Cmd+Q on macOS) |
 | Antigravity | `/mcp` in an `agy` session. Sign in once with interactive `agy` before `agenticros agy run` |
+| Grok and Claude Code on Omarchy | [Omarchy host](omarchy.md). Register with `grok mcp add` and `claude mcp add --scope user`. |
 
 ## Related docs
 
@@ -86,3 +87,4 @@ agenticros agy run "<prompt>" [--yes] [--model <model>]
 - [Antigravity CLI setup](agy-setup.md)
 - [CLI reference](cli.md)
 - [Claude Code MCP server README](../packages/agenticros-claude-code/README.md)
+- [Omarchy host (Grok and Claude Code)](omarchy.md)

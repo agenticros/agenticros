@@ -96,6 +96,10 @@ claude
 
 Scope options: `--scope user` (default), `--scope project` (shared via `.mcp.json`).
 
+## Grok
+
+Grok Build speaks MCP. On a host with no native ROS install, run rosbridge in Docker and register this server with `grok mcp add`. The Omarchy steps, including the host `~/.agenticros/config.json` that selects rosbridge, are in [docs/omarchy.md](../../docs/omarchy.md).
+
 ## Codex CLI (OpenAI)
 
 The same MCP server works unmodified with the **OpenAI Codex CLI** — Codex is a vanilla MCP client, and our server speaks the standard MCP protocol.

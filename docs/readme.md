@@ -9,6 +9,7 @@ AgenticROS connects AI agent platforms to ROS2 robots through a shared core, tra
 - [Robot setup](robot-setup.md) - robot-side ROS 2, launch steps, OpenClaw plugin setup, and quick checks.
 - [Local VLM / Ollama](local-vlm.md) - run OpenClaw or Hermes with local vision models (no cloud API keys).
 - [MCP client setup](mcp-setup.md) - unified `agenticros mcp setup` for Codex, Hermes, Claude, and Antigravity.
+- [Omarchy host](omarchy.md) - ROS in Docker, MCP server on the host, Grok and Claude Code over rosbridge.
 - [Codex CLI setup](codex-setup.md) - register the AgenticROS MCP server for OpenAI Codex (`agenticros codex setup`).
 - [Hermes Agent setup](hermes-setup.md) - register the AgenticROS MCP server for Hermes (`agenticros hermes setup`).
 - [Antigravity CLI setup](agy-setup.md) - register the AgenticROS MCP server for `agy` (`agenticros agy setup`). Uses your Antigravity subscription; no `GEMINI_API_KEY`.

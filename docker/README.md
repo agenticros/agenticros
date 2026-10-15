@@ -22,6 +22,8 @@ That runs `ros2 launch agenticros_bringup rosbridge_gazebo.launch.py` inside the
 
 Then use OpenClaw on your machine with the AgenticROS plugin pointing at **`ws://localhost:9090`**. See the main [README](../README.md) for plugin install and config. For **local Ollama** instead of cloud OpenAI, see [docs/local-vlm.md](../docs/local-vlm.md).
 
+On an Arch-based host such as Omarchy, keep Grok or Claude Code on the host and point them at the same rosbridge URL. See [docs/omarchy.md](../docs/omarchy.md).
+
 ### Mode A (local DDS) + Gazebo on the host
 
 [`docker-compose.local.yml`](docker-compose.local.yml) sets **`AGENTICROS_TRANSPORT_MODE=local`**. That image does **not** bundle Gazebo. On the **same machine**, install ROS 2 + TurtleBot3 Gazebo, build **`agenticros_bringup`**, then run:
