@@ -27,6 +27,8 @@ Omarchy does not put your user in the `docker` group. In a terminal, `sudo docke
 
 `docker compose up ros2` starts rosbridge only. It does not start a RealSense. The upstream `docker/Dockerfile.ros2` image has rosbridge and Gazebo, not librealsense.
 
+Run one rosbridge. A second container on port 9090 keeps the RealSense stack's bridge from binding, and a bridge started without `--ipc host` can list topics and still receive no images. Fast DDS delivers large frames through shared memory. The camera container and the rosbridge container both need `--ipc host` (the RealSense ROS launcher already sets that).
+
 For a USB RealSense (D435 and similar):
 
 - Run the camera node in a Jazzy image that contains librealsense and `realsense2_camera`. Build librealsense with `FORCE_RSUSB_BACKEND=ON` so the host kernel does not need a patched `uvcvideo` module.
@@ -34,7 +36,7 @@ For a USB RealSense (D435 and similar):
 - Use `--network host`, or publish port `9090`, so the host can open `ws://localhost:9090`.
 - If the camera process is not root, the device node must be mode `0666`. The stock RealSense udev rules do that once the `plugdev` group exists. A camera that was already plugged in keeps the old mode until you unplug it or `chmod` the node.
 
-Color frames show up as `/camera/camera/color/image_raw`. Depth is `/camera/camera/depth/image_rect_raw`.
+Color frames show up as `/camera/camera/color/image_raw`. Depth is `/camera/camera/depth/image_rect_raw`. On a D435, `/camera/camera/color/image_raw/compressed` can appear in the topic list after something subscribes, with no publisher and no frames. Snapshots use that JPEG topic only when a publisher exists, and otherwise read the raw image.
 
 ## 2. Build the MCP server on the host
 

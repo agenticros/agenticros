@@ -2,6 +2,8 @@ export {
   ROS_MSG_IMAGE,
   ROS_MSG_COMPRESSED_IMAGE,
   preferCompressedColorTopic,
+  selectColorSnapshotTopic,
+  colorSnapshotCandidates,
   snapshotMessageKind,
   bufferAndMimeFromCompressedImageMessage,
   cameraSnapshotFromPlainMessage,

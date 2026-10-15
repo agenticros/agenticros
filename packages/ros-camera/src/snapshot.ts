@@ -46,6 +46,63 @@ export function preferCompressedColorTopic(topic: string): string {
   return trimmed;
 }
 
+/**
+ * Pick the color topic to subscribe to.
+ *
+ * Compressed JPEG is preferred when that sibling is actually published.
+ * A raw `image_raw` topic is kept when the caller asked for `Image`, or
+ * when a live topic list does not contain the `/compressed` sibling.
+ * Without a topic list, raw color topics are still rewritten to
+ * `/compressed` so older callers keep their previous behavior.
+ *
+ * A name in the topic list is not enough: RealSense keeps
+ * `image_raw/compressed` visible after a subscribe even when no node
+ * publishes it. Pass {@link ColorSnapshotOptions.publisherTopics} for
+ * names that have a publisher.
+ */
+export interface ColorSnapshotOptions {
+  messageType?: string;
+  publishedTopics?: readonly string[];
+  /** Topics with at least one publisher. When set, this list wins over `publishedTopics`. */
+  publisherTopics?: readonly string[];
+}
+
+export function selectColorSnapshotTopic(
+  topic: string,
+  options?: ColorSnapshotOptions,
+): string {
+  const trimmed = topic.trim().replace(/\/+$/, "");
+  const messageType = options?.messageType?.trim();
+  if (messageType === "Image" || messageType === "sensor_msgs/msg/Image") return trimmed;
+  const preferred = preferCompressedColorTopic(trimmed);
+  if (preferred === trimmed) return trimmed;
+  const published = options?.publisherTopics ?? options?.publishedTopics;
+  if (!published) return preferred;
+  return published.includes(preferred) ? preferred : trimmed;
+}
+
+/**
+ * Topics to try, in order, for one color snapshot.
+ *
+ * A compressed topic that has a publisher is tried first. The raw topic
+ * follows it, because that compressed name is often only a subscriber.
+ * An explicit CompressedImage request does not fall back.
+ */
+export function colorSnapshotCandidates(
+  topic: string,
+  options?: ColorSnapshotOptions,
+): string[] {
+  const selected = selectColorSnapshotTopic(topic, options);
+  const messageType = options?.messageType?.trim();
+  const forcedCompressed =
+    messageType === "CompressedImage" ||
+    messageType === "sensor_msgs/msg/CompressedImage";
+  if (forcedCompressed || !/\/compressed$/i.test(selected)) return [selected];
+  const raw = selected.replace(/\/compressed$/i, "");
+  if (!raw || raw === selected) return [selected];
+  return [selected, raw];
+}
+
 /** Message kind follows the topic after {@link preferCompressedColorTopic}. */
 export function snapshotMessageKind(
   topic: string,

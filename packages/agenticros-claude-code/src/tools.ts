@@ -8,6 +8,7 @@ import type {
   Mission,
   MissionToolDispatcher,
   ResolvedRobot,
+  RosTransport,
 } from "@agenticros/core";
 import {
   resolveCameraSubscribeTopic,
@@ -45,7 +46,8 @@ import {
   ROS_MSG_IMAGE,
   cameraSnapshotFromPlainMessage,
   mimeTypeForSnapshotBase64,
-  preferCompressedColorTopic,
+  colorSnapshotCandidates,
+  selectColorSnapshotTopic,
   rosNumericField,
   snapshotMessageKind,
 } from "@agenticros/ros-camera";
@@ -281,7 +283,7 @@ export const TOOLS: McpTool[] = [
       type: "object",
       properties: {
         topic: { type: "string", description: "Camera image topic (default from the robot's cameraTopic in ~/.agenticros/config.json). Run ros2 topic list and match your driver." },
-        message_type: { type: "string", description: "'CompressedImage' (JPEG topics, names often contain /compressed) or 'Image' for raw sensor_msgs/Image—required if there is no compressed topic." },
+        message_type: { type: "string", description: "'CompressedImage' for a JPEG topic, or 'Image' to force the raw sensor_msgs/Image topic. Omit this to use /compressed when that topic is published, and the raw topic otherwise." },
         timeout: { type: "number", description: "Timeout in milliseconds (default: 10000)" },
         robot_id: { type: "string", description: "Optional robot id (from ros2_list_robots) to scope this call. When omitted, the active robot is used." },
       },
@@ -1021,6 +1023,81 @@ async function handleRunMission(
   };
 }
 
+/** Publisher names for a topic, or undefined when rosapi cannot answer. */
+async function publishersForTopic(
+  transport: RosTransport,
+  topic: string,
+): Promise<string[] | undefined> {
+  try {
+    const response = await transport.callService({
+      service: "/rosapi/publishers",
+      type: "rosapi/srv/Publishers",
+      args: { topic },
+    });
+    const publishers = response.values?.["publishers"];
+    if (!Array.isArray(publishers)) return undefined;
+    return publishers.filter((name): name is string => typeof name === "string");
+  } catch {
+    return undefined;
+  }
+}
+
+function waitForCameraFrame(
+  transport: RosTransport,
+  topic: string,
+  messageType: "CompressedImage" | "Image",
+  timeout: number,
+): Promise<Record<string, unknown>> {
+  const type = messageType === "Image" ? ROS_MSG_IMAGE : ROS_MSG_COMPRESSED_IMAGE;
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let subscription: { unsubscribe: () => void } | undefined;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      try {
+        subscription?.unsubscribe();
+      } catch {
+        // ignore
+      }
+      reject(new Error(`Timeout waiting for camera frame on ${topic}`));
+    }, timeout);
+    try {
+      subscription = transport.subscribe(
+        { topic, type },
+        (msg: Record<string, unknown>) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          try {
+            subscription?.unsubscribe();
+          } catch {
+            // ignore
+          }
+          try {
+            const payload = cameraSnapshotFromPlainMessage(messageType, msg);
+            resolve({
+              success: true,
+              topic,
+              format: payload.formatLabel,
+              data: payload.dataBase64,
+              width: payload.width,
+              height: payload.height,
+            });
+          } catch (e) {
+            reject(e instanceof Error ? e : new Error(String(e)));
+          }
+        },
+      );
+    } catch (e) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(e instanceof Error ? e : new Error(String(e)));
+    }
+  });
+}
+
 export async function handleToolCall(
   name: string,
   args: Record<string, unknown>,
@@ -1365,86 +1442,59 @@ export async function handleToolCall(
 
     case "ros2_camera_snapshot": {
       const defaultTopic =
-        resolveBinding(robot, "camera.rgb") || "/camera/camera/color/image_raw/compressed";
+        resolveBinding(robot, "camera.rgb") ||
+        robot.cameraTopic.trim() ||
+        "/camera/camera/color/image_raw/compressed";
       const rawTopic = (args["topic"] as string | undefined) ?? defaultTopic;
-      const topic = preferCompressedColorTopic(resolveCameraSubscribeTopic(robot.namespace, rawTopic));
+      const resolved = resolveCameraSubscribeTopic(robot.namespace, rawTopic);
       const rawMsgType = args["message_type"] as string | undefined;
-      const messageType = snapshotMessageKind(topic, rawMsgType);
-      const timeout = (args["timeout"] as number | undefined) ?? 10000;
-      const type = messageType === "Image" ? ROS_MSG_IMAGE : ROS_MSG_COMPRESSED_IMAGE;
-
+      let publishedTopics: string[] | undefined;
       try {
-        const result = await new Promise<Record<string, unknown>>((resolve, reject) => {
-          let settled = false;
-          let subscription: { unsubscribe: () => void } | undefined;
-          const timer = setTimeout(() => {
-            if (settled) return;
-            settled = true;
-            try {
-              subscription?.unsubscribe();
-            } catch {
-              // ignore
-            }
-            reject(new Error(`Timeout waiting for camera frame on ${topic}`));
-          }, timeout);
-          try {
-            subscription = transport.subscribe(
-              { topic, type },
-              (msg: Record<string, unknown>) => {
-                if (settled) return;
-                settled = true;
-                clearTimeout(timer);
-                try {
-                  subscription?.unsubscribe();
-                } catch {
-                  // ignore
-                }
-                try {
-                  const payload = cameraSnapshotFromPlainMessage(messageType, msg);
-                  resolve({
-                    success: true,
-                    topic,
-                    format: payload.formatLabel,
-                    data: payload.dataBase64,
-                    width: payload.width,
-                    height: payload.height,
-                  });
-                } catch (e) {
-                  reject(e instanceof Error ? e : new Error(String(e)));
-                }
-              },
-            );
-          } catch (e) {
-            if (settled) return;
-            settled = true;
-            clearTimeout(timer);
-            reject(e instanceof Error ? e : new Error(String(e)));
-          }
+        publishedTopics = (await transport.listTopics()).map((t) => t.name);
+      } catch {
+        publishedTopics = undefined;
+      }
+      let publisherTopics: string[] | undefined;
+      if (publishedTopics) {
+        const preferred = selectColorSnapshotTopic(resolved, {
+          messageType: rawMsgType,
+          publishedTopics,
         });
-
-        const base64 = (result.data as string) ?? "";
-        const format = String((result.format as string) ?? "jpeg").toLowerCase();
-        const mimeType = mimeTypeForSnapshotBase64(base64, format);
-        const wNum = result.width != null ? rosNumericField(result.width, "width") : undefined;
-        const hNum = result.height != null ? rosNumericField(result.height, "height") : undefined;
-        const summary = `Captured one frame from ${topic}${wNum != null && hNum != null ? ` (${wNum}×${hNum})` : ""}.`;
-        const content: ToolContent[] = [{ type: "text", text: summary }];
-        if (base64 && /^[A-Za-z0-9+/=]+$/.test(base64) && base64.length >= 100) {
-          content.push({ type: "image", data: base64, mimeType });
-        } else if (base64 && (!/^[A-Za-z0-9+/=]+$/.test(base64) || base64.length < 100)) {
-          content.push({
-            type: "text",
-            text: " (Image payload was present but not valid base64 or too small—check topic, message_type, or transport.)",
-          });
-        } else if (!base64) {
-          content.push({
-            type: "text",
-            text: " (No image data received—topic may be idle or transport returned empty.)",
-          });
+        if (/\/compressed$/i.test(preferred)) {
+          const publishers = await publishersForTopic(transport, preferred);
+          if (publishers && publishers.length === 0) {
+            publisherTopics = publishedTopics.filter((name) => name !== preferred);
+          } else if (publishers && publishers.length > 0) {
+            publisherTopics = publishedTopics;
+          }
         }
-        return { content };
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+      }
+      const attempts = colorSnapshotCandidates(resolved, {
+        messageType: rawMsgType,
+        publishedTopics,
+        publisherTopics,
+      });
+      const timeout = (args["timeout"] as number | undefined) ?? 10000;
+
+      let result: Record<string, unknown> | undefined;
+      let lastError: Error | undefined;
+      for (let i = 0; i < attempts.length; i++) {
+        const attemptTopic = attempts[i]!;
+        const isLast = i === attempts.length - 1;
+        const budget = isLast ? timeout : Math.min(1500, timeout);
+        const messageType = snapshotMessageKind(attemptTopic, rawMsgType);
+        try {
+          result = await waitForCameraFrame(transport, attemptTopic, messageType, budget);
+          break;
+        } catch (err) {
+          lastError = err instanceof Error ? err : new Error(String(err));
+          const timedOut = lastError.message.startsWith("Timeout waiting for camera frame");
+          if (isLast || !timedOut) break;
+        }
+      }
+
+      if (!result) {
+        const message = lastError?.message ?? "no camera frame";
         return {
           content: [
             {
@@ -1456,6 +1506,29 @@ export async function handleToolCall(
           isError: true,
         };
       }
+
+      const topic = String(result.topic ?? attempts[0]);
+      const base64 = (result.data as string) ?? "";
+      const format = String((result.format as string) ?? "jpeg").toLowerCase();
+      const mimeType = mimeTypeForSnapshotBase64(base64, format);
+      const wNum = result.width != null ? rosNumericField(result.width, "width") : undefined;
+      const hNum = result.height != null ? rosNumericField(result.height, "height") : undefined;
+      const summary = `Captured one frame from ${topic}${wNum != null && hNum != null ? ` (${wNum}×${hNum})` : ""}.`;
+      const content: ToolContent[] = [{ type: "text", text: summary }];
+      if (base64 && /^[A-Za-z0-9+/=]+$/.test(base64) && base64.length >= 100) {
+        content.push({ type: "image", data: base64, mimeType });
+      } else if (base64 && (!/^[A-Za-z0-9+/=]+$/.test(base64) || base64.length < 100)) {
+        content.push({
+          type: "text",
+          text: " (Image payload was present but not valid base64 or too small—check topic, message_type, or transport.)",
+        });
+      } else if (!base64) {
+        content.push({
+          type: "text",
+          text: " (No image data received—topic may be idle or transport returned empty.)",
+        });
+      }
+      return { content };
     }
 
     case "ros2_depth_distance": {
