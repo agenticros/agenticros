@@ -13,7 +13,8 @@ export type ManagedProcess =
   | "sim"
   | "mcp"
   | "rosbridge"
-  | "eyes";
+  | "eyes"
+  | "desktop";
 
 function pidPath(name: ManagedProcess): string {
   return `${PID_DIR}/agenticros-${name}.pid`;

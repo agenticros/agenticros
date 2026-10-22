@@ -108,6 +108,7 @@ import {
 } from './lib/nav-speed.js';
 import { existsSync } from 'node:fs';
 import { createEyesTelepresenceBridge } from './lib/telepresence-bridge.js';
+import { createDesktopBridge } from './lib/desktop-bridge.js';
 
 const robotId = getRobotId();
 const apiToken = getApiToken();
@@ -667,6 +668,19 @@ class P2PServer {
                 });
             },
         });
+        this.desktopOperator = null;
+        this.desktop = createDesktopBridge({
+            iceServers: () => activeIceServers,
+            log: (line) => console.log(formatLog(line)),
+            onRelay: (msg) => {
+                if (!this.socket?.connected || !this.desktopOperator) return;
+                this.socket.emit('desktop', {
+                    ...msg,
+                    targetPeer: this.desktopOperator,
+                    sourcePeer: this.socket.id,
+                });
+            },
+        });
         
         // Initialize ROS camera subscriptions immediately
         this.initStandaloneRosCameraSubscriptions();
@@ -691,6 +705,38 @@ class P2PServer {
                 this.socket.emit('telepresence', {
                     type: 'unavailable',
                     reason: 'eyes-offline',
+                    targetPeer: sourcePeer,
+                    sourcePeer: this.socket.id,
+                });
+            }
+        }
+    }
+
+    async handleDesktop(message) {
+        const sourcePeer = message?.sourcePeer;
+        if (!sourcePeer) {
+            console.log(formatLog('Ignoring desktop signal with no source peer'));
+            return;
+        }
+        const type = String(message.type || '').toLowerCase();
+        if (type === 'end') {
+            if (this.desktopOperator === sourcePeer) {
+                this.desktop.end();
+                this.desktopOperator = null;
+            }
+            return;
+        }
+        // A new offer replaces the previous viewer. Desktop SDP stays off the
+        // teleop PeerConnection; this only remembers who should receive the answer.
+        if (type === 'offer') this.desktopOperator = sourcePeer;
+        const ok = await this.desktop.forward(message);
+        if (!ok && type === 'offer') {
+            console.log(formatLog('agenticros desktop is not running — desktop unavailable'));
+            this.desktopOperator = null;
+            if (this.socket?.connected) {
+                this.socket.emit('desktop', {
+                    type: 'unavailable',
+                    reason: 'desktop-offline',
                     targetPeer: sourcePeer,
                     sourcePeer: this.socket.id,
                 });
@@ -951,6 +997,10 @@ class P2PServer {
 
             this.socket.on('telepresence', (message) => {
                 void this.handleTelepresence(message);
+            });
+
+            this.socket.on('desktop', (message) => {
+                void this.handleDesktop(message);
             });
 
             this.socket.on('peer-reconnect', async (data) => {

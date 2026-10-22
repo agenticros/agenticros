@@ -14,7 +14,7 @@
  * What ships:
  *   - scripts/                      shell helpers, install scripts, sim entrypoints
  *   - ros2_ws/src/agenticros_*      our ROS 2 packages (msgs + Python nodes)
- *   - packages/{core,ros-camera,agenticros,agenticros-claude-code,agenticros-gemini,robot-eyes}
+ *   - packages/{core,ros-camera,agenticros,agenticros-claude-code,agenticros-gemini,robot-eyes,agenticros-desktop}
  *                                   TypeScript/JS sources for the workspace, NO dist or node_modules
  *   - packages/agenticros-claude-code/dist  (pre-built so `npx agenticros` works without colcon)
  *   - package.json / pnpm-workspace.yaml / tsconfig.base.json   monorepo manifests
@@ -58,6 +58,7 @@ const INCLUDED_PACKAGES = [
   "agenticros-gemini",
   "agenticros-robot",
   "robot-eyes",
+  "agenticros-desktop",
 ];
 
 // NOTE: .npmrc is deliberately absent here. npm pack strips .npmrc from

@@ -1,0 +1,13 @@
+[Unit]
+Description=AgenticROS Hyprland remote desktop
+After=graphical-session.target pipewire.service wireplumber.service xdg-desktop-portal.service
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/agenticros desktop --foreground
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target

@@ -19,7 +19,7 @@ export interface DownOptions {
   stopGateway?: boolean;
 }
 
-const STOPPABLE: ManagedProcess[] = ["sim", "mcp", "rosbridge", "camera", "eyes"];
+const STOPPABLE: ManagedProcess[] = ["sim", "mcp", "rosbridge", "camera", "eyes", "desktop"];
 
 export async function downCommand(opts: DownOptions): Promise<void> {
   header("AgenticROS - shutting down");

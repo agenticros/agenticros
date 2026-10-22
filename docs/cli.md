@@ -68,6 +68,15 @@ optionally publishes WASD keyboard teleop; plays R2D2-style chirps (mute with
 `--no-sound`). Runs over local DDS on the robot — not the OpenClaw remote teleop
 page. Full details: [eyes.md](eyes.md).
 
+### `agenticros desktop [--foreground] [--test-pattern] [--port <n>] [--width <px>] [--height <px>] [--fps <n>]`
+
+Share the Hyprland session with the AgenticROS Cloud desktop page (screen,
+mouse, and keyboard). Run it inside the Wayland session, alongside
+`agenticros connect`. The process listens on `127.0.0.1:8766` and does not
+join the teleop data-channel peer. `--foreground` is for a systemd user unit.
+Details and the session checks (`XDG_SESSION_TYPE`, PipeWire, the Hyprland
+portal): [packages/agenticros-desktop/README.md](../packages/agenticros-desktop/README.md).
+
 ### `agenticros web [--no-open]`
 
 Prints the AgenticROS config/teleop page URL served by the OpenClaw plugin's

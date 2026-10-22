@@ -12,7 +12,7 @@ import { clearPid, isPidAlive, readPid, type ManagedProcess } from "../util/pidf
 import { colors, header, info } from "../util/logger.js";
 import { readState } from "../util/state.js";
 
-const COMPONENTS: ManagedProcess[] = ["camera", "sim", "mcp", "rosbridge", "eyes"];
+const COMPONENTS: ManagedProcess[] = ["camera", "sim", "mcp", "rosbridge", "eyes", "desktop"];
 
 const HW_PATTERNS: { name: string; pattern: string }[] = [
   { name: "comms", pattern: "comms.js" },

@@ -6,6 +6,7 @@
  *   mcp      /tmp/agenticros-mcp.log     (the MCP server)
  *   sim      /tmp/agenticros-sim.log     (the sim launcher)
  *   eyes     /tmp/agenticros-eyes.log    (robot face display)
+ *   desktop  /tmp/agenticros-desktop.log (Hyprland remote desktop)
  *   motors   /tmp/agenticros-motors.log  (start motors helper)
  *   comms    /tmp/agenticros-comms.log   (cloud connect)
  *   gateway  journalctl --user-unit openclaw-gateway.service
@@ -20,9 +21,9 @@ import { execa } from "execa";
 import { logPath, type ManagedProcess } from "../util/pidfile.js";
 import { colors, header, info, warn } from "../util/logger.js";
 
-type LogTarget = "camera" | "mcp" | "sim" | "rosbridge" | "eyes" | "gateway" | "motors" | "comms";
+type LogTarget = "camera" | "mcp" | "sim" | "rosbridge" | "eyes" | "desktop" | "gateway" | "motors" | "comms";
 
-const TARGETS: LogTarget[] = ["camera", "mcp", "sim", "rosbridge", "eyes", "motors", "comms", "gateway"];
+const TARGETS: LogTarget[] = ["camera", "mcp", "sim", "rosbridge", "eyes", "desktop", "motors", "comms", "gateway"];
 
 const EXTRA_LOG_PATH: Partial<Record<LogTarget, string>> = {
   motors: "/tmp/agenticros-motors.log",

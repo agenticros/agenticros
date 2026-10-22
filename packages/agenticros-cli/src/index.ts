@@ -19,6 +19,7 @@ import { statusCommand } from "./commands/status.js";
 import { logsCommand } from "./commands/logs.js";
 import { configCommand } from "./commands/config.js";
 import { eyesCommand } from "./commands/eyes.js";
+import { desktopCommand } from "./commands/desktop.js";
 import { webCommand } from "./commands/web.js";
 import { skillsCommand } from "./commands/skills.js";
 import { createSkillCommand } from "./commands/create-skill.js";
@@ -158,6 +159,35 @@ program
       noPersonGaze: opts.personGaze === false,
       port: opts.port,
       topic: opts.topic,
+    });
+  });
+
+program
+  .command("desktop")
+  .description(
+    "Share the Hyprland session with AgenticROS Cloud (screen, mouse, and keyboard). Run inside the Wayland session. See packages/agenticros-desktop/README.md.",
+  )
+  .option("--foreground", "Stay in the foreground (systemd user unit)", false)
+  .option("--test-pattern", "Send a GStreamer test pattern instead of the portal capture", false)
+  .option("--port <n>", "Local signaling port (default 8766)")
+  .option("--width <px>", "Encoded width (default 1280)")
+  .option("--height <px>", "Encoded height (default 720)")
+  .option("--fps <n>", "Encoded frame rate (default 15)")
+  .action(async (opts: {
+    foreground?: boolean;
+    testPattern?: boolean;
+    port?: string;
+    width?: string;
+    height?: string;
+    fps?: string;
+  }) => {
+    await desktopCommand({
+      foreground: opts.foreground === true,
+      testPattern: opts.testPattern === true,
+      port: opts.port,
+      width: opts.width,
+      height: opts.height,
+      fps: opts.fps,
     });
   });
 
@@ -551,7 +581,7 @@ for (const service of ["motors", "realsense", "camera"] as const) {
 program
   .command("logs [target]")
   .description(
-    "Tail logs. target = camera | mcp | gateway | sim | eyes | motors | comms (default: print available logs).",
+    "Tail logs. target = camera | mcp | gateway | sim | eyes | desktop | motors | comms (default: print available logs).",
   )
   .option("-f, --follow", "Tail the log (tail -F). Default prints last N lines and exits.", false)
   .option("-n, --lines <n>", "Number of lines from the end to start at", "200")
