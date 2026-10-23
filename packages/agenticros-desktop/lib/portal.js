@@ -1,12 +1,15 @@
 /**
- * XDG Desktop Portal ScreenCast (xdg-desktop-portal-hyprland).
- * One approval is stored as a restore token under ~/.agenticros/.
+ * XDG Desktop Portal ScreenCast (xdg-desktop-portal-wlr, chooser_type=none).
+ * The Start reply's streams variant is read from busctl. dbus-next never
+ * unmarshalls that body. OpenPipeWireRemote's unix fd is received with recvmsg.
  */
 
 import { spawn } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+
+import { connectSessionBus } from "./unix-fd-socket.js";
 
 export function restoreTokenPath(home = homedir()) {
   return join(home, ".agenticros", "desktop-restore-token");
@@ -265,8 +268,8 @@ function watchPortalResponse(path, opts = {}) {
 }
 
 /**
- * Open a monitor ScreenCast. Resolves when the person at the robot approves
- * (or immediately when a restore token is still valid).
+ * Open a monitor ScreenCast. wlr with chooser_type=none returns the node
+ * without a picker. A restore token is stored under ~/.agenticros/.
  *
  * @param {{ log?: (line: string) => void, tokenFile?: string }} [opts]
  * @returns {Promise<{ fd: number, nodeId: number, width: number, height: number, close: () => void }>}
@@ -280,7 +283,16 @@ export async function openScreenCast(opts = {}) {
     throw new Error("dbus-next is not installed; cannot open the Hyprland screen cast portal");
   }
   const { Variant, Message, sessionBus } = dbus;
-  const bus = sessionBus();
+  const bus = connectSessionBus(sessionBus);
+  try {
+    return await openScreenCastOn(bus, opts, log, Variant, Message);
+  } catch (err) {
+    try { bus.disconnect(); } catch { /* ignore */ }
+    throw err;
+  }
+}
+
+async function openScreenCastOn(bus, opts, log, Variant, Message) {
   const desktop = await bus.getProxyObject(
     "org.freedesktop.portal.Desktop",
     "/org/freedesktop/portal/desktop",
@@ -318,7 +330,7 @@ export async function openScreenCast(opts = {}) {
   }), sessionPath);
 
   log("Starting screen capture");
-  const started = await portalStart(screencast, unique, sessionPath, Variant, log);
+  const started = await portalStart(bus, screencast, unique, sessionPath, Variant, log);
   const stream = {
     nodeId: started.nodeId,
     width: started.width,
@@ -357,18 +369,10 @@ function unixFd(reply) {
 }
 
 /**
- * Subscribe to the predictable request path, then invoke the portal method.
- * @param {object} bus
- * @param {object} screencast
- * @param {string} member
- * @param {string} unique
- * @param {(token: string) => Record<string, unknown>} options
- * @param {...unknown} leading
- */
-/**
  * Start() returns its PipeWire node on a signal whose body stalls dbus-next.
  * busctl reads that signal instead. The method return itself is only the
- * request path, which dbus-next can accept.
+ * request path, which dbus-next can accept. The signal is dropped before
+ * dbus-next's parser sees it.
  *
  * @param {object} screencast
  * @param {string} unique
@@ -376,9 +380,11 @@ function unixFd(reply) {
  * @param {new (signature: string, value: unknown) => unknown} Variant
  * @param {(line: string) => void} log
  */
-async function portalStart(screencast, unique, sessionPath, Variant, log) {
+async function portalStart(bus, screencast, unique, sessionPath, Variant, log) {
   const token = handleToken();
   const path = portalRequestPath(unique, token);
+  const socket = bus._connection?.stream;
+  if (socket) socket.skipResponsePath = path;
   const watch = watchPortalResponse(path, { log });
   watch.done.catch(() => {});
   await watch.ready;

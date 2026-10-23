@@ -21,23 +21,38 @@ export function buildGstArgs(opts) {
   const fps = opts.fps || DEFAULT_FPS;
   const src = opts.testPattern
     ? "videotestsrc is-live=true pattern=smpte"
-    : `pipewiresrc fd=${opts.fd} path=${opts.nodeId} do-timestamp=true`;
-  const scale = `videoconvert ! videoscale ! videorate ! video/x-raw,format=I420,width=${width},height=${height},framerate=${fps}/1`;
+    : `pipewiresrc fd=${opts.fd} path=${opts.nodeId} do-timestamp=true always-copy=true`;
+  // skip-to-first lets the first frame through. Without it videorate holds
+  // that buffer, the PipeWire pool runs dry, and the portal stops capturing.
+  const scale = `videoconvert ! videoscale ! videorate skip-to-first=true drop-only=true ! video/x-raw,format=I420,width=${width},height=${height},framerate=${fps}/1`;
   const encode = encodeElement(opts.encoder, fps);
   return ["-q", `${src} ! ${scale} ! ${encode} ! fdsink fd=1 sync=false`];
 }
 
+let h264parseAvailable;
+
+function h264ParsePrefix() {
+  if (h264parseAvailable === undefined) {
+    const probe = spawnSync("gst-inspect-1.0", ["h264parse"], { stdio: "ignore" });
+    h264parseAvailable = probe.status === 0;
+  }
+  // plugins-bad is not always installed. x264enc with cabac and dct8x8 off
+  // already writes Constrained Baseline; the caps keep that profile either way.
+  return h264parseAvailable ? "h264parse config-interval=-1 ! " : "";
+}
+
 function encodeElement(encoder, fps) {
+  const parsed = h264ParsePrefix();
   if (encoder === "vah264enc") {
-    return "vah264enc ! h264parse config-interval=-1 ! video/x-h264,stream-format=byte-stream,alignment=au,profile=constrained-baseline";
+    return `vah264enc ! ${parsed}video/x-h264,stream-format=byte-stream,alignment=au,profile=constrained-baseline`;
   }
   if (encoder === "vaapih264enc") {
-    return "vaapih264enc ! h264parse config-interval=-1 ! video/x-h264,stream-format=byte-stream,alignment=au";
+    return `vaapih264enc ! ${parsed}video/x-h264,stream-format=byte-stream,alignment=au`;
   }
   const gop = Math.max(1, fps) * 2;
   // cabac and 8x8dct off is Constrained Baseline, which is the profile the
   // browser negotiated (profile-level-id=42e01f). High-profile NALs never paint.
-  return `x264enc tune=zerolatency speed-preset=ultrafast bitrate=2500 key-int-max=${gop} bframes=0 byte-stream=true aud=true cabac=false dct8x8=false ! h264parse config-interval=-1 ! video/x-h264,stream-format=byte-stream,alignment=au,profile=constrained-baseline`;
+  return `x264enc tune=zerolatency speed-preset=ultrafast bitrate=2500 key-int-max=${gop} bframes=0 byte-stream=true aud=true cabac=false dct8x8=false ! ${parsed}video/x-h264,stream-format=byte-stream,alignment=au,profile=constrained-baseline`;
 }
 
 /**
@@ -68,7 +83,10 @@ export function startGstCapture(opts) {
   const log = opts.log || (() => {});
   const stdio = ["ignore", "pipe", "pipe"];
   if (typeof opts.stdioFd === "number") stdio.push(opts.stdioFd);
-  const child = spawn("gst-launch-1.0", opts.args, { stdio });
+  // gst-launch 1.28 treats one quoted pipeline string as a syntax error.
+  // The same description split on whitespace is accepted.
+  const args = opts.args.flatMap((arg) => String(arg) === "-q" ? [arg] : String(arg).split(/\s+/).filter(Boolean));
+  const child = spawn("gst-launch-1.0", args, { stdio });
   const demux = createAccessUnitStream(opts.onAccessUnit);
   let stderr = "";
   child.stdout?.on("data", (chunk) => demux.push(chunk));

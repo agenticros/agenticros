@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import { buildGstArgs } from "./capture.js";
 import { parseBusctlJsonScreenCast, parseBusctlScreenCast, portalRequestPath, portalSessionPath, streamFromResults } from "./portal.js";
+import { dbusHeaderNames, readDbusFrame } from "./unix-fd-socket.js";
 import { waylandSessionError, waylandSocketPath } from "./session.js";
 import { encodeMotionAbsolute, parseGlobal, parseMessages } from "./wayland.js";
 
@@ -93,6 +94,59 @@ describe("portal paths", () => {
       height: 1080,
       restoreToken: "tok",
     });
+  });
+});
+
+describe("dbus frame filter", () => {
+  it("reads the Start response path from the header and ignores the body", () => {
+    const path = "/org/freedesktop/portal/desktop/request/1_42/agenticrosabc";
+    const fields = [];
+    const push = (buf) => fields.push(buf);
+    const pad = (n) => {
+      const len = fields.reduce((sum, buf) => sum + buf.length, 0);
+      const extra = (n - (len % n)) % n;
+      if (extra) push(Buffer.alloc(extra));
+    };
+    const field = (code, sig, value) => {
+      pad(8);
+      push(Buffer.from([code, sig.length]));
+      push(Buffer.from(sig));
+      push(Buffer.from([0]));
+      if (sig === "o" || sig === "s") {
+        pad(4);
+        const text = Buffer.from(value);
+        const len = Buffer.alloc(4);
+        len.writeUInt32LE(text.length);
+        push(len);
+        push(text);
+        push(Buffer.from([0]));
+      }
+    };
+    field(1, "o", path);
+    field(3, "s", "Response");
+    const body = Buffer.from([0x01, 0x02, 0x03, 0x04]);
+    const fieldBytes = Buffer.concat(fields);
+    const header = Buffer.alloc(16);
+    header[0] = 0x6c;
+    header[1] = 4;
+    header[3] = 1;
+    header.writeUInt32LE(body.length, 4);
+    header.writeUInt32LE(1, 8);
+    header.writeUInt32LE(fieldBytes.length, 12);
+    const padded = (fieldBytes.length + 7) & ~7;
+    const message = Buffer.concat([
+      header,
+      fieldBytes,
+      Buffer.alloc(padded - fieldBytes.length),
+      body,
+    ]);
+    const frame = readDbusFrame(message);
+    assert.equal(frame.total, message.length);
+    assert.equal(frame.type, 4);
+    assert.equal(frame.path, path);
+    assert.equal(frame.member, "Response");
+    assert.deepEqual(dbusHeaderNames(fieldBytes, true), { path, member: "Response" });
+    assert.equal(readDbusFrame(message.subarray(0, 20)), null);
   });
 });
 
