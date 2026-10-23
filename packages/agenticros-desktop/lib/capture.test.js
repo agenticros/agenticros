@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
 import { buildGstArgs } from "./capture.js";
-import { portalRequestPath, portalSessionPath, streamFromResults } from "./portal.js";
+import { parseBusctlScreenCast, portalRequestPath, portalSessionPath, streamFromResults } from "./portal.js";
 import { waylandSessionError, waylandSocketPath } from "./session.js";
 import { encodeMotionAbsolute, parseGlobal, parseMessages } from "./wayland.js";
 
@@ -33,6 +33,38 @@ describe("portal paths", () => {
       portalSessionPath(":1.42", "sessiontoken"),
       "/org/freedesktop/portal/desktop/session/1_42/sessiontoken",
     );
+  });
+
+  it("reads a busctl ScreenCast response without dbus-next", () => {
+    const partial = `Member=Response\nMESSAGE "ua{sv}" {\nUINT32 0;\nSTRING "streams";\n`;
+    assert.equal(parseBusctlScreenCast(partial), null);
+    const text = `
+      Path=/org/freedesktop/portal/desktop/request/1_186/agenticrosdc21b289
+      Interface=org.freedesktop.portal.Request  Member=Response
+      MESSAGE "ua{sv}" {
+        UINT32 0;
+        STRING "streams";
+        VARIANT "a(ua{sv})" {
+          UINT32 75;
+          STRING "size";
+          VARIANT "(ii)" {
+            INT32 1920;
+            INT32 1080;
+          };
+        };
+        STRING "restore_token";
+        VARIANT "s" {
+          STRING "saved-token";
+        };
+      };
+    `;
+    assert.deepEqual(parseBusctlScreenCast(text), {
+      nodeId: 75,
+      width: 1920,
+      height: 1080,
+      restoreToken: "saved-token",
+    });
+    assert.deepEqual(parseBusctlScreenCast(`Member=Response\nUINT32 2;\n`), { denied: 2 });
   });
 
   it("reads the PipeWire node id out of Start results", () => {

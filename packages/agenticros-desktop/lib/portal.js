@@ -3,6 +3,7 @@
  * One approval is stored as a restore token under ~/.agenticros/.
  */
 
+import { spawn } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -78,6 +79,129 @@ function handleToken() {
 }
 
 /**
+ * `busctl monitor` text for one ScreenCast Response.
+ * dbus-next never sees this signal: its parser stalls on the streams variant
+ * and the desktop agent then sits on "waiting for approval" forever.
+ *
+ * @param {string} text
+ * @returns {{ nodeId: number, width: number, height: number, restoreToken: string | null } | { denied: number } | null}
+ */
+export function parseBusctlScreenCast(text) {
+  const member = text.indexOf("Member=Response");
+  if (member < 0) return null;
+  const body = text.slice(member);
+  const codeMatch = body.match(/UINT32\s+(\d+)/i);
+  if (!codeMatch) return null;
+  const code = Number(codeMatch[1]);
+  if (code !== 0) return { denied: code };
+
+  const streamsAt = body.indexOf('STRING "streams"');
+  if (streamsAt < 0) return null;
+  const nodeMatch = body.slice(streamsAt).match(/UINT32\s+(\d+)/i);
+  if (!nodeMatch) return null;
+
+  let width = 0;
+  let height = 0;
+  const sizeAt = body.indexOf('STRING "size"');
+  if (sizeAt >= 0) {
+    const dims = [...body.slice(sizeAt).matchAll(/INT32\s+(-?\d+)/gi)];
+    if (dims.length < 2) return null;
+    width = Number(dims[0][1]);
+    height = Number(dims[1][1]);
+  }
+
+  let restoreToken = null;
+  const tokenAt = body.indexOf('STRING "restore_token"');
+  if (tokenAt >= 0) {
+    const strings = [...body.slice(tokenAt).matchAll(/STRING "((?:\\.|[^"\\])*)"/g)];
+    if (strings.length < 2) return null;
+    restoreToken = strings[1][1];
+  }
+
+  return {
+    nodeId: Number(nodeMatch[1]),
+    width,
+    height,
+    restoreToken,
+  };
+}
+
+/**
+ * Read the Start() Response with busctl so the streams payload never enters
+ * the dbus-next connection.
+ *
+ * @param {string} path request object path
+ * @param {{ log?: (line: string) => void }} [opts]
+ */
+function watchPortalResponse(path, opts = {}) {
+  const log = opts.log || (() => {});
+  const match = `type='signal',interface='org.freedesktop.portal.Request',member='Response',path='${path}'`;
+  // stdbuf line-buffers busctl. A pipe would otherwise hold the signal until
+  // the process exits, which is after we need the node id.
+  const child = spawn("stdbuf", [
+    "-oL",
+    "-eL",
+    "busctl",
+    "--user",
+    "monitor",
+    "--match",
+    match,
+  ], { stdio: ["ignore", "pipe", "pipe"] });
+
+  let text = "";
+  let settled = false;
+  /** @type {(value: ReturnType<typeof parseBusctlScreenCast>) => void} */
+  let resolve;
+  /** @type {(err: Error) => void} */
+  let reject;
+  const done = new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+
+  const finish = (err, value) => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timer);
+    if (!child.killed) child.kill();
+    if (err) reject(err);
+    else resolve(value);
+  };
+
+  const timer = setTimeout(() => {
+    finish(new Error(`Portal request timed out (${path})`));
+  }, 120000);
+
+  child.stdout.on("data", (chunk) => {
+    text += chunk.toString();
+    const parsed = parseBusctlScreenCast(text);
+    if (!parsed) return;
+    if ("denied" in parsed) {
+      finish(new Error(`Portal request was denied (${parsed.denied})`));
+      return;
+    }
+    log(`Screen cast node ${parsed.nodeId}`);
+    finish(null, parsed);
+  });
+  child.stderr.on("data", (chunk) => {
+    log(`busctl: ${chunk.toString().trim()}`);
+  });
+  child.on("error", (err) => {
+    finish(err instanceof Error ? err : new Error(String(err)));
+  });
+  child.on("exit", (code) => {
+    if (!settled) finish(new Error(`busctl monitor exited (${code ?? "signal"})`));
+  });
+
+  return {
+    done,
+    stop() {
+      finish(new Error("Screen cast watch closed"));
+    },
+  };
+}
+
+/**
  * Open a monitor ScreenCast. Resolves when the person at the robot approves
  * (or immediately when a restore token is still valid).
  *
@@ -131,12 +255,14 @@ export async function openScreenCast(opts = {}) {
   }), sessionPath);
 
   log("Waiting for the Hyprland screen-share approval");
-  const started = await portalCall(bus, screencast, "Start", unique, (token) => ({
-    handle_token: new Variant("s", token),
-  }), sessionPath, "");
-
-  const stream = streamFromResults(started);
-  if (!stream) throw new Error("Screen cast started without a PipeWire stream");
+  const started = await portalStart(screencast, unique, sessionPath, Variant, log);
+  const stream = {
+    nodeId: started.nodeId,
+    width: started.width,
+    height: started.height,
+    restoreToken: started.restoreToken,
+  };
+  if (!Number.isFinite(stream.nodeId)) throw new Error("Screen cast started without a PipeWire stream");
   if (stream.restoreToken) saveRestoreToken(stream.restoreToken, opts.tokenFile);
 
   const reply = await bus.call(new Message({
@@ -176,6 +302,37 @@ function unixFd(reply) {
  * @param {(token: string) => Record<string, unknown>} options
  * @param {...unknown} leading
  */
+/**
+ * Start() returns its PipeWire node on a signal whose body stalls dbus-next.
+ * busctl reads that signal instead. The method return itself is only the
+ * request path, which dbus-next can accept.
+ *
+ * @param {object} screencast
+ * @param {string} unique
+ * @param {string} sessionPath
+ * @param {new (signature: string, value: unknown) => unknown} Variant
+ * @param {(line: string) => void} log
+ */
+async function portalStart(screencast, unique, sessionPath, Variant, log) {
+  const token = handleToken();
+  const path = portalRequestPath(unique, token);
+  const watch = watchPortalResponse(path, { log });
+  watch.done.catch(() => {});
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  try {
+    await screencast.Start(sessionPath, "", {
+      handle_token: new Variant("s", token),
+    });
+    const started = await watch.done;
+    if (!started || "denied" in started) {
+      throw new Error("Screen cast started without a PipeWire stream");
+    }
+    return started;
+  } finally {
+    watch.stop();
+  }
+}
+
 async function portalCall(bus, screencast, member, unique, options, ...leading) {
   const token = handleToken();
   const path = portalRequestPath(unique, token);

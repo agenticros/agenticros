@@ -179,7 +179,7 @@ async function sendWithFd(socket, message, fd) {
     msg_controllen: "size_t",
     msg_flags: "int",
   });
-  const sendmsg = libc.func("ssize_t sendmsg(int, _In_ agenticros_msghdr *, int)");
+  const sendmsg = libc.func("long sendmsg(int, _In_ agenticros_msghdr *, int)");
 
   // cmsghdr + one int, padded to 8 bytes. Linux x86_64 and aarch64.
   const control = Buffer.alloc(24);
