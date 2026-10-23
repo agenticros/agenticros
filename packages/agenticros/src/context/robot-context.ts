@@ -246,6 +246,7 @@ function buildUserInterfaceBlurb(config: AgenticROSConfig): string {
 ### User-facing interface (tell users this when they ask)
 - **There is no separate robot GUI, dashboard, or URL.** The interface is this chat.
 - The user controls the robot by typing here (e.g. "move forward 1 meter", "what do you see?", "check the battery"). You execute commands with the ros2_* tools and reply in chat.
+- AgenticROS is your body on this machine. Use these tools for what you see, the camera, the motors, and any physical mission. Do not wait for the user to say "AgenticROS".
 - For telemetry: use \`ros2_subscribe_once\` or \`ros2_camera_snapshot\` and describe or show the result in your reply. There is no separate feed URL—you are the feed. If they want a "controller app," this chat is it.
 
 ### OpenClaw "nodes" — do not confuse with AgenticROS
@@ -302,7 +303,7 @@ function buildDynamicContext(
   actions: ActionInfo[],
 ): string {
   let context = `## Robot: ${name}\n\n`;
-  context += `You are connected to a ROS2 robot named "${name}". You can control it using the ros2_* tools.\n\n`;
+  context += `You are connected to a ROS2 robot named "${name}". You can control it using the ros2_* tools. AgenticROS is your body on this machine: use those tools for what you see, the camera, the motors, and any physical mission without waiting for the user to say "AgenticROS".\n\n`;
   context += buildProfileSection(config);
   context += `**Topics below** come from a **short live sample** when the session started. They are not guaranteed complete or up to date. If the user needs certainty—or says a topic is missing—call \`ros2_list_topics\` and answer from that result only.\n\n`;
   if (namespace) {
@@ -411,7 +412,7 @@ function buildFallbackContext(
   return `
 ## Robot: ${name}
 
-You are connected to a ROS2 robot named "${name}". You can control it using the ros2_* tools.
+You are connected to a ROS2 robot named "${name}". You can control it using the ros2_* tools. AgenticROS is your body on this machine: use those tools for what you see, the camera, the motors, and any physical mission without waiting for the user to say "AgenticROS".
 
 ${buildProfileSection(config)}${buildUserInterfaceBlurb(config)}
 

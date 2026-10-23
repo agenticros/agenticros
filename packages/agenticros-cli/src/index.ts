@@ -218,12 +218,17 @@ program
     "First-time setup: workspace build, OpenClaw plugin install, robot config, OpenAI key. Idempotent.",
   )
   .option("--force", "Re-run every step even if it appears done", false)
+  .option("--yes", "Non-interactive: real robot on local ROS, skip cloud and OpenAI, couple installed agents", false)
   .option(
     "--install-dir <path>",
     "Where to place the AgenticROS source tree (npm-install mode). Default: ~/agenticros.",
   )
   .action(async (opts) => {
-    await initCommand(opts);
+    await initCommand({
+      force: opts.force === true,
+      installDir: opts.installDir,
+      yes: opts.yes === true,
+    });
   });
 
 program
@@ -501,7 +506,7 @@ program
 program
   .command("stop <target>")
   .description(
-    "Stop an on-robot service. target = motors | realsense | camera | mapping",
+    "Stop an on-robot service. target = motors | realsense | camera | mapping | eyes",
   )
   .action(async (target: string) => {
     await stopServiceCommand(target);
@@ -676,6 +681,11 @@ mcpCmd
   .option("--hermes", "Configure Hermes only (~/.hermes/config.yaml)", false)
   .option("--claude", "Configure Claude only (desktop + project .mcp.json)", false)
   .option("--agy", "Configure Antigravity only (~/.gemini/config/mcp_config.json)", false)
+  .option("--cursor", "Configure Cursor only (~/.cursor/mcp.json)", false)
+  .option("--grok", "Configure Grok only (~/.grok/config.toml)", false)
+  .option("--openclaw", "Configure OpenClaw only", false)
+  .option("--installed", "Configure only agents whose CLI is already on PATH", false)
+  .option("--quiet", "Do not print progress", false)
   .option("--project", "Also write project-scoped configs (.codex/config.toml, .mcp.json, .agents/mcp_config.json)", false)
   .option("--desktop", "Claude Desktop config only (with --claude)", false)
   .action(async (opts: {
@@ -684,16 +694,26 @@ mcpCmd
     hermes?: boolean;
     claude?: boolean;
     agy?: boolean;
+    cursor?: boolean;
+    grok?: boolean;
+    openclaw?: boolean;
+    installed?: boolean;
+    quiet?: boolean;
     project?: boolean;
     desktop?: boolean;
   }) => {
-    const hostFlags = opts.codex || opts.hermes || opts.claude || opts.agy;
+    const hostFlags = opts.codex || opts.hermes || opts.claude || opts.agy || opts.cursor || opts.grok || opts.openclaw;
     await mcpSetupCliCommand({
-      all: hostFlags ? false : opts.all,
+      all: hostFlags || opts.installed ? false : opts.all,
       codex: opts.codex,
       hermes: opts.hermes,
       claude: opts.claude,
       agy: opts.agy,
+      cursor: opts.cursor,
+      grok: opts.grok,
+      openclaw: opts.openclaw,
+      onlyInstalled: opts.installed === true,
+      quiet: opts.quiet === true,
       project: opts.project,
       desktop: opts.desktop,
     });

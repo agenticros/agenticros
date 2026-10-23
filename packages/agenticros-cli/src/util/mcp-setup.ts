@@ -23,9 +23,19 @@ import {
   type ClaudeConfigTarget,
   buildClaudeDoctorChecks,
   claudeDesktopConfigPath,
+  claudeUserConfigPath,
   projectMcpJsonPath,
   writeClaudeAgenticrosConfig,
+  writeClaudeMcpAllowRule,
 } from "./claude-config.js";
+import {
+  claudeInstructionPath,
+  codexInstructionPath,
+  grokInstructionPath,
+  hermesInstructionPath,
+  writeCursorRule,
+  writeEmbodimentFile,
+} from "./embodiment.js";
 import {
   buildAgyDoctorChecks,
   globalAgyMcpConfigPath,
@@ -38,11 +48,23 @@ import {
   writeAgySkill,
 } from "./agy-config.js";
 import { findMcpEntry } from "./mcp-discovery.js";
+import { buildAgenticrosMcpServerEntry, upsertAgenticrosMcpJson } from "./claude-config.js";
 import { colors, info, ok, warn, err } from "./logger.js";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { homedir } from "node:os";
+import {
+  ensureToolsAlsoAllow,
+  isAgenticrosOpenclawPluginInstalled,
+  openclawConfigExists,
+  readAgenticrosContractTools,
+} from "./openclaw-config.js";
+import { getCliPaths } from "./paths.js";
 
-export type McpHostId = "codex" | "hermes" | "claude" | "agy";
+export type McpHostId = "codex" | "hermes" | "claude" | "agy" | "cursor" | "grok" | "openclaw";
 
 const MCP_HOSTS = ["codex", "hermes", "claude", "agy"] as const satisfies readonly McpHostId[];
+const EXTRA_HOSTS = ["cursor", "grok", "openclaw"] as const satisfies readonly McpHostId[];
 
 export interface McpSetupOptions {
   /** Configure all hosts (default when no host flags). */
@@ -57,6 +79,11 @@ export interface McpSetupOptions {
   desktop?: boolean;
   /** Codex scope when only codex is targeted via legacy `codex setup --project`. */
   codexScope?: CodexConfigScope;
+  cursor?: boolean;
+  grok?: boolean;
+  openclaw?: boolean;
+  /** Configure only agents whose CLI is already on PATH, including Cursor, Grok, and OpenClaw. */
+  onlyInstalled?: boolean;
   quiet?: boolean;
   repoRoot?: string;
   cwd?: string;
@@ -119,10 +146,75 @@ export function resolveMcpHosts(opts: McpSetupOptions): McpHostId[] {
   if (opts.codexScope === "project" && opts.codex !== false) {
     return ["codex"];
   }
-  const explicit = MCP_HOSTS.filter((h) => opts[h]);
+  const explicit = [...MCP_HOSTS, ...EXTRA_HOSTS].filter((h) => opts[h]);
   if (explicit.length > 0) return [...explicit];
   if (opts.all !== false) return [...MCP_HOSTS];
   return [...MCP_HOSTS];
+}
+
+async function commandOnPath(bin: string, args: string[]): Promise<boolean> {
+  try {
+    const { exitCode } = await execa(bin, args, { reject: false });
+    return exitCode === 0;
+  } catch {
+    return false;
+  }
+}
+
+export async function cursorOnPath(): Promise<boolean> {
+  try {
+    const { stdout, exitCode } = await execa("bash", ["-lc", "command -v agent"], { reject: false });
+    if (exitCode !== 0 || !stdout.trim()) return false;
+    const { stdout: real } = await execa("readlink", ["-f", stdout.trim()], { reject: false });
+    return `${real || stdout}`.includes("cursor-agent");
+  } catch {
+    return false;
+  }
+}
+
+export async function grokOnPath(): Promise<boolean> {
+  return commandOnPath("grok", ["--version"]);
+}
+
+export async function openclawOnPath(): Promise<boolean> {
+  return commandOnPath("openclaw", ["--version"]);
+}
+
+export async function hostOnPath(host: McpHostId): Promise<boolean> {
+  switch (host) {
+    case "codex":
+      return codexOnPath();
+    case "hermes":
+      return hermesOnPath();
+    case "claude":
+      return claudeOnPath();
+    case "agy":
+      return agyOnPath();
+    case "cursor":
+      return cursorOnPath();
+    case "grok":
+      return grokOnPath();
+    case "openclaw":
+      return openclawOnPath();
+  }
+}
+
+export function cursorMcpConfigPath(): string {
+  return join(homedir(), ".cursor", "mcp.json");
+}
+
+export function grokConfigPath(): string {
+  return join(homedir(), ".grok", "config.toml");
+}
+
+export function writeCursorMcpConfig(mcpEntry: string): string {
+  const path = cursorMcpConfigPath();
+  const entry = buildAgenticrosMcpServerEntry(mcpEntry, "");
+  const existing = existsSync(path) ? readFileSync(path, "utf8") : null;
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, upsertAgenticrosMcpJson(existing, entry), "utf8");
+  writeCursorRule();
+  return path;
 }
 
 export function requireMcpEntry(): string {
@@ -153,7 +245,11 @@ export function setupClaudeMcp(
   cwd?: string,
 ): string {
   const configPath =
-    target === "project" ? projectMcpJsonPath(cwd) : claudeDesktopConfigPath();
+    target === "project"
+      ? projectMcpJsonPath(cwd)
+      : target === "user"
+        ? claudeUserConfigPath()
+        : claudeDesktopConfigPath();
   writeClaudeAgenticrosConfig(configPath, mcpEntry, { namespace: "" });
   return configPath;
 }
@@ -175,14 +271,53 @@ export function setupAgyMcp(mcpEntry: string, scope: "global" | "project", cwd?:
   return [configPath, skillPath];
 }
 
+async function installedHosts(opts: McpSetupOptions): Promise<McpHostId[]> {
+  if (opts.onlyInstalled) {
+    const present: McpHostId[] = [];
+    for (const host of [...MCP_HOSTS, ...EXTRA_HOSTS]) {
+      if (await hostOnPath(host)) present.push(host);
+    }
+    return present;
+  }
+  const hosts = resolveMcpHosts(opts);
+  const explicit = [...MCP_HOSTS, ...EXTRA_HOSTS].filter((h) => opts[h]);
+  if (explicit.length === 0) {
+    for (const extra of EXTRA_HOSTS) {
+      if (!hosts.includes(extra) && (await hostOnPath(extra))) hosts.push(extra);
+    }
+  }
+  return hosts;
+}
+
+async function setupOpenClaw(repoRoot: string | undefined, quiet: boolean): Promise<string[]> {
+  const written: string[] = [];
+  if (!(await openclawOnPath())) return written;
+  if (!isAgenticrosOpenclawPluginInstalled()) {
+    if (quiet) return written;
+    const script = join(getCliPaths().scriptsDir, "setup_gateway_plugin.sh");
+    if (existsSync(script)) {
+      await execa("bash", [script], { stdio: "inherit", reject: false });
+      written.push(script);
+    }
+  }
+  if (openclawConfigExists()) {
+    const tools = readAgenticrosContractTools(repoRoot ?? getCliPaths().repoRoot);
+    if (tools) ensureToolsAlsoAllow(tools);
+  }
+  return written;
+}
+
 export async function mcpSetupCommand(opts: McpSetupOptions = {}): Promise<void> {
   const mcpEntry = requireMcpEntry();
-  const hosts = resolveMcpHosts(opts);
+  const hosts = await installedHosts(opts);
   const repoRoot = opts.repoRoot;
   const cwd = opts.cwd ?? process.cwd();
+  const say = (fn: (message: string) => void, message: string) => {
+    if (!opts.quiet) fn(message);
+  };
 
   if (!opts.quiet) {
-    info(`Configuring AgenticROS MCP for: ${hosts.join(", ")}`);
+    info(`Configuring AgenticROS MCP for: ${hosts.join(", ") || "(none installed)"}`);
     info(`MCP server: ${mcpEntry}\n`);
   }
 
@@ -195,6 +330,8 @@ export async function mcpSetupCommand(opts: McpSetupOptions = {}): Promise<void>
       written.push(setupCodexMcp(mcpEntry, "project", repoRoot ?? cwd));
     } else {
       written.push(setupCodexMcp(mcpEntry, "global"));
+      writeEmbodimentFile(codexInstructionPath());
+      written.push(codexInstructionPath());
       if (opts.project || (isFullSetup && repoRoot)) {
         written.push(setupCodexMcp(mcpEntry, "project", repoRoot ?? cwd));
       }
@@ -203,12 +340,20 @@ export async function mcpSetupCommand(opts: McpSetupOptions = {}): Promise<void>
 
   if (hosts.includes("hermes")) {
     written.push(setupHermesMcp(mcpEntry));
+    writeEmbodimentFile(hermesInstructionPath());
+    written.push(hermesInstructionPath());
   }
 
   if (hosts.includes("claude")) {
     const desktopOnly = opts.desktop && !opts.project;
     const projectOnly = opts.project && !opts.desktop;
 
+    if (!desktopOnly) {
+      written.push(setupClaudeMcp(mcpEntry, "user"));
+      writeClaudeMcpAllowRule();
+      writeEmbodimentFile(claudeInstructionPath());
+      written.push(claudeInstructionPath());
+    }
     if (!projectOnly) {
       written.push(setupClaudeMcp(mcpEntry, "desktop"));
     }
@@ -227,9 +372,27 @@ export async function mcpSetupCommand(opts: McpSetupOptions = {}): Promise<void>
     written.push(settingsPath);
   }
 
-  for (const path of written) {
-    ok(`Wrote: ${path}`);
+  if (hosts.includes("cursor")) {
+    written.push(writeCursorMcpConfig(mcpEntry));
+    written.push(join(homedir(), ".cursor", "rules", "agenticros.mdc"));
   }
+
+  if (hosts.includes("grok")) {
+    const path = grokConfigPath();
+    writeCodexAgenticrosConfig(path, mcpEntry, { namespace: "" });
+    writeEmbodimentFile(grokInstructionPath());
+    written.push(path, grokInstructionPath());
+  }
+
+  if (hosts.includes("openclaw")) {
+    written.push(...(await setupOpenClaw(repoRoot, opts.quiet === true)));
+  }
+
+  for (const path of written) {
+    say(ok, `Wrote: ${path}`);
+  }
+
+  if (opts.quiet) return;
 
   if (hosts.includes("codex")) {
     const hasCodex = await codexOnPath();

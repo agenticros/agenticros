@@ -10,7 +10,12 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir, platform } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 
-export type ClaudeConfigTarget = "project" | "desktop";
+import { mcpShellLine } from "./mcp-launch.js";
+
+export type ClaudeConfigTarget = "project" | "desktop" | "user";
+
+/** Claude Code allows every tool from one MCP server with this rule. */
+export const CLAUDE_MCP_ALLOW_RULE = "mcp__agenticros__*";
 
 export interface ClaudeAgenticrosConfig {
   configPath: string;
@@ -39,6 +44,16 @@ export function projectMcpJsonPath(cwd = process.cwd()): string {
   return join(cwd, ".mcp.json");
 }
 
+/** Claude Code user-scope MCP config. */
+export function claudeUserConfigPath(): string {
+  return join(homedir(), ".claude.json");
+}
+
+/** Claude Code user settings, where tool allow rules live. */
+export function claudeUserSettingsPath(): string {
+  return join(homedir(), ".claude", "settings.json");
+}
+
 /** Claude Desktop MCP config (macOS / Windows). */
 export function claudeDesktopConfigPath(): string {
   const home = homedir();
@@ -50,13 +65,14 @@ export function claudeDesktopConfigPath(): string {
 }
 
 export function resolveClaudeConfigPath(target: ClaudeConfigTarget, cwd = process.cwd()): string {
-  return target === "project" ? projectMcpJsonPath(cwd) : claudeDesktopConfigPath();
+  if (target === "project") return projectMcpJsonPath(cwd);
+  if (target === "user") return claudeUserConfigPath();
+  return claudeDesktopConfigPath();
 }
 
 /** Agenticros MCP server block (stdio + sh -c wrapper for log redirection). */
 export function buildAgenticrosMcpServerEntry(mcpEntryAbs: string, namespace = ""): Record<string, unknown> {
-  const escaped = mcpEntryAbs.replace(/\\/g, "\\\\");
-  const shellCmd = `node ${escaped} 2>>/tmp/agenticros-mcp.log`;
+  const shellCmd = mcpShellLine(mcpEntryAbs).replace(/\\/g, "\\\\");
   return {
     type: "stdio",
     command: "sh",
@@ -106,6 +122,41 @@ export function writeClaudeAgenticrosConfig(
   const merged = upsertAgenticrosMcpJson(existing, entry);
   mkdirSync(dirname(configPath), { recursive: true });
   writeFileSync(configPath, merged, "utf8");
+}
+
+/** Merge the AgenticROS allow rule into Claude Code settings. Other rules stay. */
+export function upsertClaudeMcpAllowRule(existingContent: string | null): string {
+  let root: Record<string, unknown> = {};
+  if (existingContent?.trim()) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(existingContent);
+    } catch {
+      throw new Error("Claude settings.json is not valid JSON");
+    }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("Claude settings.json must be a JSON object");
+    }
+    root = { ...(parsed as Record<string, unknown>) };
+  }
+  const permissions =
+    root["permissions"] && typeof root["permissions"] === "object" && !Array.isArray(root["permissions"])
+      ? { ...(root["permissions"] as Record<string, unknown>) }
+      : {};
+  const allow = Array.isArray(permissions["allow"]) ? [...permissions["allow"]] : [];
+  if (!allow.includes(CLAUDE_MCP_ALLOW_RULE)) {
+    allow.push(CLAUDE_MCP_ALLOW_RULE);
+  }
+  permissions["allow"] = allow;
+  root["permissions"] = permissions;
+  return `${JSON.stringify(root, null, 2)}\n`;
+}
+
+export function writeClaudeMcpAllowRule(settingsPath = claudeUserSettingsPath()): void {
+  const existing = existsSync(settingsPath) ? readFileSync(settingsPath, "utf8") : null;
+  const merged = upsertClaudeMcpAllowRule(existing);
+  mkdirSync(dirname(settingsPath), { recursive: true });
+  writeFileSync(settingsPath, merged, "utf8");
 }
 
 export function readClaudeAgenticrosConfig(
@@ -234,6 +285,7 @@ export function buildClaudeDoctorChecks(
   }> = [];
 
   const candidates: Array<{ id: string; label: string; target: ClaudeConfigTarget; path: string }> = [
+    { id: "claude-config-user", label: "Claude Code user MCP", target: "user", path: claudeUserConfigPath() },
     { id: "claude-config-desktop", label: "Claude Desktop MCP", target: "desktop", path: claudeDesktopConfigPath() },
   ];
   if (repoRoot) {
@@ -248,12 +300,12 @@ export function buildClaudeDoctorChecks(
   for (const c of candidates) {
     const cfg = readClaudeAgenticrosConfig(c.path, c.target);
     if (!cfg.exists) {
-      if (c.target === "desktop") {
+      if (c.target === "desktop" || c.target === "user") {
         checks.push({
           id: c.id,
-          label: "Claude Desktop MCP config missing",
+          label: `${c.label} config missing`,
           severity: "yellow",
-          hint: "Run `agenticros mcp setup --claude` or `agenticros claude setup --desktop`.",
+          hint: "Run `agenticros mcp setup --claude`.",
         });
       }
       continue;

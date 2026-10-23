@@ -35,7 +35,8 @@ import { execa } from "execa";
 import { runDoctorChecks } from "./doctor.js";
 import { loginCommand } from "./cloud-auth.js";
 import { registerCommand } from "./register.js";
-import { agyOnPath, claudeOnPath, codexOnPath, hermesOnPath, mcpSetupCommand } from "../util/mcp-setup.js";
+import { defaultRealRobotConfig } from "../util/default-robot-config.js";
+import { agyOnPath, claudeOnPath, codexOnPath, hermesOnPath, mcpSetupCommand, openclawOnPath } from "../util/mcp-setup.js";
 import { detectRosDistro, hasBin, isWindows } from "../util/env.js";
 import { getCliPaths, isAgenticrosMonorepo, resetPathsCache } from "../util/paths.js";
 import {
@@ -56,6 +57,8 @@ import { isWorkspaceBuilt, isWorkspaceInstalled, runPnpmInstall, writeWorkspaceN
 export interface InitOptions {
   force?: boolean;
   installDir?: string;
+  /** Skip prompts. Real robot, local ROS, no cloud login, and couple every agent already on PATH. */
+  yes?: boolean;
 }
 
 export async function initCommand(opts: InitOptions): Promise<void> {
@@ -180,8 +183,8 @@ export async function initCommand(opts: InitOptions): Promise<void> {
   } else if (!ros.setupBash) {
     warn(
       "Skipping ROS 2 colcon build: no ROS 2 install under /opt/ros/. " +
-        "Install Humble or Jazzy on this machine if you need local sim / " +
-        "colcon, or continue — MCP/OpenClaw can still drive a remote robot.",
+        "Install ROS 2 on this machine if you need local sim / colcon, " +
+        "or continue — MCP/OpenClaw can still drive a remote robot.",
     );
   } else if (!hasBin("colcon")) {
     warn(
@@ -213,6 +216,19 @@ export async function initCommand(opts: InitOptions): Promise<void> {
       "Skipping OpenClaw plugin install: setup_gateway_plugin.sh requires " +
         "bash + OpenClaw CLI. Run it from WSL 2 or a Linux/macOS host.",
     );
+  } else if (opts.yes && (opts.force || !isAgenticrosOpenclawPluginInstalled())) {
+    if (await openclawOnPath()) {
+      const script = join(paths.scriptsDir, "setup_gateway_plugin.sh");
+      if (existsSync(script)) {
+        await runStep("Installing OpenClaw plugin", async () => {
+          await runShell(`bash "${script}"`);
+        });
+      } else {
+        warn(`setup_gateway_plugin.sh not found at ${script}; skipping.`);
+      }
+    } else {
+      dim("OpenClaw CLI not on PATH — skip plugin. It will be installed when OpenClaw is.");
+    }
   } else if (opts.force || !isAgenticrosOpenclawPluginInstalled()) {
     // OpenClaw onboard creates ~/.openclaw/openclaw.json before AgenticROS is
     // linked. Only skip when the flattened deploy dir is registered — otherwise
@@ -246,41 +262,57 @@ export async function initCommand(opts: InitOptions): Promise<void> {
 
   // Step: robot config.
   if (opts.force || !userConfigExists()) {
-    await promptAndWriteRobotConfig();
+    if (opts.yes) {
+      writeRobotConfig(false, "");
+    } else {
+      await promptAndWriteRobotConfig();
+    }
   } else {
     ok("Robot config already exists at ~/.agenticros/config.json (skip).");
   }
 
   // Step: AgenticROS Cloud login + register (skippable for local-only).
-  await promptCloudLoginAndRegister(opts.force === true);
+  if (opts.yes) {
+    dim("Skipping AgenticROS Cloud login. Run `agenticros login` later.");
+  } else {
+    await promptCloudLoginAndRegister(opts.force === true);
+  }
 
   // Step: OpenAI key.
-  if (opts.force || !openAiKeyConfigured(before)) {
+  if (opts.yes) {
+    dim("Skipping OpenAI key. The agent's own vision describes camera snapshots.");
+  } else if (opts.force || !openAiKeyConfigured(before)) {
     await promptAndConfigureOpenAi();
   } else {
     ok("OpenAI API key already configured (skip).");
   }
 
-  // Step: MCP clients (Codex, Hermes, Claude, Antigravity — same stdio server).
-  const hasCodexCli = await codexOnPath();
-  const hasHermesCli = await hermesOnPath();
-  const hasClaudeCli = await claudeOnPath();
-  const hasAgyCli = await agyOnPath();
-  const hasAnyMcpClient = hasCodexCli || hasHermesCli || hasClaudeCli || hasAgyCli;
-  if (hasAnyMcpClient || opts.force) {
-    const wantMcp = await confirm({
-      message: hasAnyMcpClient
-        ? "Configure MCP clients (Codex, Hermes, Claude, Antigravity) for AgenticROS?"
-        : "Write MCP config for Codex/Hermes/Claude/Antigravity? (no MCP CLI on PATH yet)",
-      default: hasAnyMcpClient,
+  // Step: MCP clients. --yes couples every agent already on PATH.
+  if (opts.yes) {
+    await runStep("Configuring installed AI agents", async () => {
+      await mcpSetupCommand({ repoRoot: paths.repoRoot, quiet: true, onlyInstalled: true });
     });
-    if (wantMcp) {
-      await runStep("Configuring MCP clients", async () => {
-        await mcpSetupCommand({ repoRoot: paths.repoRoot, quiet: true });
-      });
-    }
   } else {
-    dim("No MCP clients on PATH — skip. Run `agenticros mcp setup` later.");
+    const hasCodexCli = await codexOnPath();
+    const hasHermesCli = await hermesOnPath();
+    const hasClaudeCli = await claudeOnPath();
+    const hasAgyCli = await agyOnPath();
+    const hasAnyMcpClient = hasCodexCli || hasHermesCli || hasClaudeCli || hasAgyCli;
+    if (hasAnyMcpClient || opts.force) {
+      const wantMcp = await confirm({
+        message: hasAnyMcpClient
+          ? "Configure MCP clients (Codex, Hermes, Claude, Antigravity) for AgenticROS?"
+          : "Write MCP config for Codex/Hermes/Claude/Antigravity? (no MCP CLI on PATH yet)",
+        default: hasAnyMcpClient,
+      });
+      if (wantMcp) {
+        await runStep("Configuring MCP clients", async () => {
+          await mcpSetupCommand({ repoRoot: paths.repoRoot, quiet: true });
+        });
+      }
+    } else {
+      dim("No MCP clients on PATH — skip. Run `agenticros mcp setup` later.");
+    }
   }
 
   // Step: doctor summary.
@@ -485,11 +517,39 @@ async function promptCloudLoginAndRegister(force: boolean): Promise<void> {
   }
 }
 
+function writeRobotConfig(isSim: boolean, namespace: string): void {
+  const userData = getCliPaths().userDataDir;
+  mkdirSync(userData, { recursive: true });
+  const real = defaultRealRobotConfig();
+  const cfg = isSim
+    ? {
+        transport: { mode: "rosbridge" },
+        rosbridge: { url: "ws://localhost:9090" },
+        robot: {
+          namespace,
+          name: "Sim Robot",
+          cameraTopic: "/camera/camera/color/image_raw/compressed",
+        },
+        safety: { maxLinearVelocity: 0.5, maxAngularVelocity: 1.0 },
+        teleop: { cmdVelTopic: "/cmd_vel", speedDefault: 0.2 },
+      }
+    : {
+        ...real,
+        robot: { ...real.robot, namespace },
+      };
+  writeFileSync(join(userData, "config.json"), JSON.stringify(cfg, null, 2));
+  ok(`Wrote ~/.agenticros/config.json (namespace=${namespace || "(empty)"}).`);
+  writeState({ lastNamespace: namespace });
+  ensureProfilesExist();
+  switchMode(isSim ? "sim" : "real");
+  ok(`Mode profiles created at ~/.agenticros/profiles/. Active mode: ${isSim ? "sim" : "real"}.`);
+}
+
 async function promptAndWriteRobotConfig(): Promise<void> {
   const isSim = (await select<string>({
     message: "Which environment are you setting up first?",
     choices: [
-      { name: "Real robot (RealSense, motors, local DDS transport)", value: "real" },
+      { name: "Real robot (RealSense, motors, local ROS transport)", value: "real" },
       { name: "Simulation (Gazebo Harmonic; works without robot hardware)", value: "sim" },
     ],
     default: "sim",
@@ -500,38 +560,7 @@ async function promptAndWriteRobotConfig(): Promise<void> {
       "Robot namespace (used as topic prefix, e.g. /<namespace>/cmd_vel). Leave empty if your robot/sim doesn't use a ROS namespace (plain /cmd_vel).",
     default: "",
   });
-
-  const userData = getCliPaths().userDataDir;
-  mkdirSync(userData, { recursive: true });
-  const cfg = {
-    transport: { mode: isSim ? "rosbridge" : "local" },
-    ...(isSim ? { rosbridge: { url: "ws://localhost:9090" } } : {}),
-    robot: {
-      namespace,
-      name: isSim ? "Sim Robot" : "My Robot",
-      cameraTopic: isSim
-        ? "/camera/camera/color/image_raw/compressed"
-        : "/camera/camera/color/image_raw",
-    },
-    safety: {
-      maxLinearVelocity: isSim ? 0.5 : 1.0,
-      maxAngularVelocity: isSim ? 1.0 : 1.5,
-    },
-    teleop: {
-      cmdVelTopic: "/cmd_vel",
-      speedDefault: isSim ? 0.2 : 0.3,
-    },
-  };
-  writeFileSync(join(userData, "config.json"), JSON.stringify(cfg, null, 2));
-  ok(`Wrote ~/.agenticros/config.json (namespace=${namespace}).`);
-  writeState({ lastNamespace: namespace });
-
-  // Seed both mode profiles and persist which one this fresh install
-  // represents. From here on, switching is a `agenticros mode <real|sim>`
-  // away - no more hand-editing JSON between sim and real-robot runs.
-  ensureProfilesExist();
-  switchMode(isSim ? "sim" : "real");
-  ok(`Mode profiles created at ~/.agenticros/profiles/. Active mode: ${isSim ? "sim" : "real"}.`);
+  writeRobotConfig(isSim, namespace);
 }
 
 async function promptAndConfigureOpenAi(): Promise<void> {

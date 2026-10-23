@@ -10,7 +10,8 @@
 #      (required by OpenClaw 2026.6+: the install-time code safety scan
 #      rejects any node_modules symlink that points outside the install root,
 #      which pnpm's workspace-symlink layout always trips)
-#   3. Registers the deployed plugin with OpenClaw via `openclaw plugins install -l`
+#   3. Registers the deployed plugin with OpenClaw via
+#      `openclaw plugins install -l --force --accept-capabilities`
 #   4. (Optional) Sets robot namespace / rosbridge URL via flags
 #   5. (Optional) Adjusts the systemd user service so the gateway picks it up
 #
@@ -289,6 +290,7 @@ if [[ -n "$RCLN_DEPLOY" ]]; then
       set +u
       source "$DEPLOY_ROS_SETUP"
       [[ -n "$DEPLOY_ROS_OVERLAY" ]] && source "$DEPLOY_ROS_OVERLAY"
+      export npm_config_yes=true
       cd "$RCLN_DEPLOY" && node scripts/generate_messages.js
     ) || echo "  WARNING: rclnodejs message generation failed; the 'local' transport may not work."
   else
@@ -343,7 +345,7 @@ LOG="$(mktemp -t agenticros-install.XXXX.log)"
 # Match common success strings across OpenClaw releases (case-insensitive).
 SUCCESS_RE='Linked plugin path|Successfully linked|Plugin linked|linked plugin|already (installed|linked)|Installed plugin|plugin install(ed|ation) (complete|succeeded)'
 FAIL_RE='installation blocked|Plugin .* installation blocked|Invalid path:|must stay within extensions|code safety scan|symlink.*outside'
-( openclaw plugins install -l "$DEPLOY_DIR" >"$LOG" 2>&1 ) &
+( openclaw plugins install -l --force --accept-capabilities "$DEPLOY_DIR" >"$LOG" 2>&1 ) &
 INSTALL_PID=$!
 # ARM / Jetson deploys are slower; allow up to 90s before we stop waiting for logs.
 INSTALL_WAIT_SECS="${AGENTICROS_PLUGIN_INSTALL_WAIT_SECS:-90}"
@@ -539,6 +541,13 @@ for v in ROS_DISTRO ROS_VERSION ROS_PYTHON_VERSION ROS_DOMAIN_ID \\
   if [ -n "\$val" ]; then echo "\$v=\$val"; fi
 done
 EOSH
+      # Corebrum's ROS graph is rmw_zenoh_cpp on the one local router.
+      # A systemd gateway does not source the desktop profile, so record it here.
+      if [[ -f /etc/corebrum/ros/rmw || -x /usr/local/lib/corebrum/agenticros-with-ros.sh ]]; then
+        grep -v '^RMW_IMPLEMENTATION=' "$ENV_FILE" > "${ENV_FILE}.tmp" || true
+        printf 'RMW_IMPLEMENTATION=rmw_zenoh_cpp\n' >> "${ENV_FILE}.tmp"
+        mv "${ENV_FILE}.tmp" "$ENV_FILE"
+      fi
       # OpenClaw native admission copies sharp's .node and libvips into separate
       # capture dirs; the .node RPATH cannot see libvips unless it is on
       # LD_LIBRARY_PATH at gateway process start (runtime env changes are ignored).

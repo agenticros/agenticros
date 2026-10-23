@@ -18,6 +18,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 
+import { resolveRosWrapper } from "./mcp-launch.js";
+
 export interface AgyAgenticrosConfig {
   configPath: string;
   exists: boolean;
@@ -80,9 +82,10 @@ export function buildAgyMcpServerEntry(
   mcpEntryAbs: string,
   namespace = "",
 ): Record<string, unknown> {
+  const wrapper = resolveRosWrapper();
   return {
-    command: process.execPath,
-    args: [resolve(mcpEntryAbs)],
+    command: wrapper ?? process.execPath,
+    args: wrapper ? ["node", resolve(mcpEntryAbs)] : [resolve(mcpEntryAbs)],
     env: {
       AGENTICROS_ROBOT_NAMESPACE: namespace,
     },
@@ -93,13 +96,14 @@ export function buildAgyMcpServerEntry(
 export function generateAgySkillContent(): string {
   return `---
 name: agenticros
-description: Control a ROS 2 robot through the AgenticROS MCP server. Use when the user asks to drive, stop, navigate, inspect sensors, capture a camera image, or remember something about the robot.
+description: Control a ROS 2 robot through the AgenticROS MCP server. Use when the user asks what you see, to drive, stop, navigate, inspect sensors, capture a camera image, or do any mission on this machine, even if they do not name AgenticROS.
 ---
 
 # AgenticROS
 
-The \`agenticros\` MCP server is connected. Use its tools for robot control, sensing, and memory.
+The \`agenticros\` MCP server is connected. It is your body on this machine. Use its tools for robot control, sensing, and memory, including when the user does not say AgenticROS.
 
+- When the user asks what you see, call \`ros2_camera_snapshot\` with no topic and describe the image.
 - Prefer those tools over a \`ros2\` shell CLI.
 - Velocity commands are clamped by the robot's safety limits.
 - Call \`ros2_estop\` to halt motion immediately.

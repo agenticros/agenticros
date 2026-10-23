@@ -10,14 +10,14 @@
 
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
 const MAP_ID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const ROS_DISTROS = ["jazzy", "humble", "iron", "rolling"];
+const ROS_DISTROS = ["jazzy", "humble", "iron", "kilted", "lyrical", "rolling"];
 
 export function defaultCatalogPath(home = homedir()) {
   return join(home, ".agenticros", "maps", "index.json");
@@ -123,6 +123,13 @@ export function findStartMappingScript(fromFile) {
 export function detectRosDistroName(root = "/opt/ros") {
   for (const distro of ROS_DISTROS) {
     if (existsSync(join(root, distro, "setup.bash"))) return distro;
+  }
+  try {
+    for (const name of readdirSync(root)) {
+      if (existsSync(join(root, name, "setup.bash"))) return name;
+    }
+  } catch {
+    /* missing root */
   }
   return undefined;
 }

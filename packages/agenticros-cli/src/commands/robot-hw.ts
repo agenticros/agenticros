@@ -18,6 +18,7 @@ import {
   robotPkgHasInlineStatus,
   robotPkgHasRuntimeDeps,
 } from "../util/robot-pkg.js";
+import { clearPid, killPid } from "../util/pidfile.js";
 import { getCliPaths, resolveScriptPath } from "../util/paths.js";
 import { detectRosDistro } from "../util/env.js";
 import { getActiveRobotId, readConfigObject, readRobots } from "../util/robot-config.js";
@@ -488,6 +489,13 @@ export async function startServiceCommand(
   }
 }
 
+async function stopEyesCommand(): Promise<void> {
+  const pid = killPid("eyes");
+  clearPid("eyes");
+  if (pid) ok(`Stopped eyes (pid ${pid}).`);
+  else info("Eyes are not running.");
+}
+
 export async function stopServiceCommand(target: string): Promise<void> {
   switch (target.toLowerCase()) {
     case "motors":
@@ -502,8 +510,11 @@ export async function stopServiceCommand(target: string): Promise<void> {
     case "mapping":
       await stopMappingCommand();
       break;
+    case "eyes":
+      await stopEyesCommand();
+      break;
     default:
-      err(`Unknown stop target "${target}". Use motors | realsense | camera | mapping.`);
+      err(`Unknown stop target "${target}". Use motors | realsense | camera | mapping | eyes.`);
       process.exit(1);
   }
 }

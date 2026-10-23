@@ -316,6 +316,23 @@ export async function runDoctorChecks(opts: DoctorOptions = {}): Promise<DoctorR
   const mcpEntry = findMcpEntry();
   checks.push(...buildMcpDoctorChecks(mcpEntry, paths.repoRoot));
 
+  const corebrumRmw = "/etc/corebrum/ros/rmw";
+  if (existsSync(corebrumRmw)) {
+    const rmw = readFileSync(corebrumRmw, "utf8").trim();
+    checks.push({
+      id: "corebrum-rmw",
+      label:
+        rmw === "rmw_zenoh_cpp"
+          ? "Corebrum RMW is rmw_zenoh_cpp"
+          : `Corebrum RMW is ${rmw || "unset"}`,
+      severity: rmw === "rmw_zenoh_cpp" ? "green" : "yellow",
+      hint:
+        rmw === "rmw_zenoh_cpp"
+          ? undefined
+          : "AgenticROS processes force rmw_zenoh_cpp so they join the Zenoh router. The rest of this session is on a different middleware.",
+    });
+  }
+
   const hasCodex = await codexOnPath();
   checks.push({
     id: "codex-cli",

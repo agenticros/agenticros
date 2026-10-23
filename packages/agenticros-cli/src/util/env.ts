@@ -2,25 +2,46 @@
  * Environment + system detection helpers shared by doctor, init, and the runners.
  */
 
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { delimiter, join } from "node:path";
 
-/** Common ROS 2 install locations under /opt/ros/<distro>/setup.bash. */
-const KNOWN_DISTROS = ["humble", "iron", "jazzy", "rolling"] as const;
+/** Preferred order when more than one ROS 2 install is present. */
+const KNOWN_DISTROS = ["humble", "iron", "jazzy", "kilted", "lyrical", "rolling"] as const;
+
+function installedRosDistros(root: string): string[] {
+  try {
+    return readdirSync(root, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && existsSync(join(root, entry.name, "setup.bash")))
+      .map((entry) => entry.name);
+  } catch {
+    return [];
+  }
+}
 
 export interface RosInfo {
   distro: string | undefined;
   setupBash: string | undefined;
 }
 
-/** Look for /opt/ros/<distro>/setup.bash. Returns the first that exists, or undefined. */
-export function detectRosDistro(preferred?: string): RosInfo {
-  const candidates = preferred
-    ? [preferred, ...KNOWN_DISTROS.filter((d) => d !== preferred)]
-    : [...KNOWN_DISTROS];
+/**
+ * Look for `<root>/<distro>/setup.bash`. Honors an explicit preference, then
+ * `ROS_DISTRO`, then the known list, then any other installed distro such as
+ * Lyrical. Returns the first that exists, or undefined.
+ */
+export function detectRosDistro(preferred?: string, root = "/opt/ros"): RosInfo {
+  const installed = new Set(installedRosDistros(root));
+  const candidates = [
+    preferred,
+    process.env.ROS_DISTRO,
+    ...KNOWN_DISTROS,
+    ...installed,
+  ];
+  const seen = new Set<string>();
   for (const distro of candidates) {
-    const setupBash = `/opt/ros/${distro}/setup.bash`;
-    if (existsSync(setupBash)) return { distro, setupBash };
+    if (!distro || seen.has(distro)) continue;
+    seen.add(distro);
+    if (!installed.has(distro)) continue;
+    return { distro, setupBash: join(root, distro, "setup.bash") };
   }
   return { distro: undefined, setupBash: undefined };
 }

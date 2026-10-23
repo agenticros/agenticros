@@ -9,6 +9,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 
+import { resolveRosWrapper } from "./mcp-launch.js";
+
 export interface HermesAgenticrosConfig {
   configPath: string;
   exists: boolean;
@@ -45,12 +47,16 @@ export function globalHermesConfigPath(): string {
  * so `~/.agenticros/config.json` / `agenticros mode` drives the active robot.
  */
 export function buildAgenticrosMcpYamlBlock(mcpEntryAbs: string, namespace = ""): string {
-  const escaped = mcpEntryAbs.replace(/\\/g, "\\\\");
+  const wrapper = resolveRosWrapper();
+  const command = wrapper ? wrapper.replace(/\\/g, "\\\\") : "node";
+  const args = wrapper
+    ? `["node", "${mcpEntryAbs.replace(/\\/g, "\\\\")}"]`
+    : `["${mcpEntryAbs.replace(/\\/g, "\\\\")}"]`;
   const nsYaml = namespace.replace(/"/g, '\\"');
   return `${MCP_SERVERS_KEY}
   ${AGENTICROS_KEY}
-    command: "node"
-    args: ["${escaped}"]
+    command: "${command}"
+    args: ${args}
     env:
       AGENTICROS_ROBOT_NAMESPACE: "${nsYaml}"
     connect_timeout: 60

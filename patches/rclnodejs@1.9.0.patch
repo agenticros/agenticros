@@ -1,0 +1,33 @@
+diff --git a/lib/distro.js b/lib/distro.js
+index 99ca254e63f11ae978460a56e4f09fbe240eb9f3..3b0dde8967670f5e7ef8a89494c2ddeab3cac327 100644
+--- a/lib/distro.js
++++ b/lib/distro.js
+@@ -26,6 +26,7 @@ const DistroId = {
+   IRON: 2305,
+   JAZZY: 2405,
+   KILTED: 2505,
++  LYRICAL: 2605,
+   ROLLING: 5000,
+ };
+ 
+@@ -37,6 +38,7 @@ DistroNameIdMap.set('humble', DistroId.HUMBLE);
+ DistroNameIdMap.set('iron', DistroId.IRON);
+ DistroNameIdMap.set('jazzy', DistroId.JAZZY);
+ DistroNameIdMap.set('kilted', DistroId.KILTED);
++DistroNameIdMap.set('lyrical', DistroId.LYRICAL);
+ DistroNameIdMap.set('rolling', DistroId.ROLLING);
+ 
+ const DistroUtils = {
+diff --git a/src/rcl_lifecycle_bindings.cpp b/src/rcl_lifecycle_bindings.cpp
+index 57bf67a9e7cda0c408461ef1e07d59e5800739a6..946581e8f2412b33692c8ed7be5da7b0a1d06b87 100644
+--- a/src/rcl_lifecycle_bindings.cpp
++++ b/src/rcl_lifecycle_bindings.cpp
+@@ -71,7 +71,7 @@ Napi::Value CreateLifecycleStateMachine(const Napi::CallbackInfo& info) {
+   const rosidl_service_type_support_t* gs =
+       GetServiceTypeSupport("lifecycle_msgs", "GetState");
+ 
+-#if ROS_VERSION >= 5000  // ROS2 Rolling
++#if ROS_VERSION >= 2605  // Lyrical added rcl_clock_t; Rolling stays 5000
+   rcl_lifecycle_state_machine_options_t options =
+       rcl_lifecycle_get_default_state_machine_options();
+   options.enable_com_interface = info[1].As<Napi::Boolean>().Value();

@@ -12,6 +12,11 @@ export interface McpCommandSetupOptions {
   hermes?: boolean;
   claude?: boolean;
   agy?: boolean;
+  cursor?: boolean;
+  grok?: boolean;
+  openclaw?: boolean;
+  onlyInstalled?: boolean;
+  quiet?: boolean;
   project?: boolean;
   desktop?: boolean;
 }
@@ -25,7 +30,7 @@ export interface McpCommandDoctorOptions {
 }
 
 export async function mcpSetupCliCommand(opts: McpCommandSetupOptions = {}): Promise<void> {
-  header("Configure AgenticROS MCP");
+  if (!opts.quiet) header("Configure AgenticROS MCP");
   const paths = getCliPaths();
   await mcpSetupCommand({
     all: opts.all,
@@ -33,6 +38,11 @@ export async function mcpSetupCliCommand(opts: McpCommandSetupOptions = {}): Pro
     hermes: opts.hermes,
     claude: opts.claude,
     agy: opts.agy,
+    cursor: opts.cursor,
+    grok: opts.grok,
+    openclaw: opts.openclaw,
+    onlyInstalled: opts.onlyInstalled,
+    quiet: opts.quiet,
     project: opts.project,
     desktop: opts.desktop,
     repoRoot: paths.repoRoot,

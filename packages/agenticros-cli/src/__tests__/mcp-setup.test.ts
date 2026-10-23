@@ -13,6 +13,9 @@ describe("mcp-setup", () => {
     assert.deepEqual(resolveMcpHosts({ hermes: true }), ["hermes"]);
     assert.deepEqual(resolveMcpHosts({ claude: true }), ["claude"]);
     assert.deepEqual(resolveMcpHosts({ agy: true }), ["agy"]);
+    assert.deepEqual(resolveMcpHosts({ cursor: true }), ["cursor"]);
+    assert.deepEqual(resolveMcpHosts({ grok: true }), ["grok"]);
+    assert.deepEqual(resolveMcpHosts({ openclaw: true }), ["openclaw"]);
   });
 
   it("resolveMcpHosts uses project scope for legacy codex setup", () => {

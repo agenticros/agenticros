@@ -77,6 +77,13 @@ test("detectRosDistroName prefers jazzy", () => {
   assert.equal(detectRosDistroName(join(root, "missing")), undefined);
 });
 
+test("detectRosDistroName finds lyrical when it is the only install", () => {
+  const root = mkdtempSync(join(tmpdir(), "agenticros-ros-"));
+  mkdirSync(join(root, "lyrical"), { recursive: true });
+  writeFileSync(join(root, "lyrical", "setup.bash"), "");
+  assert.equal(detectRosDistroName(root), "lyrical");
+});
+
 test("launchMappingStack detaches start_mapping.sh with the room database", () => {
   const calls = [];
   const pid = launchMappingStack({

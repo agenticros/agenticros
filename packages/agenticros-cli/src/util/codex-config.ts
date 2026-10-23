@@ -10,6 +10,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 
+import { mcpShellLine } from "./mcp-launch.js";
+
 export type CodexConfigScope = "global" | "project";
 
 export interface CodexAgenticrosConfig {
@@ -55,8 +57,7 @@ export function resolveCodexConfigPath(scope: CodexConfigScope, cwd = process.cw
  * `~/.agenticros/config.json` / `agenticros mode` drives the active robot.
  */
 export function buildAgenticrosMcpTomlBlock(mcpEntryAbs: string, namespace = ""): string {
-  const escaped = mcpEntryAbs.replace(/\\/g, "\\\\");
-  const shellCmd = `node ${escaped} 2>>/tmp/agenticros-mcp.log`;
+  const shellCmd = mcpShellLine(mcpEntryAbs).replace(/\\/g, "\\\\");
   const nsValue = namespace.replace(/"/g, '\\"');
   return `${AGENTICROS_BLOCK_START}
 command = "sh"
