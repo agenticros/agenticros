@@ -18,6 +18,48 @@ index 99ca254e63f11ae978460a56e4f09fbe240eb9f3..3b0dde8967670f5e7ef8a89494c2ddea
  DistroNameIdMap.set('rolling', DistroId.ROLLING);
  
  const DistroUtils = {
+diff --git a/rosidl_gen/templates/message-template.js b/rosidl_gen/templates/message-template.js
+index f91ad6cfdbce0ec0d6e18cfcb82b08f93f546d13..2283549ec5b689307d2b0668b56df097394982ea 100644
+--- a/rosidl_gen/templates/message-template.js
++++ b/rosidl_gen/templates/message-template.js
+@@ -14,6 +14,8 @@
+ 
+ 'use strict';
+ 
++const DistroUtils = require('../../lib/distro.js');
++
+ /**
+  * Generate JavaScript message class code using native template literals
+  * This replaces the doT template engine with pure JavaScript
+@@ -159,6 +161,19 @@ function isPrimitivePackage(baseType) {
+   return primitiveBaseType.indexOf(baseType.type) !== -1;
+ }
+ 
++// Lyrical grew rosidl primitive sequences by two trailing bools. Message
++// sequences stayed data/size/capacity. Only the std_msgs primitive wrappers
++// are those primitive sequences, and the flags stay false because rclnodejs
++// owns the buffer itself.
++function primitiveSequenceTail() {
++  if (DistroUtils.getDistroId() < DistroUtils.DistroId.LYRICAL) {
++    return '';
++  }
++  return `,
++  is_rosidl_buffer: ref.types.bool,
++  owns_rosidl_buffer: ref.types.bool`;
++}
++
+ function isTypedArrayType(type) {
+   return typedArrayType.indexOf(type.type.toLowerCase()) !== -1;
+ }
+@@ -347,7 +362,7 @@ ${
+     : `  data: ${refArrayType},`
+ }
+   size: ref.types.size_t,
+-  capacity: ref.types.size_t
++  capacity: ref.types.size_t${isPrimitivePackage(spec.baseType) ? primitiveSequenceTail() : ''}
+ });
+ 
+ ${generateWrapperClass()}
 diff --git a/src/rcl_lifecycle_bindings.cpp b/src/rcl_lifecycle_bindings.cpp
 index 57bf67a9e7cda0c408461ef1e07d59e5800739a6..946581e8f2412b33692c8ed7be5da7b0a1d06b87 100644
 --- a/src/rcl_lifecycle_bindings.cpp
