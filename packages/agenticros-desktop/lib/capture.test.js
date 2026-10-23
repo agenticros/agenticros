@@ -93,6 +93,8 @@ describe("gstreamer pipeline", () => {
     });
     assert.match(live[1], /pipewiresrc fd=3 path=42/);
     assert.match(live[1], /x264enc tune=zerolatency/);
+    assert.match(live[1], /cabac=false/);
+    assert.match(live[1], /profile=constrained-baseline/);
     assert.match(live[1], /width=1280,height=720,framerate=15\/1/);
     assert.match(live[1], /fdsink fd=1/);
 

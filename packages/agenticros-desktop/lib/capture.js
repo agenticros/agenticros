@@ -35,7 +35,9 @@ function encodeElement(encoder, fps) {
     return "vaapih264enc ! h264parse config-interval=-1 ! video/x-h264,stream-format=byte-stream,alignment=au";
   }
   const gop = Math.max(1, fps) * 2;
-  return `x264enc tune=zerolatency speed-preset=ultrafast bitrate=2500 key-int-max=${gop} bframes=0 byte-stream=true aud=true`;
+  // cabac and 8x8dct off is Constrained Baseline, which is the profile the
+  // browser negotiated (profile-level-id=42e01f). High-profile NALs never paint.
+  return `x264enc tune=zerolatency speed-preset=ultrafast bitrate=2500 key-int-max=${gop} bframes=0 byte-stream=true aud=true cabac=false dct8x8=false ! h264parse config-interval=-1 ! video/x-h264,stream-format=byte-stream,alignment=au,profile=constrained-baseline`;
 }
 
 /**
@@ -71,7 +73,9 @@ export function startGstCapture(opts) {
   let stderr = "";
   child.stdout?.on("data", (chunk) => demux.push(chunk));
   child.stderr?.on("data", (chunk) => {
-    stderr = (stderr + chunk.toString("utf8")).slice(-4000);
+    const line = chunk.toString("utf8").trim();
+    stderr = (stderr + line).slice(-4000);
+    if (line) log(`gst: ${line.slice(0, 500)}`);
   });
   child.on("error", (err) => {
     log(`gst-launch-1.0 failed to start: ${err.message}`);

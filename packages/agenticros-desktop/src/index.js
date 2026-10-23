@@ -128,11 +128,18 @@ async function startCapture(send) {
     fps,
     encoder,
   });
+  let loggedFrame = false;
   const gst = startGstCapture({
     args,
     stdioFd: portal ? portal.fd : undefined,
     log,
-    onAccessUnit: (nals) => peer?.pushAccessUnit(nals),
+    onAccessUnit: (nals) => {
+      if (!loggedFrame) {
+        loggedFrame = true;
+        log(`First encoded frame (${nals.length} NALs)`);
+      }
+      peer?.pushAccessUnit(nals);
+    },
   });
   capture = {
     stop() {

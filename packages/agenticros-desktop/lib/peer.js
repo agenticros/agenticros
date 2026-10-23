@@ -57,6 +57,9 @@ export function createDesktopPeer(opts = {}) {
   /** @type {RTCPeerConnection | null} */
   let closed = false;
 
+  pc.iceConnectionStateChange.subscribe((state) => log(`ICE ${state}`));
+  pc.connectionStateChange.subscribe((state) => log(`Peer ${state}`));
+
   pc.onDataChannel.subscribe((channel) => {
     if (channel.label !== "desktop-input") {
       log(`Ignoring data channel ${channel.label}`);
