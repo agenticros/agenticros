@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
+import { xkbKeymapCompiles } from "./wayland.js";
 import {
   BTN_LEFT,
   BTN_MIDDLE,
@@ -34,12 +35,13 @@ describe("dom code to evdev", () => {
     assert.equal(modifierMask([30]), 0);
   });
 
-  it("writes an XKB keymap whose KeyA keycode is evdev+8", () => {
+  it("writes an XKB keymap whose KeyA keycode is evdev+8", async () => {
     const keymap = buildUsKeymap();
     assert.match(keymap, /xkb_keymap \{/);
     assert.match(keymap, /<AC01> = 38;/);
-    assert.match(keymap, /key <AC01> \{ type="TWO_LEVEL", symbols\[ a, A \] \};/);
+    assert.match(keymap, /key <AC01> \{ type="TWO_LEVEL", \[ a, A \] \};/);
     assert.match(keymap, /modifier_map Shift \{ <LFSH>, <RTSH> \};/);
+    assert.equal(await xkbKeymapCompiles(keymap), true);
   });
 });
 

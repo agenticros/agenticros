@@ -51,6 +51,16 @@ export function createAnnexBParser(onNal) {
         buf = buf.subarray(next);
       }
     },
+    // The last NAL has no following start code yet. After the encoder goes
+    // idle it is complete, and leaving it out sends a short frame.
+    flush() {
+      const start = findStartCode(buf, 0);
+      if (start < 0) return;
+      const header = startCodeLength(buf, start);
+      const nal = buf.subarray(start + header);
+      buf = Buffer.alloc(0);
+      if (nal.length > 0) onNal(Buffer.from(nal));
+    },
   };
 }
 
@@ -62,9 +72,32 @@ export function createAnnexBParser(onNal) {
 export function createAccessUnitStream(onUnit) {
   let sps = null;
   let pps = null;
+  let pending = [];
+  // x264 sliced-threads emits several slice NALs per frame. An access-unit
+  // delimiter wraps them. Sending each slice with its own RTP timestamp makes
+  // the browser paint one band and fill the rest of the frame with green.
+  const finish = () => {
+    if (pending.length === 0) return;
+    const hasIdr = pending.some((nal) => (nal[0] & 0x1f) === 5);
+    const unit = [];
+    if (hasIdr && sps) unit.push(sps);
+    if (hasIdr && pps) unit.push(pps);
+    unit.push(...pending);
+    pending = [];
+    onUnit(unit);
+  };
   const parser = createAnnexBParser((nal) => {
+    if (nal.length === 0) return;
     const type = nal[0] & 0x1f;
+    if (type === 9) {
+      finish();
+      return;
+    }
     if (type === 7) {
+      // x264's Constrained Baseline SPS is 42c0. Chrome negotiated
+      // profile-level-id=42e01f (constraint flags 0xE0). Same pictures;
+      // the extra constraint bit is what the browser agreed to.
+      if (nal.length >= 4 && nal[1] === 0x42) nal[2] = 0xe0;
       sps = nal;
       return;
     }
@@ -72,18 +105,20 @@ export function createAccessUnitStream(onUnit) {
       pps = nal;
       return;
     }
-    if (type === 6 || type === 9) return;
-    if (type === 5) {
-      const unit = [];
-      if (sps) unit.push(sps);
-      if (pps) unit.push(pps);
-      unit.push(nal);
-      onUnit(unit);
-      return;
-    }
-    if (type >= 1 && type <= 5) onUnit([nal]);
+    if (type === 6) return;
+    if (type === 1 || type === 5) pending.push(nal);
   });
-  return parser;
+  return {
+    push(chunk) {
+      parser.push(chunk);
+    },
+    // The next frame's delimiter is what normally closes this one. Flush so
+    // the last slice is included instead of being sent later by itself.
+    flush() {
+      parser.flush();
+      finish();
+    },
+  };
 }
 
 export function rtpHeader({ marker, payloadType, sequenceNumber, timestamp, ssrc }) {

@@ -295,10 +295,14 @@ export function connectVirtualInput(opts) {
         send(encodeMessage(kbMgrId, OP_KB_MANAGER_CREATE, u32([seatId, keyboardId])));
         objectKinds.set(keyboardId, IFACE_VIRTUAL_KEYBOARD);
         try {
+          if (!(await xkbKeymapCompiles(opts.keymap))) {
+            throw new Error("keymap text did not compile");
+          }
           const keymapPath = writeKeymapFile(opts.keymap);
           keymapFd = openSync(keymapPath, "r");
           const { size } = statSync(keymapPath);
           await sendWithFd(socket, encodeKeymap(keyboardId, size), keymapFd);
+          log("Virtual keyboard keymap installed");
         } catch (err) {
           log(`Virtual keyboard keymap was not installed: ${err instanceof Error ? err.message : err}`);
           keyboardId = 0;
@@ -365,6 +369,33 @@ export function connectVirtualInput(opts) {
 
 function writeKeymapFile(keymap) {
   const file = join(tmpdir(), "agenticros-desktop-keymap.xkb");
-  writeFileSync(file, keymap);
+  // Hyprland reads the mapping with xkb_keymap_new_from_string, which stops
+  // at NUL. The NUL has to sit inside the mapped size.
+  const body = Buffer.from(keymap, "utf8");
+  writeFileSync(file, Buffer.concat([body, Buffer.from([0])]));
   return file;
+}
+
+/**
+ * Hyprland posts WL_DISPLAY_ERROR_NO_MEMORY and closes the client when this
+ * text does not compile. That also drops the virtual pointer.
+ * @param {string} keymap
+ */
+export async function xkbKeymapCompiles(keymap) {
+  let koffi;
+  try {
+    koffi = (await import("koffi")).default;
+  } catch {
+    return false;
+  }
+  const lib = koffi.load("libxkbcommon.so.0");
+  const contextNew = lib.func("void *xkb_context_new(uint32_t)");
+  const fromString = lib.func(
+    "void *xkb_keymap_new_from_string(void *, const char *, uint32_t, uint32_t)",
+  );
+  const ctx = contextNew(0);
+  if (!ctx) return false;
+  // Hyprland compiles with XKB_KEYMAP_FORMAT_TEXT_V2.
+  const compiled = fromString(ctx, keymap.endsWith("\0") ? keymap : `${keymap}\0`, 2, 0);
+  return Boolean(compiled);
 }

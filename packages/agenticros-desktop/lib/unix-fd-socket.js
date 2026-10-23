@@ -36,11 +36,12 @@ function libc() {
     throw new Error("koffi is required to receive the PipeWire file descriptor");
   }
   const lib = koffi.load("libc.so.6");
-  const iovec = koffi.struct("agenticros_iovec", {
+  // Names stay off wayland.js. koffi rejects a second struct with the same name.
+  const iovec = koffi.struct("agenticros_dbus_iovec", {
     iov_base: "void *",
     iov_len: "size_t",
   });
-  const msghdr = koffi.struct("agenticros_msghdr", {
+  const msghdr = koffi.struct("agenticros_dbus_msghdr", {
     msg_name: "void *",
     msg_namelen: "uint32_t",
     msg_iov: koffi.pointer(iovec),
@@ -49,7 +50,7 @@ function libc() {
     msg_controllen: "size_t",
     msg_flags: "int",
   });
-  const pollfd = koffi.struct("agenticros_pollfd", {
+  const pollfd = koffi.struct("agenticros_dbus_pollfd", {
     fd: "int",
     events: "short",
     revents: "short",
@@ -63,8 +64,8 @@ function libc() {
     connect: lib.func("int connect(int, void *, uint32_t)"),
     close: lib.func("int close(int)"),
     send: lib.func("long send(int, void *, size_t, int)"),
-    recvmsg: lib.func("long recvmsg(int, _Inout_ agenticros_msghdr *, int)"),
-    poll: lib.func("int poll(_Inout_ agenticros_pollfd *, unsigned long, int)"),
+    recvmsg: lib.func("long recvmsg(int, _Inout_ agenticros_dbus_msghdr *, int)"),
+    poll: lib.func("int poll(_Inout_ agenticros_dbus_pollfd *, unsigned long, int)"),
     fcntl: lib.func("int fcntl(int, int, int)"),
     errnoPtr: lib.func("int * __errno_location(void)"),
   };

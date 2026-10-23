@@ -9,7 +9,7 @@
 
 import { parseArgs } from "node:util";
 
-import { buildGstArgs, DEFAULT_FPS, DEFAULT_HEIGHT, DEFAULT_WIDTH, gstreamerAvailable, pickEncoder, startGstCapture } from "../lib/capture.js";
+import { buildGstArgs, DEFAULT_FPS, DEFAULT_HEIGHT, DEFAULT_WIDTH, gstreamerAvailable, pickEncoder, startGstCapture, startWfCapture, wfRecorderAvailable } from "../lib/capture.js";
 import {
   browserButtonToEvdev,
   buildUsKeymap,
@@ -99,54 +99,107 @@ async function stopSession() {
 }
 
 async function startCapture(send) {
-  if (!gstreamerAvailable()) {
+  const useRecorder = !testPattern && wfRecorderAvailable();
+  if (!useRecorder && !gstreamerAvailable()) {
     throw new Error(
       "gst-launch-1.0 is not installed. Install gstreamer1.0-tools, gstreamer1.0-plugins-base, gstreamer1.0-plugins-good, gstreamer1.0-plugins-ugly, and gstreamer1.0-pipewire.",
     );
   }
-  const encoder = await pickEncoder();
+  const encoder = useRecorder ? "wf-recorder" : await pickEncoder();
   log(`H.264 encoder: ${encoder}`);
-  let portal = null;
   if (!testPattern) {
     send({ type: "desktop", signal: "status", state: "waiting-approval" });
-    portal = await openScreenCast({ log });
-    if (portal.width > 0 && portal.height > 0) {
-      frame.width = portal.width;
-      frame.height = portal.height;
-    }
   }
-  if (!peer) {
-    portal?.close();
-    return;
-  }
-  const args = buildGstArgs({
-    testPattern,
-    fd: 3,
-    nodeId: portal?.nodeId,
-    width,
-    height,
-    fps,
-    encoder,
-  });
-  let loggedFrame = false;
-  const gst = startGstCapture({
-    args,
-    stdioFd: portal ? portal.fd : undefined,
-    log,
-    onAccessUnit: (nals) => {
-      if (!loggedFrame) {
-        loggedFrame = true;
-        log(`First encoded frame (${nals.length} NALs)`);
-      }
-      peer?.pushAccessUnit(nals);
-    },
-  });
-  capture = {
-    stop() {
-      gst.stop();
-      portal?.close();
-    },
+  let portal = null;
+  let gst = null;
+  const stop = () => {
+    const currentGst = gst;
+    const currentPortal = portal;
+    gst = null;
+    portal = null;
+    currentGst?.stop();
+    currentPortal?.close();
   };
+  capture = { stop };
+
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    if (!peer) {
+      stop();
+      return;
+    }
+    if (!testPattern && !useRecorder) {
+      portal?.close();
+      portal = null;
+      portal = await openScreenCast({ log });
+      if (portal.width > 0 && portal.height > 0) {
+        frame.width = portal.width;
+        frame.height = portal.height;
+      }
+    }
+    if (!peer) {
+      stop();
+      return;
+    }
+    let sawFrame = false;
+    let resolveFrame = () => {};
+    const frameReady = new Promise((resolve) => {
+      resolveFrame = resolve;
+    });
+    const onAccessUnit = (nals) => {
+        if (!sawFrame) {
+          sawFrame = true;
+          log(`First encoded frame (${nals.length} NALs)`);
+          resolveFrame();
+        }
+        peer?.pushAccessUnit(nals);
+      };
+    gst = useRecorder
+      ? startWfCapture({
+        width,
+        height,
+        fps,
+        log,
+        onAccessUnit,
+        onRegion: (sourceWidth, sourceHeight) => {
+          frame.width = sourceWidth;
+          frame.height = sourceHeight;
+          log(`Screen region ${sourceWidth}x${sourceHeight}`);
+        },
+      })
+      : startGstCapture({
+        args: buildGstArgs({
+          testPattern,
+          fd: 3,
+          nodeId: portal?.nodeId,
+          width,
+          height,
+          fps,
+          encoder,
+        }),
+        stdioFd: portal ? portal.fd : undefined,
+        log,
+        onAccessUnit,
+      });
+    const failed = await Promise.race([
+      gst.exited.then((code) => code ?? 0),
+      frameReady.then(() => null),
+      new Promise((resolve) => setTimeout(() => resolve("timeout"), 4000)),
+    ]);
+    if (!peer) {
+      stop();
+      return;
+    }
+    if (failed == null) break;
+    log(`No screen frame yet (${failed})`);
+    const finished = gst.exited;
+    stop();
+    await Promise.race([
+      finished,
+      new Promise((resolve) => setTimeout(resolve, 500)),
+    ]);
+    if (attempt === 2) return;
+  }
+
   send({
     type: "desktop",
     signal: "status",

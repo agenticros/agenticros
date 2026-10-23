@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import { buildGstArgs } from "./capture.js";
+import { buildGstArgs, buildWfArgs } from "./capture.js";
 import { parseBusctlJsonScreenCast, parseBusctlScreenCast, portalRequestPath, portalSessionPath, streamFromResults } from "./portal.js";
 import { dbusHeaderNames, readDbusFrame } from "./unix-fd-socket.js";
 import { waylandSessionError, waylandSocketPath } from "./session.js";
@@ -161,11 +161,21 @@ describe("gstreamer pipeline", () => {
       encoder: "x264enc",
     });
     assert.match(live[1], /pipewiresrc fd=3 path=42/);
-    assert.match(live[1], /x264enc tune=zerolatency/);
+    assert.match(live[1], /node\.dont-reconnect=false/);
+    assert.match(live[1], /x264enc qos=false tune=zerolatency/);
+    assert.match(live[1], /videorate skip-to-first=true/);
+    assert.doesNotMatch(live[1], /drop-only/);
     assert.match(live[1], /cabac=false/);
     assert.match(live[1], /profile=constrained-baseline/);
     assert.match(live[1], /width=1280,height=720,framerate=15\/1/);
     assert.match(live[1], /fdsink fd=1/);
+
+    const recorded = buildWfArgs({ width: 1280, height: 720, fps: 15 });
+    assert.deepEqual(recorded.slice(0, 8), ["-r", "15", "-D", "-c", "libx264", "-m", "h264", "-x"]);
+    assert.ok(recorded.includes("aud=1"));
+    assert.ok(recorded.includes("threads=1"));
+    assert.ok(recorded.includes("scale=1280:720"));
+    assert.equal(recorded.at(-1), "pipe:1");
 
     const pattern = buildGstArgs({
       testPattern: true,

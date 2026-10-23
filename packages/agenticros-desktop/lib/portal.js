@@ -5,7 +5,7 @@
  */
 
 import { spawn } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { closeSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -357,6 +357,10 @@ async function openScreenCastOn(bus, opts, log, Variant, Message) {
     width: stream.width,
     height: stream.height,
     close() {
+      // The PipeWire remote stays open until this fd is closed. Leaving it
+      // open keeps a client in the daemon after gst-launch exits, and the
+      // next cast then fails to leave PAUSED.
+      try { closeSync(fd); } catch { /* already closed */ }
       try { bus.disconnect(); } catch { /* ignore */ }
     },
   };

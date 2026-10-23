@@ -158,9 +158,12 @@ export function buildUsKeymap() {
     .join("\n");
   const symbols = keys
     .map((key) => {
+      // `[ keysym ]` is the XKB shorthand. `symbols[ keysym ]` does not parse,
+      // and Hyprland answers a bad keymap with a display error that drops
+      // the pointer on the same socket.
       const levels = key.shift ? `[ ${key.base}, ${key.shift} ]` : `[ ${key.base} ]`;
       const type = key.shift ? 'type="TWO_LEVEL", ' : "";
-      return `    key <${key.name}> { ${type}symbols${levels} };`;
+      return `    key <${key.name}> { ${type}${levels} };`;
     })
     .join("\n");
   const maps = [

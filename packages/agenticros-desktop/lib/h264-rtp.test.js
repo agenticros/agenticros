@@ -29,16 +29,53 @@ describe("annex-b", () => {
   it("prepends cached SPS and PPS to an IDR", () => {
     const units = [];
     const stream = createAccessUnitStream((unit) => units.push(unit.map((n) => n[0] & 0x1f)));
+    const start = Buffer.from([0, 0, 0, 1]);
+    const aud = Buffer.concat([start, nal(9, 2)]);
     const blob = Buffer.concat([
-      Buffer.from([0, 0, 0, 1]), nal(7, 4),
-      Buffer.from([0, 0, 0, 1]), nal(8, 3),
-      Buffer.from([0, 0, 0, 1]), nal(9, 2),
-      Buffer.from([0, 0, 0, 1]), nal(5, 8),
-      Buffer.from([0, 0, 0, 1]), nal(1, 6),
+      start, nal(7, 4),
+      start, nal(8, 3),
+      aud,
+      start, nal(5, 8),
+      start, nal(1, 6),
+      aud,
+      start, nal(1, 6),
+      aud,
+      start,
     ]);
-    stream.push(Buffer.concat([blob, Buffer.from([0, 0, 0, 1])]));
-    assert.deepEqual(units[0], [7, 8, 5]);
+    stream.push(blob);
+    assert.deepEqual(units[0], [7, 8, 5, 1]);
     assert.deepEqual(units[1], [1]);
+  });
+
+  it("includes the last slice when the stream is flushed", () => {
+    const units = [];
+    const stream = createAccessUnitStream((unit) => units.push(unit.map((n) => n[0] & 0x1f)));
+    const start = Buffer.from([0, 0, 0, 1]);
+    stream.push(Buffer.concat([
+      start, nal(9, 2),
+      start, nal(7, 4),
+      start, nal(8, 3),
+      start, nal(5, 8),
+      start, nal(5, 8),
+    ]));
+    assert.equal(units.length, 0);
+    stream.flush();
+    assert.deepEqual(units[0], [7, 8, 5, 5]);
+  });
+
+  it("sets baseline SPS constraint flags to profile-level-id 42e01f", () => {
+    const units = [];
+    const stream = createAccessUnitStream((unit) => units.push(unit));
+    stream.push(Buffer.concat([
+      Buffer.from([0, 0, 0, 1, 0x67, 0x42, 0xc0, 0x1f]),
+      Buffer.from([0, 0, 0, 1, 0x09, 0x10]),
+      Buffer.from([0, 0, 0, 1, 0x65, 0x88]),
+      Buffer.from([0, 0, 0, 1, 0x09, 0x10]),
+      Buffer.from([0, 0, 0, 1]),
+    ]));
+    assert.equal(units[0][0][1], 0x42);
+    assert.equal(units[0][0][2], 0xe0);
+    assert.equal(units[0][0][3], 0x1f);
   });
 });
 
