@@ -39,7 +39,9 @@ import {
   buildMcpDoctorChecks,
   claudeOnPath,
   codexOnPath,
+  grokOnPath,
   hermesOnPath,
+  type McpHostId,
 } from "../util/mcp-setup.js";
 import { checkLiveBindings } from "../util/live-bindings.js";
 import {
@@ -312,9 +314,11 @@ export async function runDoctorChecks(opts: DoctorOptions = {}): Promise<DoctorR
     });
   }
 
-  // MCP client configs (Codex, Hermes, Claude, Antigravity).
+  // MCP client configs. Grok is checked only when its CLI is installed.
   const mcpEntry = findMcpEntry();
-  checks.push(...buildMcpDoctorChecks(mcpEntry, paths.repoRoot));
+  const mcpHosts: McpHostId[] = ["codex", "hermes", "claude", "agy"];
+  if (await grokOnPath()) mcpHosts.push("grok");
+  checks.push(...buildMcpDoctorChecks(mcpEntry, paths.repoRoot, mcpHosts));
 
   const corebrumRmw = "/etc/corebrum/ros/rmw";
   if (existsSync(corebrumRmw)) {

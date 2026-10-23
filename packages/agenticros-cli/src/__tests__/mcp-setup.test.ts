@@ -1,7 +1,11 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import { buildMcpDoctorChecks, resolveMcpHosts } from "../util/mcp-setup.js";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { buildGrokDoctorChecks, buildMcpDoctorChecks, resolveMcpHosts } from "../util/mcp-setup.js";
 
 describe("mcp-setup", () => {
   it("resolveMcpHosts defaults to all four hosts", () => {
@@ -30,5 +34,24 @@ describe("mcp-setup", () => {
     assert.ok(codexOnly.every((c) => c.id.startsWith("codex")));
     assert.ok(agyOnly.length > 0);
     assert.ok(agyOnly.every((c) => c.id.startsWith("agy")));
+    const grokOnly = buildMcpDoctorChecks("/abs/index.js", "/repo", ["grok"]);
+    assert.ok(grokOnly.length > 0);
+    assert.ok(grokOnly.every((c) => c.id.startsWith("grok")));
+  });
+
+  it("buildGrokDoctorChecks flags a relative MCP path", () => {
+    const dir = mkdtempSync(join(tmpdir(), "agenticros-grok-doctor-"));
+    const configPath = join(dir, "config.toml");
+    const instructionPath = join(dir, "AGENTS.md");
+    writeFileSync(
+      configPath,
+      '[mcp_servers.agenticros]\ncommand = "sh"\nargs = ["-c", "node packages/mcp.js"]\n',
+    );
+    writeFileSync(instructionPath, "<!-- agenticros-embodiment -->\nbody\n<!-- /agenticros-embodiment -->\n");
+    const checks = buildGrokDoctorChecks("/opt/agenticros/mcp.js", { configPath, instructionPath });
+    const config = checks.find((c) => c.id === "grok-config");
+    const instructions = checks.find((c) => c.id === "grok-instructions");
+    assert.equal(config?.severity, "red");
+    assert.equal(instructions?.severity, "green");
   });
 });

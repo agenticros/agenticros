@@ -12,6 +12,7 @@ import {
   buildCodexDoctorChecks,
   globalCodexConfigPath,
   projectCodexConfigPath,
+  readCodexAgenticrosConfig,
   writeCodexAgenticrosConfig,
 } from "./codex-config.js";
 import {
@@ -29,6 +30,8 @@ import {
   writeClaudeMcpAllowRule,
 } from "./claude-config.js";
 import {
+  EMBODIMENT_BEGIN,
+  EMBODIMENT_END,
   claudeInstructionPath,
   codexInstructionPath,
   grokInstructionPath,
@@ -51,7 +54,7 @@ import { findMcpEntry } from "./mcp-discovery.js";
 import { buildAgenticrosMcpServerEntry, upsertAgenticrosMcpJson } from "./claude-config.js";
 import { colors, info, ok, warn, err } from "./logger.js";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import { homedir } from "node:os";
 import {
   ensureToolsAlsoAllow,
@@ -457,7 +460,94 @@ export function buildMcpDoctorChecks(
   if (active.includes("agy")) {
     checks.push(...buildAgyDoctorChecks(mcpEntryExpected, repoRoot));
   }
+  if (active.includes("grok")) {
+    checks.push(...buildGrokDoctorChecks(mcpEntryExpected));
+  }
 
+  return checks;
+}
+
+/** Grok stores the same TOML shape as Codex under `~/.grok/config.toml`. */
+export function buildGrokDoctorChecks(
+  mcpEntryExpected?: string,
+  paths?: { configPath?: string; instructionPath?: string },
+): Array<{ id: string; label: string; severity: "green" | "yellow" | "red"; hint?: string; detail?: string }> {
+  const checks: Array<{
+    id: string;
+    label: string;
+    severity: "green" | "yellow" | "red";
+    hint?: string;
+    detail?: string;
+  }> = [];
+  const configPath = paths?.configPath ?? grokConfigPath();
+  const cfg = readCodexAgenticrosConfig(configPath);
+  if (!cfg.exists) {
+    checks.push({
+      id: "grok-config",
+      label: "Grok MCP config missing (~/.grok/config.toml)",
+      severity: "yellow",
+      hint: "Run `agenticros mcp setup --grok`.",
+    });
+  } else if (!cfg.command && (!cfg.args || cfg.args.length === 0)) {
+    checks.push({
+      id: "grok-config",
+      label: "Grok config has no AgenticROS MCP server",
+      severity: "yellow",
+      hint: "Run `agenticros mcp setup --grok`.",
+      detail: configPath,
+    });
+  } else {
+    const shell = cfg.args?.[0] === "-c" ? cfg.args[1] ?? "" : (cfg.args ?? []).join(" ");
+    const mcpPath = shell.match(/node\s+(\S+)/)?.[1];
+    if (mcpPath && !isAbsolute(mcpPath)) {
+      checks.push({
+        id: "grok-config",
+        label: "Grok MCP path is relative",
+        severity: "red",
+        hint: "Run `agenticros mcp setup --grok` to rewrite it with an absolute path.",
+        detail: configPath,
+      });
+    } else if (mcpEntryExpected && mcpPath && !existsSync(mcpPath) && mcpPath !== mcpEntryExpected) {
+      checks.push({
+        id: "grok-config",
+        label: "Grok MCP path does not point to a built server",
+        severity: "red",
+        hint: `Expected ${mcpEntryExpected}. Run \`agenticros mcp setup --grok\`.`,
+        detail: configPath,
+      });
+    } else {
+      checks.push({
+        id: "grok-config",
+        label: "Grok MCP config OK",
+        severity: "green",
+        detail: configPath,
+      });
+    }
+  }
+
+  const instructionPath = paths?.instructionPath ?? grokInstructionPath();
+  let instructions = "";
+  try {
+    instructions = existsSync(instructionPath) ? readFileSync(instructionPath, "utf8") : "";
+  } catch {
+    instructions = "";
+  }
+  if (instructions.includes(EMBODIMENT_BEGIN) && instructions.includes(EMBODIMENT_END)) {
+    checks.push({
+      id: "grok-instructions",
+      label: "Grok standing instruction OK",
+      severity: "green",
+      detail: instructionPath,
+    });
+  } else {
+    checks.push({
+      id: "grok-instructions",
+      label: "Grok standing instruction missing",
+      severity: "yellow",
+      hint: "Run `agenticros mcp setup --grok` to write ~/.grok/AGENTS.md.",
+      detail: instructionPath,
+    });
+  }
   return checks;
 }
 
@@ -508,6 +598,15 @@ export async function mcpDoctorCommand(opts: McpDoctorOptions = {}): Promise<num
       label: on ? "Antigravity CLI installed" : "Antigravity CLI not detected",
       severity: on ? "green" : "yellow",
       hint: on ? undefined : "Install from https://antigravity.google/docs/cli/",
+    });
+  }
+  if (hosts.includes("grok")) {
+    const on = await grokOnPath();
+    cliChecks.push({
+      id: "grok-cli",
+      label: on ? "Grok CLI installed" : "Grok CLI not detected",
+      severity: on ? "green" : "yellow",
+      hint: on ? undefined : "Install with npm: @xai-official/grok",
     });
   }
 

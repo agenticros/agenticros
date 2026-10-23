@@ -15,6 +15,7 @@ import {
 import { mcpShellLine } from "../util/mcp-launch.js";
 import { upsertClaudeMcpAllowRule } from "../util/claude-config.js";
 import { upsertAgenticrosMcpJson, buildAgenticrosMcpServerEntry } from "../util/claude-config.js";
+import { writeCodexAgenticrosConfig } from "../util/codex-config.js";
 
 describe("embodiment", () => {
   it("init --yes config is a real robot on local ROS", () => {
@@ -75,6 +76,23 @@ describe("embodiment", () => {
       if (previous === undefined) delete process.env["AGENTICROS_ROS_WRAPPER"];
       else process.env["AGENTICROS_ROS_WRAPPER"] = previous;
     }
+  });
+
+  it("grok toml keeps other sections and writes the instruction", () => {
+    const dir = mkdtempSync(join(tmpdir(), "agenticros-grok-"));
+    const toml = join(dir, "config.toml");
+    writeFileSync(toml, "[marketplace]\ndefault_skills_installs_purged = true\n");
+    writeCodexAgenticrosConfig(toml, "/opt/agenticros/mcp.js", { namespace: "" });
+    const text = readFileSync(toml, "utf8");
+    assert.match(text, /\[marketplace\]/);
+    assert.match(text, /default_skills_installs_purged = true/);
+    assert.match(text, /\[mcp_servers\.agenticros\]/);
+    assert.match(text, /node \/opt\/agenticros\/mcp\.js/);
+    const agents = join(dir, "AGENTS.md");
+    writeEmbodimentFile(agents);
+    const instructions = readFileSync(agents, "utf8");
+    assert.match(instructions, new RegExp(EMBODIMENT_BEGIN));
+    assert.match(instructions, new RegExp(EMBODIMENT_END));
   });
 
   it("cursor mcp json keeps other servers", () => {
