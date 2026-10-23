@@ -86,10 +86,46 @@ function handleToken() {
  * @param {string} text
  * @returns {{ nodeId: number, width: number, height: number, restoreToken: string | null } | { denied: number } | null}
  */
+function stripAnsi(text) {
+  return String(text || "").replace(/\x1b\[[0-9;]*m/g, "");
+}
+
+function unwrapBusctl(value) {
+  if (value && typeof value === "object" && "type" in value && "data" in value) return unwrapBusctl(value.data);
+  return value;
+}
+
+/**
+ * One `--json=short` monitor line.
+ * @param {object} msg
+ */
+export function parseBusctlJsonScreenCast(msg) {
+  if (!msg || msg.member !== "Response") return null;
+  const data = unwrapBusctl(msg.payload);
+  if (!Array.isArray(data) || data.length < 2) return null;
+  const code = Number(data[0]);
+  if (code !== 0) return { denied: code };
+  const results = data[1];
+  const streams = unwrapBusctl(results?.streams);
+  const entry = Array.isArray(streams) ? streams[0] : null;
+  if (!Array.isArray(entry)) return null;
+  const nodeId = Number(entry[0]);
+  if (!Number.isFinite(nodeId)) return null;
+  const size = unwrapBusctl(entry[1]?.size);
+  const restore = unwrapBusctl(results?.restore_token);
+  return {
+    nodeId,
+    width: Array.isArray(size) ? Number(size[0]) || 0 : 0,
+    height: Array.isArray(size) ? Number(size[1]) || 0 : 0,
+    restoreToken: typeof restore === "string" ? restore : null,
+  };
+}
+
 export function parseBusctlScreenCast(text) {
-  const member = text.indexOf("Member=Response");
+  const clean = stripAnsi(text);
+  const member = clean.indexOf("Member=Response");
   if (member < 0) return null;
-  const body = text.slice(member);
+  const body = clean.slice(member);
   const codeMatch = body.match(/UINT32\s+(\d+)/i);
   if (!codeMatch) return null;
   const code = Number(codeMatch[1]);
@@ -135,21 +171,24 @@ export function parseBusctlScreenCast(text) {
  */
 function watchPortalResponse(path, opts = {}) {
   const log = opts.log || (() => {});
-  const match = `type='signal',interface='org.freedesktop.portal.Request',member='Response',path='${path}'`;
-  // stdbuf line-buffers busctl. A pipe would otherwise hold the signal until
-  // the process exits, which is after we need the node id.
-  const child = spawn("stdbuf", [
-    "-oL",
-    "-eL",
-    "busctl",
+  // No path filter: a wrong sender token must not hide the only Response.
+  const match = "type='signal',interface='org.freedesktop.portal.Request',member='Response'";
+  const child = spawn("busctl", [
     "--user",
-    "monitor",
+    "--json=short",
     "--match",
     match,
-  ], { stdio: ["ignore", "pipe", "pipe"] });
+    "monitor",
+  ], {
+    stdio: ["ignore", "pipe", "pipe"],
+    env: { ...process.env, SYSTEMD_COLORS: "0" },
+  });
 
   let text = "";
   let settled = false;
+  let readyResolve = () => {};
+  const ready = new Promise((resolve) => { readyResolve = resolve; });
+  const readyTimer = setTimeout(() => readyResolve(), 500);
   /** @type {(value: ReturnType<typeof parseBusctlScreenCast>) => void} */
   let resolve;
   /** @type {(err: Error) => void} */
@@ -172,18 +211,41 @@ function watchPortalResponse(path, opts = {}) {
     finish(new Error(`Portal request timed out (${path})`));
   }, 120000);
 
-  child.stdout.on("data", (chunk) => {
-    text += chunk.toString();
-    const parsed = parseBusctlScreenCast(text);
-    if (!parsed) return;
+  const accept = (parsed) => {
+    if (!parsed) return false;
+    if ("raw" in parsed) {
+      finish(new Error(`Unrecognized portal reply: ${parsed.raw}`));
+      return true;
+    }
     if ("denied" in parsed) {
       finish(new Error(`Portal request was denied (${parsed.denied})`));
-      return;
+      return true;
     }
     log(`Screen cast node ${parsed.nodeId}`);
     finish(null, parsed);
+    return true;
+  };
+
+  child.stdout.on("data", (chunk) => {
+    text += chunk.toString();
+    const clean = stripAnsi(text);
+    for (const line of clean.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("{")) continue;
+      try {
+        if (accept(parseBusctlJsonScreenCast(JSON.parse(trimmed)))) return;
+      } catch {
+        // partial JSON line
+      }
+    }
+    if (!clean.includes("Member=Response") || !clean.trimEnd().endsWith("};")) return;
+    const parsed = parseBusctlScreenCast(clean);
+    if (parsed) accept(parsed);
+    else accept({ raw: clean.slice(0, 800) });
   });
   child.stderr.on("data", (chunk) => {
+    clearTimeout(readyTimer);
+    readyResolve();
     log(`busctl: ${chunk.toString().trim()}`);
   });
   child.on("error", (err) => {
@@ -195,6 +257,7 @@ function watchPortalResponse(path, opts = {}) {
 
   return {
     done,
+    ready,
     stop() {
       finish(new Error("Screen cast watch closed"));
     },
@@ -254,7 +317,7 @@ export async function openScreenCast(opts = {}) {
     handle_token: new Variant("s", token),
   }), sessionPath);
 
-  log("Waiting for the Hyprland screen-share approval");
+  log("Starting screen capture");
   const started = await portalStart(screencast, unique, sessionPath, Variant, log);
   const stream = {
     nodeId: started.nodeId,
@@ -318,7 +381,7 @@ async function portalStart(screencast, unique, sessionPath, Variant, log) {
   const path = portalRequestPath(unique, token);
   const watch = watchPortalResponse(path, { log });
   watch.done.catch(() => {});
-  await new Promise((resolve) => setTimeout(resolve, 200));
+  await watch.ready;
   try {
     await screencast.Start(sessionPath, "", {
       handle_token: new Variant("s", token),

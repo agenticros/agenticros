@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
 import { buildGstArgs } from "./capture.js";
-import { parseBusctlScreenCast, portalRequestPath, portalSessionPath, streamFromResults } from "./portal.js";
+import { parseBusctlJsonScreenCast, parseBusctlScreenCast, portalRequestPath, portalSessionPath, streamFromResults } from "./portal.js";
 import { waylandSessionError, waylandSocketPath } from "./session.js";
 import { encodeMotionAbsolute, parseGlobal, parseMessages } from "./wayland.js";
 
@@ -65,6 +65,21 @@ describe("portal paths", () => {
       restoreToken: "saved-token",
     });
     assert.deepEqual(parseBusctlScreenCast(`Member=Response\nUINT32 2;\n`), { denied: 2 });
+    assert.deepEqual(parseBusctlJsonScreenCast({
+      member: "Response",
+      payload: {
+        type: "ua{sv}",
+        data: [0, {
+          streams: { type: "a(ua{sv})", data: [[75, { size: { type: "(ii)", data: [1920, 1080] } }]] },
+          restore_token: { type: "s", data: "saved-token" },
+        }],
+      },
+    }), {
+      nodeId: 75,
+      width: 1920,
+      height: 1080,
+      restoreToken: "saved-token",
+    });
   });
 
   it("reads the PipeWire node id out of Start results", () => {
