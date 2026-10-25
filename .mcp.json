@@ -4,10 +4,7 @@
     "agenticros": {
       "type": "stdio",
       "command": "sh",
-      "args": [
-        "-c",
-        "/usr/local/lib/corebrum/agenticros-with-ros.sh node /home/corebrum/agenticros/packages/agenticros-claude-code/dist/index.js 2>>/tmp/agenticros-mcp.log"
-      ],
+      "args": ["-c", "node packages/agenticros-claude-code/dist/index.js 2>>/tmp/agenticros-mcp.log"],
       "env": {
         "AGENTICROS_ROBOT_NAMESPACE": ""
       }

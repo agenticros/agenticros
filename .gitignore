@@ -58,6 +58,12 @@ packages/agenticros-cli/*.tgz
 # Local skill installs (skills are separate repos; do not commit into core repo)
 skills/
 /agenticros-skill-*/
+
+# Machine-local MCP client configs. Setup writes absolute paths here
+# (`agenticros codex setup --project`, `agenticros agy setup`).
+# Project .mcp.json stays tracked: it uses a relative command.
+.codex/config.toml
+.agents/mcp_config.json
 # CLI scaffold templates (shipped in npm package)
 !packages/agenticros-cli/templates/
 !packages/agenticros-cli/templates/**
