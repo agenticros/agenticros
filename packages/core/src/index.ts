@@ -333,5 +333,15 @@ export type {
   ListedCapability,
 } from "./discoverable-capabilities.js";
 
+export {
+  SKILL_GRANT_ENV,
+  approveHelperPath,
+  createLocalSkillForOperator,
+  externalStackNotes,
+  installConfirmDecision,
+  installSkillForOperator,
+  runApproveHelper,
+} from "./skill-operator.js";
+
 export { TransportPool, TRANSPORT_POOL_GLOBAL_KEY } from "./transport-pool.js";
 export type { TransportFactory } from "./transport-pool.js";

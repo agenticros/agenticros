@@ -64,6 +64,8 @@ const CORE_TOOLS = [
   "ros2_list_places",
   "ros2_navigate_to_place",
   "ros2_list_capabilities",
+  "ros2_install_skill",
+  "ros2_create_skill",
   "ros2_list_robots",
   "ros2_discover_robots",
   // Phase 1.e fleet-capability filter — `ros2_find_robots_for(capability, kind, online)`.

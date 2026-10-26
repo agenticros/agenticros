@@ -31,6 +31,8 @@ describe("embodiment", () => {
     assert.match(next, /Keep this note/);
     assert.match(next, /And this/);
     assert.match(next, /ros2_camera_snapshot/);
+    assert.match(next, /ros2_install_skill/);
+    assert.match(next, /ros2_create_skill/);
     assert.equal(next.split(EMBODIMENT_BEGIN).length, 2);
   });
 

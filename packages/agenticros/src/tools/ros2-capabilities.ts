@@ -30,16 +30,31 @@ export function registerCapabilitiesTool(
       "List the high-level capabilities (named verbs) this robot can perform — built-in verbs like " +
       "drive_base / take_snapshot / measure_depth plus every capability declared by installed " +
       "AgenticROS skills (e.g. follow_person, find_object). Also includes discoverable marketplace " +
-      "capabilities (discoverable:true, install_ref) that are not installed yet so you can propose " +
-      "`agenticros skills install <install_ref>`. PREFER this over ros2_list_topics for high-level " +
+      "capabilities (discoverable:true, install_ref). Pass capability to look up one verb that may not be on the popular page. " +
+      "Install a discoverable skill with ros2_install_skill and wait for the operator. " +
+      "PREFER this over ros2_list_topics for high-level " +
       "planning. Pass robot_id to scope to a specific robot's hardware profile when using a multi-robot fleet.",
-    parameters: Type.Object({ ...ROBOT_ID_SCHEMA }),
+    parameters: Type.Object({
+      ...ROBOT_ID_SCHEMA,
+      capability: Type.Optional(
+        Type.String({
+          description: "Capability id to look up on the marketplace, such as navigate_to.",
+        }),
+      ),
+    }),
 
     async execute(_toolCallId, params) {
       const resolved = resolveRobotForTool(config, params);
       if ("error" in resolved) return resolved.error;
+      const capability =
+        typeof (params as { capability?: unknown } | undefined)?.capability === "string"
+          ? (params as { capability: string }).capability
+          : undefined;
 
-      const caps = await listCapabilitiesWithDiscoverable(config, { robotId: resolved.robot.id });
+      const caps = await listCapabilitiesWithDiscoverable(config, {
+        robotId: resolved.robot.id,
+        capability,
+      });
       const intrinsic = caps.filter((c) => c.source?.kind === "builtin").length;
       const skill = caps.filter((c) => c.installed !== false && c.source?.kind === "skill").length;
       const discoverable = caps.filter((c) => c.discoverable === true).length;

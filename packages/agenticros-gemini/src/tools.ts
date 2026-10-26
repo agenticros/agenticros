@@ -16,6 +16,8 @@ import {
   listCapabilitiesForRobot,
   listCapabilitiesWithDiscoverable,
   capabilityUnavailableMessage,
+  createLocalSkillForOperator,
+  installSkillForOperator,
   runMission,
   listRobots,
   getActiveRobotId,
@@ -169,8 +171,43 @@ export const GEMINI_FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
   {
     name: "ros2_list_capabilities",
     description:
-      "List the high-level capabilities (named verbs) this robot can perform — built-in verbs like drive_base / take_snapshot / measure_depth plus every capability declared by installed AgenticROS skills (e.g. follow_person, find_object). PREFER this over ros2_list_topics for high-level planning: capabilities are agent-meaningful verbs with typed inputs/outputs, not raw topic names. Returns one structured response listing every capability the robot supports right now.",
-    parametersJsonSchema: schemaFromProps({ ...ROBOT_ID_PROP }),
+      "List the high-level capabilities (named verbs) this robot can perform — built-in verbs like drive_base / take_snapshot / measure_depth plus every capability declared by installed AgenticROS skills (e.g. follow_person, find_object). Pass capability to look up one verb that may not be on the popular page. Install a discoverable skill with ros2_install_skill and wait for the operator. PREFER this over ros2_list_topics for high-level planning: capabilities are agent-meaningful verbs with typed inputs/outputs, not raw topic names. Returns one structured response listing every capability the robot supports right now.",
+    parametersJsonSchema: schemaFromProps({
+      ...ROBOT_ID_PROP,
+      capability: {
+        type: "string",
+        description: "Capability id to look up on the marketplace, such as navigate_to. Omit to browse the popular page.",
+      },
+    }),
+  },
+  {
+    name: "ros2_install_skill",
+    description:
+      "Install one discoverable AgenticROS skill after the operator approves. Pass install_ref from ros2_list_capabilities and a short reason. Refuses when the robot profile lacks a required feature. Does not start Nav2, MoveIt, or other external stacks. Start the agent again before the new tools appear in this session.",
+    parametersJsonSchema: schemaFromProps(
+      {
+        ...ROBOT_ID_PROP,
+        install_ref: {
+          type: "string",
+          description: "Marketplace ref such as agenticros/navigate-to, or an npm ref such as @agenticros/navigate-to.",
+        },
+        reason: { type: "string", description: "Why this mission needs the skill. Shown to the operator." },
+      },
+      ["install_ref"],
+    ),
+  },
+  {
+    name: "ros2_create_skill",
+    description:
+      "Create a local AgenticROS skill when the catalog has nothing that fits. The skill stays on this machine and is not published. Start the agent again before its tools appear.",
+    parametersJsonSchema: schemaFromProps(
+      {
+        slug: { type: "string", description: "Kebab-case skill name, such as wave-twice." },
+        reason: { type: "string", description: "Why a local skill is needed. Shown to the operator." },
+        template: { type: "string", description: "hello, robot, camera, or depth. Defaults to hello." },
+      },
+      ["slug"],
+    ),
   },
   {
     name: "ros2_list_robots",
@@ -621,7 +658,11 @@ export async function executeTool(
   if (name === "ros2_list_capabilities") {
     const resolved = resolveRobotForTool(config, args);
     if ("error" in resolved) return resolved.error;
-    const caps = await listCapabilitiesWithDiscoverable(config, { robotId: resolved.robot.id });
+    const capability = typeof args["capability"] === "string" ? args["capability"] : undefined;
+    const caps = await listCapabilitiesWithDiscoverable(config, {
+      robotId: resolved.robot.id,
+      capability,
+    });
     const intrinsic = caps.filter((c) => c.source?.kind === "builtin").length;
     const skill = caps.filter((c) => c.installed !== false && c.source?.kind === "skill").length;
     const discoverable = caps.filter((c) => c.discoverable === true).length;
@@ -635,6 +676,27 @@ export async function executeTool(
         capabilities: caps,
       }),
     };
+  }
+  if (name === "ros2_install_skill" || name === "ros2_create_skill") {
+    let profile;
+    if (name === "ros2_install_skill") {
+      const resolved = resolveRobotForTool(config, args);
+      if ("error" in resolved) return resolved.error;
+      profile = resolved.robot.profile;
+    }
+    const result =
+      name === "ros2_install_skill"
+        ? await installSkillForOperator({
+            ref: typeof args["install_ref"] === "string" ? args["install_ref"] : "",
+            reason: typeof args["reason"] === "string" ? args["reason"] : undefined,
+            profile,
+          })
+        : await createLocalSkillForOperator({
+            slug: typeof args["slug"] === "string" ? args["slug"] : "",
+            reason: typeof args["reason"] === "string" ? args["reason"] : undefined,
+            template: typeof args["template"] === "string" ? args["template"] : undefined,
+          });
+    return { output: JSON.stringify({ success: result.ok, message: result.text }) };
   }
   // ros2_list_robots reads the multi-robot section of the config (with
   // legacy fallback) — no transport required either.

@@ -14,6 +14,8 @@ export const EMBODIMENT_TEXT = [
   "AgenticROS is your body on this machine. Use its tools to see, sense, and act through ROS here.",
   'When the user asks what you see, asks for a photo, or mentions the camera, call ros2_camera_snapshot with no topic and describe the image.',
   "When they ask you to move, stop, or carry out a mission that needs the camera, the motors, or any other ROS topic on this computer, use the AgenticROS tools. Call ros2_estop to stop motion.",
+  "When a mission needs a verb that is only discoverable, call ros2_install_skill and wait for the operator. Create a local skill with ros2_create_skill only when the catalog has nothing that fits. Do not publish a skill unless the operator asks.",
+  "The current session will not see tools from a skill installed or created in this session until the agent is started again.",
   'Do not ask them to say "AgenticROS".',
 ].join("\n");
 

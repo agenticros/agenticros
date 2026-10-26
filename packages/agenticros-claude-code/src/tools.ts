@@ -17,6 +17,8 @@ import {
   listCapabilitiesForRobot,
   listCapabilitiesWithDiscoverable,
   capabilityUnavailableMessage,
+  createLocalSkillForOperator,
+  installSkillForOperator,
   runMission,
   listRobots,
   getActiveRobotId,
@@ -101,6 +103,8 @@ export const NO_TRANSPORT_TOOL_NAMES = new Set<string>([
   ...MEMORY_TOOL_NAMES,
   ...HIVE_TOOL_NAMES,
   "ros2_list_capabilities",
+  "ros2_install_skill",
+  "ros2_create_skill",
   "ros2_list_robots",
   // ros2_find_robots_for can run config-only (no online filter); the
   // tool falls back to a transport-driven discovery only when the caller
@@ -148,7 +152,36 @@ export const TOOLS: McpTool[] = [
       type: "object",
       properties: {
         robot_id: { type: "string", description: "Optional robot id (from ros2_list_robots) to scope this call. When omitted, the active robot is used. A robot with a hardware profile only advertises verbs its features satisfy." },
+        capability: { type: "string", description: "Capability id to look up on the marketplace, such as navigate_to. Omit to browse the popular page." },
       },
+    },
+  },
+  {
+    name: "ros2_install_skill",
+    description:
+      "Install one discoverable AgenticROS skill after the operator approves. Pass install_ref from ros2_list_capabilities and a short reason. Refuses when the robot profile lacks a required feature. Does not start Nav2, MoveIt, or other external stacks. Start the agent again before the new tools appear in this session.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        robot_id: { type: "string", description: "Optional robot id whose hardware profile is checked against the skill." },
+        install_ref: { type: "string", description: "Marketplace ref such as agenticros/navigate-to, or an npm ref such as @agenticros/navigate-to." },
+        reason: { type: "string", description: "Why this mission needs the skill. Shown to the operator." },
+      },
+      required: ["install_ref"],
+    },
+  },
+  {
+    name: "ros2_create_skill",
+    description:
+      "Create a local AgenticROS skill when the catalog has nothing that fits. The skill stays on this machine and is not published. Start the agent again before its tools appear.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        slug: { type: "string", description: "Kebab-case skill name, such as wave-twice." },
+        reason: { type: "string", description: "Why a local skill is needed. Shown to the operator." },
+        template: { type: "string", description: "hello, robot, camera, or depth. Defaults to hello." },
+      },
+      required: ["slug"],
     },
   },
   {
@@ -1124,8 +1157,35 @@ export async function handleToolCall(
       return robotResolveError(err);
     }
     const robot = resolveRobotFromArgs(config, args);
-    const caps = await listCapabilitiesWithDiscoverable(config, { robotId: robot.id });
+    const capability = typeof args["capability"] === "string" ? args["capability"] : undefined;
+    const caps = await listCapabilitiesWithDiscoverable(config, { robotId: robot.id, capability });
     return { content: [{ type: "text", text: formatCapabilitiesResponse(caps) }] };
+  }
+  if (name === "ros2_install_skill" || name === "ros2_create_skill") {
+    let profile;
+    if (name === "ros2_install_skill") {
+      try {
+        profile = resolveRobotFromArgs(config, args).profile;
+      } catch (err) {
+        return robotResolveError(err);
+      }
+    }
+    const result =
+      name === "ros2_install_skill"
+        ? await installSkillForOperator({
+            ref: typeof args["install_ref"] === "string" ? args["install_ref"] : "",
+            reason: typeof args["reason"] === "string" ? args["reason"] : undefined,
+            profile,
+          })
+        : await createLocalSkillForOperator({
+            slug: typeof args["slug"] === "string" ? args["slug"] : "",
+            reason: typeof args["reason"] === "string" ? args["reason"] : undefined,
+            template: typeof args["template"] === "string" ? args["template"] : undefined,
+          });
+    return {
+      content: [{ type: "text", text: JSON.stringify({ success: result.ok, message: result.text }) }],
+      isError: !result.ok,
+    };
   }
   // ros2_list_robots reads the multi-robot section of the config (with
   // legacy fallback) — no transport required either.

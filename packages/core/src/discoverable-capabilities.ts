@@ -35,10 +35,12 @@ export interface ListCapabilitiesOptions {
   apiBase?: string;
   /** Max marketplace skills to scan. Default 50. */
   marketplaceLimit?: number;
-  /** Soft-fail: on network error return installed-only. Default true. */
-  softFail?: boolean;
+  /** When set, ask the marketplace for this capability id instead of the popular page. */
+  capability?: string;
   /** Scope installed + discoverable verbs to this robot's profile. */
   robotId?: string;
+  /** Soft-fail: on network error return installed-only. Default true. */
+  softFail?: boolean;
 }
 
 interface MarketplaceSkillDoc {
@@ -120,13 +122,17 @@ function normalizeMarketplaceCap(
 }
 
 export async function fetchMarketplaceSkills(
-  opts: { apiBase?: string; limit?: number } = {},
+  opts: { apiBase?: string; limit?: number; capability?: string } = {},
 ): Promise<MarketplaceSkillDoc[]> {
   const base = skillsApiBase(opts.apiBase);
-  const limit = opts.limit ?? 50;
   const u = new URL(`${base}/skills`);
-  u.searchParams.set("limit", String(limit));
-  u.searchParams.set("sort", "popular");
+  const capability = opts.capability?.trim();
+  if (capability) {
+    u.searchParams.set("capability", capability);
+  } else {
+    u.searchParams.set("limit", String(opts.limit ?? 50));
+    u.searchParams.set("sort", "popular");
+  }
   const res = await fetch(u.toString(), { headers: { Accept: "application/json" } });
   if (!res.ok) {
     throw new Error(`Marketplace list ${res.status}`);
@@ -162,6 +168,7 @@ export async function listCapabilitiesWithDiscoverable(
     const skills = await fetchMarketplaceSkills({
       apiBase: opts.apiBase,
       limit: opts.marketplaceLimit ?? 50,
+      capability: opts.capability,
     });
     const extra: DiscoverableCapability[] = [];
     const seenDiscoverable = new Set<string>();

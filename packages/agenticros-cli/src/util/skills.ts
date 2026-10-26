@@ -523,3 +523,51 @@ export function addSkillRef(marketplaceRef: string): AddResult {
     message: `Registered skillRef '${ref}' (${parts.join(" + ")}).`,
   };
 }
+
+/** Remember a local skill directory in ~/.agenticros/config.json skillPaths. */
+export function registerLocalSkillPath(dir: string, configPath?: string): AddResult {
+  const abs = resolve(dir);
+  const info = inspectSkillDir(abs);
+  if (!info?.dir) {
+    return {
+      ok: false,
+      message: `Not an AgenticROS skill directory: ${abs}`,
+    };
+  }
+  const agenticrosPath = configPath ?? join(homedir(), ".agenticros", "config.json");
+  try {
+    mkdirSync(dirname(agenticrosPath), { recursive: true });
+    const raw = existsSync(agenticrosPath)
+      ? (JSON.parse(readFileSync(agenticrosPath, "utf8")) as Record<string, unknown>)
+      : {};
+    const paths = Array.isArray(raw.skillPaths)
+      ? (raw.skillPaths as unknown[]).filter((x): x is string => typeof x === "string")
+      : [];
+    if (!paths.includes(info.dir)) {
+      paths.push(info.dir);
+      raw.skillPaths = paths;
+      writeFileSync(agenticrosPath, JSON.stringify(raw, null, 2) + "\n", "utf8");
+    }
+  } catch (e) {
+    return {
+      ok: false,
+      message: `Failed writing ${agenticrosPath}: ${e instanceof Error ? e.message : String(e)}`,
+    };
+  }
+
+  if (!configPath && openclawConfigExists()) {
+    const reg = addSkillByPath(info.dir);
+    if (!reg.ok) {
+      return {
+        ok: true,
+        message: `Registered ${info.dir} in ${agenticrosPath}. ${reg.message}`,
+        skill: { ...info, registeredAs: ["path"] },
+      };
+    }
+  }
+  return {
+    ok: true,
+    message: `Registered local skill '${info.id}' at ${info.dir}. This skill was not published.`,
+    skill: { ...info, registeredAs: ["path"] },
+  };
+}

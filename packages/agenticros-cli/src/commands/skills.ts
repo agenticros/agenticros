@@ -15,8 +15,9 @@
  * capability manifests from `~/.agenticros/skills-cache/`.
  */
 
-import { existsSync } from "node:fs";
-import { isAbsolute, resolve } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { isAbsolute, join, resolve } from "node:path";
 
 import { checkbox, confirm, input } from "@inquirer/prompts";
 import { execa } from "execa";
@@ -26,6 +27,7 @@ import {
   addSkillByPath,
   addSkillRef,
   deriveSkillId,
+  registerLocalSkillPath,
   inspectSkillDir,
   listSkills,
   readSkillCapabilityRequires,
@@ -41,8 +43,17 @@ import {
   searchSkills,
   type MarketplaceSkill,
 } from "../util/marketplace.js";
-import { ensureSkillRefCached, skillsCacheDir } from "@agenticros/core";
+import {
+  approveHelperPath,
+  ensureSkillRefCached,
+  externalStackNotes,
+  installConfirmDecision,
+  runApproveHelper,
+  SKILL_GRANT_ENV,
+  skillsCacheDir,
+} from "@agenticros/core";
 import { createSkillCommand } from "./create-skill.js";
+import { scaffoldSkill } from "../util/skill-scaffold.js";
 import { publishSkillCommand } from "./publish-skill.js";
 import { skillsDevCommand } from "./skills-dev.js";
 import { getCliPaths } from "../util/paths.js";
@@ -70,6 +81,8 @@ export interface SkillsOptions {
   json?: boolean;
   /** Named install bundle, e.g. `mapping`. */
   bundle?: string;
+  /** With create-local: hello | robot | camera | depth */
+  template?: string;
 }
 
 let skipGatewayRestart = false;
@@ -101,6 +114,8 @@ export async function skillsCommand(opts: SkillsOptions): Promise<void> {
     case "install":
     case "i":
       return installAction(opts.arg, opts.bundle);
+    case "create-local":
+      return createLocalAction(opts.arg, opts.template);
     case "create":
       return createSkillCommand({ slug: opts.arg ?? "", template: undefined });
     case "dev":
@@ -110,7 +125,7 @@ export async function skillsCommand(opts: SkillsOptions): Promise<void> {
     default:
       err(`Unknown skills action '${opts.action}'.`);
       err(
-        "Use: list | search <q> | install <owner/skill> | create <slug> | dev | publish | discover | add | remove | sync",
+        "Use: list | search <q> | install <owner/skill> | create <slug> | create-local <slug> | dev | publish | discover | add | remove | sync",
       );
       process.exit(2);
   }
@@ -600,6 +615,12 @@ async function installOneRef(rawRef: string): Promise<void> {
 
   // Direct npm scoped ref — skip marketplace descriptor.
   if (ref.startsWith("@")) {
+    const approved = await confirmSkillChange(
+      ref,
+      ref,
+      "Install this AgenticROS skill on this machine.",
+    );
+    if (!approved) return;
     try {
       const cachePath = await ensureSkillRefCached(ref, {
         onLog: (msg) => info(msg),
@@ -657,23 +678,19 @@ async function installOneRef(rawRef: string): Promise<void> {
     info(`Repo:     ${descriptor.githubUrl}`);
   }
 
+  const title = meta?.displayName || meta?.name || ref;
+  const author = meta?.maintainerLogin ? `@${meta.maintainerLogin}` : ref;
+  const approved = await confirmSkillChange(
+    title,
+    author,
+    meta?.description || "Install this AgenticROS skill on this machine.",
+  );
+  if (!approved) return;
+
   const preferNpm = Boolean(
     descriptor.npmPackage ||
       (descriptor.packageName && String(descriptor.packageName).startsWith("@")),
   );
-
-  if (isTty && !assumeYes) {
-    const yes = await confirm({
-      message: preferNpm
-        ? `Install from npm and register this skill locally?`
-        : `Clone, build, and register this skill locally?`,
-      default: true,
-    });
-    if (!yes) {
-      info("Cancelled.");
-      return;
-    }
-  }
 
   let skillDir: string | undefined;
 
@@ -747,9 +764,87 @@ async function installOneRef(rawRef: string): Promise<void> {
   else warn(refReg.message);
   warnIfNotBuilt(skillDir, info1.entry);
   warnProfileMismatches(skillDir);
+  for (const note of externalStackNotes(capabilityIdsFromSkillDir(skillDir))) {
+    warn(note);
+  }
 
   // 4) Sync the OpenClaw contracts.tools allowlist + auto-restart gateway.
   await postChangeFollowup({ ranSync: false });
+}
+
+async function confirmSkillChange(title: string, author: string, detail: string): Promise<boolean> {
+  const decision = installConfirmDecision({
+    grant: process.env[SKILL_GRANT_ENV] === "1",
+    helperAvailable: existsSync(approveHelperPath()),
+    tty: isTty,
+  });
+  if (decision === "proceed") return true;
+  if (decision === "ask-helper") {
+    const yes = await runApproveHelper(title, author, detail);
+    if (!yes) info("Cancelled.");
+    return yes;
+  }
+  if (decision === "ask-tty") {
+    const yes = await confirm({
+      message: `Allow ${title}?`,
+      default: false,
+    });
+    if (!yes) info("Cancelled.");
+    return yes;
+  }
+  err("Refusing to install or create a skill without an operator present.");
+  process.exit(1);
+}
+
+async function createLocalAction(rawSlug: string | undefined, template?: string): Promise<void> {
+  const slug = (rawSlug ?? "").trim();
+  if (!slug) {
+    err("Usage: agenticros skills create-local <slug> [--template hello|robot|camera|depth]");
+    process.exit(2);
+  }
+  const approved = await confirmSkillChange(
+    "Create local skill",
+    slug,
+    `Create a local skill named ${slug}. It is not published.`,
+  );
+  if (!approved) return;
+  const root = join(homedir(), ".agenticros", "skills-local");
+  let created;
+  try {
+    created = scaffoldSkill({ slug, template, cwd: root });
+  } catch (e) {
+    err(e instanceof Error ? e.message : String(e));
+    process.exit(1);
+  }
+  const reg = registerLocalSkillPath(created.dir);
+  if (!reg.ok) {
+    err(reg.message);
+    process.exit(1);
+  }
+  ok(reg.message);
+  info("This skill was not published.");
+  info("Start the agent again before its tools are available.");
+}
+
+function capabilityIdsFromSkillDir(dir: string): string[] {
+  const pkgPath = join(dir, "package.json");
+  if (!existsSync(pkgPath)) return [];
+  try {
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as {
+      agenticros?: { capabilities?: unknown };
+    };
+    const caps = pkg.agenticros?.capabilities;
+    if (!Array.isArray(caps)) return [];
+    const ids: string[] = [];
+    for (const cap of caps) {
+      if (!cap || typeof cap !== "object") continue;
+      const id = (cap as { id?: unknown }).id;
+      if (typeof id === "string" && id && !ids.includes(id)) ids.push(id);
+    }
+    return ids;
+  } catch {
+    return [];
+  }
 }
 
 function formatMarketplaceError(e: unknown): string {

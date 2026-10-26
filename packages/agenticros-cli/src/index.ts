@@ -633,9 +633,9 @@ program
 program
   .command("skills [action] [arg]")
   .description(
-    "Manage AgenticROS skills. create | dev | publish | search | install <owner/skill> | list | discover | add | remove | sync.",
+    "Manage AgenticROS skills. create | create-local | dev | publish | search | install <owner/skill> | list | discover | add | remove | sync.",
   )
-  .option("--template <name>", "With `skills create`: hello | robot | camera | depth")
+  .option("--template <name>", "With `skills create` or `skills create-local`: hello | robot | camera | depth")
   .option("--graduate", "With `skills publish`: graduate a tutorial skill", false)
   .option("--invoke <tool>", "With `skills dev`: run a tool handler")
   .option("--live", "With `skills dev`: allow live transport", false)
@@ -645,7 +645,16 @@ program
   .option("--bundle <name>", "With `skills install`: install a named bundle (mapping)")
   .action(async (action: string | undefined, arg: string | undefined, opts) => {
     const act = (action ?? "list").toLowerCase();
-    if (act === "create") {
+    if (act === "create" || act === "create-local") {
+      if (act === "create-local") {
+        await skillsCommand({
+          action: "create-local",
+          arg,
+          template: opts.template,
+          yes: opts.yes === true,
+        });
+        return;
+      }
       await createSkillCommand({ slug: arg ?? "", template: opts.template });
       return;
     }

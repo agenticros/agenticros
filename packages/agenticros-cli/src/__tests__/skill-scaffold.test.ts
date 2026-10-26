@@ -8,6 +8,7 @@ import {
   slugToToolName,
   hashSkillSource,
 } from "../util/skill-scaffold.js";
+import { registerLocalSkillPath } from "../util/skills.js";
 import {
   isValidSlug,
   parseMarketplaceRef,
@@ -16,7 +17,7 @@ import {
   marketplaceRef,
   firestoreDocId,
 } from "../util/skill-manifest.js";
-import { mkdtempSync, rmSync, existsSync } from "node:fs";
+import { mkdtempSync, rmSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -47,6 +48,12 @@ describe("skill-scaffold", () => {
       assert.ok(existsSync(join(result.dir, "package.json")));
       assert.ok(existsSync(join(result.dir, "src", "index.ts")));
       assert.ok(existsSync(join(result.dir, "demo.md")));
+      const configPath = join(parent, "config.json");
+      const registered = registerLocalSkillPath(result.dir, configPath);
+      assert.equal(registered.ok, true);
+      assert.match(registered.message, /not published/);
+      const saved = JSON.parse(readFileSync(configPath, "utf8")) as { skillPaths?: string[] };
+      assert.deepEqual(saved.skillPaths, [result.dir]);
     } finally {
       rmSync(parent, { recursive: true, force: true });
     }
