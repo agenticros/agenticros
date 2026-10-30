@@ -34,7 +34,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import type {
-  AgenticROSConfig,
+  SynapseConfig,
   ResolvedRobot,
   RosTransport,
   TransportConfig,
@@ -101,7 +101,7 @@ function makeRobot(id: string, namespace: string, source: "config" | "legacy" = 
   };
 }
 
-function configWithRobots(robots: Array<Record<string, unknown>>, top?: Record<string, unknown>): AgenticROSConfig {
+function configWithRobots(robots: Array<Record<string, unknown>>, top?: Record<string, unknown>): SynapseConfig {
   return parseConfig({
     transport: { mode: "local" },
     ...(top ?? {}),

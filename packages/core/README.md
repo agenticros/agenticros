@@ -1,21 +1,24 @@
-# @agenticros/core
+# @corebrum/core
 
-Platform-agnostic ROS2 transport, types, and config schema. This package is the **single dependency** every AgenticROS adapter and skill imports.
+This project was previously known as AgenticROS.
+
+
+Platform-agnostic ROS2 transport, types, and config schema. This package is the **single dependency** every Corebrum Synapse adapter and skill imports.
 
 It contains:
 
 - The `RosTransport` interface every transport implementation satisfies.
 - Four implementations: **Zenoh** (binary CDR), **Rosbridge** (WebSocket JSON), **WebRTC** (Mode C, cloud/remote), and **Local DDS** via `rclnodejs`.
-- A Zod config schema (`AgenticROSConfig`) shared across all adapters.
-- Topic-namespace utilities, capability registry, a small long-term memory layer (`mem0` or local file backend), named places (`~/.agenticros/places.json`), and `emergencyStopRobot`.
+- A Zod config schema (`SynapseConfig`) shared across all adapters.
+- Topic-namespace utilities, capability registry, a small long-term memory layer (`mem0` or local file backend), named places (`~/.synapse/places.json`), and `emergencyStopRobot`.
 
 Transports load via dynamic `import()` in `createTransport()`. **`rclnodejs`** (local) and **`node-datachannel`** (WebRTC) are `optionalDependencies` so a normal install pulls them in automatically when the platform supports them. The OpenClaw plugin deploy script strips those entries from the *deployed* core manifest (modules stay installed) so gateway admission does not re-hash the native trees on every restart — see [openclaw-startup-performance.md](../../docs/openclaw-startup-performance.md).
 
 You don't normally use it directly — you use one of the adapters that depends on it:
 
-- [`agenticros`](https://github.com/agenticros/agenticros) — OpenClaw plugin
-- [`@agenticros/claude-code`](https://github.com/agenticros/agenticros) — MCP server for Claude Code, Codex CLI, Hermes, Antigravity CLI, and Claude Desktop
-- [`@agenticros/gemini`](https://github.com/agenticros/agenticros) — Gemini API CLI adapter (`GEMINI_API_KEY`; separate from Antigravity CLI)
+- [`synapse`](https://github.com/Corebrum/corebrum-synapse) — OpenClaw plugin
+- [`@corebrum/claude-code`](https://github.com/Corebrum/corebrum-synapse) — MCP server for Claude Code, Codex CLI, Hermes, Antigravity CLI, and Claude Desktop
+- [`@corebrum/gemini`](https://github.com/Corebrum/corebrum-synapse) — Gemini API CLI adapter (`GEMINI_API_KEY`; separate from Antigravity CLI)
 
 …or you build a **skill** for one of them.
 
@@ -26,30 +29,30 @@ A skill is an npm package that registers tools the AI agent can call on your rob
 **Quick start** — scaffold, dev locally, publish:
 
 ```bash
-npx agenticros create-skill my-skill
-cd agenticros-skill-my-skill && npm install && npm run dev
-npx agenticros publish
+npx @corebrum/synapse create-skill my-skill
+cd corebrum-skill-my-skill && npm install && npm run dev
+npx @corebrum/synapse publish
 ```
 
-Or start from scratch with `@agenticros/core`:
+Or start from scratch with `@corebrum/core`:
 
 ```bash
-npm install --save @agenticros/core
+npm install --save @corebrum/core
 ```
 
-Your `package.json` declares an `agenticros` block:
+Your `package.json` declares a `synapse` block:
 
 ```jsonc
 {
-  "name": "@agenticros/myskill",
+  "name": "@corebrum/myskill",
   "version": "0.1.0",
   "publishConfig": { "access": "public" },
   "main": "dist/index.js",
   "repository": {
     "type": "git",
-    "url": "https://github.com/you/agenticros-skill-myskill.git"
+    "url": "https://github.com/you/corebrum-skill-myskill.git"
   },
-  "agenticros": {
+  "synapse": {
     "id": "myskill",
     "displayName": "My Skill",
     "description": "What this skill does in one sentence.",
@@ -65,7 +68,7 @@ Your `package.json` declares an `agenticros` block:
     ]
   },
   "dependencies": {
-    "@agenticros/core": "^0.8.1"
+    "@corebrum/core": "^0.8.1"
   }
 }
 ```
@@ -73,7 +76,7 @@ Your `package.json` declares an `agenticros` block:
 Your entry exports a `registerSkill` function:
 
 ```ts
-import type { RegisterSkill } from "@agenticros/core";
+import type { RegisterSkill } from "@corebrum/core";
 
 export const registerSkill: RegisterSkill = (api, _config, _context) => {
   api.registerTool({
@@ -89,13 +92,13 @@ export const registerSkill: RegisterSkill = (api, _config, _context) => {
 };
 ```
 
-Publish to the marketplace with `npx agenticros publish`, or submit via **[skills.agenticros.com/submit](https://skills.agenticros.com/submit)**. Published skills use namespaced refs `owner/skill-id` (your GitHub login + `agenticros.id`):
+Publish to the marketplace with `npx @corebrum/synapse publish`, or submit via **[skills.corebrum.com/submit](https://skills.corebrum.com/submit)**. Published skills use namespaced refs `owner/skill-id` (your GitHub login + `synapse.id`):
 
 ```bash
-npx agenticros skills install your-handle/myskill
+npx @corebrum/synapse skills install your-handle/myskill
 ```
 
-See the [skills contract & guide](https://github.com/agenticros/agenticros/blob/main/docs/skills.md) for the full reference. The marketplace lists AgenticROS robot skills only; third-party Agent Skills catalogs are linked from that guide.
+See the [skills contract & guide](https://github.com/Corebrum/corebrum-synapse/blob/main/docs/skills.md) for the full reference. The marketplace lists Corebrum Synapse robot skills only; third-party Agent Skills catalogs are linked from that guide.
 
 ## License
 

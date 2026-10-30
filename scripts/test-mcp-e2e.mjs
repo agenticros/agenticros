@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * Spin up the @agenticros/claude-code MCP server as a child process and exercise
+ * Spin up the @corebrum/claude-code MCP server as a child process and exercise
  * a real JSON-RPC session over stdio. Used for end-to-end testing of the MCP
  * tools against a live sim (or real robot).
  *
  * Usage:
  *   node scripts/test-mcp-e2e.mjs
  *
- * Honours AGENTICROS_CONFIG_PATH if set; otherwise uses ~/.agenticros/config.json.
+ * Honours SYNAPSE_CONFIG_PATH if set; otherwise uses ~/.synapse/config.json.
  */
 
 import { spawn } from "node:child_process";
@@ -16,7 +16,7 @@ import { dirname, join, resolve } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "..");
-const serverDist = join(repoRoot, "packages/agenticros-claude-code/dist/index.js");
+const serverDist = join(repoRoot, "packages/synapse-claude-code/dist/index.js");
 
 const child = spawn(process.execPath, [serverDist], {
   stdio: ["pipe", "pipe", "pipe"],
@@ -116,7 +116,7 @@ async function main() {
   const init = await rpc("initialize", {
     protocolVersion: "2024-11-05",
     capabilities: { tools: {} },
-    clientInfo: { name: "agenticros-e2e", version: "0.0.1" },
+    clientInfo: { name: "synapse-e2e", version: "0.0.1" },
   });
   console.log(`server: ${init.serverInfo?.name} v${init.serverInfo?.version}`);
   await rpc("notifications/initialized", {}).catch(() => {});

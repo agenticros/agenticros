@@ -1,13 +1,13 @@
 # OpenClaw Releases and Plugin Web Routes
 
-This doc summarizes how OpenClaw version changes affect the AgenticROS plugin’s HTTP routes (landing, config, teleop) and what to do if routes return 404 or you see auth-related logs.
+This doc summarizes how OpenClaw version changes affect the Corebrum Synapse plugin’s HTTP routes (landing, config, teleop) and what to do if routes return 404 or you see auth-related logs.
 
 ## 2026.3.1 regression: plugin routes unreachable
 
 In **OpenClaw 2026.3.1**, a regression made plugin HTTP routes unreachable:
 
 - The **Control UI** SPA catch-all handler ran **before** plugin request handling in the gateway.
-- So requests to `/plugins/agenticros/`, `/agenticros/teleop/`, etc. were handled by the Control UI instead of the plugin: GET often returned the chat UI, POST returned **405 Method Not Allowed**.
+- So requests to `/plugins/synapse/`, `/synapse/teleop/`, etc. were handled by the Control UI instead of the plugin: GET often returned the chat UI, POST returned **405 Method Not Allowed**.
 
 Details: [openclaw/openclaw#31766](https://github.com/openclaw/openclaw/issues/31766).
 
@@ -20,7 +20,7 @@ Details: [openclaw/openclaw#31766](https://github.com/openclaw/openclaw/issues/3
 In **OpenClaw 2026.3.2**, the order was fixed (PR [#31906](https://github.com/openclaw/openclaw/pull/31906)):
 
 - **Plugin HTTP routes** (with their auth check) now run **before** the Control UI SPA catch-all.
-- Plugin routes are reachable again on `/agenticros/`, `/api/agenticros/`, and `/plugins/agenticros/`.
+- Plugin routes are reachable again on `/synapse/`, `/api/synapse/`, and `/plugins/synapse/`.
 
 So 2026.3.2 restores correct routing; the plugin does not need code changes for that.
 
@@ -35,12 +35,12 @@ After the fix, plugin routes **go through gateway auth** when the gateway has to
 
 So:
 
-- **From a browser:** If you open `http://127.0.0.1:18789/plugins/agenticros/` (gateway port) and the gateway uses token auth, the browser does not send the token, so the gateway may reject the request and you get “not found” or “unauthorized” and see the auth log.
-- **Via the AgenticROS proxy:** The proxy adds the token from `~/.openclaw/openclaw.json` to every request. So use **`http://127.0.0.1:18790/plugins/agenticros/`** (proxy port) to load the plugin UI and teleop with auth handled.
+- **From a browser:** If you open `http://127.0.0.1:18789/plugins/synapse/` (gateway port) and the gateway uses token auth, the browser does not send the token, so the gateway may reject the request and you get “not found” or “unauthorized” and see the auth log.
+- **Via the Corebrum Synapse proxy:** The proxy adds the token from `~/.openclaw/openclaw.json` to every request. So use **`http://127.0.0.1:18790/plugins/synapse/`** (proxy port) to load the plugin UI and teleop with auth handled.
 
-If you see **“not found”** for `/plugins/agenticros/` even when using the proxy, check:
+If you see **“not found”** for `/plugins/synapse/` even when using the proxy, check:
 
-1. Proxy is running: `node scripts/agenticros-proxy.cjs 18790`
+1. Proxy is running: `node scripts/synapse-proxy.cjs 18790`
 2. Config has a token: `gateway.auth.token` in `~/.openclaw/openclaw.json` (or `OPENCLAW_CONFIG`).
 3. You are opening the **proxy** URL (port 18790), not the gateway URL (e.g. 18789).
 
@@ -57,25 +57,25 @@ If you see **“not found”** for `/plugins/agenticros/` even when using the pr
 
 ### OpenClaw 2026.3.11 (recommended)
 
-**OpenClaw 2026.3.11** is the recommended version: plugin HTTP routes (e.g. http://127.0.0.1:18789/plugins/agenticros/) work correctly. The AgenticROS plugin registers routes synchronously and uses `auth: "plugin"` for compatibility.
+**OpenClaw 2026.3.11** is the recommended version: plugin HTTP routes (e.g. http://127.0.0.1:18789/plugins/synapse/) work correctly. The Corebrum Synapse plugin registers routes synchronously and uses `auth: "plugin"` for compatibility.
 
 - **Install 2026.3.11:** `./scripts/use-openclaw-2026.3.11.sh` (or use latest: `npm install -g openclaw@latest`)
 - **Restart the gateway:** `openclaw gateway`
-- **Open:** http://127.0.0.1:18789/plugins/agenticros/ (and http://127.0.0.1:18789/ for web chat)
+- **Open:** http://127.0.0.1:18789/plugins/synapse/ (and http://127.0.0.1:18789/ for web chat)
 
 **Rollback** to 2026.2.26 if you hit issues: `./scripts/use-openclaw-2026.2.26.sh`, then restart the gateway.
 
 ---
 
-**Local dev (recommended):** Run **`node scripts/setup-openclaw-local.cjs`** to set `gateway.auth.mode` to `"none"`, then restart the gateway. Web chat and AgenticROS pages then work at **http://127.0.0.1:18789/** and **http://127.0.0.1:18789/plugins/agenticros/** without the proxy.
+**Local dev (recommended):** Run **`node scripts/setup-openclaw-local.cjs`** to set `gateway.auth.mode` to `"none"`, then restart the gateway. Web chat and Corebrum Synapse pages then work at **http://127.0.0.1:18789/** and **http://127.0.0.1:18789/plugins/synapse/** without the proxy.
 
-**With token auth:** Use **`http://127.0.0.1:18790/plugins/agenticros/`** (with the proxy running) for the AgenticROS web UI and teleop. See [teleop.md](teleop.md) for full teleop setup.
+**With token auth:** Use **`http://127.0.0.1:18790/plugins/synapse/`** (with the proxy running) for the Corebrum Synapse web UI and teleop. See [teleop.md](teleop.md) for full teleop setup.
 
 ---
 
 ## Open OpenClaw web chat from another machine on the LAN
 
-OpenClaw defaults to **`gateway.bind: loopback`**, so the Control UI / web chat only accepts connections from the robot itself (`127.0.0.1`). AgenticROS developers often SSH into a Jetson (or other robot), run OpenClaw there, and want to use a **laptop browser** on the same Wi‑Fi / LAN — for example `http://192.168.8.148:18789/chat`.
+OpenClaw defaults to **`gateway.bind: loopback`**, so the Control UI / web chat only accepts connections from the robot itself (`127.0.0.1`). Corebrum Synapse developers often SSH into a Jetson (or other robot), run OpenClaw there, and want to use a **laptop browser** on the same Wi‑Fi / LAN — for example `http://192.168.8.148:18789/chat`.
 
 ### What you need (plain HTTP on a trusted LAN)
 
@@ -108,7 +108,7 @@ systemctl --user restart openclaw-gateway.service
 Then on your **laptop** browser (use the token URL from `openclaw dashboard` if prompted):
 
 - Web chat: `http://<ROBOT_LAN_IP>:18789/chat` (or `http://<ROBOT_LAN_IP>:18789/`)
-- AgenticROS config / teleop: `http://<ROBOT_LAN_IP>:18789/plugins/agenticros/`
+- Corebrum Synapse config / teleop: `http://<ROBOT_LAN_IP>:18789/plugins/synapse/`
 
 Confirm the gateway is listening on all interfaces (not only loopback):
 
@@ -135,10 +135,10 @@ The supported way to get a persistent remote Control UI is a **secure context** 
 
 In OpenClaw 2026.3.2 with token auth enabled, the gateway can **reject** every plugin HTTP route shortly after the plugin registers it. Logs look like:
 
-1. `AgenticROS plugin loaded successfully` and `AgenticROS teleop routes registered`
+1. `Corebrum Synapse plugin loaded successfully` and `Corebrum Synapse teleop routes registered`
 2. Then, ~2 seconds later: **`[plugins] http route registration missing or invalid auth`** for every path
 
-When that happens, the routes are **not** added. So both 18789 and 18790 return 404 for `/plugins/agenticros/`.
+When that happens, the routes are **not** added. So both 18789 and 18790 return 404 for `/plugins/synapse/`.
 
 In OpenClaw 2026.3.2 this can happen **even when** `gateway.auth.mode` is `"none"`, and the plugin’s `requireAuth: false` is not accepted by this gateway build. **Reliable fix:** use OpenClaw **2026.2.26**, where plugin routes are accepted:
 
@@ -146,7 +146,7 @@ In OpenClaw 2026.3.2 this can happen **even when** `gateway.auth.mode` is `"none
 ./scripts/use-openclaw-2026.2.26.sh
 ```
 
-Then restart the gateway (`openclaw gateway`) and open **http://127.0.0.1:18789/** (web chat) and **http://127.0.0.1:18789/plugins/agenticros/** (config, teleop). To return to latest later: `npm install -g openclaw@latest`.
+Then restart the gateway (`openclaw gateway`) and open **http://127.0.0.1:18789/** (web chat) and **http://127.0.0.1:18789/plugins/synapse/** (config, teleop). To return to latest later: `npm install -g openclaw@latest`.
 
 **Workaround:** Disable the Control UI so the gateway may accept plugin routes (in some builds). In `~/.openclaw/openclaw.json` (or `OPENCLAW_CONFIG`):
 
@@ -158,7 +158,7 @@ Then restart the gateway (`openclaw gateway`) and open **http://127.0.0.1:18789/
 
 Use **`controlUi`** (lowercase “i”), not `controlUI` — OpenClaw rejects unknown keys.
 
-Restart the gateway, then open **http://127.0.0.1:18789/plugins/agenticros/** (no proxy needed). If the auth messages disappear and the plugin page loads, the issue is the gateway's auth check when Control UI is enabled.
+Restart the gateway, then open **http://127.0.0.1:18789/plugins/synapse/** (no proxy needed). If the auth messages disappear and the plugin page loads, the issue is the gateway's auth check when Control UI is enabled.
 
 **If you already set `controlUi.enabled: false` and still see the auth messages:** In 2026.3.2 the gateway rejects plugin routes when **gateway token auth** is enabled. Removing the token does not help: the gateway may **auto-generate and re-add** it at startup (`auth token was missing. Generated a new token and saved it to config`), so token auth stays on and routes stay rejected.
 
@@ -176,7 +176,7 @@ On a **loopback-only** gateway (binding to 127.0.0.1), use **no-auth mode** so t
 
 3. Open in your browser:
    - **Web chat:** http://127.0.0.1:18789/
-   - **AgenticROS landing, config, teleop:** http://127.0.0.1:18789/plugins/agenticros/
+   - **Corebrum Synapse landing, config, teleop:** http://127.0.0.1:18789/plugins/synapse/
 
 No proxy needed. Use this only when the gateway is bound to localhost. To restore token auth later, set `gateway.auth.mode` to `"token"` and add `gateway.auth.token` in your config.
 
@@ -184,18 +184,18 @@ No proxy needed. Use this only when the gateway is bound to localhost. To restor
 
 ## When neither 18789 nor 18790 loads the plugin
 
-If both **http://127.0.0.1:18789/plugins/agenticros/** and **http://127.0.0.1:18790/plugins/agenticros/** fail to load (404, blank, or “not found”):
+If both **http://127.0.0.1:18789/plugins/synapse/** and **http://127.0.0.1:18790/plugins/synapse/** fail to load (404, blank, or “not found”):
 
 ### 0. Use no-auth mode for local dev (simplest)
 
-If your gateway is only on localhost, run **`node scripts/setup-openclaw-local.cjs`**, restart the gateway, then open **http://127.0.0.1:18789/** (web chat) and **http://127.0.0.1:18789/plugins/agenticros/** (config, teleop). This fixes both "missing or invalid auth" route rejection and web chat token_missing.
+If your gateway is only on localhost, run **`node scripts/setup-openclaw-local.cjs`**, restart the gateway, then open **http://127.0.0.1:18789/** (web chat) and **http://127.0.0.1:18789/plugins/synapse/** (config, teleop). This fixes both "missing or invalid auth" route rejection and web chat token_missing.
 
 ### 1. Confirm the plugin and routes are registered
 
 In the gateway startup logs you should see:
 
-- `AgenticROS plugin loaded successfully`
-- `AgenticROS teleop routes registered ...`
+- `Corebrum Synapse plugin loaded successfully`
+- `Corebrum Synapse teleop routes registered ...`
 
 If you see **`[plugins] http route registration missing or invalid auth`** for each route, the gateway may be **rejecting** route registration (e.g. an auth check at registration time). In that case the routes are never added, so both URLs will 404.
 
@@ -209,7 +209,7 @@ Temporarily set in your OpenClaw config (`~/.openclaw/openclaw.json` or `OPENCLA
 }
 ```
 
-Use **`controlUi`** (lowercase “i”), not `controlUI`. Restart the gateway and try **http://127.0.0.1:18789/plugins/agenticros/** again. If it loads, the issue is tied to Control UI or auth ordering.
+Use **`controlUi`** (lowercase “i”), not `controlUI`. Restart the gateway and try **http://127.0.0.1:18789/plugins/synapse/** again. If it loads, the issue is tied to Control UI or auth ordering.
 
 ### 3. Disable auth with gateway.auth.mode, not by removing the token
 
@@ -218,20 +218,20 @@ In 2026.3.2, if you only remove `gateway.auth.token`, the gateway may log **"aut
 ### 4. Confirm proxy and gateway ports
 
 - Gateway must be running on the port the proxy uses (default **18789** from `gateway.url` in config).
-- Proxy must be running: `node scripts/agenticros-proxy.cjs 18790`.
+- Proxy must be running: `node scripts/synapse-proxy.cjs 18790`.
 - Config must contain `gateway.auth.token` for the proxy to add the Bearer header.
 
 ### 5. Use the dashboard URL with token, then open the plugin
 
-Run `openclaw dashboard` and open the URL it prints (it includes the token in the hash). In that same browser tab, go to **http://127.0.0.1:18789/plugins/agenticros/**. Some setups use that token for subsequent requests; if that works, the proxy (18790) should also work when the token is sent via the proxy.
+Run `openclaw dashboard` and open the URL it prints (it includes the token in the hash). In that same browser tab, go to **http://127.0.0.1:18789/plugins/synapse/**. Some setups use that token for subsequent requests; if that works, the proxy (18790) should also work when the token is sent via the proxy.
 
 ### 6. Verify plugin path in OpenClaw config
 
-The gateway must load the AgenticROS plugin. On **OpenClaw 2026.6+**, the linked path must be the flattened deploy tree **`~/.agenticros/plugin-deploy`** (created by `scripts/setup_gateway_plugin.sh` / `agenticros init`), not the workspace `packages/agenticros` tree — pnpm workspace symlinks fail the install-time code safety scan.
+The gateway must load the Corebrum Synapse plugin. On **OpenClaw 2026.6+**, the linked path must be the flattened deploy tree **`~/.synapse/plugin-deploy`** (created by `scripts/setup_gateway_plugin.sh` / `synapse init`), not the workspace `packages/synapse-openclaw` tree — pnpm workspace symlinks fail the install-time code safety scan.
 
-In `~/.openclaw/openclaw.json`, check `plugins.installs.agenticros.sourcePath` (or `plugins.entries.agenticros`) points at that deploy dir. If the plugin never loads, no routes are registered. `agenticros doctor` reports a red `openclaw-plugin-deploy` check when this is wrong.
+In `~/.openclaw/openclaw.json`, check `plugins.installs.synapse.sourcePath` (or `plugins.entries.synapse`) points at that deploy dir. If the plugin never loads, no routes are registered. `synapse doctor` reports a red `openclaw-plugin-deploy` check when this is wrong.
 
-**Landing URL:** use `http://127.0.0.1:18789/plugins/agenticros/` (trailing slash) or `/plugins/agenticros` — both are registered. If you still get 404, the plugin is not loaded (path/deploy issue above), not a slash typo.
+**Landing URL:** use `http://127.0.0.1:18789/plugins/synapse/` (trailing slash) or `/plugins/synapse` — both are registered. If you still get 404, the plugin is not loaded (path/deploy issue above), not a slash typo.
 
 ### 7. Use OpenClaw 2026.2.26 (recommended when 2026.3.2 rejects routes)
 
@@ -241,7 +241,7 @@ If the gateway still logs "missing or invalid auth" for every route and the plug
 ./scripts/use-openclaw-2026.2.26.sh
 ```
 
-Then **http://127.0.0.1:18789/plugins/agenticros/** works. For the web chat, see [Web chat not loading on 2026.2.26](#web-chat-not-loading-on-2026226) below. To return to latest later: `npm install -g openclaw@latest`.
+Then **http://127.0.0.1:18789/plugins/synapse/** works. For the web chat, see [Web chat not loading on 2026.2.26](#web-chat-not-loading-on-2026226) below. To return to latest later: `npm install -g openclaw@latest`.
 
 ---
 

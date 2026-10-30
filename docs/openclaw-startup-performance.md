@@ -1,18 +1,18 @@
-# AgenticROS / OpenClaw Startup Optimization
+# Corebrum Synapse / OpenClaw Startup Optimization
 
 ## Purpose
 
-This document describes a startup-performance problem discovered when loading AgenticROS as an OpenClaw plugin, the diagnostic changes made on a deployed NVIDIA Jetson installation, what we learned, and what still needs to be implemented cleanly in the AgenticROS source repository.
+This document describes a startup-performance problem discovered when loading Corebrum Synapse as an OpenClaw plugin, the diagnostic changes made on a deployed NVIDIA Jetson installation, what we learned, and what still needs to be implemented cleanly in the Corebrum Synapse source repository.
 
-**Important:** The deployed copy under `~/.agenticros/plugin-deploy` contains experimental diagnostic modifications. Do **not** blindly copy that directory over the source repository.
+**Important:** The deployed copy under `~/.synapse/plugin-deploy` contains experimental diagnostic modifications. Do **not** blindly copy that directory over the source repository.
 
-The goal is to translate the proven optimizations into maintainable source changes while preserving all AgenticROS transports and functionality.
+The goal is to translate the proven optimizations into maintainable source changes while preserving all Corebrum Synapse transports and functionality.
 
 ---
 
 # 1. Original Problem
 
-OpenClaw startup became extremely slow when the AgenticROS plugin was enabled.
+OpenClaw startup became extremely slow when the Corebrum Synapse plugin was enabled.
 
 Observed behavior included:
 
@@ -21,9 +21,9 @@ Observed behavior included:
 - OpenClaw consuming approximately one CPU core during startup.
 - Memory usage reaching approximately 1–2 GB.
 - The gateway port sometimes accepting TCP connections before HTTP became responsive.
-- AgenticROS `register()` itself completing in only tens of milliseconds.
+- Corebrum Synapse `register()` itself completing in only tens of milliseconds.
 
-This initially looked like AgenticROS runtime initialization blocking Node.js.
+This initially looked like Corebrum Synapse runtime initialization blocking Node.js.
 
 That turned out **not** to be the primary cause.
 
@@ -41,7 +41,7 @@ During startup, OpenClaw recursively examines/copies/hashes plugin sources and d
 
 A startup could generate tens of thousands of files and hundreds of megabytes or more of temporary capture data.
 
-The AgenticROS dependency graph caused OpenClaw to capture packages that were not actually needed for the configured transport.
+The Corebrum Synapse dependency graph caused OpenClaw to capture packages that were not actually needed for the configured transport.
 
 The most expensive examples were native optional dependencies such as:
 
@@ -50,7 +50,7 @@ rclnodejs
 node-datachannel
 ```
 
-AgenticROS was configured to use:
+Corebrum Synapse was configured to use:
 
 ```text
 transport = rosbridge
@@ -68,7 +68,7 @@ camera        -> PNGJS
 
 The fundamental issue is therefore:
 
-> Optional AgenticROS capabilities were optional at runtime but not sufficiently optional from OpenClaw's plugin dependency/admission perspective.
+> Optional Corebrum Synapse capabilities were optional at runtime but not sufficiently optional from OpenClaw's plugin dependency/admission perspective.
 
 ---
 
@@ -78,24 +78,24 @@ The experiments produced approximately the following progression:
 
 | Configuration | OpenClaw startup |
 |---|---:|
-| Original full AgenticROS | ~102.0 sec |
-| Minimal AgenticROS root manifest | ~79.1 sec |
+| Original full Corebrum Synapse | ~102.0 sec |
+| Minimal Corebrum Synapse root manifest | ~79.1 sec |
 | Remove unused `rclnodejs` + `node-datachannel` dependency declarations | ~49.5 sec |
 | Remove Zenoh manifest declaration | ~46.7 sec |
 | Lazy-load object detection | ~49.1 sec |
 | Remove ros-camera manifest dependencies | ~48.3 sec |
 | Remove startup CDR diagnostic / Foxglove declarations | ~48.6 sec |
-| Current OpenClaw without functioning AgenticROS | ~47.0 sec |
+| Current OpenClaw without functioning Corebrum Synapse | ~47.0 sec |
 
 The exact numbers vary between runs, but the major result is clear:
 
-**AgenticROS originally added roughly 50+ seconds of startup overhead.**
+**Corebrum Synapse originally added roughly 50+ seconds of startup overhead.**
 
 After removing the major dependency-capture problems:
 
-**AgenticROS adds only approximately 1–2 seconds relative to the current OpenClaw baseline.**
+**Corebrum Synapse adds only approximately 1–2 seconds relative to the current OpenClaw baseline.**
 
-AgenticROS `register()` itself typically takes only approximately:
+Corebrum Synapse `register()` itself typically takes only approximately:
 
 ```text
 35–60 ms
@@ -107,7 +107,7 @@ Therefore the major performance problem has effectively been solved experimental
 
 # 4. Most Important Finding
 
-The largest single improvement came from removing these unused native optional dependencies from the deployed `@agenticros/core` manifest:
+The largest single improvement came from removing these unused native optional dependencies from the deployed `@corebrum/core` manifest:
 
 ```json
 "optionalDependencies": {
@@ -126,13 +126,13 @@ This happened even though neither dependency was required for the active `rosbri
 
 This is the most important production issue to address.
 
-**Production fix (source tree):** keep `rclnodejs` and `node-datachannel` as `@agenticros/core` `optionalDependencies` so install stays main-compatible (Mode A / Mode C work after a normal `pnpm install`). `scripts/setup_gateway_plugin.sh` reconstructs either package into the deploy tree if `pnpm deploy` omits it, then strips `optionalDependencies` from the *deployed* core `package.json` only (replacing the file inode so pnpm hardlinks do not mutate the workspace source). Modules remain on disk for runtime; OpenClaw admission no longer re-captures those native trees.
+**Production fix (source tree):** keep `rclnodejs` and `node-datachannel` as `@corebrum/core` `optionalDependencies` so install stays main-compatible (Mode A / Mode C work after a normal `pnpm install`). `scripts/setup_gateway_plugin.sh` reconstructs either package into the deploy tree if `pnpm deploy` omits it, then strips `optionalDependencies` from the *deployed* core `package.json` only (replacing the file inode so pnpm hardlinks do not mutate the workspace source). Modules remain on disk for runtime; OpenClaw admission no longer re-captures those native trees.
 
 ---
 
 # 5. Existing Transport Factory Is Good
 
-The AgenticROS transport factory is already architected correctly at the JavaScript level.
+The Corebrum Synapse transport factory is already architected correctly at the JavaScript level.
 
 It dynamically loads transports:
 
@@ -178,12 +178,12 @@ The problem is primarily **package/dependency visibility to OpenClaw**, not the 
 
 # 6. Recommended Architecture
 
-AgenticROS core should remain lightweight.
+Corebrum Synapse core should remain lightweight.
 
 Conceptually:
 
 ```text
-@agenticros/core
+@corebrum/core
 
     configuration
     robot profiles
@@ -237,7 +237,7 @@ It also has an appropriate failure path explaining that `rclnodejs` must be inst
 
 Therefore investigate making `rclnodejs` a truly optional/installable transport dependency rather than something OpenClaw sees as part of the default core dependency graph.
 
-Do **not** remove Local/DDS support from AgenticROS.
+Do **not** remove Local/DDS support from Corebrum Synapse.
 
 The goal is:
 
@@ -269,10 +269,10 @@ Instead make `node-datachannel` a dependency that is only required/admitted when
 
 # 9. Object Detection
 
-Originally an AgenticROS tool contained a static import similar to:
+Originally a Corebrum Synapse tool contained a static import similar to:
 
 ```js
-import { findObject } from "@agenticros/object-detection";
+import { findObject } from "@corebrum/object-detection";
 ```
 
 That made OpenClaw capture the vision stack, including packages such as:
@@ -286,7 +286,7 @@ A diagnostic modification changed this to a dynamic import inside tool execution
 
 ```js
 const { findObject } =
-    await import("@agenticros/object-detection");
+    await import("@corebrum/object-detection");
 
 const result = await findObject(...);
 ```
@@ -323,7 +323,7 @@ const imageSupported =
     );
 
 api.logger.info(
-    `AgenticROS: Zenoh CDR Image/CompressedImage supported=${imageSupported}`
+    `Corebrum Synapse: Zenoh CDR Image/CompressedImage supported=${imageSupported}`
 );
 ```
 
@@ -333,17 +333,17 @@ The plugin entrypoint also imported:
 isCdrTypeSupported
 ```
 
-from `@agenticros/core`.
+from `@corebrum/core`.
 
 This check is informational only.
 
-It is unnecessary when AgenticROS is configured for `rosbridge`.
+It is unnecessary when Corebrum Synapse is configured for `rosbridge`.
 
 The diagnostic version of the deployed plugin removed this unconditional startup check.
 
 Recommended production change:
 
-**Do not initialize/check Zenoh CDR capabilities during generic AgenticROS plugin startup.**
+**Do not initialize/check Zenoh CDR capabilities during generic Corebrum Synapse plugin startup.**
 
 If such a diagnostic is useful, execute it only when:
 
@@ -360,7 +360,7 @@ or perform it inside the Zenoh implementation.
 The following imports were found exclusively in:
 
 ```text
-@agenticros/core/dist/transport/zenoh/cdr.js
+@corebrum/core/dist/transport/zenoh/cdr.js
 ```
 
 They are:
@@ -398,7 +398,7 @@ Longer term, however, these dependencies should ideally live behind the Zenoh tr
 
 # 12. Zenoh
 
-Removing the Zenoh manifest declaration reduced the AgenticROS capture size substantially but only improved startup by a few seconds.
+Removing the Zenoh manifest declaration reduced the Corebrum Synapse capture size substantially but only improved startup by a few seconds.
 
 Zenoh should remain supported.
 
@@ -411,11 +411,11 @@ await import("./zenoh/adapter.js");
 Possible future cleanup:
 
 ```text
-@agenticros/core
-@agenticros/transport-rosbridge
-@agenticros/transport-dds
-@agenticros/transport-webrtc
-@agenticros/transport-zenoh
+@corebrum/core
+@corebrum/transport-rosbridge
+@corebrum/transport-dds
+@corebrum/transport-webrtc
+@corebrum/transport-zenoh
 ```
 
 or package exports/subpaths that provide similar dependency isolation.
@@ -497,7 +497,7 @@ This produced a meaningful improvement earlier in the debugging process.
 
 Before making this permanent:
 
-1. Inspect the current AgenticROS source.
+1. Inspect the current Corebrum Synapse source.
 2. Determine why TypeBox is required.
 3. Determine whether OpenClaw tools can use plain JSON Schema instead.
 4. Preserve all tool schemas and validation semantics.
@@ -553,7 +553,7 @@ The deployed installation has been modified during debugging.
 Location:
 
 ```text
-~/.agenticros/plugin-deploy
+~/.synapse/plugin-deploy
 ```
 
 Important modifications include:
@@ -564,7 +564,7 @@ The deployed root manifest was temporarily reduced to approximately:
 
 ```json
 "dependencies": {
-  "@agenticros/core": "workspace:*"
+  "@corebrum/core": "workspace:*"
 }
 ```
 
@@ -599,7 +599,7 @@ Do not blindly reproduce this manifest.
 `ros2-find-object.js` was modified to dynamically import:
 
 ```text
-@agenticros/object-detection
+@corebrum/object-detection
 ```
 
 This is likely worth making permanent.
@@ -626,7 +626,7 @@ export {
 } from "./transport/zenoh/cdr.js";
 ```
 
-Removing it broke the OpenClaw AgenticROS plugin before the plugin entrypoint diagnostic was changed.
+Removing it broke the OpenClaw Corebrum Synapse plugin before the plugin entrypoint diagnostic was changed.
 
 Do not remove public API exports without checking compatibility.
 
@@ -637,7 +637,7 @@ Do not remove public API exports without checking compatibility.
 Diagnostic backups were stored outside the deployed plugin tree under approximately:
 
 ```text
-~/.agenticros/debug-artifacts/
+~/.synapse/debug-artifacts/
 ```
 
 Examples include:
@@ -669,7 +669,7 @@ Do not treat every diagnostic version as production-ready.
 Do **not** do something like:
 
 ```bash
-cp -R ~/.agenticros/plugin-deploy/* ~/Projects/agenticros/
+cp -R ~/.synapse/plugin-deploy/* ~/Projects/synapse/
 ```
 
 The deployed tree contains experimental state.
@@ -681,7 +681,7 @@ Instead:
 3. Implement each desired change in TypeScript/source manifests.
 4. Build normally.
 5. Test.
-6. Deploy through the normal AgenticROS deployment process.
+6. Deploy through the normal Corebrum Synapse deployment process.
 
 ---
 
@@ -690,7 +690,7 @@ Instead:
 Expected source repository:
 
 ```text
-~/Projects/agenticros
+~/Projects/synapse
 ```
 
 Create/use a dedicated branch, for example:
@@ -737,7 +737,7 @@ Verify that the dynamic transport factory continues to work.
 Change the object-detection tool to load:
 
 ```text
-@agenticros/object-detection
+@corebrum/object-detection
 ```
 
 only when the tool is actually executed.
@@ -833,14 +833,14 @@ Run existing tests for affected packages.
 Test OpenClaw with:
 
 ```text
-AgenticROS enabled
+Corebrum Synapse enabled
 transport = rosbridge
 no skills
 ```
 
 Measure the OpenClaw-reported startup time.
 
-Expected result should be close to the OpenClaw-without-AgenticROS baseline.
+Expected result should be close to the OpenClaw-without-Corebrum Synapse baseline.
 
 ### rosbridge
 
@@ -882,7 +882,7 @@ During OpenClaw startup, inspect:
 ~/.openclaw/tmp/plugin-captures/
 ```
 
-For a rosbridge-only configuration, ideally normal AgenticROS startup should not capture large dependency trees associated exclusively with:
+For a rosbridge-only configuration, ideally normal Corebrum Synapse startup should not capture large dependency trees associated exclusively with:
 
 ```text
 rclnodejs
@@ -907,21 +907,21 @@ Current testing established an OpenClaw baseline around:
 47 seconds
 ```
 
-on this Jetson/configuration even when AgenticROS failed to load.
+on this Jetson/configuration even when Corebrum Synapse failed to load.
 
-Therefore AgenticROS should be judged primarily by **incremental startup overhead**.
+Therefore Corebrum Synapse should be judged primarily by **incremental startup overhead**.
 
 Target:
 
 ```text
 OpenClaw baseline       ~47 sec
-OpenClaw + AgenticROS   ~47–50 sec
+OpenClaw + Corebrum Synapse   ~47–50 sec
 ```
 
 rather than the original:
 
 ```text
-OpenClaw + AgenticROS   ~102 sec
+OpenClaw + Corebrum Synapse   ~102 sec
 ```
 
 The latter behavior must not return.
@@ -949,7 +949,7 @@ The objective is **dependency isolation and lazy loading**, not feature removal.
 
 # 27. Additional OpenClaw Issues
 
-Several OpenClaw system/service issues were observed but are separate from this AgenticROS source change.
+Several OpenClaw system/service issues were observed but are separate from this Corebrum Synapse source change.
 
 They include:
 
@@ -962,7 +962,7 @@ slow eMMC/SD storage
 OpenClaw capture overhead
 ```
 
-Do not mix those system-level changes into the AgenticROS Git branch unless specifically required.
+Do not mix those system-level changes into the Corebrum Synapse Git branch unless specifically required.
 
 The Jetson currently has no NVMe drive detected, and the working filesystem is on:
 
@@ -972,7 +972,7 @@ The Jetson currently has no NVMe drive detected, and the working filesystem is o
 
 The filesystem was also more than 90% full during portions of testing.
 
-Storage performance contributes to OpenClaw capture time but does not explain the AgenticROS-specific dependency regression by itself.
+Storage performance contributes to OpenClaw capture time but does not explain the Corebrum Synapse-specific dependency regression by itself.
 
 ---
 
@@ -980,7 +980,7 @@ Storage performance contributes to OpenClaw capture time but does not explain th
 
 The key lesson is:
 
-> AgenticROS itself was not taking 100 seconds to initialize. OpenClaw was spending most of that time capturing, hashing, admitting, and processing AgenticROS dependencies that were not required for the selected transport.
+> Corebrum Synapse itself was not taking 100 seconds to initialize. OpenClaw was spending most of that time capturing, hashing, admitting, and processing Corebrum Synapse dependencies that were not required for the selected transport.
 
 The largest offender was the presence of unused native optional transport dependencies:
 
@@ -993,7 +993,7 @@ Removing those from the default OpenClaw-visible dependency graph reduced startu
 
 The preferred design is:
 
-> Load expensive or transport-specific dependencies only when the corresponding AgenticROS capability is actually selected or invoked.
+> Load expensive or transport-specific dependencies only when the corresponding Corebrum Synapse capability is actually selected or invoked.
 
 Preserve functionality.
 
@@ -1001,7 +1001,7 @@ Implement the changes in source.
 
 Do not blindly reproduce diagnostic manifest edits.
 
-After implementation, compare OpenClaw startup with and without AgenticROS and verify that incremental AgenticROS overhead remains only a few seconds.
+After implementation, compare OpenClaw startup with and without Corebrum Synapse and verify that incremental Corebrum Synapse overhead remains only a few seconds.
 
 ---
 
@@ -1039,4 +1039,4 @@ After:  ~48–50 sec
 OpenClaw baseline: ~47 sec
 ```
 
-This demonstrates that the optimization removes approximately 50 seconds of AgenticROS-induced startup overhead without intentionally removing AgenticROS functionality.
+This demonstrates that the optimization removes approximately 50 seconds of Corebrum Synapse-induced startup overhead without intentionally removing Corebrum Synapse functionality.

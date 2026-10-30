@@ -1,9 +1,9 @@
 /**
- * Discoverable marketplace capabilities — list verbs from skills.agenticros.com
+ * Discoverable marketplace capabilities — list verbs from skills.corebrum.com
  * that are not yet installed locally, so agents can propose installs.
  */
 
-import type { AgenticROSConfig } from "./config.js";
+import type { SynapseConfig } from "./config.js";
 import {
   listCapabilitiesForRobot,
   type Capability,
@@ -146,7 +146,7 @@ export async function fetchMarketplaceSkills(
  * (ids not already present locally). Soft-fails offline.
  */
 export async function listCapabilitiesWithDiscoverable(
-  config: AgenticROSConfig,
+  config: SynapseConfig,
   opts: ListCapabilitiesOptions = {},
 ): Promise<ListedCapability[]> {
   const installed = listCapabilitiesForRobot(config, opts.robotId).map((c) => {

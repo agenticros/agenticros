@@ -1,0 +1,30 @@
+{
+  "name": "@corebrum/gemini",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "Corebrum Synapse Gemini adapter — chat with your ROS2 robot using Google Gemini",
+  "main": "./dist/index.js",
+  "bin": {
+    "synapse-gemini": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --test-force-exit \"dist/__tests__/*.test.js\"",
+    "smoke-api": "node scripts/smoke-api.mjs",
+    "chat": "node dist/index.js"
+  },
+  "dependencies": {
+    "@corebrum/core": "workspace:*",
+    "@corebrum/object-detection": "workspace:*",
+    "@corebrum/ros-camera": "workspace:*",
+    "@google/genai": "^1.0.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "typescript": "^5.7.0"
+  },
+  "author": "PlaiPin",
+  "license": "Apache-2.0"
+}

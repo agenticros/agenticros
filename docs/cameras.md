@@ -1,6 +1,6 @@
 # Camera Support
 
-The AgenticROS plugin’s **ros2_camera_snapshot** tool captures a single frame from any ROS2 image topic and returns it as base64 for display in chat. With **Zenoh** (Mode D), the plugin decodes `sensor_msgs/msg/Image` and `sensor_msgs/msg/CompressedImage` from CDR; no rosbridge is required.
+The Corebrum Synapse plugin’s **ros2_camera_snapshot** tool captures a single frame from any ROS2 image topic and returns it as base64 for display in chat. With **Zenoh** (Mode D), the plugin decodes `sensor_msgs/msg/Image` and `sensor_msgs/msg/CompressedImage` from CDR; no rosbridge is required.
 
 **After updating the plugin** (e.g. pulling code that adds Image/CompressedImage over Zenoh), **restart the OpenClaw gateway** so it loads the new code: `openclaw gateway restart`. Otherwise the assistant may still report “CDR subscribe not implemented for Image/CompressedImage”.
 
@@ -11,7 +11,7 @@ The AgenticROS plugin’s **ros2_camera_snapshot** tool captures a single frame 
 
 ## RealSense (realsense-ros)
 
-The [RealSense ROS2 wrapper](https://github.com/realsenseai/realsense-ros) publishes standard ROS2 topics. AgenticROS supports them via `ros2_camera_snapshot` with the appropriate topic and message type.
+The [RealSense ROS2 wrapper](https://github.com/realsenseai/realsense-ros) publishes standard ROS2 topics. Corebrum Synapse supports them via `ros2_camera_snapshot` with the appropriate topic and message type.
 
 | Use case | Topic | message_type |
 |----------|--------|----------------|
@@ -38,12 +38,12 @@ If `realsense2_camera_node` is running but topics have **no publishers** (e.g. `
 rs-enumerate-devices
 ```
 
-When the camera is in **D4XX Recovery** mode, the ROS node retries forever and logs `Serial Number not supported by the device!` to `/tmp/agenticros-camera.log`. `agenticros up real` / `start_demo.sh` now detect this and skip the launch with recovery steps.
+When the camera is in **D4XX Recovery** mode, the ROS node retries forever and logs `Serial Number not supported by the device!` to `/tmp/synapse-camera.log`. `synapse up real` / `start_demo.sh` now detect this and skip the launch with recovery steps.
 
 Recover firmware (stop the camera node first):
 
 ```bash
-agenticros down
+synapse down
 rs-fw-update -r
 rs-enumerate-devices -s    # should show your D4xx model + real serial
 ```
@@ -54,4 +54,4 @@ Then re-launch the real-robot demo. If recovery fails, unplug USB for 10 seconds
 
 When using Zenoh with **robot.namespace** set (e.g. for cmd_vel), camera topics are usually **not** under that namespace—they stay under `/camera/...`. The plugin now includes camera topics in discovery and defaults **ros2_camera_snapshot** to `/camera/camera/color/image_raw/compressed` (RealSense). To override, set **robot.cameraTopic** in the plugin config to your camera topic (e.g. `/camera/camera/color/image_raw/compressed`).
 
-To put a **USB RealSense on a simulated AMR** in RViz (live cloud, simulated wheels), use `agenticros up sim-amr --real-camera`. See [Shadow AMR](simulation.md#shadow-amr-real-realsense--simulated-body).
+To put a **USB RealSense on a simulated AMR** in RViz (live cloud, simulated wheels), use `synapse up sim-amr --real-camera`. See [Shadow AMR](simulation.md#shadow-amr-real-realsense--simulated-body).

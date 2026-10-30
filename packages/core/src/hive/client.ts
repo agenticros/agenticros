@@ -1,4 +1,4 @@
-import type { AgenticROSConfig } from "../config.js";
+import type { SynapseConfig } from "../config.js";
 import { isDeniedActuationTopic, taskDefinitionMentionsActuation } from "./deny.js";
 import { makeHiveEvent } from "./event.js";
 import {
@@ -15,7 +15,7 @@ import {
 } from "./types.js";
 
 const RECIPE_TEMPLATE_BASE = "https://corebrum.com/recipes";
-const RECIPE_TASK_PREFIX = "agenticros/recipe/";
+const RECIPE_TASK_PREFIX = "synapse/recipe/";
 
 export interface HiveClientHooks {
   /** Injected fetch for tests. Defaults to global fetch. */
@@ -50,7 +50,7 @@ export class HiveHttpClient implements HiveClient {
   private readonly persistRecipes?: HiveClientHooks["persistRecipes"];
   private ensured = false;
 
-  constructor(config: AgenticROSConfig, overrides: HiveClientOverrides = {}, hooks: HiveClientHooks = {}) {
+  constructor(config: SynapseConfig, overrides: HiveClientOverrides = {}, hooks: HiveClientHooks = {}) {
     this.url = stripTrailingSlash(overrides.url ?? config.hive?.url ?? DEFAULT_HIVE_URL);
     this.identityId = overrides.identityId ?? config.hive?.identityId;
     this.hiveId = overrides.hiveId ?? config.hive?.hiveId;
@@ -232,7 +232,7 @@ export class HiveHttpClient implements HiveClient {
     if (v2) {
       taskId = v2;
     } else {
-      const file = `${RECIPE_TEMPLATE_BASE}/agenticros-${id}.yaml`;
+      const file = `${RECIPE_TEMPLATE_BASE}/synapse-${id}.yaml`;
       const submitted = await this.request("POST", "/api/submit", {
         file,
         input: JSON.stringify(input),
@@ -355,7 +355,7 @@ export class HiveHttpClient implements HiveClient {
     if (named?.hive_id) return named.hive_id;
     const created = await this.request("POST", `/api/hives?key_id=${enc(identityId)}`, {
       name: this.hiveName,
-      description: "AgenticROS fleet hive",
+      description: "Corebrum Synapse fleet hive",
     });
     if (typeof created.hive_id !== "string" || !created.hive_id) {
       throw new HiveUnavailableError("Fleet memory is not available yet.");

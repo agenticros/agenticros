@@ -1,5 +1,11 @@
 # Robotic Arm Control Demo
 
+This project was previously known as AgenticROS.
+
+
+This project was previously known as Corebrum Synapse.
+
+
 Control a robotic arm through natural language commands via messaging apps.
 
 ## Status
@@ -9,8 +15,8 @@ Control a robotic arm through natural language commands via messaging apps.
 Named-pose MoveIt on the sim arm is already shipped:
 
 ```bash
-agenticros up sim-arm --moveit --headless
-npx agenticros skills install @agenticros/moveit-pick
+synapse up sim-arm --moveit --headless
+npx @corebrum/synapse skills install @corebrum/moveit-pick
 node scripts/test-moveit-sim.mjs
 ```
 

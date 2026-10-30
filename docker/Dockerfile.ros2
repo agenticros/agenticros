@@ -15,11 +15,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV TURTLEBOT3_MODEL=burger
 ENV ROS_DOMAIN_ID=0
 
-# Copy the AgenticROS discovery node
-COPY ros2_ws/src/agenticros_bringup /ros2_ws/src/agenticros_bringup
-COPY ros2_ws/src/agenticros_discovery /ros2_ws/src/agenticros_discovery
-COPY ros2_ws/src/agenticros_msgs /ros2_ws/src/agenticros_msgs
-COPY ros2_ws/src/agenticros_agent /ros2_ws/src/agenticros_agent
+# Copy the Corebrum Synapse discovery node
+COPY ros2_ws/src/synapse_bringup /ros2_ws/src/synapse_bringup
+COPY ros2_ws/src/synapse_discovery /ros2_ws/src/synapse_discovery
+COPY ros2_ws/src/synapse_msgs /ros2_ws/src/synapse_msgs
+COPY ros2_ws/src/synapse_agent /ros2_ws/src/synapse_agent
 
 # Build ROS2 packages
 WORKDIR /ros2_ws

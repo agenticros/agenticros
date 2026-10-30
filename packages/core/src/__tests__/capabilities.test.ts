@@ -3,7 +3,7 @@
  *
  * The four broken-link failure cascade we hit on 2026-06-10 is exactly the
  * regression class these tests are here to prevent:
- *   1. Stale @agenticros/core caches in skill repos hiding new exports.
+ *   1. Stale @corebrum/core caches in skill repos hiding new exports.
  *   2. `sync-skill-tools.mjs` overwriting `contracts.tools` with a stale list.
  *   3. OpenClaw `tools.alsoAllow` filtering out unallowlisted plugin tools.
  *   4. The plugin-deploy `dist/` falling behind the workspace.
@@ -11,12 +11,12 @@
  * The most upstream of those is "the reader produces what we promised";
  * everything else depends on that contract holding. So this file pins down:
  *   - BUILTIN_CAPABILITIES has the 6 intrinsic verbs we ship.
- *   - readSkillCapabilities() picks up the `agenticros` block from package.json.
- *   - It uses `agenticros.id` (not the package name) as the skill id.
+ *   - readSkillCapabilities() picks up the `synapse` block from package.json.
+ *   - It uses `synapse.id` (not the package name) as the skill id.
  *   - It tags every capability with a source so dispatchers can filter.
  *   - It deduplicates within a skill so a malformed manifest can't blow up.
  *   - listAllCapabilities() merges intrinsic + skill in that order.
- *   - It tolerates non-skill packages (no `agenticros` key) silently.
+ *   - It tolerates non-skill packages (no `synapse` key) silently.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -67,14 +67,14 @@ test("BUILTIN_CAPABILITIES exposes the intrinsic robot verbs", () => {
   }
 });
 
-test("readSkillCapabilities: reads capabilities from the `agenticros` block", async () => {
-  const root = await mkdtemp(path.join(tmpdir(), "agenticros-caps-"));
+test("readSkillCapabilities: reads capabilities from the `synapse` block", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "synapse-caps-"));
   try {
     const skillDir = await makeSkillDir(root, "skill-alpha", {
-      name: "agenticros-skill-alpha",
+      name: "corebrum-skill-alpha",
       version: "0.0.1",
       main: "dist/index.js",
-      agenticros: {
+      synapse: {
         id: "alpha",
         displayName: "Alpha",
         capabilities: [
@@ -106,7 +106,7 @@ test("readSkillCapabilities: reads capabilities from the `agenticros` block", as
     assert.equal(wave.source?.kind, "skill");
     if (wave.source?.kind === "skill") {
       assert.equal(wave.source.skillId, "alpha");
-      assert.equal(wave.source.package, "agenticros-skill-alpha");
+      assert.equal(wave.source.package, "corebrum-skill-alpha");
     }
     assert.equal(wave.implementation?.kind, "in_process", "default implementation should be in_process");
 
@@ -117,13 +117,13 @@ test("readSkillCapabilities: reads capabilities from the `agenticros` block", as
   }
 });
 
-test("readSkillCapabilities: uses agenticros.id (not the package name) for the skill id", async () => {
-  const root = await mkdtemp(path.join(tmpdir(), "agenticros-caps-"));
+test("readSkillCapabilities: uses synapse.id (not the package name) for the skill id", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "synapse-caps-"));
   try {
     const skillDir = await makeSkillDir(root, "weird-named-repo", {
       name: "@some-org/totally-different-name",
       version: "0.0.1",
-      agenticros: {
+      synapse: {
         id: "explicit-id",
         capabilities: [{ id: "do_thing", verb: "do", description: "Do." }],
       },
@@ -141,7 +141,7 @@ test("readSkillCapabilities: uses agenticros.id (not the package name) for the s
 });
 
 test("readSkillCapabilities: silently ignores non-skill packages", async () => {
-  const root = await mkdtemp(path.join(tmpdir(), "agenticros-caps-"));
+  const root = await mkdtemp(path.join(tmpdir(), "synapse-caps-"));
   try {
     const dir = await makeSkillDir(root, "not-a-skill", {
       name: "regular-package",
@@ -155,12 +155,12 @@ test("readSkillCapabilities: silently ignores non-skill packages", async () => {
 });
 
 test("readSkillCapabilities: dedupes within a skill when an id appears twice in the array", async () => {
-  const root = await mkdtemp(path.join(tmpdir(), "agenticros-caps-"));
+  const root = await mkdtemp(path.join(tmpdir(), "synapse-caps-"));
   try {
     const skillDir = await makeSkillDir(root, "skill-dupe", {
-      name: "agenticros-skill-dupe",
+      name: "corebrum-skill-dupe",
       version: "0.0.1",
-      agenticros: {
+      synapse: {
         id: "dupe",
         capabilities: [
           { id: "shared_id", verb: "first", description: "First." },
@@ -180,12 +180,12 @@ test("readSkillCapabilities: dedupes within a skill when an id appears twice in 
 });
 
 test("readSkillCapabilities: drops entries without a valid id", async () => {
-  const root = await mkdtemp(path.join(tmpdir(), "agenticros-caps-"));
+  const root = await mkdtemp(path.join(tmpdir(), "synapse-caps-"));
   try {
     const skillDir = await makeSkillDir(root, "skill-bad", {
-      name: "agenticros-skill-bad",
+      name: "corebrum-skill-bad",
       version: "0.0.1",
-      agenticros: {
+      synapse: {
         id: "bad",
         capabilities: [
           { verb: "noid", description: "Missing id." },
@@ -204,13 +204,13 @@ test("readSkillCapabilities: drops entries without a valid id", async () => {
   }
 });
 
-test("readSkillCapabilities: skips packages with an `agenticros` block that lacks an `id`", async () => {
-  const root = await mkdtemp(path.join(tmpdir(), "agenticros-caps-"));
+test("readSkillCapabilities: skips packages with a `synapse` block that lacks an `id`", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "synapse-caps-"));
   try {
     const skillDir = await makeSkillDir(root, "skill-noid", {
-      name: "agenticros-skill-noid",
+      name: "corebrum-skill-noid",
       version: "0.0.1",
-      agenticros: {
+      synapse: {
         capabilities: [{ id: "do_thing", verb: "do", description: "Do." }],
       },
     });
@@ -222,12 +222,12 @@ test("readSkillCapabilities: skips packages with an `agenticros` block that lack
 });
 
 test("listAllCapabilities: built-ins first, then skill caps; counts add up", async () => {
-  const root = await mkdtemp(path.join(tmpdir(), "agenticros-caps-"));
+  const root = await mkdtemp(path.join(tmpdir(), "synapse-caps-"));
   try {
     const skillDir = await makeSkillDir(root, "skill-extra", {
-      name: "agenticros-skill-extra",
+      name: "corebrum-skill-extra",
       version: "0.0.1",
-      agenticros: {
+      synapse: {
         id: "extra",
         capabilities: [
           { id: "extra_one", verb: "demo", description: "One." },

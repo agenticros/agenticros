@@ -1,10 +1,10 @@
 {
-  "name": "@agenticros/core",
+  "name": "@corebrum/core",
   "version": "0.8.15",
   "type": "module",
-  "description": "AgenticROS core — platform-agnostic ROS2 transport, types, and config (the dep every AgenticROS skill imports).",
+  "description": "Corebrum Synapse core — platform-agnostic ROS2 transport, types, and config (the dep every Corebrum Synapse skill imports).",
   "keywords": [
-    "agenticros",
+    "synapse",
     "ros2",
     "robotics",
     "zenoh",
@@ -12,11 +12,11 @@
     "webrtc",
     "skill-sdk"
   ],
-  "homepage": "https://github.com/agenticros/agenticros#readme",
-  "bugs": "https://github.com/agenticros/agenticros/issues",
+  "homepage": "https://github.com/Corebrum/corebrum-synapse#readme",
+  "bugs": "https://github.com/Corebrum/corebrum-synapse/issues",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/agenticros/agenticros.git",
+    "url": "git+https://github.com/Corebrum/corebrum-synapse.git",
     "directory": "packages/core"
   },
   "main": "./dist/index.js",

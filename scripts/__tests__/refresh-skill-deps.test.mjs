@@ -8,7 +8,7 @@
  * Why these tests matter: today there's only one staleness-detection
  * algorithm, and if it accidentally treats "target has more files than
  * source" as stale (it should NOT), or treats unrelated files in the
- * skill's @agenticros/core as missing (it should NOT), the refresh will
+ * skill's @corebrum/core as missing (it should NOT), the refresh will
  * either thrash (always reinstall) or no-op (never reinstall) — both of
  * which break the contract.
  */
@@ -79,7 +79,7 @@ test("findMissingFiles: empty target ⇒ everything in source is missing", () =>
   assert.deepEqual(findMissingFiles(["a.js", "b.js"], []), ["a.js", "b.js"]);
 });
 
-test("checkSkillStaleness: hasCoreLink=false when skill has no @agenticros/core dep", async () => {
+test("checkSkillStaleness: hasCoreLink=false when skill has no @corebrum/core dep", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "refresh-test-"));
   try {
     const skill = path.join(root, "skill-no-core");
@@ -102,7 +102,7 @@ test("checkSkillStaleness: detects missing files when target lacks new source fi
 
     // Skill has a stale link — only index.js, missing capabilities.js and mission.js.
     const skill = path.join(root, "skill");
-    const staleDist = path.join(skill, "node_modules", "@agenticros", "core", "dist");
+    const staleDist = path.join(skill, "node_modules", "@synapse", "core", "dist");
     await writeText(path.join(staleDist, "index.js"), "");
 
     const result = checkSkillStaleness(skill, { sourceCoreDist: coreSrc });
@@ -123,7 +123,7 @@ test("checkSkillStaleness: returns missingFiles=[] when target is current", asyn
     await writeText(path.join(coreSrc, "capabilities.js"), "");
 
     const skill = path.join(root, "skill");
-    const dist = path.join(skill, "node_modules", "@agenticros", "core", "dist");
+    const dist = path.join(skill, "node_modules", "@synapse", "core", "dist");
     await writeText(path.join(dist, "index.js"), "");
     await writeText(path.join(dist, "capabilities.js"), "");
 
@@ -137,7 +137,7 @@ test("checkSkillStaleness: returns missingFiles=[] when target is current", asyn
   }
 });
 
-test("checkSkillStaleness: works when the skill's @agenticros/core is a symlink (real pnpm layout)", async () => {
+test("checkSkillStaleness: works when the skill's @corebrum/core is a symlink (real pnpm layout)", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "refresh-test-"));
   try {
     const coreSrc = path.join(root, "core", "dist");
@@ -150,15 +150,15 @@ test("checkSkillStaleness: works when the skill's @agenticros/core is a symlink 
       "skill",
       "node_modules",
       ".pnpm",
-      "@agenticros+core@file+stub",
+      "@synapse+core@file+stub",
       "node_modules",
-      "@agenticros",
+      "@synapse",
       "core",
     );
     await writeText(path.join(pnpmStore, "dist", "index.js"), "");
     await writeText(path.join(pnpmStore, "dist", "mission.js"), "");
 
-    const linkParent = path.join(root, "skill", "node_modules", "@agenticros");
+    const linkParent = path.join(root, "skill", "node_modules", "@synapse");
     await mkdir(linkParent, { recursive: true });
     await symlink(pnpmStore, path.join(linkParent, "core"));
 
@@ -174,20 +174,20 @@ test("checkSkillStaleness: works when the skill's @agenticros/core is a symlink 
 test("discoverSkillPaths: extraSkillPaths are picked up and absolutised", () => {
   // Inject only the extraSkillPaths and isolate from env / config files by
   // clearing the relevant env vars for the duration of the call. The
-  // function also reads ~/.openclaw/openclaw.json + ~/.agenticros/config.json
+  // function also reads ~/.openclaw/openclaw.json + ~/.synapse/config.json
   // unconditionally; we accept that those may add more entries, and just
   // assert our injected path is INCLUDED, not that it's the only one.
   const original = {
-    AGENTICROS_SKILL_PATHS: process.env.AGENTICROS_SKILL_PATHS,
+    SYNAPSE_SKILL_PATHS: process.env.SYNAPSE_SKILL_PATHS,
     OPENCLAW_CONFIG: process.env.OPENCLAW_CONFIG,
-    AGENTICROS_CONFIG_PATH: process.env.AGENTICROS_CONFIG_PATH,
+    SYNAPSE_CONFIG_PATH: process.env.SYNAPSE_CONFIG_PATH,
   };
   try {
-    delete process.env.AGENTICROS_SKILL_PATHS;
-    // Point OpenClaw + AgenticROS config readers at nonexistent files so
+    delete process.env.SYNAPSE_SKILL_PATHS;
+    // Point OpenClaw + Corebrum Synapse config readers at nonexistent files so
     // those branches contribute nothing during the test.
     process.env.OPENCLAW_CONFIG = "/dev/null/nonexistent.json";
-    process.env.AGENTICROS_CONFIG_PATH = "/dev/null/nonexistent.json";
+    process.env.SYNAPSE_CONFIG_PATH = "/dev/null/nonexistent.json";
 
     const paths = discoverSkillPaths({ extraSkillPaths: ["/tmp/my-skill"] });
     assert.ok(paths.includes("/tmp/my-skill"), `expected /tmp/my-skill in discovered paths; got ${paths.join(", ")}`);
@@ -199,24 +199,24 @@ test("discoverSkillPaths: extraSkillPaths are picked up and absolutised", () => 
   }
 });
 
-test("discoverSkillPaths: AGENTICROS_SKILL_PATHS env var splits on ':'", () => {
-  const original = process.env.AGENTICROS_SKILL_PATHS;
+test("discoverSkillPaths: SYNAPSE_SKILL_PATHS env var splits on ':'", () => {
+  const original = process.env.SYNAPSE_SKILL_PATHS;
   const originalOpen = process.env.OPENCLAW_CONFIG;
-  const originalAgenticros = process.env.AGENTICROS_CONFIG_PATH;
+  const originalSynapse = process.env.SYNAPSE_CONFIG_PATH;
   try {
     process.env.OPENCLAW_CONFIG = "/dev/null/nonexistent.json";
-    process.env.AGENTICROS_CONFIG_PATH = "/dev/null/nonexistent.json";
-    process.env.AGENTICROS_SKILL_PATHS = "/tmp/skill-a:/tmp/skill-b";
+    process.env.SYNAPSE_CONFIG_PATH = "/dev/null/nonexistent.json";
+    process.env.SYNAPSE_SKILL_PATHS = "/tmp/skill-a:/tmp/skill-b";
 
     const paths = discoverSkillPaths();
     assert.ok(paths.includes("/tmp/skill-a"));
     assert.ok(paths.includes("/tmp/skill-b"));
   } finally {
-    if (original === undefined) delete process.env.AGENTICROS_SKILL_PATHS;
-    else process.env.AGENTICROS_SKILL_PATHS = original;
+    if (original === undefined) delete process.env.SYNAPSE_SKILL_PATHS;
+    else process.env.SYNAPSE_SKILL_PATHS = original;
     if (originalOpen === undefined) delete process.env.OPENCLAW_CONFIG;
     else process.env.OPENCLAW_CONFIG = originalOpen;
-    if (originalAgenticros === undefined) delete process.env.AGENTICROS_CONFIG_PATH;
-    else process.env.AGENTICROS_CONFIG_PATH = originalAgenticros;
+    if (originalSynapse === undefined) delete process.env.SYNAPSE_CONFIG_PATH;
+    else process.env.SYNAPSE_CONFIG_PATH = originalSynapse;
   }
 });

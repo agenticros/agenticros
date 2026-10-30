@@ -6,7 +6,7 @@ settings:
 
 patchedDependencies:
   '@eclipse-zenoh/zenoh-ts@1.9.0':
-    hash: pdjq6ms3zvqwikn6vpqzasydsy
+    hash: lm6aqmfretqatvenouc2ws6ba4
     path: patches/@eclipse-zenoh__zenoh-ts@1.9.0.patch
   rclnodejs@1.9.0:
     hash: y5vmlfxthws6ekhua6z5b4nqmu
@@ -16,17 +16,58 @@ importers:
 
   .: {}
 
-  packages/agenticros:
+  packages/core:
     dependencies:
-      '@agenticros/core':
+      '@eclipse-zenoh/zenoh-ts':
+        specifier: ^1.9.0
+        version: 1.9.0(patch_hash=lm6aqmfretqatvenouc2ws6ba4)
+      '@foxglove/cdr':
+        specifier: ^3.5.0
+        version: 3.5.0
+      '@foxglove/rosmsg':
+        specifier: ^4.2.2
+        version: 4.2.2
+      '@foxglove/rosmsg2-serialization':
+        specifier: ^3.1.0
+        version: 3.1.0
+      ws:
+        specifier: ^8.18.0
+        version: 8.19.0
+      zod:
+        specifier: ^3.24.0
+        version: 3.25.76
+    optionalDependencies:
+      node-datachannel:
+        specifier: ^0.12.0
+        version: 0.12.0
+      rclnodejs:
+        specifier: ^1.8.1
+        version: 1.9.0(patch_hash=y5vmlfxthws6ekhua6z5b4nqmu)
+    devDependencies:
+      '@types/node':
+        specifier: ^20.17.0
+        version: 20.19.35
+      '@types/ws':
+        specifier: ^8.5.13
+        version: 8.18.1
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  packages/object-detection:
+    dependencies:
+      '@corebrum/core':
         specifier: workspace:*
         version: link:../core
-      '@agenticros/object-detection':
-        specifier: workspace:*
-        version: link:../object-detection
-      '@agenticros/ros-camera':
+      '@corebrum/ros-camera':
         specifier: workspace:*
         version: link:../ros-camera
+      onnxruntime-node:
+        specifier: ^1.20.0
+        version: 1.26.0
+      sharp:
+        specifier: ^0.33.0
+        version: 0.33.5
     devDependencies:
       '@types/node':
         specifier: ^20.17.0
@@ -35,15 +76,44 @@ importers:
         specifier: ^5.7.0
         version: 5.9.3
 
-  packages/agenticros-claude-code:
+  packages/robot-eyes:
     dependencies:
-      '@agenticros/core':
+      ws:
+        specifier: ^8.18.0
+        version: 8.19.0
+    optionalDependencies:
+      rclnodejs:
+        specifier: ^1.9.0
+        version: 1.9.0(patch_hash=y5vmlfxthws6ekhua6z5b4nqmu)
+
+  packages/ros-camera:
+    dependencies:
+      fzstd:
+        specifier: ^0.1.1
+        version: 0.1.1
+      pngjs:
+        specifier: ^7.0.0
+        version: 7.0.0
+    devDependencies:
+      '@types/node':
+        specifier: ^20.17.0
+        version: 20.19.35
+      '@types/pngjs':
+        specifier: ^6.0.5
+        version: 6.0.5
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  packages/synapse-claude-code:
+    dependencies:
+      '@corebrum/core':
         specifier: workspace:*
         version: link:../core
-      '@agenticros/object-detection':
+      '@corebrum/object-detection':
         specifier: workspace:*
         version: link:../object-detection
-      '@agenticros/ros-camera':
+      '@corebrum/ros-camera':
         specifier: workspace:*
         version: link:../ros-camera
       '@huggingface/transformers':
@@ -66,9 +136,9 @@ importers:
         specifier: ^5.7.0
         version: 5.9.3
 
-  packages/agenticros-cli:
+  packages/synapse-cli:
     dependencies:
-      '@agenticros/core':
+      '@corebrum/core':
         specifier: workspace:*
         version: link:../core
       '@inquirer/prompts':
@@ -100,7 +170,7 @@ importers:
         specifier: ^5.7.0
         version: 5.9.3
 
-  packages/agenticros-desktop:
+  packages/synapse-desktop:
     dependencies:
       dbus-next:
         specifier: ^0.10.2
@@ -116,15 +186,15 @@ importers:
         specifier: ^2.16.3
         version: 2.16.3
 
-  packages/agenticros-gemini:
+  packages/synapse-gemini:
     dependencies:
-      '@agenticros/core':
+      '@corebrum/core':
         specifier: workspace:*
         version: link:../core
-      '@agenticros/object-detection':
+      '@corebrum/object-detection':
         specifier: workspace:*
         version: link:../object-detection
-      '@agenticros/ros-camera':
+      '@corebrum/ros-camera':
         specifier: workspace:*
         version: link:../ros-camera
       '@google/genai':
@@ -141,7 +211,26 @@ importers:
         specifier: ^5.7.0
         version: 5.9.3
 
-  packages/agenticros-robot:
+  packages/synapse-openclaw:
+    dependencies:
+      '@corebrum/core':
+        specifier: workspace:*
+        version: link:../core
+      '@corebrum/object-detection':
+        specifier: workspace:*
+        version: link:../object-detection
+      '@corebrum/ros-camera':
+        specifier: workspace:*
+        version: link:../ros-camera
+    devDependencies:
+      '@types/node':
+        specifier: ^20.17.0
+        version: 20.19.35
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  packages/synapse-robot:
     dependencies:
       canvas:
         specifier: ^3.1.2
@@ -201,95 +290,6 @@ importers:
       koffi:
         specifier: ^2.16.3
         version: 2.16.3
-
-  packages/core:
-    dependencies:
-      '@eclipse-zenoh/zenoh-ts':
-        specifier: ^1.9.0
-        version: 1.9.0(patch_hash=pdjq6ms3zvqwikn6vpqzasydsy)
-      '@foxglove/cdr':
-        specifier: ^3.5.0
-        version: 3.5.0
-      '@foxglove/rosmsg':
-        specifier: ^4.2.2
-        version: 4.2.2
-      '@foxglove/rosmsg2-serialization':
-        specifier: ^3.1.0
-        version: 3.1.0
-      ws:
-        specifier: ^8.18.0
-        version: 8.19.0
-      zod:
-        specifier: ^3.24.0
-        version: 3.25.76
-    optionalDependencies:
-      node-datachannel:
-        specifier: ^0.12.0
-        version: 0.12.0
-      rclnodejs:
-        specifier: ^1.8.1
-        version: 1.9.0(patch_hash=y5vmlfxthws6ekhua6z5b4nqmu)
-    devDependencies:
-      '@types/node':
-        specifier: ^20.17.0
-        version: 20.19.35
-      '@types/ws':
-        specifier: ^8.5.13
-        version: 8.18.1
-      typescript:
-        specifier: ^5.7.0
-        version: 5.9.3
-
-  packages/object-detection:
-    dependencies:
-      '@agenticros/core':
-        specifier: workspace:*
-        version: link:../core
-      '@agenticros/ros-camera':
-        specifier: workspace:*
-        version: link:../ros-camera
-      onnxruntime-node:
-        specifier: ^1.20.0
-        version: 1.26.0
-      sharp:
-        specifier: ^0.33.0
-        version: 0.33.5
-    devDependencies:
-      '@types/node':
-        specifier: ^20.17.0
-        version: 20.19.35
-      typescript:
-        specifier: ^5.7.0
-        version: 5.9.3
-
-  packages/robot-eyes:
-    dependencies:
-      ws:
-        specifier: ^8.18.0
-        version: 8.19.0
-    optionalDependencies:
-      rclnodejs:
-        specifier: ^1.9.0
-        version: 1.9.0(patch_hash=y5vmlfxthws6ekhua6z5b4nqmu)
-
-  packages/ros-camera:
-    dependencies:
-      fzstd:
-        specifier: ^0.1.1
-        version: 0.1.1
-      pngjs:
-        specifier: ^7.0.0
-        version: 7.0.0
-    devDependencies:
-      '@types/node':
-        specifier: ^20.17.0
-        version: 20.19.35
-      '@types/pngjs':
-        specifier: ^6.0.5
-        version: 6.0.5
-      typescript:
-        specifier: ^5.7.0
-        version: 5.9.3
 
 packages:
 
@@ -3120,7 +3120,7 @@ snapshots:
       http-response-object: 3.0.2
       parse-cache-control: 1.0.1
 
-  '@eclipse-zenoh/zenoh-ts@1.9.0(patch_hash=pdjq6ms3zvqwikn6vpqzasydsy)':
+  '@eclipse-zenoh/zenoh-ts@1.9.0(patch_hash=lm6aqmfretqatvenouc2ws6ba4)':
     dependencies:
       '@thi.ng/leb128': 3.1.79
       base64-arraybuffer: 1.0.2

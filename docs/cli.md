@@ -1,6 +1,6 @@
-# `agenticros` CLI reference
+# `synapse` CLI reference
 
-`agenticros` is the single command-line entry point for the AgenticROS
+`synapse` is the single command-line entry point for the Corebrum Synapse
 project. It orchestrates the existing shell scripts (`scripts/start_demo.sh`,
 `scripts/setup_gateway_plugin.sh`, …) and the simulation launchers, and adds
 an interactive menu, a doctor, and a status/logs view on top.
@@ -9,35 +9,35 @@ an interactive menu, a doctor, and a status/logs view on top.
 
 | Audience | Command |
 |---|---|
-| One-off (no install) | `npx agenticros` |
-| Per-user global      | `pnpm add -g agenticros` (or `npm install -g agenticros`) |
-| Contributor (repo)   | `./agenticros` from the repo root, or `./scripts/install_cli.sh` |
+| One-off (no install) | `npx @corebrum/synapse` |
+| Per-user global      | `pnpm add -g synapse` (or `npm install -g @corebrum/synapse`) |
+| Contributor (repo)   | `./synapse` from the repo root, or `./scripts/install_cli.sh` |
 
-The `npx` and `npm` flows ship a snapshot of the entire AgenticROS monorepo
-inside the published tarball. The first `agenticros init` copies that
-snapshot into `~/agenticros` (configurable via `$AGENTICROS_HOME` or
+The `npx` and `npm` flows ship a snapshot of the entire Corebrum Synapse monorepo
+inside the published tarball. The first `synapse init` copies that
+snapshot into `~/synapse` (configurable via `$SYNAPSE_HOME` or
 `--install-dir`), then runs `pnpm install`, `pnpm build`, and `colcon build`
-there. After init, every subsequent `agenticros` invocation operates against
-`~/agenticros` as the workspace root.
+there. After init, every subsequent `synapse` invocation operates against
+`~/synapse` as the workspace root.
 
 Contributors working from a clone get a third "workspace mode": the CLI auto-
-detects the `agenticros-monorepo` package.json walking upward from its install
+detects the `corebrum-synapse` package.json walking upward from its install
 location and uses the live sources / dist directly.
 
 ## Commands
 
-### `agenticros` (no args)
+### `synapse` (no args)
 
 Opens the interactive top-level menu. The menu adapts to the doctor's output:
 if any red checks are present, "First-time setup" is moved to the top.
 
-### `agenticros up [target]`
+### `synapse up [target]`
 
 Bring up a robot stack. Targets:
 
 | Target    | What it does |
 |-----------|-----|
-| `real`    | Runs `scripts/start_demo.sh`: RealSense camera (unless `--no-camera`), MCP build, and local motor controller via `@agenticros/robot` (unless `--no-motors`). Add `--map` for RTAB-Map + Nav2. |
+| `real`    | Runs `scripts/start_demo.sh`: RealSense camera (unless `--no-camera`), MCP build, and local motor controller via `@corebrum/robot` (unless `--no-motors`). Add `--map` for RTAB-Map + Nav2. |
 | `sim-amr` | Launches the simulated 2-wheel AMR (`scripts/sim/run_sim.sh`). Add `--nav2` for map + AMCL + Nav2. Add `--real-camera` for a live RealSense overlay on the sim body (implies `--rviz`). |
 | `sim-arm` | Launches the simulated UR5e-shaped arm (per-joint `/arm/*/cmd_pos`). Add `--moveit` for MoveIt2 move_group + FollowJointTrajectory bridge. |
 
@@ -59,7 +59,7 @@ Flags:
 - `--eyes-no-sound` with `--eyes`: mute R2D2 idle/excited chirps
 - `--eyes-no-person-gaze` with `--eyes`: skip idle person-follow even if YOLO is already installed
 
-### `agenticros eyes [--no-browser] [--no-teleop] [--no-sound] [--no-person-gaze] [--port <n>] [--topic <path>]`
+### `synapse eyes [--no-browser] [--no-teleop] [--no-sound] [--no-person-gaze] [--port <n>] [--topic <path>]`
 
 Start fullscreen robot eyes on a tablet / face display. Subscribes to the
 configured `cmd_vel` topic for left/right gaze; when idle and YOLO is already
@@ -68,72 +68,72 @@ optionally publishes WASD keyboard teleop; plays R2D2-style chirps (mute with
 `--no-sound`). Runs over local DDS on the robot — not the OpenClaw remote teleop
 page. Full details: [eyes.md](eyes.md).
 
-### `agenticros desktop [--foreground] [--test-pattern] [--port <n>] [--width <px>] [--height <px>] [--fps <n>]`
+### `synapse desktop [--foreground] [--test-pattern] [--port <n>] [--width <px>] [--height <px>] [--fps <n>]`
 
-Share the Hyprland session with the AgenticROS Cloud desktop page (screen,
+Share the Hyprland session with the Corebrum Cloud desktop page (screen,
 mouse, and keyboard). Run it inside the Wayland session, alongside
-`agenticros connect`. The process listens on `127.0.0.1:8766` and does not
+`synapse connect`. The process listens on `127.0.0.1:8766` and does not
 join the teleop data-channel peer. `--foreground` is for a systemd user unit.
 Details and the session checks (`XDG_SESSION_TYPE`, PipeWire, the Hyprland
-portal): [packages/agenticros-desktop/README.md](../packages/agenticros-desktop/README.md).
+portal): [packages/synapse-desktop/README.md](../packages/synapse-desktop/README.md).
 
-### `agenticros web [--no-open]`
+### `synapse web [--no-open]`
 
-Prints the AgenticROS config/teleop page URL served by the OpenClaw plugin's
-web dashboard (`/plugins/agenticros/`) and opens it in a browser (best-effort,
+Prints the Corebrum Synapse config/teleop page URL served by the OpenClaw plugin's
+web dashboard (`/plugins/synapse/`) and opens it in a browser (best-effort,
 cross-platform `xdg-open` / `open` / `start`; `--no-open` just prints the
 URL(s)). Reads `gateway.port`/`gateway.bind` from `~/.openclaw/openclaw.json`
 to also print a LAN-reachable URL when the gateway is bound to `lan`. If the
 page 404s/401s with gateway auth enabled, see
 [openclaw-releases-and-plugin-routes.md](openclaw-releases-and-plugin-routes.md).
 
-### `agenticros down [--keep-camera] [--stop-gateway]`
+### `synapse down [--keep-camera] [--stop-gateway]`
 
-SIGTERMs every process recorded in `/tmp/agenticros-*.pid` (including eyes)
+SIGTERMs every process recorded in `/tmp/synapse-*.pid` (including eyes)
 and leaves the OpenClaw gateway running unless `--stop-gateway`. Also cleans
 up stray `gz sim`, `rviz2`, `parameter_bridge`, and motor controller processes.
-Cloud `comms.js` is left running — use `agenticros disconnect` to stop it.
+Cloud `comms.js` is left running — use `synapse disconnect` to stop it.
 
 ### On-robot hardware (cloud + motors + cameras)
 
-Default cloud host is **`cloud.agenticros.com`** (REST + WebSocket). Credentials
-live in `configstore('agenticros')` (`ROBOT_ID`, `API_TOKEN`); legacy
+Default cloud host is **`cloud.corebrum.com`** (REST + WebSocket). Credentials
+live in `configstore('synapse')` (`ROBOT_ID`, `API_TOKEN`); legacy
 `configstore('robotics')` values are migrated on first read.
 
 | Command | Purpose |
 |---------|---------|
-| `agenticros login [--no-open]` | Device-code login (GitHub in browser); saves `API_TOKEN` like `set --token`. |
-| `agenticros logout` | Clear `API_TOKEN` (keeps `ROBOT_ID`). |
-| `agenticros whoami` | Show cloud account and whether this robot is registered. |
-| `agenticros register` | Interactive wizard (required: name, camera, compute). Mints/reuses local UUID and `POST /robots` to ARC. |
-| `agenticros remote list` | List robots on your ARC account with online/offline presence. |
-| `agenticros remote <action> [--robot <id>] [--skill <id>]` | Run a preset CLI action on an online robot via `POST /robot/:id/cli`. Actions: `start_motors`, `stop_motors`, `start_realsense`, `stop_realsense`, `start_camera`, `stop_camera`, `start_mapping`, `stop_mapping`, `navigate_to` (requires `--x` and `--y`, optional `--yaw`), `list_maps`, `create_map` (requires `--label`), `rename_map` / `use_map` / `delete_map` (require `--map`), `status`, `skills_list`, `skills_sync`, `skills_remove` (requires `--skill`), `gateway_restart`. |
-| `agenticros start mapping` / `agenticros stop mapping` | Start or stop RTAB-Map + Nav2 (`scripts/start_mapping.sh`). The first start creates a room map named Room. Later starts resume that database. Skips a second RealSense launch when the camera node is already up. |
-| `agenticros maps list` | List room maps on this robot. `--json` prints `{ activeId, maps }`. |
-| `agenticros maps create --label <name> [--start]` | Add a room. `--start` launches a fresh database for it. |
-| `agenticros maps rename <id> --label <name>` | Rename a room. |
-| `agenticros maps use <id>` | Make that room active and relaunch it in localization mode. |
-| `agenticros maps delete <id> [--yes]` | Delete the database and places saved on that map. |
-| `agenticros navigate --x <m> --y <m> [--yaw <rad>]` | Send one Nav2 `navigate_to_pose` goal in the `map` frame. |
-| `agenticros gateway restart [--json]` | Restart the local OpenClaw gateway (`systemctl --user` then `openclaw gateway restart`). Also available remotely as `agenticros remote gateway_restart`. |
-| `agenticros connect [-s host]` | Start cloud P2P/ROS bridge (`comms.js`). Default `wss://cloud.agenticros.com`. |
-| `agenticros disconnect` | Stop `comms.js`. |
-| `agenticros id` | Print (or create) robot ID. |
-| `agenticros set --token=… [--id=…]` | Manual credential save (prefer `login`). Run `agenticros init` first so connect/motors deps are installed. |
-| `agenticros start motors [-b rpi\|firmata\|jetson] [-p pins] [-e enc] [-d device] [--odom] [--no-odom] [--tpr n]` | Start motor controller. Publishes `/odom` when ARC has wheel geometry (or `--odom`). `-e` enables Firmata encoder odom. Jetson GPIO is **opt-in** (`-b jetson` only). Hardware pin maps: [hardware.md](hardware.md). |
-| `agenticros stop motors` | Stop all motor backends. |
-| `agenticros start realsense [-p\|--pointcloud]` | Start RealSense (recovery preflight + pidfile). |
-| `agenticros stop realsense` | Stop RealSense node. |
-| `agenticros start camera [-d /dev/videoN] [-r WxH] [-f fps]` | Start 2D V4L camera → `/camera2d`. |
-| `agenticros stop camera` | Stop 2D camera. |
+| `synapse login [--no-open]` | Device-code login (GitHub in browser); saves `API_TOKEN` like `set --token`. |
+| `synapse logout` | Clear `API_TOKEN` (keeps `ROBOT_ID`). |
+| `synapse whoami` | Show cloud account and whether this robot is registered. |
+| `synapse register` | Interactive wizard (required: name, camera, compute). Mints/reuses local UUID and `POST /robots` to ARC. |
+| `synapse remote list` | List robots on your ARC account with online/offline presence. |
+| `synapse remote <action> [--robot <id>] [--skill <id>]` | Run a preset CLI action on an online robot via `POST /robot/:id/cli`. Actions: `start_motors`, `stop_motors`, `start_realsense`, `stop_realsense`, `start_camera`, `stop_camera`, `start_mapping`, `stop_mapping`, `navigate_to` (requires `--x` and `--y`, optional `--yaw`), `list_maps`, `create_map` (requires `--label`), `rename_map` / `use_map` / `delete_map` (require `--map`), `status`, `skills_list`, `skills_sync`, `skills_remove` (requires `--skill`), `gateway_restart`. |
+| `synapse start mapping` / `synapse stop mapping` | Start or stop RTAB-Map + Nav2 (`scripts/start_mapping.sh`). The first start creates a room map named Room. Later starts resume that database. Skips a second RealSense launch when the camera node is already up. |
+| `synapse maps list` | List room maps on this robot. `--json` prints `{ activeId, maps }`. |
+| `synapse maps create --label <name> [--start]` | Add a room. `--start` launches a fresh database for it. |
+| `synapse maps rename <id> --label <name>` | Rename a room. |
+| `synapse maps use <id>` | Make that room active and relaunch it in localization mode. |
+| `synapse maps delete <id> [--yes]` | Delete the database and places saved on that map. |
+| `synapse navigate --x <m> --y <m> [--yaw <rad>]` | Send one Nav2 `navigate_to_pose` goal in the `map` frame. |
+| `synapse gateway restart [--json]` | Restart the local OpenClaw gateway (`systemctl --user` then `openclaw gateway restart`). Also available remotely as `synapse remote gateway_restart`. |
+| `synapse connect [-s host]` | Start cloud P2P/ROS bridge (`comms.js`). Default `wss://cloud.corebrum.com`. |
+| `synapse disconnect` | Stop `comms.js`. |
+| `synapse id` | Print (or create) robot ID. |
+| `synapse set --token=… [--id=…]` | Manual credential save (prefer `login`). Run `synapse init` first so connect/motors deps are installed. |
+| `synapse start motors [-b rpi\|firmata\|jetson] [-p pins] [-e enc] [-d device] [--odom] [--no-odom] [--tpr n]` | Start motor controller. Publishes `/odom` when ARC has wheel geometry (or `--odom`). `-e` enables Firmata encoder odom. Jetson GPIO is **opt-in** (`-b jetson` only). Hardware pin maps: [hardware.md](hardware.md). |
+| `synapse stop motors` | Stop all motor backends. |
+| `synapse start realsense [-p\|--pointcloud]` | Start RealSense (recovery preflight + pidfile). |
+| `synapse stop realsense` | Stop RealSense node. |
+| `synapse start camera [-d /dev/videoN] [-r WxH] [-f fps]` | Start 2D V4L camera → `/camera2d`. |
+| `synapse stop camera` | Stop 2D camera. |
 
-Aliases: `agenticros motors start`, `agenticros camera stop`, etc.
+Aliases: `synapse motors start`, `synapse camera stop`, etc.
 
-The interactive menu includes **AgenticROS Cloud** (login / register / whoami)
+The interactive menu includes **Corebrum Cloud** (login / register / whoami)
 and a **Robot hardware** submenu for connect, motors, cameras, **Start mapping** /
 **Stop mapping**, and room maps (list, create, switch, rename, delete).
 
-### `agenticros init [--force] [--install-dir <path>]`
+### `synapse init [--force] [--install-dir <path>]`
 
 Idempotent first-time setup wizard. Each step queries doctor first and is
 skipped (with a checkmark) when already done:
@@ -142,15 +142,15 @@ skipped (with a checkmark) when already done:
 2. JS workspace build (`pnpm build`)
 3. ROS 2 workspace build (`colcon build --symlink-install`)
 4. OpenClaw plugin install (via `scripts/setup_gateway_plugin.sh`)
-5. Robot config (writes `~/.agenticros/config.json`)
-6. AgenticROS Cloud login + register (optional — skip for local-only)
+5. Robot config (writes `~/.synapse/config.json`)
+6. Corebrum Cloud login + register (optional — skip for local-only)
 7. OpenAI API key (optional — skip when using local Ollama; see [local-vlm.md](local-vlm.md))
-8. MCP client config (optional — `agenticros mcp setup` for Codex, Hermes, and Claude)
-9. Final `agenticros doctor` summary
+8. MCP client config (optional — `synapse mcp setup` for Codex, Hermes, and Claude)
+9. Final `synapse doctor` summary
 
 Pass `--force` to re-run every step regardless of state.
 
-### `agenticros doctor [--json] [--live]`
+### `synapse doctor [--json] [--live]`
 
 Runs every health check and prints a coloured table. With `--json`, emits the
 same report as a structured object for CI / scripting:
@@ -171,9 +171,9 @@ Without `--live`, profile checks are static (schema + required bindings only).
 Checks include MCP server build status, OpenClaw plugin health, **MCP client configs**
 (Codex, Hermes, Claude, Antigravity — path and namespace policy), and CLI presence on `PATH`.
 
-### `agenticros mcp setup [--codex] [--hermes] [--claude] [--agy] [--project] [--desktop]`
+### `synapse mcp setup [--codex] [--hermes] [--claude] [--agy] [--project] [--desktop]`
 
-**Primary command** — register the AgenticROS MCP server for all MCP clients at once:
+**Primary command** — register the Corebrum Synapse MCP server for all MCP clients at once:
 
 | Flag | Effect |
 |---|---|
@@ -185,70 +185,70 @@ Checks include MCP server build status, OpenClaw plugin health, **MCP client con
 | `--project` | Also write project-scoped Codex / Claude / Antigravity configs |
 | `--desktop` | With `--claude`, Claude Desktop config only |
 
-Uses an **absolute path** to the MCP server binary. Sets `AGENTICROS_ROBOT_NAMESPACE` empty so `agenticros mode real|sim` drives the active robot namespace.
+Uses an **absolute path** to the MCP server binary. Sets `SYNAPSE_ROBOT_NAMESPACE` empty so `synapse mode real|sim` drives the active robot namespace.
 
-Also offered as an optional step during `agenticros init`.
+Also offered as an optional step during `synapse init`.
 
 See **[docs/mcp-setup.md](mcp-setup.md)** for the unified onboarding guide.
 
-### `agenticros mcp doctor [--json] [--codex] [--hermes] [--claude] [--agy]`
+### `synapse mcp doctor [--json] [--codex] [--hermes] [--claude] [--agy]`
 
 Validate MCP configuration for Codex, Hermes, Claude, and Antigravity. Exits non-zero on red checks.
 
-### `agenticros codex setup [--project]`
+### `synapse codex setup [--project]`
 
-Register the AgenticROS MCP server for **OpenAI Codex CLI**:
+Register the Corebrum Synapse MCP server for **OpenAI Codex CLI**:
 
 | Flag | Effect |
 |---|---|
-| (default) | Writes `[mcp_servers.agenticros]` to `~/.codex/config.toml` |
+| (default) | Writes `[mcp_servers.synapse]` to `~/.codex/config.toml` |
 | `--project` | Writes `.codex/config.toml` in the current repo root instead |
 
-Uses an **absolute path** to the MCP server binary (`packages/agenticros-claude-code/dist/index.js` in workspace mode, or the bundled path after `npx agenticros init`). Sets `AGENTICROS_ROBOT_NAMESPACE = ""` so `agenticros mode real|sim` drives the active robot namespace.
+Uses an **absolute path** to the MCP server binary (`packages/synapse-claude-code/dist/index.js` in workspace mode, or the bundled path after `npx @corebrum/synapse init`). Sets `SYNAPSE_ROBOT_NAMESPACE = ""` so `synapse mode real|sim` drives the active robot namespace.
 
-Also offered as an optional step during `agenticros init`.
+Also offered as an optional step during `synapse init`.
 
-### `agenticros codex doctor [--json]`
+### `synapse codex doctor [--json]`
 
 Validate Codex MCP configuration: global and (when in a workspace) project `.codex/config.toml`, MCP binary path, and namespace policy. Exits non-zero on red checks. With `--json`, emits structured output for scripting.
 
 See **[docs/codex-setup.md](codex-setup.md)** for the full Codex onboarding guide.
 
-### `agenticros hermes setup`
+### `synapse hermes setup`
 
-Register the AgenticROS MCP server for **[Hermes Agent](https://github.com/NousResearch/hermes-agent)**:
+Register the Corebrum Synapse MCP server for **[Hermes Agent](https://github.com/NousResearch/hermes-agent)**:
 
-Writes `mcp_servers.agenticros` to `~/.hermes/config.yaml` with an **absolute path** to the MCP server binary and `AGENTICROS_ROBOT_NAMESPACE: ""` so `agenticros mode real|sim` drives the active robot namespace.
+Writes `mcp_servers.synapse` to `~/.hermes/config.yaml` with an **absolute path** to the MCP server binary and `SYNAPSE_ROBOT_NAMESPACE: ""` so `synapse mode real|sim` drives the active robot namespace.
 
-Also offered as an optional step during `agenticros init`. After setup, run `/reload-mcp` in Hermes or `hermes mcp test agenticros`.
+Also offered as an optional step during `synapse init`. After setup, run `/reload-mcp` in Hermes or `hermes mcp test synapse`.
 
-### `agenticros hermes doctor [--json]`
+### `synapse hermes doctor [--json]`
 
 Validate Hermes MCP configuration: `~/.hermes/config.yaml`, MCP binary path, and namespace policy. Exits non-zero on red checks. With `--json`, emits structured output for scripting.
 
 See **[docs/hermes-setup.md](hermes-setup.md)** for the full Hermes onboarding guide.
 
-### `agenticros agy setup`
+### `synapse agy setup`
 
-Register the AgenticROS MCP server for **[Google Antigravity CLI](https://antigravity.google/docs/cli/)** (`agy`):
+Register the Corebrum Synapse MCP server for **[Google Antigravity CLI](https://antigravity.google/docs/cli/)** (`agy`):
 
-Writes `mcpServers.agenticros` to `~/.gemini/config/mcp_config.json` and, when run inside a repo, `.agents/mcp_config.json`. Also installs a short AgenticROS skill at `~/.gemini/antigravity-cli/skills/agenticros/SKILL.md` (and `.agents/skills/agenticros/SKILL.md` in a repo), and adds `mcp(agenticros/*)` to `permissions.allow` in `~/.gemini/antigravity-cli/settings.json` so headless `agy` can call the robot tools. Uses an **absolute path** to the MCP server binary and `AGENTICROS_ROBOT_NAMESPACE: ""` so `agenticros mode real|sim` drives the active robot namespace.
+Writes `mcpServers.synapse` to `~/.gemini/config/mcp_config.json` and, when run inside a repo, `.agents/mcp_config.json`. Also installs a short Corebrum Synapse skill at `~/.gemini/antigravity-cli/skills/synapse/SKILL.md` (and `.agents/skills/synapse/SKILL.md` in a repo), and adds `mcp(synapse/*)` to `permissions.allow` in `~/.gemini/antigravity-cli/settings.json` so headless `agy` can call the robot tools. Uses an **absolute path** to the MCP server binary and `SYNAPSE_ROBOT_NAMESPACE: ""` so `synapse mode real|sim` drives the active robot namespace.
 
 This uses your Antigravity subscription. It does not need `GEMINI_API_KEY`. Sign in once with interactive `agy` before headless runs.
 
-### `agenticros agy doctor [--json]`
+### `synapse agy doctor [--json]`
 
-Validate Antigravity MCP configuration and the AgenticROS skill. Exits non-zero on red checks (wrong binary path or a hardcoded namespace). With `--json`, emits structured output for scripting.
+Validate Antigravity MCP configuration and the Corebrum Synapse skill. Exits non-zero on red checks (wrong binary path or a hardcoded namespace). With `--json`, emits structured output for scripting.
 
-### `agenticros agy run <prompt...> [--yes] [--model <model>]`
+### `synapse agy run <prompt...> [--yes] [--model <model>]`
 
-Run one prompt through `agy -p` and exit. Stdio is inherited so the session stays attached to your terminal. After `agenticros agy setup`, AgenticROS MCP tools are allowed in headless mode. `--yes` passes `--dangerously-skip-permissions`, which auto-approves every tool call, including shell commands. Omit it to leave non-MCP tools on Ask.
+Run one prompt through `agy -p` and exit. Stdio is inherited so the session stays attached to your terminal. After `synapse agy setup`, Corebrum Synapse MCP tools are allowed in headless mode. `--yes` passes `--dangerously-skip-permissions`, which auto-approves every tool call, including shell commands. Omit it to leave non-MCP tools on Ask.
 
 See **[docs/agy-setup.md](agy-setup.md)** for the full Antigravity onboarding guide.
 
-### `agenticros claude setup [--desktop] [--project]`
+### `synapse claude setup [--desktop] [--project]`
 
-Register the AgenticROS MCP server for **Claude Code** and **Claude Desktop**:
+Register the Corebrum Synapse MCP server for **Claude Code** and **Claude Desktop**:
 
 | Flag | Effect |
 |---|---|
@@ -256,47 +256,47 @@ Register the AgenticROS MCP server for **Claude Code** and **Claude Desktop**:
 | `--desktop` | `claude_desktop_config.json` only |
 | `--project` | `.mcp.json` in repo root only |
 
-Alias for `agenticros mcp setup --claude`. Restart Claude Desktop fully after desktop config changes.
+Alias for `synapse mcp setup --claude`. Restart Claude Desktop fully after desktop config changes.
 
-### `agenticros claude doctor [--json]`
+### `synapse claude doctor [--json]`
 
 Validate Claude MCP configuration (desktop + project `.mcp.json`). Exits non-zero on red checks.
 
-### `agenticros status [--json]`
+### `synapse status [--json]`
 
 Shows running components (camera / sim / mcp / rosbridge / eyes / openclaw-gateway)
-and the last-used mode/namespace from `~/.agenticros/cli-state.json`.
+and the last-used mode/namespace from `~/.synapse/cli-state.json`.
 
-### `agenticros logs [target]`
+### `synapse logs [target]`
 
 Tails one of: `camera`, `mcp`, `sim`, `rosbridge`, `eyes`, `gateway`. Without a
 target, prints the list of available log targets. Defaults to follow mode
 (`-f`); pass `--no-follow` to disable.
 
-### `agenticros config [action] [key=value]`
+### `synapse config [action] [key=value]`
 
-Read or edit `~/.agenticros/config.json`. Actions:
+Read or edit `~/.synapse/config.json`. Actions:
 
 | Action | Example | Effect |
 |---|---|---|
-| `show`  | `agenticros config show` (or just `agenticros config`) | Pretty-print the file. |
-| `set`   | `agenticros config set robot.namespace=sim_robot` | Write a single key (dot-paths supported). |
-| `edit`  | `agenticros config edit` | Open in `$EDITOR`. |
-| `reset` | `agenticros config reset` | Delete the file (with confirm). |
+| `show`  | `synapse config show` (or just `synapse config`) | Pretty-print the file. |
+| `set`   | `synapse config set robot.namespace=sim_robot` | Write a single key (dot-paths supported). |
+| `edit`  | `synapse config edit` | Open in `$EDITOR`. |
+| `reset` | `synapse config reset` | Delete the file (with confirm). |
 
-### `agenticros robots`
+### `synapse robots`
 
-Fleet entries in `~/.agenticros/config.json`. Profile flags gate advertised
+Fleet entries in `~/.synapse/config.json`. Profile flags gate advertised
 verbs per body — see [robot-profile.md](robot-profile.md).
 
 | Action | Example |
 |---|---|
-| `list` | `agenticros robots list` |
-| `add` | `agenticros robots add warehouse-01 --features=base,camera --binding camera.rgb=/cam/compressed` |
-| `profile show` | `agenticros robots profile show warehouse-01` |
-| `profile infer` | `agenticros robots profile infer warehouse-01 --apply` |
+| `list` | `synapse robots list` |
+| `add` | `synapse robots add warehouse-01 --features=base,camera --binding camera.rgb=/cam/compressed` |
+| `profile show` | `synapse robots profile show warehouse-01` |
+| `profile infer` | `synapse robots profile infer warehouse-01 --apply` |
 
-### `agenticros hive [on|off|doctor|recipes]`
+### `synapse hive [on|off|doctor|recipes]`
 
 Optional fleet hive (off by default). See [hive.md](hive.md).
 
@@ -311,68 +311,68 @@ Optional fleet hive (off by default). See [hive.md](hive.md).
 
 | Path | Owner | Purpose |
 |---|---|---|
-| `~/.agenticros/config.json` | User | AgenticROS runtime config (transport mode, namespace, safety limits). |
-| `~/.config/configstore/agenticros.json` | CLI | Cloud `ROBOT_ID` + `API_TOKEN` (`login` / `set` / `id` / `register`). |
-| `~/.agenticros/cli-state.json` | CLI | Last-used mode/namespace for the menu's "(yesterday)" hint. |
-| `~/.hermes/config.yaml` | Hermes Agent | MCP server registrations (written by `agenticros mcp setup` or `agenticros hermes setup`). |
-| `~/.gemini/config/mcp_config.json` | Antigravity CLI | MCP server registrations (written by `agenticros mcp setup` or `agenticros agy setup`). |
-| `~/.gemini/antigravity-cli/skills/agenticros/SKILL.md` | Antigravity CLI | When to use the AgenticROS MCP tools. |
-| `.agents/mcp_config.json` | Antigravity CLI | Project-scoped MCP config (written by `agenticros agy setup` or `agenticros mcp setup` inside a repo). |
-| `.agents/skills/agenticros/SKILL.md` | Antigravity CLI | Project-scoped AgenticROS skill. |
-| `~/.codex/config.toml` | Codex CLI | MCP server registrations (written by `agenticros mcp setup` or `agenticros codex setup`). |
-| `.codex/config.toml` | Codex CLI | Project-scoped MCP config (written by `agenticros mcp setup` or `agenticros codex setup --project`). |
-| `.mcp.json` | Claude Code | Project-scoped MCP config (written by `agenticros mcp setup` or `agenticros claude setup`). |
-| `~/Library/Application Support/Claude/claude_desktop_config.json` | Claude Desktop | MCP server registrations (written by `agenticros mcp setup` or `agenticros claude setup --desktop`). |
-| `~/agenticros/` | CLI (npm-install mode) | Copy of the monorepo, with built dist + colcon install. |
-| `/tmp/agenticros-*.pid` | CLI | PIDs of background processes the CLI spawned. |
-| `/tmp/agenticros-*.log` | CLI | Stdout/stderr from those processes. |
-| `~/.openclaw/openclaw.json` | OpenClaw gateway | Plugin registration + per-plugin config (incl. AgenticROS). |
+| `~/.synapse/config.json` | User | Corebrum Synapse runtime config (transport mode, namespace, safety limits). |
+| `~/.config/configstore/synapse.json` | CLI | Cloud `ROBOT_ID` + `API_TOKEN` (`login` / `set` / `id` / `register`). |
+| `~/.synapse/cli-state.json` | CLI | Last-used mode/namespace for the menu's "(yesterday)" hint. |
+| `~/.hermes/config.yaml` | Hermes Agent | MCP server registrations (written by `synapse mcp setup` or `synapse hermes setup`). |
+| `~/.gemini/config/mcp_config.json` | Antigravity CLI | MCP server registrations (written by `synapse mcp setup` or `synapse agy setup`). |
+| `~/.gemini/antigravity-cli/skills/synapse/SKILL.md` | Antigravity CLI | When to use the Corebrum Synapse MCP tools. |
+| `.agents/mcp_config.json` | Antigravity CLI | Project-scoped MCP config (written by `synapse agy setup` or `synapse mcp setup` inside a repo). |
+| `.agents/skills/synapse/SKILL.md` | Antigravity CLI | Project-scoped Corebrum Synapse skill. |
+| `~/.codex/config.toml` | Codex CLI | MCP server registrations (written by `synapse mcp setup` or `synapse codex setup`). |
+| `.codex/config.toml` | Codex CLI | Project-scoped MCP config (written by `synapse mcp setup` or `synapse codex setup --project`). |
+| `.mcp.json` | Claude Code | Project-scoped MCP config (written by `synapse mcp setup` or `synapse claude setup`). |
+| `~/Library/Application Support/Claude/claude_desktop_config.json` | Claude Desktop | MCP server registrations (written by `synapse mcp setup` or `synapse claude setup --desktop`). |
+| `~/synapse/` | CLI (npm-install mode) | Copy of the monorepo, with built dist + colcon install. |
+| `/tmp/synapse-*.pid` | CLI | PIDs of background processes the CLI spawned. |
+| `/tmp/synapse-*.log` | CLI | Stdout/stderr from those processes. |
+| `~/.openclaw/openclaw.json` | OpenClaw gateway | Plugin registration + per-plugin config (incl. Corebrum Synapse). |
 
 ## Environment variables
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `AGENTICROS_HOME` | `~/agenticros` | Install root in npm-install mode. |
-| `AGENTICROS_CONFIG_PATH` | (auto) | Override the path to `~/.agenticros/config.json`. |
-| `AGENTICROS_ROBOT_NAMESPACE` | (from config) | Force a robot namespace at runtime. |
+| `SYNAPSE_HOME` | `~/synapse` | Install root in npm-install mode. |
+| `SYNAPSE_CONFIG_PATH` | (auto) | Override the path to `~/.synapse/config.json`. |
+| `SYNAPSE_ROBOT_NAMESPACE` | (from config) | Force a robot namespace at runtime. |
 | `OPENAI_API_KEY` | (none) | If set, doctor reports green without requiring OpenClaw profile config. |
-| `AGENTICROS_SKILLS_API` | `https://skills.agenticros.com/api` | Override marketplace API base URL. |
-| `GH_TOKEN` / `GITHUB_TOKEN` | (none) | GitHub PAT for `agenticros publish`. |
+| `SYNAPSE_SKILLS_API` | `https://skills.corebrum.com/api` | Override marketplace API base URL. |
+| `GH_TOKEN` / `GITHUB_TOKEN` | (none) | GitHub PAT for `synapse publish`. |
 
 ### Skill authoring
 
 | Command | Purpose |
 |---|---|
-| `agenticros create-skill <slug> [--template hello\|robot\|camera\|depth]` | Scaffold `./agenticros-skill-<slug>/` in cwd. |
-| `agenticros skills dev [--invoke <tool>] [--live]` | Load the skill locally without OpenClaw. |
-| `agenticros publish [--graduate]` | Validate, push to GitHub, submit to skills.agenticros.com; `npm publish` when name is `@agenticros/*`. |
-| `agenticros skills list [--json]` | List registered / available / broken skills (JSON for remote/automation). |
-| `agenticros skills remove <id> [--yes] [--no-restart]` | Unregister a skill; `--yes` skips prompts (required for remote). |
-| `agenticros skills sync [--no-restart]` | Re-sync OpenClaw `contracts.tools` allowlist from registered skills. |
-| `agenticros skills install <owner/skill\|@scope/pkg> [--yes] [--no-restart]` | Install from marketplace or npm; prefers npm when advertised; auto-restarts OpenClaw gateway unless `--no-restart`. |
-| `agenticros skills install --bundle mapping` | Install `@agenticros/start-slam`, `explore`, and `navigate-to`. |
-| `agenticros skills search <q>` | Search the marketplace. |
+| `synapse create-skill <slug> [--template hello\|robot\|camera\|depth]` | Scaffold `./corebrum-skill-<slug>/` in cwd. |
+| `synapse skills dev [--invoke <tool>] [--live]` | Load the skill locally without OpenClaw. |
+| `synapse publish [--graduate]` | Validate, push to GitHub, submit to skills.corebrum.com; `npm publish` when name is `@corebrum/*`. |
+| `synapse skills list [--json]` | List registered / available / broken skills (JSON for remote/automation). |
+| `synapse skills remove <id> [--yes] [--no-restart]` | Unregister a skill; `--yes` skips prompts (required for remote). |
+| `synapse skills sync [--no-restart]` | Re-sync OpenClaw `contracts.tools` allowlist from registered skills. |
+| `synapse skills install <owner/skill\|@scope/pkg> [--yes] [--no-restart]` | Install from marketplace or npm; prefers npm when advertised; auto-restarts OpenClaw gateway unless `--no-restart`. |
+| `synapse skills install --bundle mapping` | Install `@corebrum/start-slam`, `explore`, and `navigate-to`. |
+| `synapse skills search <q>` | Search the marketplace. |
 
 Robot skills only. Third-party Agent Skills (`SKILL.md`) are not installed through these commands — see [Official catalogs](https://www.skills.sh/official), [Jetson Agent Skills](https://www.jetson-ai-lab.com/tutorials/jetson-agent-skills/), and the [Agent Skills spec](https://agentskills.io/home). Details in [skills.md](skills.md).
 
 ## Troubleshooting
 
-- **`doctor` shows red checks** → run `agenticros init` to walk through every
+- **`doctor` shows red checks** → run `synapse init` to walk through every
   step. Re-run `doctor` afterward. For MCP-specific issues, run
-  `agenticros mcp doctor` (or `agenticros codex doctor`, `agenticros hermes doctor`, `agenticros claude doctor`, `agenticros agy doctor`).
-- **MCP tools missing in any client** → run `agenticros mcp setup`. See [mcp-setup.md](mcp-setup.md).
-- **Codex `/mcp` does not list agenticros** → run `agenticros mcp setup --codex`
+  `synapse mcp doctor` (or `synapse codex doctor`, `synapse hermes doctor`, `synapse claude doctor`, `synapse agy doctor`).
+- **MCP tools missing in any client** → run `synapse mcp setup`. See [mcp-setup.md](mcp-setup.md).
+- **Codex `/mcp` does not list synapse** → run `synapse mcp setup --codex`
   (absolute MCP path required). See [codex-setup.md](codex-setup.md).
-- **Hermes MCP tools missing** → run `agenticros mcp setup --hermes`, then `/reload-mcp`
+- **Hermes MCP tools missing** → run `synapse mcp setup --hermes`, then `/reload-mcp`
   in Hermes. See [hermes-setup.md](hermes-setup.md).
-- **Antigravity `/mcp` does not list agenticros** → run `agenticros agy setup`.
+- **Antigravity `/mcp` does not list synapse** → run `synapse agy setup`.
   Antigravity reads `~/.gemini/config/mcp_config.json` and `.agents/mcp_config.json`. See [agy-setup.md](agy-setup.md).
-- **`up` exits immediately** → `agenticros logs <component>` (the CLI now
+- **`up` exits immediately** → `synapse logs <component>` (the CLI now
   records where every child wrote its output) and read the error in context.
 - **`up sim-amr` warns "scripts/sim/run_sim.sh not found"** → simulation
   support is delivered in CLI Phase 2; until then the message tells you when
   to expect it.
-- **`pnpm --filter agenticros build` builds two packages** → check the OpenClaw
-  plugin's `packages/agenticros/package.json`; its npm name should be
-  `@agenticros/openclaw`, not `agenticros`. If it's wrong, `pnpm --filter` will
+- **`pnpm --filter @corebrum/synapse build` builds two packages** → check the OpenClaw
+  plugin's `packages/synapse-openclaw/package.json`; its npm name should be
+  `@corebrum/openclaw`, not `synapse`. If it's wrong, `pnpm --filter` will
   match both. (Fixed in this repo as of June 2026.)

@@ -13,7 +13,7 @@
  *
  * The agent uses this to answer questions like "which robots can I talk
  * to right now?" without forcing the user to hand-edit
- * `~/.agenticros/config.json` every time a robot joins the network.
+ * `~/.synapse/config.json` every time a robot joins the network.
  *
  * Persistence is intentionally OUT of scope here: discovery is read-only.
  * Writing newly-detected robots into the user's config is a separate
@@ -43,7 +43,7 @@
  * the robot is actually publishing on.
  */
 
-import type { AgenticROSConfig } from "./config.js";
+import type { SynapseConfig } from "./config.js";
 import type { ResolvedRobot } from "./robots.js";
 import { listRobots } from "./robots.js";
 import type { TopicInfo } from "./transport/types.js";
@@ -104,10 +104,10 @@ export function effectiveCmdVelNamespace(robotNamespace: string): string {
  *
  * Detection rules (either is enough):
  *   1. `/<seg>/cmd_vel` — classic mobile-base signal
- *   2. `/<seg>/agenticros/robot_info` — Phase 1.d heartbeat (arms/drones
+ *   2. `/<seg>/synapse/robot_info` — Phase 1.d heartbeat (arms/drones
  *      without cmd_vel still show up)
  *
- * The unnamespaced `/cmd_vel` / `/agenticros/robot_info` topics register
+ * The unnamespaced `/cmd_vel` / `/synapse/robot_info` topics register
  * the empty namespace (id=""). Topic count under each namespace is
  * accumulated so consumers can rank by liveness.
  *
@@ -130,14 +130,14 @@ export function detectRobotsFromTopics(topics: TopicInfo[]): DetectedRobot[] {
     }
 
     // Heartbeat topic — covers robots that don't publish cmd_vel.
-    const hb = t.name.match(/^\/([^/]+)\/agenticros\/robot_info$/);
+    const hb = t.name.match(/^\/([^/]+)\/synapse\/robot_info$/);
     if (hb) {
       const ns = hb[1]!;
       if (!byNs.has(ns)) {
         byNs.set(ns, { cmdVelTopic: `/${ns}/cmd_vel`, topicCount: 0 });
       }
     } else if (
-      (t.name === "/agenticros/robot_info" || t.name === "agenticros/robot_info") &&
+      (t.name === "/synapse/robot_info" || t.name === "synapse/robot_info") &&
       !byNs.has("")
     ) {
       byNs.set("", { cmdVelTopic: "/cmd_vel", topicCount: 0 });
@@ -174,7 +174,7 @@ export function detectRobotsFromTopics(topics: TopicInfo[]): DetectedRobot[] {
  */
 export function discoverRobots(
   topics: TopicInfo[],
-  config: AgenticROSConfig,
+  config: SynapseConfig,
 ): RobotDiscoveryResult {
   const detected = detectRobotsFromTopics(topics);
   const configured = listRobots(config);

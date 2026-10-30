@@ -1,74 +1,74 @@
 # Mapping a room (RTAB-Map + Nav2)
 
 ```bash
-agenticros up real --map
-agenticros skills install --bundle mapping
+synapse up real --map
+synapse skills install --bundle mapping
 # chat: "map the room"
 # then: "save this place as kitchen" / "go to the kitchen"
 ```
 
-`--map` starts camera + motors (`start_demo.sh`) then `agenticros_bringup` RTAB-Map + Nav2. Use `--wheel-odom` when the motor controller publishes `/odom`.
+`--map` starts camera + motors (`start_demo.sh`) then `synapse_bringup` RTAB-Map + Nav2. Use `--wheel-odom` when the motor controller publishes `/odom`.
 
 | Stack | Command | Localization |
 |-------|---------|--------------|
-| **Real robot (live map)** | `agenticros up real --map` | RTAB-Map RGB-D VSLAM (or wheel `/odom` with `--wheel-odom`) |
-| **Sim (known floorplan)** | `agenticros up sim-amr --nav2` | Static map + AMCL — **not** RTAB-Map |
+| **Real robot (live map)** | `synapse up real --map` | RTAB-Map RGB-D VSLAM (or wheel `/odom` with `--wheel-odom`) |
+| **Sim (known floorplan)** | `synapse up sim-amr --nav2` | Static map + AMCL — **not** RTAB-Map |
 
-AgenticROS does not run SLAM or path planning in the agent process. Mapping a room is three operator-owned ROS pieces plus marketplace skills:
+Corebrum Synapse does not run SLAM or path planning in the agent process. Mapping a room is three operator-owned ROS pieces plus marketplace skills:
 
 1. **RTAB-Map** builds `/map` and `map` → `odom` (RGB-D VSLAM).
 2. **Nav2** (`navigation_launch.py` only — **no AMCL**) drives to poses and avoids obstacles.
-3. **`agenticros_explore`** picks frontiers (or random free cells) and sends `NavigateToPose`.
+3. **`synapse_explore`** picks frontiers (or random free cells) and sends `NavigateToPose`.
 
 Skills:
 
 | Skill | Verbs | Role |
 |---|---|---|
-| [`@agenticros/start-slam`](https://www.npmjs.com/package/@agenticros/start-slam) | `start_slam`, `stop_slam`, `save_map`, `load_map`, `set_mapping_mode`, `set_localization_mode` | RTAB-Map lifecycle. Does **not** move the base. |
-| [`@agenticros/explore`](https://www.npmjs.com/package/@agenticros/explore) | `explore`, `wander` | Long-running coverage / wander loop. |
-| [`@agenticros/navigate-to`](https://www.npmjs.com/package/@agenticros/navigate-to) | `navigate_to` | Go to a known `{x, y, yaw}` **after** you have a map. |
+| [`@corebrum/start-slam`](https://www.npmjs.com/package/@corebrum/start-slam) | `start_slam`, `stop_slam`, `save_map`, `load_map`, `set_mapping_mode`, `set_localization_mode` | RTAB-Map lifecycle. Does **not** move the base. |
+| [`@corebrum/explore`](https://www.npmjs.com/package/@corebrum/explore) | `explore`, `wander` | Long-running coverage / wander loop. |
+| [`@corebrum/navigate-to`](https://www.npmjs.com/package/@corebrum/navigate-to) | `navigate_to` | Go to a known `{x, y, yaw}` **after** you have a map. |
 
-`agenticros up sim-amr --nav2` is a **static map + AMCL** stack. Use it for `navigate_to` / `wander` against a known grid. It will **not** exercise live RTAB-Map.
+`synapse up sim-amr --nav2` is a **static map + AMCL** stack. Use it for `navigate_to` / `wander` against a known grid. It will **not** exercise live RTAB-Map.
 
 ## Drive the map from ARC
 
-CLI **0.7.24** or newer streams `/map` to the [AgenticROS Cloud](https://cloud.agenticros.com) control page while you teleop, and accepts remote start-mapping and navigate commands.
+CLI **0.7.24** or newer streams `/map` to the [Corebrum Cloud](https://cloud.corebrum.com) control page while you teleop, and accepts remote start-mapping and navigate commands.
 
 ```bash
-npm install -g agenticros@0.7.24   # skip if this robot is already on 0.7.24+
-agenticros connect
-agenticros up real --map
+npm install -g @corebrum/synapse@0.7.24   # skip if this robot is already on 0.7.24+
+synapse connect
+synapse up real --map
 ```
 
 Open that robot’s control page and drive with the joystick, WASD, or a gamepad. About once a second the page draws the occupancy grid (free, unknown, occupied) and a pose arrow. Click a free cell to send a Nav2 `navigate_to_pose` goal in the `map` frame. Occupied and unknown cells are rejected. Moving the joystick cancels the goal. The Speed slider on that page sets how fast the goal is driven: 100 is full duty, and anything under 35 still uses the 0.35 duty floor so the TT motors can start.
 
-Do the [Nav2 apt install and the rclnodejs binding refresh](#node-bindings-for-click-to-navigate) on the robot before the first click. The joystick only needs `geometry_msgs/Twist`, which `agenticros init` already generated. The click needs `nav2_msgs/action/NavigateToPose`, which is generated only after the Nav2 packages are installed.
+Do the [Nav2 apt install and the rclnodejs binding refresh](#node-bindings-for-click-to-navigate) on the robot before the first click. The joystick only needs `geometry_msgs/Twist`, which `synapse init` already generated. The click needs `nav2_msgs/action/NavigateToPose`, which is generated only after the Nav2 packages are installed.
 
-You can start the stack from ARC without an SSH session. On the control page, **Start mapping** runs `agenticros start mapping`. The [Remote CLI](https://cloud.agenticros.com/remote) page has the same start/stop pair, plus a **Navigate to** form (map-frame x, y, yaw). Missions adds **Map the room** and **Navigate to**, which dispatch those same commands when you run them. The robot must be on CLI **0.7.24** or newer (`agenticros start mapping` and `agenticros navigate`), then `agenticros disconnect && agenticros connect`.
+You can start the stack from ARC without an SSH session. On the control page, **Start mapping** runs `synapse start mapping`. The [Remote CLI](https://cloud.corebrum.com/remote) page has the same start/stop pair, plus a **Navigate to** form (map-frame x, y, yaw). Missions adds **Map the room** and **Navigate to**, which dispatch those same commands when you run them. The robot must be on CLI **0.7.24** or newer (`synapse start mapping` and `synapse navigate`), then `synapse disconnect && synapse connect`.
 
-Start mapping replies immediately with the room catalog (`{ activeId, maps }`, creating **Room** when the list is empty) and launches RTAB-Map in the background. The Maps page stays at 0 if that reply never arrives — stopping RealSense and the previous stack used to run inside ARC's command timeout, so the button reported failure and the empty catalog from delete was left in place. After pulling, `agenticros disconnect && agenticros connect` reloads the bridge. The occupancy preview shows once `/map` is publishing (`/tmp/agenticros-mapping.log`).
+Start mapping replies immediately with the room catalog (`{ activeId, maps }`, creating **Room** when the list is empty) and launches RTAB-Map in the background. The Maps page stays at 0 if that reply never arrives — stopping RealSense and the previous stack used to run inside ARC's command timeout, so the button reported failure and the empty catalog from delete was left in place. After pulling, `synapse disconnect && synapse connect` reloads the bridge. The occupancy preview shows once `/map` is publishing (`/tmp/synapse-mapping.log`).
 
 `--map` is what publishes `/map` and starts the `navigate_to_pose` action. See [mapping bringup](#bringup-physical-rgb-d-robot) if the grid never appears.
 
 ## Several rooms
 
-Each room is its own RTAB-Map database under `~/.agenticros/maps/<id>.db`, listed in `~/.agenticros/maps/index.json`. The first `agenticros start mapping` creates a map named **Room** (and moves an existing `~/.ros/rtabmap.db` onto it). Starting again resumes that file instead of wiping it. Delete the map to throw it away and map the room over.
+Each room is its own RTAB-Map database under `~/.synapse/maps/<id>.db`, listed in `~/.synapse/maps/index.json`. The first `synapse start mapping` creates a map named **Room** (and moves an existing `~/.ros/rtabmap.db` onto it). Starting again resumes that file instead of wiping it. Delete the map to throw it away and map the room over.
 
 ```bash
-agenticros maps list
-agenticros maps create --label Kitchen --start
-agenticros maps use <id>          # switch rooms; relaunches in localization mode
-agenticros maps rename <id> --label "Living Room"
-agenticros maps delete <id>
+synapse maps list
+synapse maps create --label Kitchen --start
+synapse maps use <id>          # switch rooms; relaunches in localization mode
+synapse maps rename <id> --label "Living Room"
+synapse maps delete <id>
 ```
 
 Places saved with `ros2_save_place` are stored against the active map. Deleting a map removes those places.
 
-On [AgenticROS Cloud](https://cloud.agenticros.com/maps) the **Maps** page does the same thing, with a confirmation step before delete. Free keeps **1 map per robot**. Nerd is 10, Teams 25, Enterprise is a higher cap. The control page room menu switches the active map when the robot is online. Switching restarts the mapping stack on that database (`AGENTICROS_MAP_LOCALIZE=1` once `agenticros_bringup` is rebuilt).
+On [Corebrum Cloud](https://cloud.corebrum.com/maps) the **Maps** page does the same thing, with a confirmation step before delete. Free keeps **1 map per robot**. Nerd is 10, Teams 25, Enterprise is a higher cap. The control page room menu switches the active map when the robot is online. Switching restarts the mapping stack on that database (`SYNAPSE_MAP_LOCALIZE=1` once `synapse_bringup` is rebuilt).
 
 ## Install
 
-Nav2’s metapackage (`navigation2`) is required in addition to `nav2-bringup`. Without it, `navigate_to_pose` / costmaps are missing and `@agenticros/explore` cannot run. Jazzy:
+Nav2’s metapackage (`navigation2`) is required in addition to `nav2-bringup`. Without it, `navigate_to_pose` / costmaps are missing and `@corebrum/explore` cannot run. Jazzy:
 
 ```bash
 sudo apt-get install -y \
@@ -82,7 +82,7 @@ Humble: replace `jazzy` with `humble`. `nav2-bringup` alone does **not** pull th
 
 ### Node bindings for click-to-navigate
 
-ARC map clicks go through `comms.js` and rclnodejs. `agenticros init` generates those JavaScript bindings during `pnpm install`. If that install ran before the Nav2 apt packages above, `generated/` has no `nav2_msgs/action/NavigateToPose`, and a click fails with:
+ARC map clicks go through `comms.js` and rclnodejs. `synapse init` generates those JavaScript bindings during `pnpm install`. If that install ran before the Nav2 apt packages above, `generated/` has no `nav2_msgs/action/NavigateToPose`, and a click fails with:
 
 ```text
 The message required does not exist: nav2_msgs, action, NavigateToPose
@@ -94,15 +94,15 @@ Regenerate once on the robot, with ROS sourced, then reconnect. Source ROS first
 source /opt/ros/${ROS_DISTRO:-jazzy}/setup.bash   # humble: source /opt/ros/humble/setup.bash
 ls /opt/ros/$ROS_DISTRO/share/nav2_msgs/action/NavigateToPose.action
 
-RCLN=$(find "$HOME/agenticros/node_modules/.pnpm" -maxdepth 3 -type d -name rclnodejs -print -quit)
+RCLN=$(find "$HOME/synapse/node_modules/.pnpm" -maxdepth 3 -type d -name rclnodejs -print -quit)
 cd "$RCLN"
 npm run generate-messages
 
-agenticros disconnect
-agenticros connect
+synapse disconnect
+synapse connect
 ```
 
-`NavigateToPose.action` must exist before `generate-messages`. If `ls` fails, install the apt packages above and run this block again. On a git checkout, point `find` at that repo’s `node_modules/.pnpm` instead of `$HOME/agenticros`. Generation can take a few minutes on a Jetson.
+`NavigateToPose.action` must exist before `generate-messages`. If `ls` fails, install the apt packages above and run this block again. On a git checkout, point `find` at that repo’s `node_modules/.pnpm` instead of `$HOME/synapse`. Generation can take a few minutes on a Jetson.
 
 If RTAB-Map / Nav2 fails at startup with `libdiagnostic_updater.so: cannot open shared object file` (or undefined `diagnostic_updater::Updater` symbols), the apt package is headers-only on some distros. Build the shared library into this workspace once:
 
@@ -113,12 +113,12 @@ source ros2_ws/install/setup.bash
 ```
 
 ```bash
-cd /path/to/agenticros/ros2_ws
+cd /path/to/synapse/ros2_ws
 source /opt/ros/jazzy/setup.bash   # or humble
-colcon build --packages-select agenticros_msgs agenticros_explore agenticros_bringup
+colcon build --packages-select synapse_msgs synapse_explore synapse_bringup
 source install/setup.bash
 
-npx agenticros skills install --bundle mapping
+npx @corebrum/synapse skills install --bundle mapping
 # same as: start-slam + explore + navigate-to
 ```
 
@@ -129,18 +129,18 @@ Calibrated extrinsics, a `base_link` / `base_footprint` TF tree, and (ideally) w
 ```bash
 # Default: camera + SLAM + Nav2 + explore action server (does not drive until a mission).
 # Direct launch still wipes ~/.ros/rtabmap.db unless delete_db_on_start:=false.
-# `agenticros start mapping` uses ~/.agenticros/maps/<id>.db and resumes it when the file exists.
-ros2 launch agenticros_bringup rtabmap_nav2.launch.py
+# `synapse start mapping` uses ~/.synapse/maps/<id>.db and resumes it when the file exists.
+ros2 launch synapse_bringup rtabmap_nav2.launch.py
 
 # Wheel odom instead of visual odometry:
-ros2 launch agenticros_bringup rtabmap_nav2.launch.py visual_odometry:=false odom_topic:=/odom
+ros2 launch synapse_bringup rtabmap_nav2.launch.py visual_odometry:=false odom_topic:=/odom
 
 # Already have camera + SLAM elsewhere:
-ros2 launch agenticros_bringup rtabmap_nav2.launch.py \
+ros2 launch synapse_bringup rtabmap_nav2.launch.py \
   use_realsense:=false use_rtabmap:=false
 ```
 
-The launch always passes RTAB-Map a height-based ground cut: points below 20 cm in `base_link` are floor, points from 20 cm to 1.5 m are obstacles, and ray tracing marks the space in front of the camera as free. The RealSense looks down while `camera_pitch` defaults to 0, so nearby floor is projected up near `camera_z` (15 cm). A 5 cm cut left that floor black and only the steepest rays white. Cells already stored in the room database stay occupied. Delete that map, or start a new one, after rebuilding `agenticros_bringup`. If the camera sits higher than 20 cm, raise `Grid/MaxGroundHeight` above `camera_z`, or set `camera_pitch` to the real downward tilt.
+The launch always passes RTAB-Map a height-based ground cut: points below 20 cm in `base_link` are floor, points from 20 cm to 1.5 m are obstacles, and ray tracing marks the space in front of the camera as free. The RealSense looks down while `camera_pitch` defaults to 0, so nearby floor is projected up near `camera_z` (15 cm). A 5 cm cut left that floor black and only the steepest rays white. Cells already stored in the room database stay occupied. Delete that map, or start a new one, after rebuilding `synapse_bringup`. If the camera sits higher than 20 cm, raise `Grid/MaxGroundHeight` above `camera_z`, or set `camera_pitch` to the real downward tilt.
 
 ### Jetson / D457 (GMSL) notes
 
@@ -148,7 +148,7 @@ Some GMSL RealSense setups publish broken or desynced hardware timestamps, and m
 
 ```bash
 # Camera already running elsewhere (recommended profiles: 424x240x15):
-ros2 launch agenticros_bringup rtabmap_nav2.launch.py \
+ros2 launch synapse_bringup rtabmap_nav2.launch.py \
   use_realsense:=false \
   rewrite_camera_stamps:=true \
   use_static_robot_tf:=true \
@@ -234,7 +234,7 @@ Or say *"wander around"*.
 | Camera info | `/camera/camera/color/camera_info` |
 | Occupancy | `/map` |
 | Base TF | `base_footprint` (fallback `base_link`) |
-| Nav2 params | `agenticros_bringup/config/nav2_rtabmap.yaml` (`use_sim_time: false`, `allow_unknown: true`) |
+| Nav2 params | `synapse_bringup/config/nav2_rtabmap.yaml` (`use_sim_time: false`, `allow_unknown: true`) |
 
 If your URDF uses only `base_link`, pass `frame_id:=base_link` and `base_frame:=base_link`.
 
@@ -250,14 +250,14 @@ The map click reached the robot, and rclnodejs has no generated `NavigateToPose`
 
 ### `Parameter 'use_realsense' is not supported`
 
-That warning comes from `realsense2_camera/rs_launch.py` treating **every** parent launch argument as a camera parameter. Current `rtabmap_nav2.launch.py` starts `realsense2_camera_node` directly, so those warnings should be gone after you pull and `colcon build --packages-select agenticros_bringup`.
+That warning comes from `realsense2_camera/rs_launch.py` treating **every** parent launch argument as a camera parameter. Current `rtabmap_nav2.launch.py` starts `realsense2_camera_node` directly, so those warnings should be gone after you pull and `colcon build --packages-select synapse_bringup`.
 
 ### `Device or resource busy` / `xioctl(VIDIOC_S_FMT) errno=16`
 
 Only one process can open the D436. Stop the other owner first:
 
 ```bash
-agenticros stop realsense        # if you used agenticros start realsense
+synapse stop realsense        # if you used synapse start realsense
 # or: pkill -f realsense2_camera_node
 # confirm: fuser /dev/video0 /dev/video4
 ```
@@ -265,23 +265,23 @@ agenticros stop realsense        # if you used agenticros start realsense
 Then either let this launch own the camera, or keep the existing node and skip a second one:
 
 ```bash
-ros2 launch agenticros_bringup rtabmap_nav2.launch.py use_realsense:=false
+ros2 launch synapse_bringup rtabmap_nav2.launch.py use_realsense:=false
 ```
 
 Default profiles here are `640x480x15` (override with `color_profile` / `depth_profile`). The D436 IMU HID warnings are expected — gyro/accel are left off.
 
 ### `No critics defined for FollowPath` / `Failed to change state for node: smoother_server`
 
-Nav2 loaded its **compiled defaults** (DWB, no critics) instead of `config/nav2_rtabmap.yaml`. That happens when `rtabmap.launch.py` sets launch `namespace:=rtabmap` and Nav2's `RewrittenYaml` nests every param under that key. Pull this repo, rebuild `agenticros_bringup`, and confirm you are launching **this** file (not a stale install without `--symlink-install`).
+Nav2 loaded its **compiled defaults** (DWB, no critics) instead of `config/nav2_rtabmap.yaml`. That happens when `rtabmap.launch.py` sets launch `namespace:=rtabmap` and Nav2's `RewrittenYaml` nests every param under that key. Pull this repo, rebuild `synapse_bringup`, and confirm you are launching **this** file (not a stale install without `--symlink-install`).
 
 ```bash
-cd ~/Projects/agenticros
+cd ~/Projects/synapse
 git pull
 cd ros2_ws
 source /opt/ros/jazzy/setup.bash
-colcon build --packages-select agenticros_bringup agenticros_explore agenticros_msgs --symlink-install
+colcon build --packages-select synapse_bringup synapse_explore synapse_msgs --symlink-install
 source install/setup.bash
-ros2 launch agenticros_bringup rtabmap_nav2.launch.py
+ros2 launch synapse_bringup rtabmap_nav2.launch.py
 ```
 
 On configure you should see `Created smoother : simple_smoother` and **not** `No critics defined for FollowPath`.
@@ -293,7 +293,7 @@ That spam means `~/.ros/rtabmap.db` was not closed cleanly (Ctrl-C, crash, power
 This launch **does not drive**. It only brings up camera + SLAM + Nav2 + the explore *action server*. After it is healthy, say *"wander around"* / *"map the room"*, or:
 
 ```bash
-ros2 action send_goal /wander agenticros_msgs/action/Explore "{mode: wander, timeout_s: 60}"
+ros2 action send_goal /wander synapse_msgs/action/Explore "{mode: wander, timeout_s: 60}"
 ```
 
 Fresh map (default as of this bringup):
@@ -301,14 +301,14 @@ Fresh map (default as of this bringup):
 ```bash
 # Stop the launch, then either rely on delete_db_on_start:=true (default) or:
 rm -f ~/.ros/rtabmap.db ~/.ros/rtabmap.db.back
-ros2 launch agenticros_bringup rtabmap_nav2.launch.py \
+ros2 launch synapse_bringup rtabmap_nav2.launch.py \
   use_static_robot_tf:=true \
   robot_namespace:=YOUR_NS    # if motors subscribe to /YOUR_NS/cmd_vel
 ```
 
 To **resume** a good map: `delete_db_on_start:=false`. To try repairing a crashed db: `rtabmap-recovery ~/.ros/rtabmap.db`.
 
-If wander runs but the base never moves, Nav2 is publishing `/cmd_vel` and the firmware is listening on `/<namespace>/cmd_vel`. Pass `robot_namespace` (same as `robot.namespace` in `~/.agenticros/config.json`).
+If wander runs but the base never moves, Nav2 is publishing `/cmd_vel` and the firmware is listening on `/<namespace>/cmd_vel`. Pass `robot_namespace` (same as `robot.namespace` in `~/.synapse/config.json`).
 
 ## What not to do
 
@@ -322,5 +322,5 @@ If wander runs but the base never moves, Nav2 is publishing `/cmd_vel` and the f
 - [Missions](missions.md) — chaining
 - [Cameras](cameras.md) — RealSense topics
 - [Simulation](simulation.md) — static-map Nav2 on `sim-amr`
-- [`agenticros_explore`](../ros2_ws/src/agenticros_explore/README.md) — action server
-- [`agenticros_bringup`](../ros2_ws/src/agenticros_bringup/README.md) — launch files
+- [`synapse_explore`](../ros2_ws/src/synapse_explore/README.md) — action server
+- [`synapse_bringup`](../ros2_ws/src/synapse_bringup/README.md) — launch files

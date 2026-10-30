@@ -1,6 +1,6 @@
 /**
  * Named room maps. Each map is an RTAB-Map database on the robot
- * (`~/.agenticros/maps/<id>.db`) plus a row in `index.json`.
+ * (`~/.synapse/maps/<id>.db`) plus a row in `index.json`.
  * ARC stores the public catalog (id, label, active); the database stays local.
  */
 
@@ -60,12 +60,12 @@ export interface MapStorePaths {
   mapsDir?: string;
   /** Override `~/.ros/rtabmap.db` (tests). */
   legacyDatabasePath?: string;
-  /** Override `~/.agenticros/places.json` when deleting a map (tests). */
+  /** Override `~/.synapse/places.json` when deleting a map (tests). */
   placesPath?: string;
 }
 
 export function defaultMapsDir(): string {
-  return join(homedir(), ".agenticros", "maps");
+  return join(homedir(), ".synapse", "maps");
 }
 
 export function defaultCatalogPath(): string {

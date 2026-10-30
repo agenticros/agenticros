@@ -304,7 +304,7 @@ export class WebRTCTransport implements RosTransport {
 
   // --- Private helpers ---
 
-  private nextId(prefix = "agenticros"): string {
+  private nextId(prefix = "synapse"): string {
     return `${prefix}_${++this.idCounter}`;
   }
 
@@ -450,7 +450,7 @@ export class WebRTCTransport implements RosTransport {
 
     const rtcConfig = { iceServers: iceServerStrs };
     const { PeerConnection, DescriptionType } = this.ndc;
-    this.pc = new PeerConnection("agenticros-frontend", rtcConfig);
+    this.pc = new PeerConnection("synapse-frontend", rtcConfig);
 
     // Handle ICE candidates from our side → send to robot
     this.pc.onLocalCandidate((candidate: string, mid: string) => {

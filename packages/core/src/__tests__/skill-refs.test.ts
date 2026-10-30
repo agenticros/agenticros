@@ -11,27 +11,27 @@ import {
 } from "../index.js";
 
 test("parseSkillRef: owner/skill and @pin", () => {
-  assert.deepEqual(parseSkillRef("agenticros/navigate-to"), {
+  assert.deepEqual(parseSkillRef("synapse/navigate-to"), {
     kind: "marketplace",
-    marketplaceRef: "agenticros/navigate-to",
-    owner: "agenticros",
+    marketplaceRef: "synapse/navigate-to",
+    owner: "synapse",
     skill: "navigate-to",
     gitRef: "main",
   });
-  assert.equal(parseSkillRef("agenticros/start-slam@v0.1.0")?.gitRef, "v0.1.0");
+  assert.equal(parseSkillRef("synapse/start-slam@v0.1.0")?.gitRef, "v0.1.0");
   assert.equal(parseSkillRef("nope"), null);
   assert.equal(parseSkillRef(""), null);
 });
 
 test("parseSkillRef: npm scoped package", () => {
-  assert.deepEqual(parseSkillRef("@agenticros/navigate-to"), {
+  assert.deepEqual(parseSkillRef("@corebrum/navigate-to"), {
     kind: "npm",
-    npmPackage: "@agenticros/navigate-to",
+    npmPackage: "@corebrum/navigate-to",
     npmVersion: undefined,
   });
-  assert.deepEqual(parseSkillRef("@agenticros/find@^0.2.0"), {
+  assert.deepEqual(parseSkillRef("@corebrum/find@^0.2.0"), {
     kind: "npm",
-    npmPackage: "@agenticros/find",
+    npmPackage: "@corebrum/find",
     npmVersion: "^0.2.0",
   });
 });
@@ -39,8 +39,8 @@ test("parseSkillRef: npm scoped package", () => {
 test("parseConfig: skillRefs defaults to []", () => {
   const cfg = parseConfig({});
   assert.deepEqual(cfg.skillRefs, []);
-  const cfg2 = parseConfig({ skillRefs: ["agenticros/detect-humans"] });
-  assert.deepEqual(cfg2.skillRefs, ["agenticros/detect-humans"]);
+  const cfg2 = parseConfig({ skillRefs: ["synapse/detect-humans"] });
+  assert.deepEqual(cfg2.skillRefs, ["synapse/detect-humans"]);
 });
 
 test("listCapabilitiesWithDiscoverable: soft-fail offline keeps installed", async () => {
@@ -61,7 +61,7 @@ test("listCapabilitiesWithDiscoverable: merges marketplace caps when fetch works
       JSON.stringify({
         skills: [
           {
-            marketplaceRef: "agenticros/detect-humans",
+            marketplaceRef: "synapse/detect-humans",
             visibility: "public",
             capabilities: [
               {
@@ -83,7 +83,7 @@ test("listCapabilitiesWithDiscoverable: merges marketplace caps when fetch works
     assert.ok(det);
     assert.equal(det!.discoverable, true);
     assert.equal(det!.installed, false);
-    assert.equal(det!.install_ref, "agenticros/detect-humans");
+    assert.equal(det!.install_ref, "synapse/detect-humans");
     assert.ok(caps.some((c) => c.id === "drive_base" && c.installed === true));
   } finally {
     globalThis.fetch = originalFetch;

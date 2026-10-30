@@ -1,9 +1,9 @@
 # Local VLM inference (Ollama)
 
-Run AgenticROS **without cloud LLM API keys** by pointing your agent platform at **Ollama** on the same machine (or LAN). AgenticROS handles ROS 2 tools, safety clamps, and skills; **OpenClaw** (or Hermes) chooses which model reasons and calls those tools.
+Run Corebrum Synapse **without cloud LLM API keys** by pointing your agent platform at **Ollama** on the same machine (or LAN). Corebrum Synapse handles ROS 2 tools, safety clamps, and skills; **OpenClaw** (or Hermes) chooses which model reasons and calls those tools.
 
 ```
-You → OpenClaw / Hermes (Ollama qwen3-vl) → AgenticROS plugin → ROS 2 → Robot
+You → OpenClaw / Hermes (Ollama qwen3-vl) → Corebrum Synapse plugin → ROS 2 → Robot
 ```
 
 No OpenAI, Anthropic, or Google key is required for the **robot control loop** when inference stays on Ollama.
@@ -17,7 +17,7 @@ No OpenAI, Anthropic, or Google key is required for the **robot control loop** w
 | Sandboxed Jetson / NemoClaw stack | **NVIDIA NemoClaw** | [docs/nemoclaw.md](nemoclaw.md) (detailed Ollama recipes) |
 | Claude / Codex / Gemini | Cloud models | Optional — use this doc only for memory embeddings or Follow Me VLM |
 
-`agenticros init` asks for an OpenAI key — **you can skip it** when using local Ollama with OpenClaw or Hermes.
+`synapse init` asks for an OpenAI key — **you can skip it** when using local Ollama with OpenClaw or Hermes.
 
 ## Model recommendations
 
@@ -44,20 +44,20 @@ ollama serve                       # usually already running as a service
 curl -s http://localhost:11434/api/tags | head   # sanity check
 ```
 
-AgenticROS stack (robot or sim):
+Corebrum Synapse stack (robot or sim):
 
 ```bash
-npx agenticros init    # skip OpenAI key when prompted
-agenticros up sim-amr  # or: agenticros up real
+npx @corebrum/synapse init    # skip OpenAI key when prompted
+synapse up sim-amr  # or: synapse up real
 ```
 
 ## OpenClaw + Ollama (recommended)
 
-### 1. Install the AgenticROS plugin
+### 1. Install the Corebrum Synapse plugin
 
-`agenticros init` runs `scripts/setup_gateway_plugin.sh` and registers the plugin. Config UI:
+`synapse init` runs `scripts/setup_gateway_plugin.sh` and registers the plugin. Config UI:
 
-`http://127.0.0.1:18789/plugins/agenticros/`
+`http://127.0.0.1:18789/plugins/synapse/`
 
 For loopback dev without gateway token auth:
 
@@ -111,7 +111,7 @@ jq '.agents.defaults.llm.idleTimeoutSeconds = 480' \
 ```json
 "plugins": {
   "entries": {
-    "agenticros": {
+    "synapse": {
       "config": {
         "describer": { "enabled": false }
       }
@@ -120,7 +120,7 @@ jq '.agents.defaults.llm.idleTimeoutSeconds = 480' \
 }
 ```
 
-Or use the config UI at `/plugins/agenticros/` → save → restart gateway.
+Or use the config UI at `/plugins/synapse/` → save → restart gateway.
 
 ### 5. Smoke test
 
@@ -133,7 +133,7 @@ Gateway log should **not** contain `tool image omitted: model does not support i
 
 ## Text-only primary → enable the describer
 
-If you keep a **text-only** Ollama model as primary (e.g. for faster tool calling on Jetson), enable AgenticROS’s in-plugin describer so `ros2_camera_snapshot` embeds a text caption (OpenClaw filters raw images for text-only models):
+If you keep a **text-only** Ollama model as primary (e.g. for faster tool calling on Jetson), enable Corebrum Synapse’s in-plugin describer so `ros2_camera_snapshot` embeds a text caption (OpenClaw filters raw images for text-only models):
 
 ```json
 "describer": {
@@ -143,13 +143,13 @@ If you keep a **text-only** Ollama model as primary (e.g. for faster tool callin
 }
 ```
 
-Set via `~/.openclaw/openclaw.json` → `plugins.entries.agenticros.config.describer` or the AgenticROS config UI.
+Set via `~/.openclaw/openclaw.json` → `plugins.entries.synapse.config.describer` or the Corebrum Synapse config UI.
 
 ## Follow Me skill (Ollama VLM steering)
 
 The Follow Me skill can call Ollama directly for person tracking (independent of the chat LLM):
 
-In the config UI (**Follow Me** section) or `plugins.entries.agenticros.config.skills.followme`:
+In the config UI (**Follow Me** section) or `plugins.entries.synapse.config.skills.followme`:
 
 ```json
 "skills": {
@@ -162,15 +162,15 @@ In the config UI (**Follow Me** section) or `plugins.entries.agenticros.config.s
 }
 ```
 
-Install the skill: `agenticros skills install chrismatthieu/followme` (see [skills.md](skills.md)).
+Install the skill: `synapse skills install chrismatthieu/followme` (see [skills.md](skills.md)).
 
 ## Hermes + Ollama
 
-Hermes is model-agnostic — point it at Ollama, register AgenticROS MCP, and chat from the terminal:
+Hermes is model-agnostic — point it at Ollama, register Corebrum Synapse MCP, and chat from the terminal:
 
 ```bash
-agenticros hermes setup
-agenticros hermes doctor
+synapse hermes setup
+synapse hermes doctor
 ```
 
 In `~/.hermes/config.yaml`, set the LLM provider to Ollama and your model (exact keys depend on your Hermes version), for example:

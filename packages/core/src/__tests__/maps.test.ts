@@ -17,7 +17,7 @@ import {
 import { listPlaces, savePlace } from "../places.js";
 
 test("maps: create, rename, switch, delete", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "agenticros-maps-"));
+  const dir = await mkdtemp(join(tmpdir(), "synapse-maps-"));
   const catalogPath = join(dir, "index.json");
   const mapsDir = join(dir, "dbs");
   const placesPath = join(dir, "places.json");
@@ -52,7 +52,7 @@ test("maps: create, rename, switch, delete", async () => {
 });
 
 test("maps: ensureActiveMap creates Room once", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "agenticros-maps-"));
+  const dir = await mkdtemp(join(tmpdir(), "synapse-maps-"));
   const opts = { catalogPath: join(dir, "index.json"), mapsDir: join(dir, "dbs") };
   try {
     const first = ensureActiveMap(opts);
@@ -66,7 +66,7 @@ test("maps: ensureActiveMap creates Room once", async () => {
 });
 
 test("maps: first map adopts a legacy rtabmap.db when present", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "agenticros-maps-"));
+  const dir = await mkdtemp(join(tmpdir(), "synapse-maps-"));
   const legacy = join(dir, "rtabmap.db");
   const opts = {
     catalogPath: join(dir, "index.json"),

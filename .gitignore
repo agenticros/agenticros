@@ -37,7 +37,7 @@ ros2_ws/src/*/*.egg-info/
 ros2_ws/src/diagnostics_repo/
 ros2_ws/src/diagnostic_updater
 ros2_ws/src/rosbridge_suite_repo/
-ros2_ws/.agenticros-cli-build-stamp
+ros2_ws/.synapse-cli-build-stamp
 
 # Python
 __pycache__/
@@ -53,17 +53,17 @@ docker/.env
 npm-debug.log*
 
 # npm pack artifacts (local publish smoke tests)
-packages/agenticros-cli/*.tgz
+packages/synapse-cli/*.tgz
 
 # Local skill installs (skills are separate repos; do not commit into core repo)
 skills/
-/agenticros-skill-*/
+/corebrum-skill-*/
 
 # Machine-local MCP client configs. Setup writes absolute paths here
-# (`agenticros codex setup --project`, `agenticros agy setup`).
+# (`synapse codex setup --project`, `synapse agy setup`).
 # Project .mcp.json stays tracked: it uses a relative command.
 .codex/config.toml
 .agents/mcp_config.json
 # CLI scaffold templates (shipped in npm package)
-!packages/agenticros-cli/templates/
-!packages/agenticros-cli/templates/**
+!packages/synapse-cli/templates/
+!packages/synapse-cli/templates/**

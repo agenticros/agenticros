@@ -1,8 +1,8 @@
 #!/bin/bash
-# activate_workspace.sh - Cross-platform workspace activation for AgenticROS
+# activate_workspace.sh - Cross-platform workspace activation for Corebrum Synapse
 #
 # DESCRIPTION:
-#   This script sets up the complete development environment for the AgenticROS project.
+#   This script sets up the complete development environment for the Corebrum Synapse project.
 #   It supports both Ubuntu (venv + native ROS2) and macOS (mamba + RoboStack).
 #   The script handles platform detection and activates the appropriate environment type.
 #
@@ -204,8 +204,8 @@ verify_setup() {
     local python_path=$(which python3)
     log_info "Python: $python_path"
 
-    # Check for agenticros packages
-    for pkg in agenticros_msgs agenticros_discovery agenticros_agent; do
+    # Check for synapse packages
+    for pkg in synapse_msgs synapse_discovery synapse_agent; do
         if ros2 pkg list 2>/dev/null | grep -q "$pkg"; then
             log_success "Package found: $pkg"
         else
@@ -219,7 +219,7 @@ verify_setup() {
 # Main execution
 main() {
     echo "======================================"
-    echo "AgenticROS Workspace Activation"
+    echo "Corebrum Synapse Workspace Activation"
     echo "======================================"
     echo ""
 
@@ -276,8 +276,8 @@ main() {
     echo ""
     echo "Ready for development! You can now:"
     echo "  - Build packages:  cd ros2_ws && colcon build --symlink-install"
-    echo "  - Run discovery:   ros2 run agenticros_discovery discovery_node"
-    echo "  - Run agent:       ros2 run agenticros_agent agent_node"
+    echo "  - Run discovery:   ros2 run synapse_discovery discovery_node"
+    echo "  - Run agent:       ros2 run synapse_agent agent_node"
     echo "  - List topics:     ros2 topic list"
     echo ""
 }

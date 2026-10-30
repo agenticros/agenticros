@@ -127,6 +127,6 @@ test("client: setRecipe uses hosted template URL, not a local yaml path", async 
   assert.equal(result.on, true);
   assert.equal(result.taskId, "task-9");
   assert.ok(typeof submitBody?.file === "string");
-  assert.match(String(submitBody?.file), /^https:\/\/corebrum.com\/recipes\/agenticros-detect\.yaml$/);
+  assert.match(String(submitBody?.file), /^https:\/\/corebrum.com\/recipes\/synapse-detect\.yaml$/);
   assert.equal(String(submitBody?.file).includes(".."), false);
 });

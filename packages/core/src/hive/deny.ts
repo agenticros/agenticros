@@ -1,5 +1,5 @@
 /**
- * Client-side deny-list: Corebrum publish is unclamped. AgenticROS never
+ * Client-side deny-list: Corebrum publish is unclamped. Corebrum Synapse never
  * calls POST /api/publish, and refuses any recipe/task payload that would
  * write Twist / joints / gripper / Nav2 goals.
  */
@@ -30,6 +30,6 @@ export function taskDefinitionMentionsActuation(value: unknown): boolean {
  */
 export function assertHivePublishDenied(topic: string): never {
   throw new Error(
-    `Hive client refuses to publish to "${topic}". Driving and joints stay in AgenticROS.`,
+    `Hive client refuses to publish to "${topic}". Driving and joints stay in Corebrum Synapse.`,
   );
 }

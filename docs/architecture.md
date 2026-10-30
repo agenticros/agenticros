@@ -1,23 +1,23 @@
-# AgenticROS System Architecture
+# Corebrum Synapse System Architecture
 
-![AgenticROS system flow: chat and Jarvis voice → agent platforms → AgenticROS tools, missions, transports, and skills → ROS robot sensing and actuation](images/agenticros-architecture.png)
+![Corebrum Synapse system flow: chat and Jarvis voice → agent platforms → Corebrum Synapse tools, missions, transports, and skills → ROS robot sensing and actuation](images/synapse-architecture.png)
 
-AgenticROS supports four deployment modes depending on where OpenClaw runs
+Corebrum Synapse supports four deployment modes depending on where OpenClaw runs
 relative to the robot. The AI Gateway layer and ROS2 layer remain the same
 across all modes — only the transport between them changes.
 
 The diagram above is the product flow: conversation channels (including
 Jarvis voice in and spoken replies out) and agent platforms (OpenClaw,
-NemoClaw, Claude, Codex, Gemini, Hermes) call into AgenticROS — tools and
+NemoClaw, Claude, Codex, Gemini, Hermes) call into Corebrum Synapse — tools and
 capabilities, missions and memory, transport and safety, skills and
 perception — then out to the ROS 2 graph and robot hardware. Jarvis is
 the `chrismatthieu/jarvis` skill: after the wake word, everyday questions
 are answered by a fast chat model; robot commands and ROS inquiries go
-through the same OpenClaw agent loop as web chat, so installed AgenticROS
-skills work the same out loud. Source SVG: [agenticros-system-flow.svg](agenticros-system-flow.svg).
+through the same OpenClaw agent loop as web chat, so installed Corebrum Synapse
+skills work the same out loud. Source SVG: [synapse-system-flow.svg](synapse-system-flow.svg).
 The text diagrams below break out each deployment mode in more detail.
 A package-level diagram of adapters and `ros2_ws` nodes is in
-[agenticros-architecture.svg](agenticros-architecture.svg).
+[synapse-architecture.svg](synapse-architecture.svg).
 
 ---
 
@@ -46,7 +46,7 @@ A package-level diagram of adapters and `ros2_ws` nodes is in
 │  └─────────────────────────────┼─────────────────────────────────────────────┘  │
 │                                ▼                                                 │
 │  ┌────────────────────────────────────────────────────────────────────────────┐  │
-│  │                       AGENTICROS PLUGIN                                       │  │
+│  │                       SYNAPSE    PLUGIN                                       │  │
 │  │                                                                            │  │
 │  │  ┌─────────────────────────────────────────────────────────────────────┐   │  │
 │  │  │                    TOOL REGISTRY                                     │   │  │
@@ -103,7 +103,7 @@ A package-level diagram of adapters and `ros2_ws` nodes is in
 │  └─────────────────────────────────────────────────────────────────────────┘      │
 │                                                                                   │
 │  ┌─────────────────────────────────┐  ┌───────────────────────────────────┐       │
-│  │  agenticros_discovery              │  │  Nav2 / MoveIt2 / Other Stacks   │       │
+│  │  synapse_discovery              │  │  Nav2 / MoveIt2 / Other Stacks   │       │
 │  │  (capability introspection)     │  │  (navigation, manipulation)       │       │
 │  └─────────────────────────────────┘  └───────────────────────────────────┘       │
 └──────────────────────────────────────────────────────────────────────────────────┘
@@ -129,7 +129,7 @@ internet access.
 │                        ROBOT MACHINE                                     │
 │                                                                          │
 │  ┌────────────────────────────────────────────────────────────────────┐  │
-│  │  OPENCLAW + AGENTICROS PLUGIN                                        │  │
+│  │  OPENCLAW + SYNAPSE    PLUGIN                                        │  │
 │  │                                                                    │  │
 │  │  AI Agent → Safety Validator → Tool Execution                     │  │
 │  └──────────────────────┬─────────────────────────────────────────────┘  │
@@ -172,7 +172,7 @@ where everything is on the same network.
 │  LOCAL SERVER / DEV MACHINE    │     │  ROBOT                          │
 │                                │     │                                 │
 │  ┌──────────────────────────┐  │     │  ┌───────────────────────────┐  │
-│  │  OPENCLAW + AGENTICROS      │  │     │  │  rosbridge_server         │  │
+│  │  OPENCLAW + SYNAPSE         │  │     │  │  rosbridge_server         │  │
 │  │  PLUGIN                  │──┼─────┼─►│  (WebSocket → ROS2 DDS)   │  │
 │  │                          │  │ LAN │  └─────────────┬─────────────┘  │
 │  │  rosbridge-client lib    │  │ WS  │                │                │
@@ -214,7 +214,7 @@ when operators and robots are in different locations.
 │  CLOUD / VPS                   │                  │  ROBOT (behind NAT/firewall)   │
 │                                │                  │                                │
 │  ┌──────────────────────────┐  │                  │  ┌──────────────────────────┐  │
-│  │  OPENCLAW + AGENTICROS      │  │                  │  │  AgenticROS Agent Node      │  │
+│  │  OPENCLAW + SYNAPSE         │  │                  │  │  Corebrum Synapse Agent Node      │  │
 │  │  PLUGIN                  │  │                  │  │  (ROS2 node)             │  │
 │  │                          │  │                  │  │                          │  │
 │  │  WebRTC data channel     │◄─┼── P2P or TURN ──┼─►│  WebRTC data channel     │  │
@@ -238,7 +238,7 @@ Latency:   ~10-100ms (internet, varies)
 NAT issue:  solved — both sides connect outbound to STUN/TURN, then P2P
 ```
 
-In Mode C, the robot runs a **AgenticROS Agent Node** (`agenticros_agent`) — a
+In Mode C, the robot runs a **Corebrum Synapse Agent Node** (`synapse_agent`) — a
 lightweight ROS2 node that connects outbound to the signaling/TURN server
 and establishes a WebRTC data channel with the cloud-side plugin. Commands
 and feedback flow over this encrypted peer-to-peer channel. Neither side
@@ -264,7 +264,7 @@ prefer the Zenoh stack over DDS.
 │  OPENCLAW MACHINE               │     │  ROBOT (Zenoh RMW)           │
 │                                 │     │                               │
 │  ┌──────────────────────────┐   │     │  ┌─────────────────────────┐  │
-│  │  OPENCLAW + AGENTICROS      │   │     │  │  Zenoh router           │  │
+│  │  OPENCLAW + SYNAPSE         │   │     │  │  Zenoh router           │  │
 │  │  PLUGIN                  │   │     │  │  (zenohd)                │  │
 │  │                          │   │     │  └───────────┬─────────────┘  │
 │  │  zenoh-ts (WebSocket)    │───┼─────┼─►             │                │
@@ -309,7 +309,7 @@ Twist to every robot whose profile has `base`. See [robot-profile.md](robot-prof
 ## Transport Adapter Abstraction
 
 All plugin tools call `getTransport()` instead of directly using a specific
-client library. The `RosTransport` interface (`@agenticros/transport`) provides
+client library. The `RosTransport` interface (`@corebrum/transport`) provides
 a unified API for all three deployment modes:
 
 ```
@@ -318,20 +318,20 @@ a unified API for all three deployment modes:
        ▼
   getTransport(): RosTransport
        │
-       ├── RosbridgeTransport  (Mode B — @agenticros/rosbridge-client)
+       ├── RosbridgeTransport  (Mode B — @corebrum/rosbridge-client)
        │     └── WebSocket → rosbridge_server → ROS2 DDS
        │
-       ├── LocalTransport      (Mode A — @agenticros/transport-local, stub)
+       ├── LocalTransport      (Mode A — @corebrum/transport-local, stub)
        │     └── rclnodejs → ROS2 DDS directly
        │
-       ├── WebRTCTransport     (Mode C — @agenticros/transport-webrtc, stub)
-       │     └── WebRTC data channel → agenticros_agent → ROS2 DDS
+       ├── WebRTCTransport     (Mode C — @corebrum/transport-webrtc, stub)
+       │     └── WebRTC data channel → synapse_agent → ROS2 DDS
        │
        └── ZenohTransport      (Mode D — zenoh-ts)
              └── WebSocket → Zenoh router → ROS2 (rmw_zenoh_cpp)
 ```
 
-The `createTransport(config)` factory in `@agenticros/transport` uses dynamic
+The `createTransport(config)` factory in `@corebrum/transport` uses dynamic
 `import()` to load the correct adapter by mode, so unused adapters and their
 dependencies are never loaded.
 
@@ -367,7 +367,7 @@ When `config.hive.enabled` is true, adapters register `hive_*` tools
 (remember / recall / forget / status / enable / set_recipe) that talk to
 an optional Corebrum process over `http://127.0.0.1:6502/api/*`. Hive is
 **not** a memory backend: per-robot `memory_*` stays on `local` / `mem0`.
-Corebrum is a separate proprietary product; AgenticROS never vendors it
+Corebrum is a separate proprietary product; Corebrum Synapse never vendors it
 and never publishes `cmd_vel` through it.
 
 When hive is off (the default), `createHiveClient` returns `null`, no
@@ -379,7 +379,7 @@ When hive is off (the default), `createHiveClient` returns `null`, no
 ## Data Flow Example
 
 ```
-  User (Telegram)                AgenticROS                        Robot
+  User (Telegram)                Corebrum Synapse                        Robot
        │                            │                              │
        │  "Move forward 2 meters"   │                              │
        │───────────────────────────►│                              │

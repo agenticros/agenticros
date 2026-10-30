@@ -33,13 +33,13 @@ const BASE_CAPS: Capability[] = [
     id: "find_object",
     verb: "find",
     description: "find",
-    source: { kind: "skill", skillId: "find", package: "agenticros-skill-find" },
+    source: { kind: "skill", skillId: "find", package: "corebrum-skill-find" },
   },
   {
     id: "follow_person",
     verb: "follow",
     description: "follow",
-    source: { kind: "skill", skillId: "followme", package: "agenticros-skill-followme" },
+    source: { kind: "skill", skillId: "followme", package: "corebrum-skill-followme" },
   },
 ];
 
@@ -255,7 +255,7 @@ test("planner: 'paint the wall blue' (unrecognised verb) fails gracefully with s
 test("planner: 'wander around' maps to wander when the skill is installed", () => {
   const caps: Capability[] = [
     ...BASE_CAPS,
-    { id: "wander", verb: "wander", description: "wander", source: { kind: "skill", skillId: "explore", package: "@agenticros/explore" } },
+    { id: "wander", verb: "wander", description: "wander", source: { kind: "skill", skillId: "explore", package: "@corebrum/explore" } },
   ];
   const res = compileGoalToMission("wander around", caps);
   assert.ok(res.mission, `expected mission, got error: ${res.error}`);
@@ -267,7 +267,7 @@ test("planner: 'wander around' maps to wander when the skill is installed", () =
 test("planner: 'explore the room' maps to explore", () => {
   const caps: Capability[] = [
     ...BASE_CAPS,
-    { id: "explore", verb: "explore", description: "explore", source: { kind: "skill", skillId: "explore", package: "@agenticros/explore" } },
+    { id: "explore", verb: "explore", description: "explore", source: { kind: "skill", skillId: "explore", package: "@corebrum/explore" } },
   ];
   const res = compileGoalToMission("explore the room", caps);
   assert.ok(res.mission);
@@ -277,9 +277,9 @@ test("planner: 'explore the room' maps to explore", () => {
 test("planner: 'map the room' chains start_slam → explore → save_map when installed", () => {
   const caps: Capability[] = [
     ...BASE_CAPS,
-    { id: "start_slam", verb: "map", description: "start", source: { kind: "skill", skillId: "start-slam", package: "@agenticros/start-slam" } },
-    { id: "save_map", verb: "map", description: "save", source: { kind: "skill", skillId: "start-slam", package: "@agenticros/start-slam" } },
-    { id: "explore", verb: "explore", description: "explore", source: { kind: "skill", skillId: "explore", package: "@agenticros/explore" } },
+    { id: "start_slam", verb: "map", description: "start", source: { kind: "skill", skillId: "start-slam", package: "@corebrum/start-slam" } },
+    { id: "save_map", verb: "map", description: "save", source: { kind: "skill", skillId: "start-slam", package: "@corebrum/start-slam" } },
+    { id: "explore", verb: "explore", description: "explore", source: { kind: "skill", skillId: "explore", package: "@corebrum/explore" } },
   ];
   const res = compileGoalToMission("map the room", caps);
   assert.ok(res.mission, `expected mission, got error: ${res.error}`);
@@ -292,7 +292,7 @@ test("planner: 'map the room' chains start_slam → explore → save_map when in
 test("planner: 'map the room' still compiles with only explore installed", () => {
   const caps: Capability[] = [
     ...BASE_CAPS,
-    { id: "explore", verb: "explore", description: "explore", source: { kind: "skill", skillId: "explore", package: "@agenticros/explore" } },
+    { id: "explore", verb: "explore", description: "explore", source: { kind: "skill", skillId: "explore", package: "@corebrum/explore" } },
   ];
   const res = compileGoalToMission("map the room", caps);
   assert.ok(res.mission);
@@ -337,7 +337,7 @@ const NAV_CAPS: Capability[] = [
     id: "navigate_to",
     verb: "navigate",
     description: "nav",
-    source: { kind: "skill", skillId: "navigate-to", package: "@agenticros/navigate-to" },
+    source: { kind: "skill", skillId: "navigate-to", package: "@corebrum/navigate-to" },
   },
   { id: "navigate_to_place", verb: "navigate", description: "place", source: { kind: "builtin" } },
   { id: "save_place", verb: "remember_place", description: "save", source: { kind: "builtin" } },

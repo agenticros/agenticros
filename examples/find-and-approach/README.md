@@ -1,6 +1,12 @@
 # Find and Approach — mission chaining demo
 
-A minimal **single-robot** walkthrough for AgenticROS mission orchestration: install the Find Object skill, confirm capabilities, then run a two-step *find → approach* mission via natural language or a declarative plan.
+This project was previously known as AgenticROS.
+
+
+This project was previously known as Corebrum Synapse.
+
+
+A minimal **single-robot** walkthrough for Corebrum Synapse mission orchestration: install the Find Object skill, confirm capabilities, then run a two-step *find → approach* mission via natural language or a declarative plan.
 
 ## What you will see
 
@@ -13,24 +19,24 @@ No custom mission code — the contract layer chains existing skills.
 ## Prerequisites
 
 - Node.js ≥ 20
-- AgenticROS CLI: `npx agenticros`
-- Sim stack (easiest): `agenticros up sim-amr`
-- An MCP client: `agenticros mcp setup` (Claude Code, Codex, Hermes) **or** OpenClaw with the plugin
+- Corebrum Synapse CLI: `npx @corebrum/synapse`
+- Sim stack (easiest): `synapse up sim-amr`
+- An MCP client: `synapse mcp setup` (Claude Code, Codex, Hermes) **or** OpenClaw with the plugin
 
 ## Steps
 
 ### 1. Start the sim
 
 ```bash
-agenticros up sim-amr
-agenticros mcp setup    # skip if you only use OpenClaw chat
+synapse up sim-amr
+synapse mcp setup    # skip if you only use OpenClaw chat
 ```
 
 ### 2. Install the Find Object skill (OpenClaw plugin path)
 
 ```bash
-npx agenticros skills install chrismatthieu/find
-agenticros skills sync
+npx @corebrum/synapse skills install chrismatthieu/find
+synapse skills sync
 systemctl --user restart openclaw-gateway.service   # OpenClaw only
 ```
 
@@ -88,7 +94,7 @@ Call `mission_cancel`. Remaining steps are marked `cancelled`.
 To target a named robot in a multi-robot config:
 
 ```bash
-agenticros robots add sim-amr --namespace=<your-sim-namespace> --kind=amr
+synapse robots add sim-amr --namespace=<your-sim-namespace> --kind=amr
 ```
 
 Then:
@@ -106,6 +112,6 @@ Or ask: *"Using warehouse-amr, find a bottle and drive toward it."*
 | `find_object` not in capabilities | Install the Find skill; restart gateway / MCP |
 | Planner error on goal | Check `ros2_list_capabilities`; install missing skill |
 | Robot does not move on approach step | Sim must be running; check `cmd_vel` / namespace in config |
-| OpenClaw tool missing | Run `agenticros skills sync`; check `contracts.tools` in plugin manifest |
+| OpenClaw tool missing | Run `synapse skills sync`; check `contracts.tools` in plugin manifest |
 
 Full guide: [docs/missions.md](../../docs/missions.md).

@@ -89,7 +89,7 @@ export class ZenohTransport implements RosTransport {
       if (!locator) {
         this.setStatus("disconnected");
         throw new Error(
-          "Zenoh router endpoint is empty. Set zenoh.routerEndpoint in config (e.g. ws://localhost:10000). See docs/zenoh-agenticros.md.",
+          "Zenoh router endpoint is empty. Set zenoh.routerEndpoint in config (e.g. ws://localhost:10000). See docs/zenoh-synapse.md.",
         );
       }
       if (!/^wss?:\/\//i.test(locator)) {
@@ -102,7 +102,7 @@ export class ZenohTransport implements RosTransport {
         const config = new Config(locator);
         this.session = await Session.open(config);
         this.setStatus("connected");
-        console.warn(`[AgenticROS] Zenoh connected to ${locator}`);
+        console.warn(`[Corebrum Synapse] Zenoh connected to ${locator}`);
       } catch (e) {
         this.setStatus("disconnected");
         const msg = e instanceof Error ? e.message : String(e);
@@ -111,7 +111,7 @@ export class ZenohTransport implements RosTransport {
             `Zenoh endpoint "${locator}" is not a valid URL. Use a WebSocket URL, e.g. ws://localhost:10000.`,
           );
         }
-        console.error(`[AgenticROS] Zenoh connection failed to ${locator}:`, e);
+        console.error(`[Corebrum Synapse] Zenoh connection failed to ${locator}:`, e);
         throw e;
       }
     });
@@ -165,9 +165,9 @@ export class ZenohTransport implements RosTransport {
       throw new Error(`Zenoh publish: topic is empty (options.topic=${JSON.stringify(options.topic)})`);
     }
     const payload = encodeCdr(options.type, options.msg);
-    console.warn(`[AgenticROS] Zenoh publish: key=${key} topic=${effectiveTopic}`);
+    console.warn(`[Corebrum Synapse] Zenoh publish: key=${key} topic=${effectiveTopic}`);
     return s.put(key, payload).catch((err: unknown) => {
-      console.error("[AgenticROS] Zenoh put failed:", key, err);
+      console.error("[Corebrum Synapse] Zenoh put failed:", key, err);
       throw new Error(`Zenoh put failed: ${err}`);
     });
   }
@@ -201,7 +201,7 @@ export class ZenohTransport implements RosTransport {
         } catch (e) {
           if (!decodeErrorLogged) {
             decodeErrorLogged = true;
-            console.warn("[AgenticROS] Zenoh CDR decode failed for", options.topic, type, e instanceof Error ? e.message : String(e));
+            console.warn("[Corebrum Synapse] Zenoh CDR decode failed for", options.topic, type, e instanceof Error ? e.message : String(e));
           }
         }
       },
@@ -248,7 +248,7 @@ export class ZenohTransport implements RosTransport {
         } catch (e) {
           if (!decodeErrorLogged) {
             decodeErrorLogged = true;
-            console.warn("[AgenticROS] Zenoh CDR decode failed for", options.topic, type, e instanceof Error ? e.message : String(e));
+            console.warn("[Corebrum Synapse] Zenoh CDR decode failed for", options.topic, type, e instanceof Error ? e.message : String(e));
           }
         }
       },
@@ -288,7 +288,7 @@ export class ZenohTransport implements RosTransport {
     const run = async (): Promise<TopicInfo[]> => {
       const s = this.session;
       if (!s || s.isClosed()) {
-        console.warn("[AgenticROS] Zenoh listTopics: not connected");
+        console.warn("[Corebrum Synapse] Zenoh listTopics: not connected");
         return [];
       }
       const keys = new Set<string>();
@@ -304,17 +304,17 @@ export class ZenohTransport implements RosTransport {
           subs.push(await s.declareSubscriber(keyexpr, { handler, allowedOrigin: Locality.ANY }));
         } catch (e) {
           console.warn(
-            "[AgenticROS] Zenoh listTopics: declareSubscriber failed for",
+            "[Corebrum Synapse] Zenoh listTopics: declareSubscriber failed for",
             keyexpr,
             e instanceof Error ? e.message : String(e),
           );
         }
       }
       if (subs.length === 0) {
-        console.warn("[AgenticROS] Zenoh listTopics: no subscribers declared (check key expressions)");
+        console.warn("[Corebrum Synapse] Zenoh listTopics: no subscribers declared (check key expressions)");
         return [];
       }
-      const rawMs = Number.parseInt(process.env.AGENTICROS_ZENOH_LIST_TOPICS_MS ?? "", 10);
+      const rawMs = Number.parseInt(process.env.SYNAPSE_ZENOH_LIST_TOPICS_MS ?? "", 10);
       const sampleMs = Number.isFinite(rawMs) ? Math.min(60_000, Math.max(1000, rawMs)) : 6500;
       await new Promise((r) => setTimeout(r, sampleMs));
       await Promise.all(subs.map((sub) => sub.undeclare()));
@@ -326,17 +326,17 @@ export class ZenohTransport implements RosTransport {
           type: "unknown",
         }));
       if (topics.length > 0) {
-        console.warn(`[AgenticROS] Zenoh listTopics: found ${topics.length} keys (sampled ${sampleMs}ms)`);
+        console.warn(`[Corebrum Synapse] Zenoh listTopics: found ${topics.length} keys (sampled ${sampleMs}ms)`);
       } else {
         const ep = (this.config.routerEndpoint ?? "").trim() || "(not configured)";
         console.warn(
-          "[AgenticROS] Zenoh listTopics: no keys in sampling window — " +
+          "[Corebrum Synapse] Zenoh listTopics: no keys in sampling window — " +
             `waited ${sampleMs}ms on ${ep}. ` +
             "If `zenoh subscribe` on another host shows traffic, ensure it uses the **same Zenoh router** as this session: " +
             "OpenClaw uses **WebSocket to zenoh-plugin-remote-api** (e.g. ws://127.0.0.1:10000), not raw TCP to the robot. " +
             "A CLI client to tcp/ROBOT_IP:7447 sees the robot's local router; data only appears here if the robot bridge peers to the Mac router you connected to. " +
             "`subscribe -k '**'` also prints **binary payloads** (garbled text), not topic names — keys are short path-like strings when Zenoh prints them separately. " +
-            "Optional: set AGENTICROS_ZENOH_LIST_TOPICS_MS (ms) to sample longer for low-rate topics.",
+            "Optional: set SYNAPSE_ZENOH_LIST_TOPICS_MS (ms) to sample longer for low-rate topics.",
         );
       }
       return topics;

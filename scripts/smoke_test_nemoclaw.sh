@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #
-# Smoke-test the hybrid NemoClaw + AgenticROS bridge.
+# Smoke-test the hybrid NemoClaw + Corebrum Synapse bridge.
 #
 # Checks, in order:
 #   1. NemoClaw sandbox container is up.
-#   2. agenticros_rosbridge policy is loaded into the live gateway bundle
+#   2. synapse_rosbridge policy is loaded into the live gateway bundle
 #      with the SSRF allowed_ips block (so host.docker.internal is reachable).
 #   3. rosbridge_server is bound on the host (0.0.0.0:9090).
 #   4. The plugin's actual TCP connection through the OPA proxy is ALLOWED
@@ -34,20 +34,20 @@ if [[ -z "${CONTAINER}" ]]; then
 fi
 pass "sandbox container: ${CONTAINER}"
 
-# ----- 2. agenticros_rosbridge policy loaded with allowed_ips ---------------
+# ----- 2. synapse_rosbridge policy loaded with allowed_ips ---------------
 OPENSHELL_BIN="${OPENSHELL_BIN:-$(command -v openshell || echo "$HOME/.local/bin/openshell")}"
 if [[ ! -x "${OPENSHELL_BIN}" ]]; then
   warn "openshell CLI not found at ${OPENSHELL_BIN} — skipping policy bundle check"
 else
   POLICY_BUNDLE=$("${OPENSHELL_BIN}" policy get --full nemo 2>/dev/null || true)
-  if grep -q 'agenticros_rosbridge:' <<<"${POLICY_BUNDLE}"; then
+  if grep -q 'synapse_rosbridge:' <<<"${POLICY_BUNDLE}"; then
     if grep -q 'allowed_ips:' <<<"${POLICY_BUNDLE}"; then
-      pass "agenticros_rosbridge policy is loaded with allowed_ips (SSRF guard satisfied)"
+      pass "synapse_rosbridge policy is loaded with allowed_ips (SSRF guard satisfied)"
     else
-      fail "agenticros_rosbridge policy is loaded but missing allowed_ips — SSRF guard will deny"
+      fail "synapse_rosbridge policy is loaded but missing allowed_ips — SSRF guard will deny"
     fi
   else
-    fail "agenticros_rosbridge policy is NOT loaded — run: nemoclaw nemo policy-add --yes --from-file scripts/agenticros-rosbridge.policy.yaml"
+    fail "synapse_rosbridge policy is NOT loaded — run: nemoclaw nemo policy-add --yes --from-file scripts/synapse-rosbridge.policy.yaml"
   fi
 fi
 
@@ -64,12 +64,12 @@ if [[ -n "${LOG_FILE}" ]]; then
   LAST_DECISION=$(docker exec "${CONTAINER}" sh -c "grep -E 'host.docker.internal:9090|host.openshell.internal:9090' '${LOG_FILE}' | tail -1" 2>/dev/null)
   if [[ -z "${LAST_DECISION}" ]]; then
     warn "no recent proxy decisions for host.docker.internal:9090 in ${LOG_FILE} (gateway hasn't tried yet?)"
-  elif grep -qE 'ALLOWED.*policy:agenticros_rosbridge' <<<"${LAST_DECISION}"; then
-    pass "last proxy decision: ALLOWED via agenticros_rosbridge"
+  elif grep -qE 'ALLOWED.*policy:synapse_rosbridge' <<<"${LAST_DECISION}"; then
+    pass "last proxy decision: ALLOWED via synapse_rosbridge"
   elif grep -q 'engine:ssrf' <<<"${LAST_DECISION}"; then
     fail "last proxy decision: DENIED by SSRF guard — add allowed_ips to the policy. Saw: ${LAST_DECISION##*OCSF }"
   elif grep -q 'engine:opa' <<<"${LAST_DECISION}"; then
-    fail "last proxy decision: DENIED by OPA — endpoint missing from agenticros_rosbridge. Saw: ${LAST_DECISION##*OCSF }"
+    fail "last proxy decision: DENIED by OPA — endpoint missing from synapse_rosbridge. Saw: ${LAST_DECISION##*OCSF }"
   else
     warn "unrecognised proxy decision: ${LAST_DECISION##*OCSF }"
   fi
@@ -77,7 +77,7 @@ fi
 
 # ----- 5. live WebSocket roundtrip to /rosapi/topics through the proxy ------
 GW_PID=$(docker exec "${CONTAINER}" pgrep -f openclaw-gateway 2>/dev/null | head -1 | tr -d '\r')
-WS_PATH=$(docker exec "${CONTAINER}" sh -c 'ls -d /sandbox/agenticros/node_modules/.pnpm/ws@*/node_modules/ws 2>/dev/null | head -1' | tr -d '\r')
+WS_PATH=$(docker exec "${CONTAINER}" sh -c 'ls -d /sandbox/synapse/node_modules/.pnpm/ws@*/node_modules/ws 2>/dev/null | head -1' | tr -d '\r')
 if [[ -z "${GW_PID}" ]] || [[ -z "${WS_PATH}" ]]; then
   warn "skip WebSocket roundtrip — gateway pid=${GW_PID:-?} ws=${WS_PATH:-?}"
 else

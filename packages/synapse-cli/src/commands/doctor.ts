@@ -1,0 +1,1006 @@
+/**
+ * `synapse doctor` - environment health check.
+ *
+ * Runs every check, prints a coloured table, exits non-zero if any check is
+ * red. With --json, emits a structured JSON object suitable for CI.
+ *
+ * The same check infrastructure powers the menu's "needs first-time setup"
+ * detection (`hasRedChecks()`) so the UX stays consistent.
+ */
+
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+
+import { execa } from "execa";
+
+import { getCliPaths } from "../util/paths.js";
+import { detectRosDistro, hasBin, hasGazeboHarmonic } from "../util/env.js";
+import { colors, header, ok, warn, err, info } from "../util/logger.js";
+import { activeConfigPath, profilesDir, readActiveMode } from "../util/profiles.js";
+import {
+  ensureToolsAlsoAllow,
+  getSynapseOpenclawPluginInstallStatus,
+  pluginDeployDir,
+  readSynapseContractTools,
+  readOpenclawConfig,
+} from "../util/openclaw-config.js";
+import { listSkills, readSkillCapabilityRequires } from "../util/skills.js";
+import { readConfigObject, readRobots } from "../util/robot-config.js";
+import {
+  featuresMissingBindings,
+  parseProfileObject,
+  unknownBindingKeys,
+  unknownFeatures,
+} from "../util/robot-profile.js";
+import { findMcpEntry } from "../util/mcp-discovery.js";
+import {
+  agyOnPath,
+  buildMcpDoctorChecks,
+  claudeOnPath,
+  codexOnPath,
+  grokOnPath,
+  hermesOnPath,
+  type McpHostId,
+} from "../util/mcp-setup.js";
+import { checkLiveBindings } from "../util/live-bindings.js";
+import {
+  currentNodeModuleAbi,
+  nativeAddonsNeedRebuild,
+  readWorkspaceNodeAbi,
+} from "../util/workspace.js";
+
+export type Severity = "green" | "yellow" | "red";
+
+export interface CheckResult {
+  id: string;
+  label: string;
+  severity: Severity;
+  detail?: string;
+  hint?: string;
+}
+
+export interface DoctorReport {
+  checks: CheckResult[];
+  summary: { green: number; yellow: number; red: number };
+}
+
+export interface DoctorOptions {
+  json?: boolean;
+  /** Probe the live ROS graph and check profile bindings. */
+  live?: boolean;
+}
+
+export async function doctorCommand(opts: DoctorOptions): Promise<number> {
+  const report = await runDoctorChecks(opts);
+
+  if (opts.json) {
+    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+  } else {
+    header("Corebrum Synapse doctor");
+    for (const c of report.checks) {
+      const icon =
+        c.severity === "green"
+          ? colors.green("✓")
+          : c.severity === "yellow"
+            ? colors.yellow("○")
+            : colors.red("✗");
+      const labelText = `${icon} ${c.label}`;
+      const detail = c.detail ? `  ${colors.dim(c.detail)}` : "";
+      process.stdout.write(`${labelText}${detail}\n`);
+      if (c.severity === "red" && c.hint) {
+        process.stdout.write(`     ${colors.dim("→ " + c.hint)}\n`);
+      }
+    }
+    const s = report.summary;
+    process.stdout.write(
+      `\n${colors.bold("Summary:")} ${colors.green(`${s.green} green`)}, ${colors.yellow(`${s.yellow} yellow`)}, ${colors.red(`${s.red} red`)}\n`,
+    );
+    if (s.red > 0) {
+      info("Try `synapse init` to fix the red checks.");
+    }
+  }
+
+  return report.summary.red > 0 ? 1 : 0;
+}
+
+/** Returns true if any red check is present — used by the menu to reorder choices. */
+export async function hasRedChecks(): Promise<boolean> {
+  const report = await runDoctorChecks();
+  return report.summary.red > 0;
+}
+
+export async function runDoctorChecks(opts: DoctorOptions = {}): Promise<DoctorReport> {
+  const paths = getCliPaths();
+  const checks: CheckResult[] = [];
+
+  // ROS distro.
+  const ros = detectRosDistro();
+  if (ros.distro) {
+    checks.push({
+      id: "ros-distro",
+      label: `ROS 2 distro detected (${ros.distro})`,
+      severity: "green",
+    });
+  } else {
+    checks.push({
+      id: "ros-distro",
+      label: "ROS 2 not detected",
+      severity: "red",
+      hint: "Install ROS 2 Humble or Jazzy: https://docs.ros.org/en/humble/Installation.html",
+    });
+  }
+
+  // pnpm + node.
+  try {
+    const { stdout } = await execa("node", ["--version"], { reject: false });
+    const ver = stdout.trim().replace(/^v/, "");
+    const major = Number(ver.split(".")[0]);
+    checks.push({
+      id: "node",
+      label: `Node ${ver}`,
+      severity: major >= 20 ? "green" : "yellow",
+      hint: major >= 20 ? undefined : "Corebrum Synapse targets Node >= 20.",
+    });
+  } catch {
+    checks.push({
+      id: "node",
+      label: "Node not installed",
+      severity: "red",
+      hint: "Install Node 20+ from https://nodejs.org",
+    });
+  }
+
+  if (hasBin("pnpm")) {
+    checks.push({
+      id: "pnpm",
+      label: "pnpm available",
+      severity: "green",
+    });
+  } else {
+    checks.push({
+      id: "pnpm",
+      label: "pnpm not installed",
+      severity: "red",
+      hint: "Install with: npm install -g pnpm  (or: corepack enable && corepack prepare pnpm@latest --activate)",
+    });
+  }
+
+  if (ros.setupBash) {
+    if (hasBin("colcon")) {
+      checks.push({
+        id: "colcon",
+        label: "colcon available",
+        severity: "green",
+      });
+    } else {
+      checks.push({
+        id: "colcon",
+        label: "colcon not installed",
+        severity: "red",
+        hint: "ROS 2 is present but the build tool is missing. Install with: sudo apt install -y python3-colcon-common-extensions",
+      });
+    }
+  }
+
+  // Workspace built (workspace mode only).
+  if (paths.workspaceMode) {
+    const installSetup = join(paths.repoRoot!, "ros2_ws", "install", "setup.bash");
+    checks.push({
+      id: "ros2-ws-built",
+      label: "ros2_ws colcon-built",
+      severity: existsSync(installSetup) ? "green" : "red",
+      hint: existsSync(installSetup)
+        ? undefined
+        : "Build with: cd ros2_ws && colcon build --symlink-install",
+    });
+
+    const nm = join(paths.repoRoot!, "node_modules");
+    if (existsSync(nm) && nativeAddonsNeedRebuild(paths.repoRoot!)) {
+      const fromAbi = readWorkspaceNodeAbi(paths.repoRoot!) ?? "unknown";
+      checks.push({
+        id: "js-deps",
+        label: "JS native modules need rebuild (Node ABI changed)",
+        severity: "red",
+        detail: `modules ABI ${fromAbi} → ${currentNodeModuleAbi()} (Node ${process.versions.node})`,
+        hint: "Node was upgraded without reinstalling JS deps. Run: synapse init --force",
+      });
+    } else {
+      checks.push({
+        id: "js-deps",
+        label: "JS workspace deps installed",
+        severity: existsSync(nm) ? "green" : "red",
+        hint: existsSync(nm) ? undefined : "Run: pnpm install  (or: synapse init --force)",
+      });
+    }
+  }
+
+  // MCP server built.
+  const mcpIndex = join(paths.mcpDistDir, "index.js");
+  if (existsSync(mcpIndex)) {
+    const ageDays = (Date.now() - statSync(mcpIndex).mtimeMs) / 86_400_000;
+    checks.push({
+      id: "mcp-built",
+      label: "@corebrum/claude-code MCP server built",
+      severity: ageDays < 30 ? "green" : "yellow",
+      detail: `dist age: ${Math.round(ageDays)} day(s)`,
+      hint: ageDays >= 30 ? "Rebuild with `pnpm --filter @corebrum/claude-code build`" : undefined,
+    });
+  } else {
+    checks.push({
+      id: "mcp-built",
+      label: "@corebrum/claude-code MCP server NOT built",
+      severity: "red",
+      hint: paths.workspaceMode
+        ? "Run: pnpm --filter @corebrum/claude-code build"
+        : "Re-run `synapse init` to repopulate the bundled MCP dist.",
+    });
+  }
+
+  // Disk free.
+  try {
+    const { stdout } = await execa("df", ["-Pk", paths.workspaceMode ? paths.repoRoot! : paths.installDir], {
+      reject: false,
+    });
+    const lines = stdout.trim().split("\n");
+    const last = lines[lines.length - 1] ?? "";
+    const cols = last.trim().split(/\s+/);
+    const availKb = Number(cols[3]);
+    if (Number.isFinite(availKb)) {
+      const availGb = availKb / 1_048_576;
+      const sev: Severity = availGb >= 5 ? "green" : availGb >= 2 ? "yellow" : "red";
+      checks.push({
+        id: "disk",
+        label: `Disk free: ${availGb.toFixed(1)} GB`,
+        severity: sev,
+        hint:
+          sev === "red"
+            ? "Free at least 2 GB before colcon build / pnpm install."
+            : sev === "yellow"
+              ? "Disk is getting tight; consider cleaning ~/.cache/pip or large docker images."
+              : undefined,
+      });
+    }
+  } catch {
+    // skip if df missing
+  }
+
+  // Gazebo (informational - only red for sim modes).
+  checks.push({
+    id: "gz",
+    label: hasGazeboHarmonic() ? "Gazebo Harmonic available" : "Gazebo not installed",
+    severity: hasGazeboHarmonic() ? "green" : "yellow",
+    hint: hasGazeboHarmonic()
+      ? undefined
+      : `Required only for simulation. Install with: sudo apt install ros-${ros.distro ?? "jazzy"}-ros-gz`,
+  });
+
+  // Mode profile + namespace shadowing. Each mode (real / sim) needs its own
+  // namespace in ~/.synapse/config.json. If SYNAPSE_ROBOT_NAMESPACE is
+  // exported in the shell (or hardcoded in .mcp.json env), it unconditionally
+  // overrides the config file - silently breaking the other mode.
+  const mode = readActiveMode();
+  const cfgPath = activeConfigPath();
+  if (mode) {
+    checks.push({
+      id: "active-mode",
+      label: `Active mode: ${mode} (~/.synapse/profiles/${mode}.json)`,
+      severity: existsSync(cfgPath) ? "green" : "yellow",
+      hint: existsSync(cfgPath)
+        ? undefined
+        : "Run `synapse mode real` (or sim) to populate ~/.synapse/config.json.",
+    });
+  } else {
+    checks.push({
+      id: "active-mode",
+      label: "Active mode profile not set",
+      severity: existsSync(profilesDir()) ? "yellow" : "yellow",
+      hint: "Run `synapse mode real` (or sim) to pick a profile.",
+    });
+  }
+
+  const envNs = (process.env["SYNAPSE_ROBOT_NAMESPACE"] ?? "").trim();
+  if (envNs.length > 0) {
+    const shadowsSim = mode === "sim" || mode === null;
+    checks.push({
+      id: "ns-env-shadow",
+      label: shadowsSim
+        ? `SYNAPSE_ROBOT_NAMESPACE env shadows config (set to '${envNs}')`
+        : `SYNAPSE_ROBOT_NAMESPACE env overrides config (set to '${envNs}')`,
+      severity: shadowsSim ? "red" : "yellow",
+      hint: shadowsSim
+        ? "Unset that env var (or set it to \"\" in .mcp.json / ~/.codex/config.toml / claude_desktop_config.json / ~/.gemini/config/mcp_config.json) so the active mode profile drives the namespace."
+        : "Fine for real-robot mode if the value matches your robot's namespace.",
+    });
+  }
+
+  // MCP client configs. Grok is checked only when its CLI is installed.
+  const mcpEntry = findMcpEntry();
+  const mcpHosts: McpHostId[] = ["codex", "hermes", "claude", "agy"];
+  if (await grokOnPath()) mcpHosts.push("grok");
+  checks.push(...buildMcpDoctorChecks(mcpEntry, paths.repoRoot, mcpHosts));
+
+  const corebrumRmw = "/etc/corebrum/ros/rmw";
+  if (existsSync(corebrumRmw)) {
+    const rmw = readFileSync(corebrumRmw, "utf8").trim();
+    checks.push({
+      id: "corebrum-rmw",
+      label:
+        rmw === "rmw_zenoh_cpp"
+          ? "Corebrum RMW is rmw_zenoh_cpp"
+          : `Corebrum RMW is ${rmw || "unset"}`,
+      severity: rmw === "rmw_zenoh_cpp" ? "green" : "yellow",
+      hint:
+        rmw === "rmw_zenoh_cpp"
+          ? undefined
+          : "Corebrum Synapse processes force rmw_zenoh_cpp so they join the Zenoh router. The rest of this session is on a different middleware.",
+    });
+  }
+
+  const hasCodex = await codexOnPath();
+  checks.push({
+    id: "codex-cli",
+    label: hasCodex ? "Codex CLI installed" : "Codex CLI not detected",
+    severity: hasCodex ? "green" : "yellow",
+    hint: hasCodex
+      ? undefined
+      : "Install from https://developers.openai.com/codex/ then run `synapse mcp setup --codex`.",
+  });
+
+  const hasHermes = await hermesOnPath();
+  checks.push({
+    id: "hermes-cli",
+    label: hasHermes ? "Hermes CLI installed" : "Hermes CLI not detected",
+    severity: hasHermes ? "green" : "yellow",
+    hint: hasHermes
+      ? undefined
+      : "Install from https://github.com/NousResearch/hermes-agent then run `synapse mcp setup --hermes`.",
+  });
+
+  const hasClaude = await claudeOnPath();
+  checks.push({
+    id: "claude-cli",
+    label: hasClaude ? "Claude Code CLI installed" : "Claude Code CLI not detected",
+    severity: hasClaude ? "green" : "yellow",
+    hint: hasClaude
+      ? undefined
+      : "Install from https://claude.com/product/claude-code then run `synapse mcp setup --claude`.",
+  });
+
+  const hasAgy = await agyOnPath();
+  checks.push({
+    id: "agy-cli",
+    label: hasAgy ? "Antigravity CLI installed" : "Antigravity CLI not detected",
+    severity: hasAgy ? "green" : "yellow",
+    hint: hasAgy
+      ? undefined
+      : "Install from https://antigravity.google/docs/cli/ then run `synapse mcp setup --agy`.",
+  });
+
+  // OpenAI key.
+  const home = process.env["HOME"] ?? "";
+  const authFile = join(home, ".openclaw", "agents", "main", "agent", "auth-profiles.json");
+  const haveEnv = (process.env["OPENAI_API_KEY"] ?? "").length > 10;
+  const haveFile = existsSync(authFile);
+  checks.push({
+    id: "openai-key",
+    label: haveEnv ? "OpenAI key in env" : haveFile ? "OpenAI key in OpenClaw profiles" : "OpenAI key not configured",
+    severity: haveEnv || haveFile ? "green" : "yellow",
+    hint:
+      haveEnv || haveFile
+        ? undefined
+        : "Set OPENAI_API_KEY in env, or run `synapse init` to configure it interactively.",
+  });
+
+  // OpenClaw plugin.
+  const ocConfig = join(home, ".openclaw", "openclaw.json");
+  checks.push({
+    id: "openclaw-config",
+    label: existsSync(ocConfig) ? "OpenClaw config present" : "OpenClaw config missing",
+    severity: existsSync(ocConfig) ? "green" : "red",
+    hint: existsSync(ocConfig) ? undefined : "Run `synapse init` to install the OpenClaw plugin.",
+  });
+
+  // Deployed + linked plugin (OpenClaw 2026.6+ requires ~/.synapse/plugin-deploy).
+  // Having openclaw.json alone is not enough — that file is created by OpenClaw
+  // onboard before Corebrum Synapse is installed.
+  const pluginInstall = getSynapseOpenclawPluginInstallStatus();
+  if (pluginInstall.ok) {
+    checks.push({
+      id: "openclaw-plugin-deploy",
+      label: "Corebrum Synapse OpenClaw plugin linked via plugin-deploy",
+      severity: "green",
+      detail: pluginInstall.sourcePath ?? pluginDeployDir(),
+    });
+  } else {
+    const hints: Record<typeof pluginInstall.reason, string> = {
+      "no-openclaw-config": "Run `synapse init` (or install OpenClaw, then re-run init).",
+      "no-deploy":
+        "Run `synapse init` or `bash scripts/setup_gateway_plugin.sh` to build ~/.synapse/plugin-deploy.",
+      "not-registered":
+        "OpenClaw config exists but Corebrum Synapse is not registered. Run `bash scripts/setup_gateway_plugin.sh`.",
+      "wrong-path":
+        "Plugin path must be ~/.synapse/plugin-deploy (not packages/synapse-openclaw). Re-run `bash scripts/setup_gateway_plugin.sh`.",
+    };
+    checks.push({
+      id: "openclaw-plugin-deploy",
+      label: "Corebrum Synapse OpenClaw plugin not properly installed",
+      severity: "red",
+      detail: pluginInstall.detail ?? pluginInstall.reason,
+      hint: hints[pluginInstall.reason],
+    });
+  }
+
+  // tools.alsoAllow vs plugin contracts.tools. OpenClaw 2026.6+ tool profiles
+  // ("coding", "standard", …) are strict allowlists applied BEFORE plugin tools
+  // are merged in - missing entries here is why "OpenClaw says it has no
+  // ros2_camera_snapshot" even when the plugin loaded successfully. We do a
+  // dry-run sync (write:false) to compute the delta without touching the file.
+  if (existsSync(ocConfig)) {
+    const cfg = readOpenclawConfig();
+    const tools = readSynapseContractTools(paths.repoRoot ?? paths.installDir);
+    if (cfg && tools && tools.length > 0) {
+      const dry = ensureToolsAlsoAllow(tools, { cfg, write: false });
+      if (dry && dry.added.length > 0) {
+        const profile = (cfg["tools"] as Record<string, unknown> | undefined)?.["profile"];
+        const profileStr = typeof profile === "string" ? profile : "(default)";
+        checks.push({
+          id: "tools-alsoallow",
+          label: `OpenClaw tools.alsoAllow missing ${dry.added.length} Corebrum Synapse tool(s)`,
+          severity: "red",
+          detail: `tools.profile = ${profileStr}; chat agent will not see: ${dry.added.slice(0, 4).join(", ")}${dry.added.length > 4 ? ", …" : ""}`,
+          hint: "Run `synapse skills sync` (or re-run `synapse init`) to repair the allowlist.",
+        });
+      } else {
+        checks.push({
+          id: "tools-alsoallow",
+          label: `OpenClaw tools.alsoAllow covers every Corebrum Synapse tool`,
+          severity: "green",
+        });
+      }
+    }
+  }
+
+  // skillRefs / skills-cache (MCP + OpenClaw auto-fetch v1)
+  try {
+    const { skillsCacheDir } = await import("@corebrum/core");
+    const cacheRoot = skillsCacheDir();
+    const synapseCfgPath = join(homedir(), ".synapse", "config.json");
+    let refCount = 0;
+    if (existsSync(synapseCfgPath)) {
+      try {
+        const raw = JSON.parse(readFileSync(synapseCfgPath, "utf8")) as {
+          skillRefs?: unknown;
+        };
+        if (Array.isArray(raw.skillRefs)) refCount = raw.skillRefs.length;
+      } catch {
+        /* ignore */
+      }
+    }
+    if (refCount > 0 || existsSync(cacheRoot)) {
+      checks.push({
+        id: "skills-cache",
+        label:
+          refCount > 0
+            ? `skillRefs: ${refCount} declared; cache ${existsSync(cacheRoot) ? cacheRoot : "(missing)"}`
+            : `skills-cache present at ${cacheRoot}`,
+        severity: existsSync(cacheRoot) || refCount === 0 ? "green" : "yellow",
+        hint:
+          refCount > 0 && !existsSync(cacheRoot)
+            ? "Run `synapse skills install <owner/skill>` to warm ~/.synapse/skills-cache/."
+            : undefined,
+      });
+    }
+  } catch {
+    /* core not resolvable in odd installs — skip */
+  }
+
+  // Skills (only meaningful once the OpenClaw config exists).
+  if (existsSync(ocConfig)) {
+    try {
+      const skills = listSkills();
+      if (skills.brokenPaths.length > 0) {
+        checks.push({
+          id: "skills",
+          label: `Skills: ${skills.registered.length} registered, ${skills.brokenPaths.length} broken`,
+          severity: "yellow",
+          detail: skills.available.length > 0 ? `${skills.available.length} cloned but unregistered` : undefined,
+          hint:
+            "Run `synapse skills` to inspect; broken paths point at directories that no longer contain a valid skill.",
+        });
+      } else if (skills.registered.length > 0) {
+        const ids = skills.registered.map((s) => s.id).join(", ");
+        const unbuilt = skills.registered.filter((s) => s.dir && s.built === false);
+        if (unbuilt.length > 0) {
+          checks.push({
+            id: "skills",
+            label: `Skills: ${skills.registered.length} registered, ${unbuilt.length} not built (${unbuilt.map((s) => s.id).join(", ")})`,
+            severity: "yellow",
+            hint:
+              `Build them so the OpenClaw plugin can load their tools:\n` +
+              unbuilt.map((s) => `      cd ${s.dir} && pnpm build`).join("\n"),
+          });
+        } else {
+          checks.push({
+            id: "skills",
+            label: `Skills: ${skills.registered.length} registered (${ids})`,
+            severity: "green",
+            detail:
+              skills.available.length > 0
+                ? `${skills.available.length} cloned but unregistered`
+                : undefined,
+            hint:
+              skills.available.length > 0
+                ? "Run `synapse skills discover` to register the cloned-but-unregistered ones."
+                : undefined,
+          });
+        }
+      } else {
+        checks.push({
+          id: "skills",
+          label: "Skills: none registered",
+          severity: "yellow",
+          detail: skills.available.length > 0 ? `${skills.available.length} cloned but unregistered` : "(none cloned)",
+          hint:
+            skills.available.length > 0
+              ? "Run `synapse skills discover` to register cloned skills."
+              : "Skills are optional. Clone any `corebrum-skill-*` repo near this one to make it discoverable.",
+        });
+      }
+    } catch {
+      // Skip silently if listing fails (already covered by openclaw-config check).
+    }
+  }
+
+  // Skill config sanity: detect "phantom blanks" in OpenClaw's plugin config that
+  // historically broke skills (e.g. config UI saving every field as "" or 0 →
+  // depthTopic="" → follow_robot publishes linear.x=0 → no motor motion).
+  // Modern corebrum-skill-followme treats blanks/zeros as "use default", but a
+  // user running an older skill version will still see the bug. We surface it.
+  if (existsSync(ocConfig)) {
+    try {
+      const oc = readOpenclawConfig() as Record<string, unknown> | null;
+      const ag = (oc?.plugins as Record<string, unknown> | undefined)?.entries as
+        | Record<string, unknown>
+        | undefined;
+      const fm = (
+        (((ag?.synapse as Record<string, unknown> | undefined)?.config as
+          | Record<string, unknown>
+          | undefined)?.skills as Record<string, unknown> | undefined)?.followme
+      ) as Record<string, unknown> | undefined;
+      if (fm) {
+        const stringKeysNeedingValue = [
+          "depthTopic",
+          "cameraTopic",
+          "vlmModel",
+          "ollamaUrl",
+        ];
+        const numericKeysExpectedPositive = [
+          "rateHz",
+          "targetDistance",
+          "searchAngularVelocity",
+          "searchTicksBeforeSwitch",
+          "criticalStopDistanceM",
+          "maxVelocityFraction",
+        ];
+        const blankStrings = stringKeysNeedingValue.filter(
+          (k) => typeof fm[k] === "string" && (fm[k] as string).trim() === "",
+        );
+        const zeroNumbers = numericKeysExpectedPositive.filter(
+          (k) => typeof fm[k] === "number" && (fm[k] as number) === 0,
+        );
+        const phantom = [...blankStrings, ...zeroNumbers];
+        if (phantom.length > 0) {
+          checks.push({
+            id: "skills-followme-blanks",
+            label: `follow_me config has ${phantom.length} blank/zero field(s)`,
+            severity: "yellow",
+            detail: `Empty: ${phantom.slice(0, 6).join(", ")}${phantom.length > 6 ? ", …" : ""} - modern skill versions default these, but older builds may not.`,
+            hint:
+              "Open the OpenClaw config UI and clear (or fix) the fields - or upgrade corebrum-skill-followme to a version where getFollowMeConfig() treats blanks as 'use default'.",
+          });
+        }
+      }
+    } catch {
+      // Non-fatal; doctor's openclaw-config check covers parse errors.
+    }
+  }
+
+  // OpenClaw gateway service.
+  try {
+    const { exitCode } = await execa(
+      "systemctl",
+      ["--user", "is-active", "openclaw-gateway.service"],
+      { reject: false },
+    );
+    checks.push({
+      id: "openclaw-gateway",
+      label:
+        exitCode === 0
+          ? "OpenClaw gateway service active"
+          : "OpenClaw gateway service not running",
+      severity: exitCode === 0 ? "green" : "yellow",
+      hint:
+        exitCode === 0
+          ? undefined
+          : "Start with: systemctl --user start openclaw-gateway.service",
+    });
+  } catch {
+    // systemctl missing - skip
+  }
+
+  // RealSense (informational).
+  try {
+    const { stdout: lsusbOut, exitCode: lsusbRc } = await execa("lsusb", { reject: false });
+    const usbHit =
+      lsusbRc === 0 && /Intel.*RealSense|RealSense|8086:0b|38e5:/i.test(lsusbOut);
+    let recoveryMode = false;
+    let enumerateDetail: string | undefined;
+    try {
+      const { stdout: rsOut, exitCode: rsRc } = await execa("rs-enumerate-devices", {
+        reject: false,
+      });
+      if (rsRc === 0) {
+        recoveryMode = /recovery/i.test(rsOut);
+        const serial = rsOut.match(/Serial Number\s*:\s*(\S+)/i)?.[1];
+        const name = rsOut.match(/Name\s*:\s*(.+)/i)?.[1]?.trim();
+        if (name) enumerateDetail = name;
+        if (serial && serial !== "n/a") enumerateDetail = `${enumerateDetail ?? "RealSense"} (${serial})`;
+      }
+    } catch {
+      // rs-enumerate-devices missing - lsusb-only check below
+    }
+
+    if (recoveryMode) {
+      checks.push({
+        id: "realsense",
+        label: "Intel RealSense in firmware RECOVERY mode",
+        severity: "red",
+        detail: enumerateDetail,
+        hint:
+          "Camera topics will have no publishers until firmware is recovered. " +
+          "Run: synapse down && rs-fw-update -r && rs-enumerate-devices -s",
+      });
+    } else if (usbHit || enumerateDetail) {
+      checks.push({
+        id: "realsense",
+        label: enumerateDetail ?? "Intel RealSense detected",
+        severity: "green",
+      });
+    } else if (lsusbRc === 0) {
+      checks.push({
+        id: "realsense",
+        label: "No Intel RealSense detected",
+        severity: "yellow",
+        hint: "Only required for `synapse up real` with the default camera setup.",
+      });
+    }
+  } catch {
+    // lsusb missing - skip
+  }
+
+  // Robot eyes (optional on-robot face display). Yellow when the package is
+  // present but there is no graphical display / browser for kiosk mode.
+  const eyesEntry = paths.repoRoot
+    ? join(paths.repoRoot, "packages", "robot-eyes", "src", "index.js")
+    : "";
+  if (eyesEntry && existsSync(eyesEntry)) {
+    const eyesPkgDir = join(paths.repoRoot!, "packages", "robot-eyes");
+    const eyesWs = join(eyesPkgDir, "node_modules", "ws", "package.json");
+    if (!existsSync(eyesWs)) {
+      checks.push({
+        id: "eyes-deps",
+        label: "Robot eyes package present but deps not installed (ws)",
+        severity: "red",
+        hint: `Run: cd ${paths.repoRoot} && pnpm install   (or: synapse init)`,
+      });
+    }
+
+    const display = (process.env["DISPLAY"] ?? "").trim();
+    let browserFound = false;
+    for (const bin of ["firefox", "chromium-browser", "chromium", "google-chrome"]) {
+      try {
+        const { exitCode } = await execa("which", [bin], { reject: false });
+        if (exitCode === 0) {
+          browserFound = true;
+          break;
+        }
+      } catch {
+        // ignore
+      }
+    }
+    if (!display) {
+      checks.push({
+        id: "eyes-display",
+        label: "Robot eyes available but no $DISPLAY",
+        severity: "yellow",
+        hint: "Set DISPLAY (e.g. :0) on a tablet/head unit, or run `synapse eyes --no-browser` and open the URL yourself.",
+      });
+    } else if (!browserFound) {
+      checks.push({
+        id: "eyes-display",
+        label: `Robot eyes available (DISPLAY=${display}, no kiosk browser)`,
+        severity: "yellow",
+        hint: "Install Firefox or Chromium for kiosk mode, or use `synapse eyes --no-browser`.",
+      });
+    } else {
+      checks.push({
+        id: "eyes-display",
+        label: `Robot eyes ready (DISPLAY=${display})`,
+        severity: "green",
+        detail: "synapse eyes",
+      });
+    }
+  } else if (paths.mode !== "bundle") {
+    checks.push({
+      id: "eyes-display",
+      label: "Robot eyes package missing",
+      severity: "yellow",
+      hint: "Expected packages/robot-eyes — re-run `synapse init` or pull the latest monorepo.",
+    });
+  }
+
+  // Robot hardware profiles — static, no live graph.
+  {
+    const obj = readConfigObject();
+    const { robots } = readRobots(obj);
+    const profiled = robots.filter((r) => r.profile);
+    if (robots.length > 0 && profiled.length === 0) {
+      checks.push({
+        id: "robot-profile",
+        label: "No robot hardware profile set — advertised verbs are gateway-wide",
+        severity: "yellow",
+        hint: "Run `synapse robots profile infer --apply` so skills only advertise on bodies that have the hardware.",
+      });
+    }
+    for (const r of robots) {
+      const profile = r.profile ?? parseProfileObject(
+        (Array.isArray(obj["robots"]) ? (obj["robots"] as Record<string, unknown>[]) : []).find(
+          (e) => e && e["id"] === r.id,
+        )?.["profile"],
+      );
+      if (!profile) continue;
+      const unkF = unknownFeatures(profile.features);
+      const unkB = unknownBindingKeys(profile.bindings);
+      if (unkF.length > 0 || unkB.length > 0) {
+        checks.push({
+          id: `robot-profile-${r.id}-vocab`,
+          label: `Robot "${r.id}" profile has unknown ${[
+            unkF.length ? `feature(s) ${unkF.join(", ")}` : "",
+            unkB.length ? `binding key(s) ${unkB.join(", ")}` : "",
+          ]
+            .filter(Boolean)
+            .join(" / ")}`,
+          severity: "red",
+          hint: "See docs/robot-profile.md for the frozen feature and binding vocabulary.",
+        });
+      }
+      const missingBind = featuresMissingBindings(profile);
+      if (missingBind.length > 0) {
+        checks.push({
+          id: `robot-profile-${r.id}-bindings`,
+          label: `Robot "${r.id}" declares ${missingBind.join(", ")} but is missing the v1 binding`,
+          severity: "red",
+          hint: `Add --binding on \`synapse robots add ${r.id}\` (e.g. camera.rgb=/your/camera/topic).`,
+        });
+      }
+    }
+    if (profiled.length > 0) {
+      try {
+        const skills = listSkills();
+        for (const skill of skills.registered) {
+          if (!skill.dir) continue;
+          const required = readSkillCapabilityRequires(skill.dir);
+          for (const cap of required) {
+            for (const r of profiled) {
+              const have = new Set(r.profile!.features);
+              const missing = cap.requires.filter((f) => !have.has(f));
+              if (missing.length === 0) continue;
+              checks.push({
+                id: `robot-profile-${r.id}-${cap.id}`,
+                label: `Skill ${cap.id} needs ${missing.join(", ")} — robot "${r.id}" profile does not have it`,
+                severity: "yellow",
+                hint: "The skill stays installed for other robots. Add the feature or omit this robot from that mission.",
+              });
+            }
+          }
+        }
+      } catch {
+        /* OpenClaw config missing — skip skill/profile pairing */
+      }
+      if (
+        profiled.length > 0 &&
+        !checks.some((c) => c.id.startsWith("robot-profile-") && c.severity === "red")
+      ) {
+        checks.push({
+          id: "robot-profile",
+          label: `Robot profile(s) set (${profiled.map((r) => r.id).join(", ")})`,
+          severity: "green",
+        });
+      }
+    }
+  }
+
+  // Corebrum Cloud credentials (warn-only — local-only users may skip).
+  try {
+    const {
+      getApiToken,
+      getRobotId,
+      isCloudRobotRegistered,
+    } = await import("../util/robot-cloud-config.js");
+    const token = getApiToken();
+    const robotId = getRobotId();
+    if (!token) {
+      checks.push({
+        id: "cloud-token",
+        label: "Corebrum Cloud API token not set",
+        severity: "yellow",
+        hint: "Run `synapse login` (or `synapse set --token=…`) for cloud connect / register.",
+      });
+    } else {
+      checks.push({
+        id: "cloud-token",
+        label: "Corebrum Cloud API token set",
+        severity: "green",
+      });
+      if (!robotId) {
+        checks.push({
+          id: "cloud-robot",
+          label: "Cloud ROBOT ID not set",
+          severity: "yellow",
+          hint: "Run `synapse register` or `synapse id`.",
+        });
+      } else {
+        const registered = await isCloudRobotRegistered();
+        checks.push({
+          id: "cloud-robot",
+          label: registered
+            ? "Cloud robot registered"
+            : "Cloud robot not registered on account",
+          severity: registered ? "green" : "yellow",
+          detail: robotId,
+          hint: registered
+            ? undefined
+            : "Run `synapse register` to claim this ROBOT ID on Corebrum Cloud.",
+        });
+      }
+    }
+  } catch {
+    // configstore unavailable — skip
+  }
+
+  appendWorkspaceLimitChecks(checks, readConfigObject());
+
+  if (opts.live) {
+    const live = await runLiveBindingChecks();
+    checks.push(...live);
+  }
+
+  const summary = checks.reduce(
+    (acc, c) => {
+      acc[c.severity] += 1;
+      return acc;
+    },
+    { green: 0, yellow: 0, red: 0 } as DoctorReport["summary"],
+  );
+
+  return { checks, summary };
+}
+
+function workspaceBoundsInvalid(bounds: Record<string, unknown>): string | undefined {
+  const xMin = bounds["xMin"];
+  const xMax = bounds["xMax"];
+  const yMin = bounds["yMin"];
+  const yMax = bounds["yMax"];
+  if (typeof xMin === "number" && typeof xMax === "number" && xMin > xMax) {
+    return `xMin (${xMin}) > xMax (${xMax})`;
+  }
+  if (typeof yMin === "number" && typeof yMax === "number" && yMin > yMax) {
+    return `yMin (${yMin}) > yMax (${yMax})`;
+  }
+  return undefined;
+}
+
+function appendWorkspaceLimitChecks(checks: CheckResult[], obj: Record<string, unknown>): void {
+  const gateway = obj["safety"];
+  if (gateway && typeof gateway === "object" && !Array.isArray(gateway)) {
+    const wl = (gateway as Record<string, unknown>)["workspaceLimits"];
+    if (wl && typeof wl === "object" && !Array.isArray(wl)) {
+      const bad = workspaceBoundsInvalid(wl as Record<string, unknown>);
+      if (bad) {
+        checks.push({
+          id: "safety-workspace",
+          label: `Gateway workspaceLimits malformed (${bad})`,
+          severity: "red",
+          hint: "Fix safety.workspaceLimits so min ≤ max, or omit the field to disable the geofence.",
+        });
+      }
+    }
+  }
+  const { robots } = readRobots(obj);
+  for (const r of robots) {
+    const wl = r.safety?.workspaceLimits;
+    if (!wl) continue;
+    const bad = workspaceBoundsInvalid(wl as unknown as Record<string, unknown>);
+    if (bad) {
+      checks.push({
+        id: `safety-workspace-${r.id}`,
+        label: `Robot "${r.id}" workspaceLimits malformed (${bad})`,
+        severity: "red",
+        hint: "Fix robots[].safety.workspaceLimits so min ≤ max.",
+      });
+    }
+  }
+}
+
+const LIVE_CONNECT_MS = 8_000;
+
+async function runLiveBindingChecks(): Promise<CheckResult[]> {
+  const { robots } = readRobots();
+  const profiled = robots.filter((r) => r.profile);
+  if (profiled.length === 0) {
+    return [
+      {
+        id: "live-graph",
+        label: "No hardware profile to verify on the live graph",
+        severity: "yellow",
+        hint: "Run `synapse robots profile infer --apply`, then `synapse doctor --live`.",
+      },
+    ];
+  }
+
+  const core = await import("@corebrum/core");
+  const cfg = core.parseConfig(readConfigObject());
+  const transport = await core.createTransport(core.getTransportConfig(cfg));
+  try {
+    await Promise.race([
+      transport.connect(),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error(`Transport connect timed out after ${LIVE_CONNECT_MS / 1000}s`)),
+          LIVE_CONNECT_MS,
+        ),
+      ),
+    ]);
+    const topics = await transport.listTopics();
+    let actions: Array<{ name: string; type?: string }> | undefined;
+    try {
+      actions = await transport.listActions();
+    } catch {
+      actions = undefined;
+    }
+    const live = checkLiveBindings(profiled, { topics, actions });
+    return live.map((c) => ({
+      id: c.id,
+      label: c.reason,
+      severity: c.severity,
+      detail: c.name || undefined,
+      hint:
+        c.severity === "red"
+          ? "Start the driver for that feature, or fix the binding with `synapse robots add … --binding`."
+          : undefined,
+    }));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return [
+      {
+        id: "live-graph",
+        label: "Live graph unreachable",
+        severity: "red",
+        detail: msg,
+        hint: "Start the transport (zenohd / rosbridge / local ROS) and retry `synapse doctor --live`.",
+      },
+    ];
+  } finally {
+    try {
+      await transport.disconnect();
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+// Silence unused warnings for utilities the doctor module re-exports.
+void ok;
+void warn;
+void err;

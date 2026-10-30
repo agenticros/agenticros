@@ -1,6 +1,6 @@
 # Omarchy host (Grok and Claude Code)
 
-Omarchy is Arch-based. Its host Python, GCC, OpenCV, and Qt do not match ROS 2 Jazzy, so leave ROS inside a container. Grok and Claude Code stay on the host and talk to that container through the AgenticROS MCP server. The server uses rosbridge (`ws://localhost:9090`). It does not load ROS libraries on the host.
+Omarchy is Arch-based. Its host Python, GCC, OpenCV, and Qt do not match ROS 2 Jazzy, so leave ROS inside a container. Grok and Claude Code stay on the host and talk to that container through the Corebrum Synapse MCP server. The server uses rosbridge (`ws://localhost:9090`). It does not load ROS libraries on the host.
 
 This is deployment Mode B from [architecture.md](architecture.md): the agent runs on the workstation, rosbridge runs with the robot graph.
 
@@ -9,7 +9,7 @@ This is deployment Mode B from [architecture.md](architecture.md): the agent run
 | Piece | Where | Why |
 |-------|--------|-----|
 | ROS 2 Jazzy, rosbridge, RealSense | Container | Matches Ubuntu 24.04 and the Jazzy libraries |
-| `@agenticros/claude-code` MCP server | Host | Grok and Claude Code spawn a local stdio process |
+| `@corebrum/claude-code` MCP server | Host | Grok and Claude Code spawn a local stdio process |
 | Grok, Claude Code | Host | Both already speak MCP |
 
 Do not install OpenClaw or Claude inside the ROS container for this setup. Do not set the host config to `"transport": { "mode": "local" }`. That mode loads `rclnodejs` against a sourced ROS install. The host has no `/opt/ros`, and a binding built inside the container will not load under the host's Node.
@@ -43,7 +43,7 @@ Color frames show up as `/camera/camera/color/image_raw`. Depth is `/camera/came
 Node 20 or newer is required. pnpm 9.15.4 matches this repo (`packageManager` in the root `package.json`). A Node install from mise is fine, including Node 26, because rosbridge mode is plain WebSocket.
 
 ```bash
-cd /path/to/agenticros
+cd /path/to/synapse
 npm install -g pnpm@9.15.4
 # Omarchy ships libvips. Without this, sharp tries to compile against it and
 # fails looking for node-gyp. The flag selects sharp's prebuilt binary.
@@ -54,19 +54,19 @@ npm install -g pnpm@9.15.4
 # there. Rosbridge mode does not load it. The rebuild line installs the
 # prebuilt natives the MCP server can use (sharp, onnx, node-datachannel).
 SHARP_IGNORE_GLOBAL_LIBVIPS=1 ONNXRUNTIME_NODE_INSTALL_CUDA=skip \
-  pnpm install --frozen-lockfile --filter @agenticros/claude-code... --ignore-scripts
+  pnpm install --frozen-lockfile --filter @corebrum/claude-code... --ignore-scripts
 SHARP_IGNORE_GLOBAL_LIBVIPS=1 ONNXRUNTIME_NODE_INSTALL_CUDA=skip \
   pnpm rebuild sharp onnxruntime-node node-datachannel
-pnpm --filter @agenticros/claude-code... build
+pnpm --filter @corebrum/claude-code... build
 ```
 
-The server entry is `packages/agenticros-claude-code/dist/index.js`. `dist/` is gitignored, so each machine builds its own.
+The server entry is `packages/synapse-claude-code/dist/index.js`. `dist/` is gitignored, so each machine builds its own.
 
 Object detection (`onnxruntime-node`, `sharp`) loads only when a detection tool is called.
 
 ## 3. Host robot config
 
-Write this on the **host**, at `~/.agenticros/config.json`. The container's own `~/.agenticros` is a different directory when the container home is a mounted state folder. Leave the in-container config on `local` if the menu inside the container uses DDS.
+Write this on the **host**, at `~/.synapse/config.json`. The container's own `~/.synapse` is a different directory when the container home is a mounted state folder. Leave the in-container config on `local` if the menu inside the container uses DDS.
 
 ```json
 {
@@ -95,25 +95,25 @@ Leave the namespace empty when topics are `/cmd_vel` and `/camera/camera/...` ra
 Use the absolute path from the build. Both clients spawn the server themselves, so the path has to work no matter what the client's working directory is.
 
 ```bash
-MCP=/absolute/path/to/agenticros/packages/agenticros-claude-code/dist/index.js
+MCP=/absolute/path/to/synapse/packages/synapse-claude-code/dist/index.js
 NODE=$(command -v node)
 
-grok mcp add --scope user agenticros \
-  -e AGENTICROS_CONFIG_PATH="$HOME/.agenticros/config.json" \
-  -e AGENTICROS_ROBOT_NAMESPACE= \
+grok mcp add --scope user synapse \
+  -e SYNAPSE_CONFIG_PATH="$HOME/.synapse/config.json" \
+  -e SYNAPSE_ROBOT_NAMESPACE= \
   -- "$NODE" "$MCP"
 
-claude mcp add --scope user agenticros \
-  -e AGENTICROS_CONFIG_PATH="$HOME/.agenticros/config.json" \
-  -e AGENTICROS_ROBOT_NAMESPACE= \
+claude mcp add --scope user synapse \
+  -e SYNAPSE_CONFIG_PATH="$HOME/.synapse/config.json" \
+  -e SYNAPSE_ROBOT_NAMESPACE= \
   -- "$NODE" "$MCP"
 ```
 
-Grok stores that in `~/.grok/config.toml` under `[mcp_servers.agenticros]`. Claude Code stores the user scope in `~/.claude.json`.
+Grok stores that in `~/.grok/config.toml` under `[mcp_servers.synapse]`. Claude Code stores the user scope in `~/.claude.json`.
 
-`agenticros mcp setup --claude` writes a project `.mcp.json` and, on Linux, a Claude Desktop file under `~/Library/Application Support/Claude/`. Claude Code on Omarchy does not read that desktop path. Use `claude mcp add --scope user` for the CLI you already logged into.
+`synapse mcp setup --claude` writes a project `.mcp.json` and, on Linux, a Claude Desktop file under `~/Library/Application Support/Claude/`. Claude Code on Omarchy does not read that desktop path. Use `claude mcp add --scope user` for the CLI you already logged into.
 
-The repo ships a project `.mcp.json` with a relative path for people who run Claude Code from the clone. `claude mcp list` then warns that `agenticros` is defined in both the user scope and the project scope. Both read `~/.agenticros/config.json` when `AGENTICROS_CONFIG_PATH` is unset. The user-scope command above is the one that works from any directory. Leave the committed `.mcp.json` in place.
+The repo ships a project `.mcp.json` with a relative path for people who run Claude Code from the clone. `claude mcp list` then warns that `synapse` is defined in both the user scope and the project scope. Both read `~/.synapse/config.json` when `SYNAPSE_CONFIG_PATH` is unset. The user-scope command above is the one that works from any directory. Leave the committed `.mcp.json` in place.
 
 Start a new Grok session and a new Claude Code session so they load the server. Check:
 
@@ -122,7 +122,7 @@ grok mcp list
 claude mcp list
 ```
 
-Both should show `agenticros`. In Claude Code, `/mcp` lists the same server.
+Both should show `synapse`. In Claude Code, `/mcp` lists the same server.
 
 ## 5. Confirm the robot graph
 
@@ -131,14 +131,14 @@ With rosbridge listening, ask either agent to list ROS topics, or call `ros2_lis
 A one-shot check from the repo, using the same config the agents use:
 
 ```bash
-cd /path/to/agenticros
-AGENTICROS_CONFIG_PATH="$HOME/.agenticros/config.json" \
+cd /path/to/synapse
+SYNAPSE_CONFIG_PATH="$HOME/.synapse/config.json" \
   node --input-type=module -e '
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 const transport = new StdioClientTransport({
   command: process.execPath,
-  args: ["packages/agenticros-claude-code/dist/index.js"],
+  args: ["packages/synapse-claude-code/dist/index.js"],
   env: { ...process.env },
 });
 const client = new Client({ name: "omarchy-smoke", version: "0.0.1" });

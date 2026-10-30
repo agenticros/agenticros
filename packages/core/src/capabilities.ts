@@ -1,5 +1,5 @@
 /**
- * Capability registry — Phase 1.a/1.b of the AgenticROS strategy.
+ * Capability registry — Phase 1.a/1.b of the Corebrum Synapse strategy.
  *
  * A capability is a named, declarable verb an LLM can plan against
  * (`follow_person`, `find_object`, `take_snapshot`, `drive_base`).
@@ -8,11 +8,11 @@
  * capability when Phase 4 lands — no rewrite required.
  *
  * Two kinds of capabilities:
- *  - **Intrinsic** — built into every AgenticROS deployment (drive_base,
+ *  - **Intrinsic** — built into every Corebrum Synapse deployment (drive_base,
  *    take_snapshot, measure_depth, list_topics, publish, subscribe). Lives
  *    in this file as `BUILTIN_CAPABILITIES`.
  *  - **Skill-declared** — comes from a skill package's `package.json`
- *    under `agenticrosSkill.capabilities[]` (or a sibling
+ *    under `synapseSkill.capabilities[]` (or a sibling
  *    `capabilities.json`). Read at adapter startup.
  *
  * See: docs/strategy-ai-agents-plus-ros.md §4 (Phase 1).
@@ -21,7 +21,7 @@
 import { createRequire } from "node:module";
 import { readFileSync, existsSync } from "node:fs";
 import { join, resolve as resolvePath } from "node:path";
-import type { AgenticROSConfig } from "./config.js";
+import type { SynapseConfig } from "./config.js";
 import { resolveRobot, type ResolvedRobot } from "./robots.js";
 import { featuresSatisfied, missingFeatures } from "./robot-profile.js";
 
@@ -272,12 +272,12 @@ function readCapabilitiesJson(
 }
 
 /**
- * Read the `agenticros.capabilities[]` array from a skill's package.json,
+ * Read the `synapse.capabilities[]` array from a skill's package.json,
  * merging any sibling `capabilities.json`. Returns `null` if the package
- * doesn't declare a valid `agenticros` block.
+ * doesn't declare a valid `synapse` block.
  *
- * The legacy `agenticrosSkill: true | { capabilities }` form is NOT supported
- * — every skill must use the single `agenticros` block as its source of truth.
+ * The legacy `synapseSkill: true | { capabilities }` form is NOT supported
+ * — every skill must use the single `synapse` block as its source of truth.
  */
 function readSkillManifestFromDir(
   packageDir: string,
@@ -286,22 +286,22 @@ function readSkillManifestFromDir(
   if (!existsSync(pkgJsonPath)) return null;
   let pkg: {
     name?: string;
-    agenticros?: { id?: unknown; capabilities?: unknown };
+    synapse?: { id?: unknown; capabilities?: unknown };
   };
   try {
     pkg = JSON.parse(readFileSync(pkgJsonPath, "utf-8"));
   } catch {
     return null;
   }
-  if (!pkg.agenticros || typeof pkg.agenticros !== "object") return null;
-  if (typeof pkg.agenticros.id !== "string") return null;
+  if (!pkg.synapse || typeof pkg.synapse !== "object") return null;
+  if (typeof pkg.synapse.id !== "string") return null;
 
   const packageName = pkg.name ?? "unknown";
-  const skillId = pkg.agenticros.id;
+  const skillId = pkg.synapse.id;
   const rawCaps: Array<Partial<Capability> & { id: string }> = [];
   const seenIds = new Set<string>();
 
-  const caps = pkg.agenticros.capabilities;
+  const caps = pkg.synapse.capabilities;
   if (Array.isArray(caps)) {
     for (const c of caps) {
       if (isCapabilityLike(c) && !seenIds.has(c.id)) {
@@ -348,7 +348,7 @@ function resolvePackageDir(packageName: string, searchPaths: string[]): string |
  * skill loader; this function focuses on returning the capabilities
  * it can read.
  */
-export function readSkillCapabilities(config: AgenticROSConfig): Capability[] {
+export function readSkillCapabilities(config: SynapseConfig): Capability[] {
   const out: Capability[] = [];
   const seen = new Set<string>();
 
@@ -402,7 +402,7 @@ export function readSkillCapabilities(config: AgenticROSConfig): Capability[] {
  * skill-declared capabilities. This is the shape returned by
  * `ros2_list_capabilities` across every adapter.
  */
-export function listAllCapabilities(config: AgenticROSConfig): Capability[] {
+export function listAllCapabilities(config: SynapseConfig): Capability[] {
   return [...BUILTIN_CAPABILITIES, ...readSkillCapabilities(config)];
 }
 
@@ -427,7 +427,7 @@ function filterCapabilitiesForRobot(
  * `robotId` omitted → active robot. No profile → no hardware filter.
  */
 export function listCapabilitiesForRobot(
-  config: AgenticROSConfig,
+  config: SynapseConfig,
   robotId?: string,
 ): Capability[] {
   const robot = resolveRobot(config, robotId);
@@ -440,7 +440,7 @@ export function listCapabilitiesForRobot(
  * "not found in registry".
  */
 export function capabilityUnavailableMessage(
-  config: AgenticROSConfig,
+  config: SynapseConfig,
   robotId: string | undefined,
   capId: string,
 ): string | undefined {

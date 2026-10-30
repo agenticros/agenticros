@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Repository-root convenience launcher for the Corebrum Synapse CLI.
+#
+# Demo-friendly: `./synapse` from this repo runs the workspace build of
+# packages/synapse-cli without requiring a global install. If the CLI hasn't
+# been built yet, we build it on the first invocation so a fresh clone "just
+# works".
+#
+# Published npm users should run `npx @corebrum/synapse` instead — this shim is for
+# contributors working out of the monorepo.
+
+set -e
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CLI_DIR="$ROOT/packages/synapse-cli"
+DIST_ENTRY="$CLI_DIR/dist/index.js"
+
+if [ ! -f "$DIST_ENTRY" ]; then
+  if [ ! -d "$ROOT/node_modules" ]; then
+    echo "[synapse] First-time setup: installing JS workspace deps…" >&2
+    (cd "$ROOT" && pnpm install)
+  fi
+  echo "[synapse] Building the CLI (one-time)…" >&2
+  (cd "$ROOT" && pnpm --filter @corebrum/synapse build)
+fi
+
+exec node "$DIST_ENTRY" "$@"

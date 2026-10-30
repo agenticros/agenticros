@@ -1,9 +1,9 @@
 {
-  "name": "agenticros-monorepo",
+  "name": "corebrum-synapse",
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "description": "AgenticROS — monorepo for ROS2 + AI agent integrations. The publishable CLI lives in packages/agenticros-cli (npm: `agenticros`).",
+  "description": "Corebrum Synapse — monorepo for ROS2 + AI agent integrations. The publishable CLI lives in packages/synapse-cli (npm: `@corebrum/synapse`, command: `synapse`).",
   "scripts": {
     "build": "pnpm -r build",
     "clean": "pnpm -r exec rm -rf dist tsconfig.tsbuildinfo",
@@ -11,7 +11,7 @@
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm test:scripts && pnpm -r --workspace-concurrency 1 --if-present test",
     "test:scripts": "node --test scripts/__tests__/*.test.mjs",
-    "mcp:kill": "pkill -f 'node packages/agenticros-claude-code/dist/index.js' || true",
+    "mcp:kill": "pkill -f 'node packages/synapse-claude-code/dist/index.js' || true",
     "sync-skill-tools": "node scripts/sync-skill-tools.mjs",
     "sync-skill-tools:dry": "node scripts/sync-skill-tools.mjs --dry-run --verbose",
     "refresh:skills": "node scripts/refresh-skill-deps.mjs",

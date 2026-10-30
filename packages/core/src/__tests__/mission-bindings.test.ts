@@ -26,7 +26,7 @@ test("buildMissionBindings derives ros2_<id> for skill capabilities", () => {
       id: "wave_hand",
       verb: "wave",
       description: "Wave",
-      source: { kind: "skill", skillId: "wave", package: "agenticros-skill-wave" },
+      source: { kind: "skill", skillId: "wave", package: "corebrum-skill-wave" },
     },
   ];
   const bindings = buildMissionBindings(caps);

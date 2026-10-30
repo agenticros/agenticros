@@ -1,7 +1,7 @@
 #!/bin/bash
 # run_robot_rosbridge.sh - Start rosbridge WebSocket server on the robot
 #
-# Run this on the robot so the AgenticROS plugin (OpenClaw) can connect to ROS2.
+# Run this on the robot so the Corebrum Synapse plugin (OpenClaw) can connect to ROS2.
 # Usage: ./scripts/run_robot_rosbridge.sh [humble|jazzy]
 # Default ROS distro: humble
 

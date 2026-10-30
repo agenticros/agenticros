@@ -1,8 +1,8 @@
 {
-  "name": "@agenticros/ros-camera",
+  "name": "@corebrum/ros-camera",
   "version": "0.0.1",
   "type": "module",
-  "description": "Shared ROS2 camera snapshot encoding (sensor_msgs Image / CompressedImage) for AgenticROS adapters",
+  "description": "Shared ROS2 camera snapshot encoding (sensor_msgs Image / CompressedImage) for Corebrum Synapse adapters",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

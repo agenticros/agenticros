@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# install_cli.sh - put the AgenticROS CLI on PATH for the current user.
+# install_cli.sh - put the Corebrum Synapse CLI on PATH for the current user.
 #
 # Three install strategies are tried, in order of preference:
 #   1. `pnpm link --global` against the workspace package (best for contributors;
-#      live edits to packages/agenticros-cli/src/ are visible immediately after
-#      `pnpm --filter agenticros build`).
-#   2. PATH symlink under ~/.local/bin pointing at the repo's ./agenticros shim
+#      live edits to packages/synapse-cli/src/ are visible immediately after
+#      `pnpm --filter @corebrum/synapse build`).
+#   2. PATH symlink under ~/.local/bin pointing at the repo's ./synapse shim
 #      (works without a global pnpm prefix).
 #   3. Print clear next-step instructions.
 #
@@ -13,13 +13,13 @@
 #   ./scripts/install_cli.sh           # auto-pick the best strategy
 #   ./scripts/install_cli.sh --method symlink   # force one
 #
-# After install, run `agenticros --version` to confirm.
+# After install, run `synapse --version` to confirm.
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-CLI_DIR="$ROOT/packages/agenticros-cli"
-ROOT_SHIM="$ROOT/agenticros"
+CLI_DIR="$ROOT/packages/synapse-cli"
+ROOT_SHIM="$ROOT/synapse"
 METHOD="auto"
 
 while [[ $# -gt 0 ]]; do
@@ -40,7 +40,7 @@ err() { printf "\033[31m[install-cli]\033[0m %s\n" "$*" >&2; }
 ensure_built() {
   if [[ ! -f "$CLI_DIR/dist/index.js" ]]; then
     log "Building the CLI (one-time)..."
-    (cd "$ROOT" && pnpm --filter agenticros build)
+    (cd "$ROOT" && pnpm --filter @corebrum/synapse build)
   fi
 }
 
@@ -49,7 +49,7 @@ try_pnpm_link() {
   ensure_built
   log "Installing via pnpm link --global from $CLI_DIR"
   (cd "$CLI_DIR" && pnpm link --global) || return 1
-  ok  "Linked. Run: agenticros --version"
+  ok  "Linked. Run: synapse --version"
   return 0
 }
 
@@ -57,8 +57,8 @@ try_symlink() {
   local target="$HOME/.local/bin"
   mkdir -p "$target"
   ensure_built
-  if ln -sf "$ROOT_SHIM" "$target/agenticros"; then
-    ok "Symlinked $ROOT_SHIM -> $target/agenticros"
+  if ln -sf "$ROOT_SHIM" "$target/synapse"; then
+    ok "Symlinked $ROOT_SHIM -> $target/synapse"
     case ":$PATH:" in
       *":$target:"*) ok "$target is already on PATH." ;;
       *) warn "Add $target to PATH (e.g. add 'export PATH=\"\$HOME/.local/bin:\$PATH\"' to your shell rc)." ;;
@@ -76,12 +76,12 @@ Failed to install the CLI automatically. Manual options:
        export PATH="$ROOT:\$PATH"
 
   2. Use pnpm directly:
-       cd "$ROOT" && pnpm --filter agenticros build && pnpm --filter agenticros link --global
+       cd "$ROOT" && pnpm --filter @corebrum/synapse build && pnpm --filter @corebrum/synapse link --global
 
   3. Use the bundled root shim ad-hoc:
        $ROOT_SHIM --help
 
-After any of the above, run: agenticros --version
+After any of the above, run: synapse --version
 EOF
   return 1
 }

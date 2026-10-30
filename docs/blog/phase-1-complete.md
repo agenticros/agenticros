@@ -1,8 +1,8 @@
-# AgenticROS: agents that know what your robot can do
+# Corebrum Synapse: agents that know what your robot can do
 
 For a long time, talking to a robot through an LLM meant dumping topic lists into the prompt and hoping the model guessed the right `cmd_vel` twist. That works for demos. It falls apart the moment you have two robots, a Nav2 stack you already trust, or a second agent that needs to pick up where the first one left off.
 
-AgenticROS is the contract layer that fixes that. Agents plan in **named capabilities** and **missions**, not raw topics. They can see which robots are online, pause a mission mid-flight, and call an existing ROS node — Nav2, YOLO, whatever you already run — without rewriting it in TypeScript.
+Corebrum Synapse is the contract layer that fixes that. Agents plan in **named capabilities** and **missions**, not raw topics. They can see which robots are online, pause a mission mid-flight, and call an existing ROS node — Nav2, YOLO, whatever you already run — without rewriting it in TypeScript.
 
 This post walks through what that contract layer looks like in practice — and what we shipped recently to make it production-ready.
 
@@ -29,11 +29,11 @@ The agent asks `ros2_list_capabilities` once, gets a typed verb list (`find_obje
 
 ### 1. Fleet awareness that matches the wire
 
-Robots already advertised themselves with an `agenticros_discovery` heartbeat on `<ns>/agenticros/robot_info` — id, kind, sensors, capability ids, timestamp. The TypeScript side was still inferring "online" from `<ns>/cmd_vel` heuristics.
+Robots already advertised themselves with an `synapse_discovery` heartbeat on `<ns>/synapse/robot_info` — id, kind, sensors, capability ids, timestamp. The TypeScript side was still inferring "online" from `<ns>/cmd_vel` heuristics.
 
 We wired that heartbeat through end to end: **5 second staleness** means online; older means offline. `ros2_list_robots`, `ros2_discover_robots`, and `ros2_find_robots_for(online=true)` all agree with what the robot is actually saying. `cmd_vel` remains a fallback for stacks that haven't started the discovery node yet. Namespaces that only advertise `robot_info` (arms, drones) also show up.
 
-Fleet config also got the IaC shape we wanted: if `~/.agenticros/fleet.json` exists (or `AGENTICROS_FLEET_PATH`), it wins over `config.robots[]`. Check it into git; treat the room like infrastructure.
+Fleet config also got the IaC shape we wanted: if `~/.synapse/fleet.json` exists (or `SYNAPSE_FLEET_PATH`), it wins over `config.robots[]`. Check it into git; treat the room like infrastructure.
 
 ```text
 You: which AMRs with RealSense can follow a person right now?
@@ -55,7 +55,7 @@ What's new: **`mission_pause` / `mission_resume`**. Pause holds before the next 
 
 Until now, chaining a new skill into a mission meant editing `MISSION_BINDINGS` in three packages. That's the opposite of a skill marketplace.
 
-Bindings now live in `@agenticros/core` (`buildMissionBindings`) and are built from the capability registry. Declare a capability on a skill; it becomes mission-chainable on OpenClaw, MCP, and Gemini without a core PR per adapter. External ROS-node capabilities plug into the same table via `external:<capability_id>`.
+Bindings now live in `@corebrum/core` (`buildMissionBindings`) and are built from the capability registry. Declare a capability on a skill; it becomes mission-chainable on OpenClaw, MCP, and Gemini without a core PR per adapter. External ROS-node capabilities plug into the same table via `external:<capability_id>`.
 
 ### 4. Gemini parity for the canonical demo
 
@@ -88,7 +88,7 @@ A capability manifest can point at an existing action, service, or topic instead
 }
 ```
 
-AgenticROS dispatches through the transport you already use (Zenoh, rosbridge, local, WebRTC). The `launch` field is documentation for humans and `agenticros doctor` — bringup stays operator-owned so the gateway never shells out into your robot's process tree by surprise.
+Corebrum Synapse dispatches through the transport you already use (Zenoh, rosbridge, local, WebRTC). The `launch` field is documentation for humans and `synapse doctor` — bringup stays operator-owned so the gateway never shells out into your robot's process tree by surprise.
 
 We ship a reference **`navigate_to`** skill under [`examples/navigate-to`](../../examples/navigate-to/). Keep your stack. Add a manifest. The LLM calls it by name.
 
@@ -121,9 +121,9 @@ If memory is enabled, a second agent on another adapter can `memory_recall({ nam
 ## Try it
 
 ```bash
-npx agenticros init
-# point transport at your robot or: agenticros up sim-amr
-npx agenticros mcp setup   # or OpenClaw / Gemini per docs
+npx @corebrum/synapse init
+# point transport at your robot or: synapse up sim-amr
+npx @corebrum/synapse mcp setup   # or OpenClaw / Gemini per docs
 ```
 
 Then ask the agent: *"what can this robot do?"* followed by *"find a chair and drive toward it."*

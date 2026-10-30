@@ -1,5 +1,5 @@
 /**
- * Mission planner — Phase 1.g of the AgenticROS strategy.
+ * Mission planner — Phase 1.g of the Corebrum Synapse strategy.
  *
  * Compiles a natural-language goal ("find a chair and drive toward
  * it", "take a picture", "follow me") into a declarative `Mission`
@@ -15,7 +15,7 @@
  * `compileGoalToMission` contract — Phase 2+ work. For now this
  * covers the canonical verbs in `BUILTIN_CAPABILITIES` + the
  * skill-declared `find_object` / `follow_person` that ship with
- * AgenticROS.
+ * Corebrum Synapse.
  *
  * The planner ONLY emits steps for capabilities present in the
  * `capabilities` argument it's handed. Skill capabilities that

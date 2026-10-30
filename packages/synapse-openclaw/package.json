@@ -1,0 +1,37 @@
+{
+  "name": "@corebrum/openclaw",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "Corebrum Synapse OpenClaw plugin — ROS2 tools, commands, and routes for the OpenClaw gateway",
+  "openclaw": {
+    "id": "synapse",
+    "activation": {
+      "onStartup": true
+    },
+    "extensions": [
+      "./dist/index.js"
+    ],
+    "compat": {
+      "pluginApi": ">=2026.3.24-beta.2"
+    },
+    "build": {
+      "openclawVersion": "2026.3.24-beta.2"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --test-force-exit \"dist/__tests__/*.test.js\""
+  },
+  "dependencies": {
+    "@corebrum/core": "workspace:*",
+    "@corebrum/object-detection": "workspace:*",
+    "@corebrum/ros-camera": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "typescript": "^5.7.0"
+  },
+  "author": "PlaiPin",
+  "license": "Apache-2.0"
+}

@@ -18,7 +18,7 @@ import { dirname, join, resolve } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "..");
-const serverDist = join(repoRoot, "packages/agenticros-claude-code/dist/index.js");
+const serverDist = join(repoRoot, "packages/synapse-claude-code/dist/index.js");
 
 const child = spawn(process.execPath, [serverDist], {
   stdio: ["pipe", "pipe", "pipe"],

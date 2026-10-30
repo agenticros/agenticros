@@ -2,7 +2,7 @@
 /**
  * Set OpenClaw gateway to no-auth mode for local development so that:
  * - Web chat (Control UI) loads without a token
- * - AgenticROS plugin routes (config, teleop) are accepted and load at /plugins/agenticros/
+ * - Corebrum Synapse plugin routes (config, teleop) are accepted and load at /plugins/synapse/
  *
  * In OpenClaw 2026.3.2, when gateway.auth is token-based, the gateway rejects plugin
  * HTTP route registration ("missing or invalid auth"), so plugin pages return 404.
@@ -11,7 +11,7 @@
  * Usage:
  *   node scripts/setup-openclaw-local.cjs
  *   # Restart the gateway: openclaw gateway
- *   # Then open: http://127.0.0.1:18789/ (web chat) and http://127.0.0.1:18789/plugins/agenticros/
+ *   # Then open: http://127.0.0.1:18789/ (web chat) and http://127.0.0.1:18789/plugins/synapse/
  *
  * WARNING: Only use on a gateway bound to 127.0.0.1. Do not use on a LAN/internet-facing gateway.
  */
@@ -69,7 +69,7 @@ console.log('');
 console.log('  Set gateway.auth.mode to "none" in', configPath);
 console.log('  Restart the gateway (openclaw gateway), then open:');
 console.log('    - Web chat:  http://127.0.0.1:18789/');
-console.log('    - AgenticROS config & teleop:  http://127.0.0.1:18789/plugins/agenticros/');
+console.log('    - Corebrum Synapse config & teleop:  http://127.0.0.1:18789/plugins/synapse/');
 console.log('');
 console.log('  For local use only (127.0.0.1). To restore token auth later, set gateway.auth.mode to "token" and add gateway.auth.token.');
 console.log('');

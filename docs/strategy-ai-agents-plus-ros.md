@@ -7,7 +7,7 @@
 
 ## 1. TL;DR
 
-AgenticROS is the agent-platform layer for ROS robots: named capabilities,
+Corebrum Synapse is the agent-platform layer for ROS robots: named capabilities,
 chained-skill missions, multi-robot fleet discovery, cross-agent shared
 memory, and a multi-adapter architecture (OpenClaw, NemoClaw, Claude Code /
 Desktop / Dispatch, Gemini, and future targets like LangGraph, OpenAI,
@@ -28,7 +28,7 @@ Roadmap, four phases:
   skills into missions, and lets a single agent reason about multiple
   robots in the room (and pick the right one for the job).
 - **Phase 2** turns the skill ecosystem into a real marketplace at
-  `skills.agenticros.com` — open-source first, with an app-store
+  `skills.corebrum.com` — open-source first, with an app-store
   commission model layered on top once usage justifies it.
 - **Phase 3** promotes memory to spatial memory (likely
   [ReMEmbR](https://nvidia-ai-iot.github.io/remembr/)-backed) and ships
@@ -36,9 +36,9 @@ Roadmap, four phases:
 - **Phase 4** opens the platform to cross-vendor multi-agent
   collaboration via an inter-agent protocol (ACP / A2A).
 
-## 2. Positioning — what AgenticROS is, who it's for, and why it wins
+## 2. Positioning — what Corebrum Synapse is, who it's for, and why it wins
 
-### What AgenticROS is
+### What Corebrum Synapse is
 
 The current tagline — *"agentic AI for ROS-powered robots"* /
 *"bridges frontier reasoning models with cameras, depth sensors, motors,
@@ -76,7 +76,7 @@ sit anywhere on the spectrum, and the platform doesn't care which:
   since yesterday?"* and the LLM reasons over the map state plus
   spatial memory (Phase 3).
 
-AgenticROS does not require an LLM in any particular skill's hot path.
+Corebrum Synapse does not require an LLM in any particular skill's hot path.
 The platform's job is to make every kind of skill **discoverable by
 name**, **chainable into missions**, and **shareable across agents and
 robots** — regardless of whether the skill's brain is a transformer or
@@ -95,7 +95,7 @@ Two distinct audiences, both first-class:
   Keep your existing node. Add a capability manifest that describes
   what it exposes — no port to TypeScript, no rewrite of your control
   loop. Phase 1's manifest format works for both **in-process Node.js
-  skills** (the current `agenticros-skill-*` shape) **and descriptors
+  skills** (the current `corebrum-skill-*` shape) **and descriptors
   that wrap external ROS nodes**. Pick whichever fits. An LLM can now
   invoke your stack by name; your stack didn't have to change.
 
@@ -107,7 +107,7 @@ named, AI-callable ROS skills**. Every published skill makes the
 platform more valuable for the next user, harder to displace, and a
 more compelling target for partners. The "ROS robot that follows you /
 picks up the cup / maps the warehouse / detects a human / runs Nav2 /
-runs MoveIt" verbs become AgenticROS skills before anyone else has
+runs MoveIt" verbs become Corebrum Synapse skills before anyone else has
 them, then the catalog compounds. Phase 2's marketplace is the surface
 area; Phase 1's capability manifests are the substrate; the seed
 catalog is what gets us to escape velocity.
@@ -117,21 +117,21 @@ catalog is what gets us to escape velocity.
 Concrete inventory of what already supports the platform-layer thesis:
 
 - 9 MCP tools in
-  [packages/agenticros-claude-code/src/tools.ts](../packages/agenticros-claude-code/src/tools.ts)
+  [packages/synapse-claude-code/src/tools.ts](../packages/synapse-claude-code/src/tools.ts)
   (`ros2_list_topics`, `ros2_publish`, `ros2_subscribe_once`,
   `ros2_service_call`, `ros2_action_goal`, `ros2_param_get`/`set`,
   `ros2_camera_snapshot`, `ros2_depth_distance`).
-- Three production adapters sharing one `@agenticros/core` transport:
-  the OpenClaw plugin ([packages/agenticros](../packages/agenticros)),
+- Three production adapters sharing one `@corebrum/core` transport:
+  the OpenClaw plugin ([packages/synapse-openclaw](../packages/synapse-openclaw)),
   the Claude Code MCP server
-  ([packages/agenticros-claude-code](../packages/agenticros-claude-code)),
+  ([packages/synapse-claude-code](../packages/synapse-claude-code)),
   and the Gemini CLI
-  ([packages/agenticros-gemini](../packages/agenticros-gemini)).
+  ([packages/synapse-gemini](../packages/synapse-gemini)).
 - A working skill system with two reference skills
-  (`agenticros-skill-followme`, `agenticros-skill-find`). The
+  (`corebrum-skill-followme`, `corebrum-skill-find`). The
   named-capability model already works in production.
 - Synchronous skill loader at
-  [packages/agenticros/src/skill-loader.ts](../packages/agenticros/src/skill-loader.ts)
+  [packages/synapse-openclaw/src/skill-loader.ts](../packages/synapse-openclaw/src/skill-loader.ts)
   — OpenClaw `register()` snapshot semantics already solved.
 - Shared cross-adapter memory (mem0 + local JSON backends), described
   in [docs/memory.md](memory.md). Facts taught to one agent become
@@ -140,11 +140,11 @@ Concrete inventory of what already supports the platform-layer thesis:
   [packages/core/src/transport/factory.ts](../packages/core/src/transport/factory.ts):
   local DDS via rclnodejs, Zenoh CDR, rosbridge, WebRTC. Each works
   without changes to skills.
-- CLI bootstrap: `npx agenticros` runs a looping menu with doctor
+- CLI bootstrap: `npx @corebrum/synapse` runs a looping menu with doctor
   health checks, simulation launchers (Gazebo + RViz, 6-DOF arm), and
   real-robot launchers.
 - Capability discovery node already exists at
-  [ros2_ws/src/agenticros_discovery](../ros2_ws/src/agenticros_discovery)
+  [ros2_ws/src/synapse_discovery](../ros2_ws/src/synapse_discovery)
   — the seed for the multi-robot fleet advertisement in Phase 1.
 
 ## 4. Phase 1: Capability registry + skill chaining + multi-robot fleet discovery
@@ -162,13 +162,13 @@ writing per-robot or per-mission code. Four sub-deliverables.
 
 ### (a) Capability schema on skills
 
-Each `agenticros-skill-*` package (or external ROS node descriptor)
+Each `corebrum-skill-*` package (or external ROS node descriptor)
 declares its capabilities — either in `package.json` under
-`agenticrosSkill`, or in a sibling `capabilities.json`:
+`synapseSkill`, or in a sibling `capabilities.json`:
 
 ```jsonc
 {
-  "agenticrosSkill": true,
+  "synapseSkill": true,
   "capabilities": [
     {
       "id": "follow_person",
@@ -189,12 +189,12 @@ don't participate in chained-mission planning or
 
 **Design note — manifests cover both in-process Node.js skills and
 external ROS-node descriptors.** Today's two reference skills
-(`agenticros-skill-followme`, `agenticros-skill-find`) are TypeScript
-packages loaded in-process by the AgenticROS gateway. That's the right
+(`corebrum-skill-followme`, `corebrum-skill-find`) are TypeScript
+packages loaded in-process by the Corebrum Synapse gateway. That's the right
 shape for AI-driven and hybrid skills authored from scratch. For
 experienced ROS developers with existing C++ or Python nodes (Nav2
 stacks, MoveIt setups, YOLO pipelines, RTAB-Map deployments), the same
-`agenticrosSkill` manifest can be a descriptor that wraps the external
+`synapseSkill` manifest can be a descriptor that wraps the external
 node:
 
 ```jsonc
@@ -229,14 +229,14 @@ Surfaces the union of all registered skill capabilities plus the
 robot's intrinsic verbs (cmd_vel, camera, depth, list_topics) in one
 structured response. Agents use this for high-level planning instead
 of dumping topic lists into the LLM context. Added to
-[packages/agenticros-claude-code/src/tools.ts](../packages/agenticros-claude-code/src/tools.ts)
+[packages/synapse-claude-code/src/tools.ts](../packages/synapse-claude-code/src/tools.ts)
 and mirrored in OpenClaw and Gemini per the multi-adapter pattern.
 
 Once Phase 2a's auto-fetch ships, the response also includes a
 `discoverable: true` flag for marketplace skills not yet installed —
 letting the agent propose mid-conversation installs (*"I don't see an
 inventory_scan skill; want me to add
-`@agenticros/inventory-scan`?"*) instead of giving up.
+`@corebrum/inventory-scan`?"*) instead of giving up.
 
 ### (c) Skill chaining for missions
 
@@ -279,7 +279,7 @@ can `memory_recall({ namespace: "mission:<id>" })` and inspect what's
 been run so far. Live-probed against the MCP server stdio surface.
 
 Phase 1.g (natural-language → step-graph compilation) ships
-`compileGoalToMission(goal, capabilities)` in `@agenticros/core` and
+`compileGoalToMission(goal, capabilities)` in `@corebrum/core` and
 extends `run_mission` to accept `goal` alongside `mission`. The
 compiler is rule-based + deterministic — no LLM dependency, so the
 runtime has no hard requirement on Ollama and the planner's output is
@@ -322,15 +322,15 @@ run_mission({robot_id, plan})                            [Phase 1.d, shipped]
 
 Phase 1.e (capability-aware fleet filter) is implemented on the TS side
 across all three adapters (Claude Code, OpenClaw, Gemini). The CLI
-`agenticros robots` family accepts `--kind`, `--sensors=has_realsense,!has_arm`,
+`synapse robots` family accepts `--kind`, `--sensors=has_realsense,!has_arm`,
 and `--capabilities=…` so the metadata behind `ros2_find_robots_for`
 is set per robot without hand-editing JSON. The matching ROS-side
-heartbeat (point (d) below — `<ns>/agenticros/robot_info` published at
+heartbeat (point (d) below — `<ns>/synapse/robot_info` published at
 1 Hz with the same kind/sensors/capabilities shape) is the next sub-step.
 
-ROS side: `agenticros_discovery` (already at
-[ros2_ws/src/agenticros_discovery](../ros2_ws/src/agenticros_discovery))
-publishes a heartbeat on `<namespace>/agenticros/robot_info`
+ROS side: `synapse_discovery` (already at
+[ros2_ws/src/synapse_discovery](../ros2_ws/src/synapse_discovery))
+publishes a heartbeat on `<namespace>/synapse/robot_info`
 containing id, human-readable name, kind, namespace, capability list,
 robot capabilities (`has_realsense`, `has_lidar`, `has_arm`), and a
 timestamp. The heartbeat fields are deliberately a superset of an
@@ -341,13 +341,13 @@ different transport. Single-robot deployments are unaffected:
 
 Discovery mechanism — hybrid for Phase 1:
 
-- **Static fleet config** (`~/.agenticros/fleet.json`) — wins if
+- **Static fleet config** (`~/.synapse/fleet.json`) — wins if
   present. Manual but deterministic; works across any network.
 - **ROS2-graph fallback** — query the ROS graph for
-  `agenticros_discovery` nodes when no fleet config is set. Zero
+  `synapse_discovery` nodes when no fleet config is set. Zero
   config, works on LAN.
 - **Cloud / mesh registry** — Phase 2 topic, naturally co-located
-  with `skills.agenticros.com`.
+  with `skills.corebrum.com`.
 
 The agent's mental model shifts from *"Drive the robot forward"* →
 `ros2_publish(/cmd_vel, …)` to *"Have an AMR with RealSense find the
@@ -364,7 +364,7 @@ capability registry, multi-robot-aware.
 - Resource arbitration (two agents fighting over the same robot) —
   operational policy, post-Phase 1 once real usage shows the pattern.
 
-## 5. Phase 2: Skills marketplace at `skills.agenticros.com`
+## 5. Phase 2: Skills marketplace at `skills.corebrum.com`
 
 Once skills carry capability manifests (Phase 1), a real marketplace
 becomes the natural next surface. Split into two milestones so
@@ -379,20 +379,20 @@ marketplace is the discovery surface; declarative auto-fetch is the
 install mechanism.
 
 **Declarative skill references + auto-fetch (the headline UX shift).**
-Users list skills in `~/.agenticros/config.json` (or a shared
+Users list skills in `~/.synapse/config.json` (or a shared
 `fleet.json` for multi-robot deployments):
 
 ```jsonc
 {
   "skills": [
-    "@agenticros/follow-me@^1.2.0",
-    "@agenticros/find-object@^0.3.0"
+    "@corebrum/follow-me@^1.2.0",
+    "@corebrum/find-object@^0.3.0"
   ]
 }
 ```
 
 On gateway / MCP server / Gemini CLI startup: read `skills`, check
-`~/.agenticros/skills-cache/<scope>/<name>/<version>/`, and if absent,
+`~/.synapse/skills-cache/<scope>/<name>/<version>/`, and if absent,
 fetch via the marketplace (which resolves through npm under the hood
 — re-using npm's CDN, integrity checks, and versioning). Extract to
 cache, load the capability manifest, register tools. **No git clone,
@@ -401,7 +401,7 @@ still execute in-process on the robot/gateway — auto-fetch is about
 installation, not execution locality (real-time control loops can't
 tolerate network round-trips per tick).
 
-**Website.** Dedicated subdomain `skills.agenticros.com` (separate
+**Website.** Dedicated subdomain `skills.corebrum.com` (separate
 from the main marketing site). Index of every published skill,
 searchable by verb / tag / robot type / agent platform / capability.
 Each skill listing shows: capability manifest from Phase 1, supported
@@ -415,21 +415,21 @@ VSLAM/VIO/perception/Nav2/MoveIt — or hybrid). Both new robotics
 developers and experienced ROS developers can find skills that match
 their world.
 
-**Submission.** `agenticros skills publish` packages the local skill
+**Submission.** `synapse skills publish` packages the local skill
 directory, validates the capability manifest schema, signs the
-metadata, publishes to npm under `@agenticros/*`, and registers
+metadata, publishes to npm under `@corebrum/*`, and registers
 metadata with the marketplace. Authentication via the developer's npm
 or GitHub account so we don't run another identity system.
 
 **Distribution.** Skills remain npm packages under
-`@agenticros/*` scope. The marketplace is a *metadata +
+`@corebrum/*` scope. The marketplace is a *metadata +
 discovery* layer on top of npm, not a separate package host. (This
 keeps day-1 infra small and lets skill authors keep familiar publish
 flows.)
 
-**CLI as convenience layer, not the primary mechanism.** `agenticros
+**CLI as convenience layer, not the primary mechanism.** `synapse
 skills search <query>` lists results from the marketplace API;
-`agenticros skills add <name>` appends the skill reference to the
+`synapse skills add <name>` appends the skill reference to the
 config and pre-warms the cache so the first launch is instant. Power
 users editing `config.json` directly is equally supported. The CLI is
 not required.
@@ -456,7 +456,7 @@ Phase 2a:
 ```jsonc
 {
   "skills": [
-    "@agenticros/follow-me@^1.2.0",
+    "@corebrum/follow-me@^1.2.0",
     { "id": "@enterprise/inventory-scan@2.1.0", "license": "ent_..." }
   ]
 }
@@ -479,14 +479,14 @@ wait for review.
 **Payouts.** Pick a payment processor (Stripe Connect is the obvious
 choice) and a payout cadence at launch. Not engineered in Phase 2a.
 
-### What Phase 2 buys AgenticROS strategically
+### What Phase 2 buys Corebrum Synapse strategically
 
 - **Network effect** — every published skill makes the platform more
   valuable for the next user.
 - **Visible developer economy** — the moment the first paid skill
-  ships and earns, AgenticROS stops being "an open-source library"
+  ships and earns, Corebrum Synapse stops being "an open-source library"
   and starts being "a robotics platform with a developer ecosystem."
-- **Discovery surface** — `skills.agenticros.com` is a marketing site
+- **Discovery surface** — `skills.corebrum.com` is a marketing site
   that ranks for "ROS robot follow person", "ROS warehouse inventory
   robot", etc. Each skill listing is an SEO entry point we don't have
   today.
@@ -509,9 +509,9 @@ side-by-side:
   NVIDIA conversations.
 
 Packaging: ship spatial memory as a **marketplace skill**
-(`@agenticros/spatial-memory`) selecting either backend per
+(`@corebrum/spatial-memory`) selecting either backend per
 config. Likely candidate to be the *first paid skill* on
-`skills.agenticros.com` — it's a feature with clear enterprise value
+`skills.corebrum.com` — it's a feature with clear enterprise value
 (warehouse, inventory, maintenance use cases), and it doesn't gate the
 open-source platform. Free/paid split decided at Phase 3 kickoff.
 
@@ -526,7 +526,7 @@ sharing the same robots, the same memory, and the same mission state.
 
 ### Protocol landscape
 
-- **MCP (Anthropic)** is agent ↔ **tools**. This is what AgenticROS
+- **MCP (Anthropic)** is agent ↔ **tools**. This is what Corebrum Synapse
   already speaks via the Claude Code adapter.
 - **ACP (IBM BeeAI / Linux Foundation AGNTCY)** is agent ↔ **agent**,
   REST-based, agent-manifest / capability-card model.
@@ -535,7 +535,7 @@ sharing the same robots, the same memory, and the same mission state.
 
 ACP and A2A are converging on the same shape: an agent advertises a
 "card" (id, capabilities, inputs, auth) and exposes endpoints for
-delegation. AgenticROS will be **protocol-agnostic and adopt whichever
+delegation. Corebrum Synapse will be **protocol-agnostic and adopt whichever
 wins** — likely both via thin adapters once production usage clarifies
 which one peers actually speak. We are deliberately not picking a
 winner today.
@@ -556,14 +556,14 @@ winner today.
   layer. Memory entries carry the agent identity that wrote them, so
   a downstream agent can ask *"what did the perception agent observe
   at 09:15?"* with full provenance.
-- **Robot-as-agent** — each `agenticros_discovery` heartbeat (Phase
+- **Robot-as-agent** — each `synapse_discovery` heartbeat (Phase
   1.d) gains an ACP/A2A endpoint, so external agents can discover
   robots in the network the same way they discover any other agent.
 
 ### Concrete deliverables when Phase 4 lands
 
 - One ACP-or-A2A adapter as a new package
-  (`@agenticros/inter-agent-acp` / `-a2a`), same shape as today's
+  (`@corebrum/inter-agent-acp` / `-a2a`), same shape as today's
   transport adapters in
   [packages/core/src/transport](../packages/core/src/transport).
 - Extend `run_mission` to accept `{ agent_id, robot_id, plan }` per
@@ -613,7 +613,7 @@ winner today.
 - Don't run marketplace skills remotely / "skill-as-a-service" for
   control-path skills. Real-time control on a robot can't tolerate
   per-tick network round-trips. Skills always execute in-process with
-  the AgenticROS gateway.
+  the Corebrum Synapse gateway.
 
 ## 9. The one concrete first move (Phase 1, week 1)
 
@@ -621,14 +621,14 @@ Ship a minimal `ros2_list_capabilities` MCP tool that reads the
 capability manifests of our two existing skills (`follow_robot`,
 `find_object`) plus the intrinsic robot verbs. Publish to npm with
 the next CLI version. Write a short blog post:
-*"AgenticROS Phase 1: Capabilities + Missions — AI Agents that finally
+*"Corebrum Synapse Phase 1: Capabilities + Missions — AI Agents that finally
 understand what your robot can do."*
 
 ### Seed catalog plan (concurrent with Phase 1 development)
 
 To make the moat real, line up a small seed catalog of skills
 spanning the spectrum so the marketplace launches non-empty and
-signals to both audiences that AgenticROS welcomes their world:
+signals to both audiences that Corebrum Synapse welcomes their world:
 
 - **AI-driven** (already shipped): `follow_robot`, `find_object`.
 - **Deterministic — perception**: human detection skill wrapping a
@@ -645,7 +645,7 @@ signals to both audiences that AgenticROS welcomes their world:
 The first two AI-driven skills exist today; the deterministic ones
 are concrete next-skill candidates that an experienced ROS developer
 can ship via the external-descriptor path with minimal
-AgenticROS-specific code. Reversible if the framing misses; cheap to
+Corebrum Synapse-specific code. Reversible if the framing misses; cheap to
 author. Sets the foundation for sub-deliverables (b)-(d) in Phase 1
 and primes Phase 2's marketplace launch.
 
@@ -653,27 +653,27 @@ and primes Phase 2's marketplace launch.
 
 ### Phase 1 (decide at kickoff)
 
-- **Capability schema location** — `package.json` `agenticrosSkill`
+- **Capability schema location** — `package.json` `synapseSkill`
   block vs separate `capabilities.json`.
 - **Mission runner — JS or DSL?** Start with JSON + LLM-generated
   plans; real DSL waits until we see usage.
 - **Per-skill safety policies in capabilities** — `blocks_base`,
   `interruptible` in capability schema, or in a separate safety
   contract?
-- **Fleet config schema** — single file (`~/.agenticros/fleet.json`)
+- **Fleet config schema** — single file (`~/.synapse/fleet.json`)
   listing all robots with namespace + transport, or per-robot files
-  in `~/.agenticros/fleet/*.json`?
+  in `~/.synapse/fleet/*.json`?
 - **Robot identity uniqueness** — UUID like today's `robotbb86...`,
   or human-assigned `kitchen-bot-1`? Recommendation: keep UUID as
   `id`, let users set a separate `name` field for display.
-- **Heartbeat cadence** — how often does `agenticros_discovery`
+- **Heartbeat cadence** — how often does `synapse_discovery`
   publish `robot_info`? Recommendation: 1 Hz with 5 s staleness
   window.
 
 ### Phase 2 (decide at marketplace kickoff)
 
 - **Registry backend** — small Postgres + REST API behind
-  `skills.agenticros.com`, or static GitHub-Pages-style JSON index?
+  `skills.corebrum.com`, or static GitHub-Pages-style JSON index?
   Static is simpler and fully open; dynamic is required once we add
   paid skills.
 - **Identity** — npm-account based, GitHub OAuth, or new account
@@ -688,13 +688,13 @@ and primes Phase 2's marketplace launch.
 - **Commission split** — 70/30 (developer/platform) per App-Store
   precedent, but worth benchmarking against VS Code Marketplace +
   OpenClaw Hub at launch time.
-- **Cache strategy** — `~/.agenticros/skills-cache/` eviction policy:
+- **Cache strategy** — `~/.synapse/skills-cache/` eviction policy:
   LRU, never-evict, or per-version retention count? And: does the
   gateway boot in offline mode if the cache is warm but the
   marketplace is unreachable? Recommendation: never-evict by default
   + boot offline if all referenced skills are cached, since robotics
   deployments often run on intermittent networks.
-- **Registry vs npm** — proxy fetches through `skills.agenticros.com`
+- **Registry vs npm** — proxy fetches through `skills.corebrum.com`
   (telemetry, license enforcement, abuse handling) or fetch directly
   from npm (simpler, no marketplace dependency at runtime)?
   Recommendation: proxy for paid skills (needed for license check),

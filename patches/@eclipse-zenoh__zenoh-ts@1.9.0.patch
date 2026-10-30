@@ -8,7 +8,7 @@ index 4ac3967f589784380501e4cbf3c9dd11a07500d6..2fff09753f579735a52a6115fb89e292
          let retries = 0;
 -        let retryTimeoutMs = RETRY_TIMEOUT_MS;
          while (retries < MAX_RETRIES) {
-+            // Per-attempt timeout (AgenticROS: avoid unbounded growth across outer loop iterations)
++            // Per-attempt timeout (Corebrum Synapse: avoid unbounded growth across outer loop iterations)
 +            const retryTimeoutMs = Math.min(RETRY_TIMEOUT_MS + retries * 1500, 15000);
              let ws = new WebSocket(websocketEndpoint);
              ws.binaryType = "arraybuffer";
@@ -38,7 +38,7 @@ index 4ac3967f589784380501e4cbf3c9dd11a07500d6..2fff09753f579735a52a6115fb89e292
 -                ws = new WebSocket(websocketEndpoint);
 -                console.warn("Restart connection");
 -            }
-+            // AgenticROS: upstream never incremented `retries`, causing an infinite connect storm and
++            // Corebrum Synapse: upstream never incremented `retries`, causing an infinite connect storm and
 +            // zenoh remote-api 1006 / router disconnects. Back off between attempts.
 +            retries += 1;
 +            console.warn(`Restart connection (${retries}/${MAX_RETRIES})`);

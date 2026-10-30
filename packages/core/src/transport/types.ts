@@ -1,5 +1,5 @@
 /**
- * Shared types for the AgenticROS transport abstraction layer.
+ * Shared types for the Corebrum Synapse transport abstraction layer.
  */
 
 // --- Connection ---

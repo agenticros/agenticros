@@ -1,12 +1,18 @@
 # Explore / wander
 
-Canonical package: **[agenticros-skill-explore](https://github.com/agenticros/agenticros-skill-explore)** (`@agenticros/explore`).
+This project was previously known as AgenticROS.
 
-Frontier coverage (`explore`) and safe wandering (`wander`). The on-robot [`agenticros_explore`](../../ros2_ws/src/agenticros_explore) node sends Nav2 `NavigateToPose` goals; obstacle avoidance stays in Nav2. Pair with [`@agenticros/start-slam`](../start-slam/README.md) to persist an RTAB-Map database.
+
+This project was previously known as Corebrum Synapse.
+
+
+Canonical package: **[corebrum-skill-explore](https://github.com/Corebrum/corebrum-skill-explore)** (`@corebrum/explore`).
+
+Frontier coverage (`explore`) and safe wandering (`wander`). The on-robot [`synapse_explore`](../../ros2_ws/src/synapse_explore) node sends Nav2 `NavigateToPose` goals; obstacle avoidance stays in Nav2. Pair with [`@corebrum/start-slam`](../start-slam/README.md) to persist an RTAB-Map database.
 
 ```bash
-npx agenticros skills install @agenticros/explore
-npx agenticros skills install @agenticros/start-slam
+npx @corebrum/synapse skills install @corebrum/explore
+npx @corebrum/synapse skills install @corebrum/start-slam
 ```
 
 On the **robot**, install Nav2 + RTAB-Map before launching. Jazzy:
@@ -18,13 +24,13 @@ sudo apt-get install -y \
   ros-jazzy-rtabmap-ros
 ```
 
-Humble: the same names with `ros-humble-…`. Then, from `agenticros/ros2_ws`:
+Humble: the same names with `ros-humble-…`. Then, from `synapse/ros2_ws`:
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-colcon build --packages-select agenticros_msgs agenticros_explore agenticros_bringup
+colcon build --packages-select synapse_msgs synapse_explore synapse_bringup
 source install/setup.bash
-ros2 launch agenticros_bringup rtabmap_nav2.launch.py
+ros2 launch synapse_bringup rtabmap_nav2.launch.py
 ```
 
 Then `run_mission` with goal `"map the room"` or:
@@ -44,6 +50,6 @@ Then `run_mission` with goal `"map the room"` or:
 
 Wander only: `{ "capability": "wander", "inputs": { "timeout_s": 60 } }`.
 
-`agenticros up sim-amr --nav2` has a complete static map, so `explore` finishes quickly (no frontiers). `wander` still hops between free cells.
+`synapse up sim-amr --nav2` has a complete static map, so `explore` finishes quickly (no frontiers). `wander` still hops between free cells.
 
 Full bringup: **[docs/mapping.md](../../docs/mapping.md)**.

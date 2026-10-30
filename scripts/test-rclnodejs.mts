@@ -42,8 +42,8 @@ console.log("\n=== Test 2: init + createNode + spin ===");
 await rclnodejs.init();
 console.log("  ✓ rclnodejs.init() succeeded");
 
-const node = rclnodejs.createNode("agenticros_test");
-console.log("  ✓ createNode('agenticros_test') succeeded");
+const node = rclnodejs.createNode("synapse_test");
+console.log("  ✓ createNode('synapse_test') succeeded");
 
 rclnodejs.spin(node);
 console.log("  ✓ spin(node) started (non-blocking)");

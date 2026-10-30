@@ -23,7 +23,7 @@ import { listRobots } from "../robots.js";
 import { parseConfig } from "../config.js";
 
 test("parseRobotInfoMessage extracts fields", () => {
-  const hb = parseRobotInfoMessage("/bot1/agenticros/robot_info", {
+  const hb = parseRobotInfoMessage("/bot1/synapse/robot_info", {
     id: "kitchen",
     name: "Kitchen Bot",
     kind: "amr",
@@ -42,7 +42,7 @@ test("parseRobotInfoMessage extracts fields", () => {
 
 test("isHeartbeatFresh respects 5s window", () => {
   const now = 1_000_000;
-  const fresh = parseRobotInfoMessage("/n/agenticros/robot_info", {
+  const fresh = parseRobotInfoMessage("/n/synapse/robot_info", {
     id: "a",
     robot_namespace: "n",
     stamp: { sec: Math.floor((now - 2000) / 1000), nanosec: 0 },
@@ -57,7 +57,7 @@ test("isHeartbeatFresh respects 5s window", () => {
 
 test("onlineIdsFromHeartbeats maps to configured ids", () => {
   const now = Date.now();
-  const hb = parseRobotInfoMessage("/robotabc/agenticros/robot_info", {
+  const hb = parseRobotInfoMessage("/robotabc/synapse/robot_info", {
     id: "wire-id",
     robot_namespace: "robotabc",
     stamp: { sec: Math.floor(now / 1000), nanosec: 0 },
@@ -73,13 +73,13 @@ test("onlineIdsFromHeartbeats maps to configured ids", () => {
 
 test("mergeRobotHeartbeats keeps freshest per namespace", () => {
   const now = Date.now();
-  const older = parseRobotInfoMessage("/robotn/agenticros/robot_info", {
+  const older = parseRobotInfoMessage("/robotn/synapse/robot_info", {
     id: "a",
     robot_namespace: "robotn",
     name: "old",
   });
   older.stamp_ms = now - 1000;
-  const newer = parseRobotInfoMessage("/robotn/agenticros/robot_info", {
+  const newer = parseRobotInfoMessage("/robotn/synapse/robot_info", {
     id: "a",
     robot_namespace: "robotn",
     name: "new",
@@ -91,16 +91,16 @@ test("mergeRobotHeartbeats keeps freshest per namespace", () => {
 
 test("detectRobotsFromTopics includes robot_info-only namespaces", () => {
   const detected = detectRobotsFromTopics([
-    { name: "/arm1/agenticros/robot_info", type: "agenticros_msgs/msg/RobotInfo" },
+    { name: "/arm1/synapse/robot_info", type: "synapse_msgs/msg/RobotInfo" },
   ]);
   assert.equal(detected.length, 1);
   assert.equal(detected[0]!.id, "arm1");
 });
 
 test("discoverRobots treats robot_info topic as online signal", () => {
-  // Isolate from a real ~/.agenticros/fleet.json on the developer machine.
-  const prev = process.env.AGENTICROS_FLEET_PATH;
-  process.env.AGENTICROS_FLEET_PATH = join(tmpdir(), "no-fleet-for-discover-test.json");
+  // Isolate from a real ~/.synapse/fleet.json on the developer machine.
+  const prev = process.env.SYNAPSE_FLEET_PATH;
+  process.env.SYNAPSE_FLEET_PATH = join(tmpdir(), "no-fleet-for-discover-test.json");
   try {
     // Namespace must already be the on-wire form (or UUID) so
     // effectiveCmdVelNamespace matches the topic segment.
@@ -108,19 +108,19 @@ test("discoverRobots treats robot_info topic as online signal", () => {
       robots: [{ id: "arm1", namespace: "robotarm1", kind: "arm" }],
     });
     const result = discoverRobots(
-      [{ name: "/robotarm1/agenticros/robot_info", type: "agenticros_msgs/msg/RobotInfo" }],
+      [{ name: "/robotarm1/synapse/robot_info", type: "synapse_msgs/msg/RobotInfo" }],
       cfg,
     );
     assert.equal(result.configured_online.length, 1);
     assert.equal(result.configured_online[0]!.id, "arm1");
   } finally {
-    if (prev === undefined) delete process.env.AGENTICROS_FLEET_PATH;
-    else process.env.AGENTICROS_FLEET_PATH = prev;
+    if (prev === undefined) delete process.env.SYNAPSE_FLEET_PATH;
+    else process.env.SYNAPSE_FLEET_PATH = prev;
   }
 });
 
 test("loadFleetFile + applyFleetOverride wins over config.robots", () => {
-  const dir = mkdtempSync(join(tmpdir(), "agenticros-fleet-"));
+  const dir = mkdtempSync(join(tmpdir(), "synapse-fleet-"));
   const path = join(dir, "fleet.json");
   try {
     writeFileSync(
@@ -146,7 +146,7 @@ test("loadFleetFile + applyFleetOverride wins over config.robots", () => {
 });
 
 test("loadFleetFile missing file is unused", () => {
-  const result = loadFleetFile(join(tmpdir(), "no-such-agenticros-fleet-xyz.json"));
+  const result = loadFleetFile(join(tmpdir(), "no-such-synapse-fleet-xyz.json"));
   assert.equal(result.used, false);
   assert.equal(result.robots.length, 0);
 });

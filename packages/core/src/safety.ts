@@ -7,7 +7,7 @@
  * fleet does not share one clamp.
  */
 
-import type { AgenticROSConfig, RobotSafetyOverlay, WorkspaceLimits } from "./config.js";
+import type { SynapseConfig, RobotSafetyOverlay, WorkspaceLimits } from "./config.js";
 import type { ProfileRobot } from "./robot-profile.js";
 import { resolveBinding } from "./robot-profile.js";
 import type { RosTransport } from "./transport/transport.js";
@@ -54,7 +54,7 @@ function overlayOf(
  * win; unset fields inherit the gateway `config.safety` defaults.
  */
 export function resolveSafetyForRobot(
-  config: AgenticROSConfig,
+  config: SynapseConfig,
   robot?: { safety?: RobotSafetyOverlay } | null,
 ): SafetyLimits {
   const gateway = config.safety ?? {
@@ -230,7 +230,7 @@ export function checkWorkspacePayload(limits: SafetyLimits, payload: unknown): S
 }
 
 export function checkPublishSafety(
-  config: AgenticROSConfig,
+  config: SynapseConfig,
   params: Record<string, unknown>,
   robot?: { safety?: RobotSafetyOverlay } | null,
 ): SafetyCheckResult {
@@ -242,7 +242,7 @@ export function checkPublishSafety(
 }
 
 export function checkActionGoalSafety(
-  config: AgenticROSConfig,
+  config: SynapseConfig,
   params: Record<string, unknown>,
   robot?: { safety?: RobotSafetyOverlay } | null,
 ): SafetyCheckResult {
@@ -252,7 +252,7 @@ export function checkActionGoalSafety(
 }
 
 export function checkInputsWorkspace(
-  config: AgenticROSConfig,
+  config: SynapseConfig,
   inputs: Record<string, unknown>,
   robot?: { safety?: RobotSafetyOverlay } | null,
 ): SafetyCheckResult {

@@ -1,6 +1,6 @@
 /**
  * Merge a hive patch into a raw config object (no Zod). Used by the CLI
- * and hive_enable so adapters can write ~/.agenticros/config.json without
+ * and hive_enable so adapters can write ~/.synapse/config.json without
  * pulling transport deps beyond what's already imported.
  */
 

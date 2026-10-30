@@ -1,5 +1,5 @@
 /**
- * Operator gate for installing or creating an AgenticROS skill.
+ * Operator gate for installing or creating a Corebrum Synapse skill.
  * A non-interactive caller cannot skip the desktop prompt with --yes.
  */
 
@@ -9,7 +9,7 @@ import { existsSync } from "node:fs";
 import { missingFeatures, type RobotProfile } from "./robot-profile.js";
 import { skillsApiBase } from "./skill-refs.js";
 
-export const SKILL_GRANT_ENV = "AGENTICROS_SKILL_GRANT";
+export const SKILL_GRANT_ENV = "SYNAPSE_SKILL_GRANT";
 
 const EXTERNAL_STACK_NOTES: Record<string, string> = {
   navigate_to: "Nav2 is not started by this install. Bring it up before navigate_to can run.",
@@ -126,7 +126,7 @@ export function runApproveHelper(title: string, author: string, detail: string):
 }
 
 export function runGrantedCli(args: string[]): Promise<{ code: number; output: string }> {
-  const bin = process.env.AGENTICROS_BIN?.trim() || "agenticros";
+  const bin = process.env.SYNAPSE_BIN?.trim() || "synapse";
   return new Promise((resolve) => {
     const child = spawn(bin, args, {
       env: { ...process.env, [SKILL_GRANT_ENV]: "1" },
@@ -217,7 +217,7 @@ export async function installSkillForOperator(input: {
   const title = listing?.displayName?.trim() || ref;
   const author = listing?.maintainerLogin ? `@${listing.maintainerLogin}` : ref;
   const detail = [
-    listing?.description?.trim() || "Install this AgenticROS skill on this machine.",
+    listing?.description?.trim() || "Install this Corebrum Synapse skill on this machine.",
     input.reason?.trim() ? `Reason: ${input.reason.trim()}` : "",
     ...notes,
   ]

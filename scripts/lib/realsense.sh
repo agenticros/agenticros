@@ -1,4 +1,4 @@
-# Shared RealSense launch helpers for start_demo.sh and agenticros start realsense.
+# Shared RealSense launch helpers for start_demo.sh and synapse start realsense.
 #
 # Callers must set (or accept defaults):
 #   ROS_DISTRO, CAMERA_LOG, CAMERA_PID_FILE
@@ -9,10 +9,10 @@
 #   else  → depth/infra + RGB 424x240@6 (+ RGBD/IMU)
 # NOTE: 320x180 is NOT supported on many D4xx RGB sensors — the node silently
 # falls back to a high-res default (e.g. 1280x720) and floods WebRTC.
-# Escape hatch: AGENTICROS_REALSENSE_FULL=1 or arg "full" → stock rs_launch.py defaults.
+# Escape hatch: SYNAPSE_REALSENSE_FULL=1 or arg "full" → stock rs_launch.py defaults.
 
-CAMERA_LOG="${CAMERA_LOG:-/tmp/agenticros-camera.log}"
-CAMERA_PID_FILE="${CAMERA_PID_FILE:-/tmp/agenticros-camera.pid}"
+CAMERA_LOG="${CAMERA_LOG:-/tmp/synapse-camera.log}"
+CAMERA_PID_FILE="${CAMERA_PID_FILE:-/tmp/synapse-camera.pid}"
 
 # True when rs-enumerate-devices reports D4XX Recovery firmware (camera won't stream).
 realsense_in_recovery_mode() {
@@ -25,10 +25,10 @@ realsense_print_recovery_help() {
     echo "          The camera node will start but publish no images on ROS topics." >&2
     echo "" >&2
     echo "   Fix (stop any running camera node first):" >&2
-    echo "     agenticros stop realsense   # or: agenticros down" >&2
+    echo "     synapse stop realsense   # or: synapse down" >&2
     echo "     rs-fw-update -r" >&2
     echo "     rs-enumerate-devices -s    # should show D4xx + real serial" >&2
-    echo "     agenticros start realsense" >&2
+    echo "     synapse start realsense" >&2
     echo "" >&2
     echo "   If recovery fails: unplug USB 10s, use a USB 3.0 port + data cable." >&2
     echo "   Logs: $CAMERA_LOG" >&2
@@ -72,16 +72,16 @@ realsense_verify_started() {
 
 # Build ros2 launch args for teleop (low bandwidth) or full defaults.
 # Args / env:
-#   pointcloud | AGENTICROS_REALSENSE_POINTCLOUD=1
-#   full | AGENTICROS_REALSENSE_FULL=1
-#   AGENTICROS_REALSENSE_MODEL=D421|D435|… (portal camera field)
-#   AGENTICROS_REALSENSE_CAMERA_NAMESPACE  → camera_namespace:=
-#   AGENTICROS_REALSENSE_PUBLISH_TF=false  → publish_tf:=false (shadow AMR overlay)
-#   AGENTICROS_REALSENSE_ALIGN_DEPTH=1     → align_depth.enable:=true + enable_sync:=true
+#   pointcloud | SYNAPSE_REALSENSE_POINTCLOUD=1
+#   full | SYNAPSE_REALSENSE_FULL=1
+#   SYNAPSE_REALSENSE_MODEL=D421|D435|… (portal camera field)
+#   SYNAPSE_REALSENSE_CAMERA_NAMESPACE  → camera_namespace:=
+#   SYNAPSE_REALSENSE_PUBLISH_TF=false  → publish_tf:=false (shadow AMR overlay)
+#   SYNAPSE_REALSENSE_ALIGN_DEPTH=1     → align_depth.enable:=true + enable_sync:=true
 realsense_launch_args() {
     local enable_pointcloud=0
     local use_full=0
-    local model="${AGENTICROS_REALSENSE_MODEL:-}"
+    local model="${SYNAPSE_REALSENSE_MODEL:-}"
     local arg
     for arg in "$@"; do
         case "$arg" in
@@ -90,10 +90,10 @@ realsense_launch_args() {
             model=*) model="${arg#model=}" ;;
         esac
     done
-    if [[ "${AGENTICROS_REALSENSE_POINTCLOUD:-}" == "1" ]]; then
+    if [[ "${SYNAPSE_REALSENSE_POINTCLOUD:-}" == "1" ]]; then
         enable_pointcloud=1
     fi
-    if [[ "${AGENTICROS_REALSENSE_FULL:-}" == "1" ]]; then
+    if [[ "${SYNAPSE_REALSENSE_FULL:-}" == "1" ]]; then
         use_full=1
     fi
 
@@ -132,15 +132,15 @@ realsense_launch_args() {
         echo "   pointcloud.enabled:=true" >&2
     fi
 
-    if [[ -n "${AGENTICROS_REALSENSE_CAMERA_NAMESPACE:-}" ]]; then
-        launch_args+=("camera_namespace:=${AGENTICROS_REALSENSE_CAMERA_NAMESPACE}")
-        echo "   camera_namespace:=${AGENTICROS_REALSENSE_CAMERA_NAMESPACE}" >&2
+    if [[ -n "${SYNAPSE_REALSENSE_CAMERA_NAMESPACE:-}" ]]; then
+        launch_args+=("camera_namespace:=${SYNAPSE_REALSENSE_CAMERA_NAMESPACE}")
+        echo "   camera_namespace:=${SYNAPSE_REALSENSE_CAMERA_NAMESPACE}" >&2
     fi
-    if [[ "${AGENTICROS_REALSENSE_PUBLISH_TF:-}" == "false" ]]; then
+    if [[ "${SYNAPSE_REALSENSE_PUBLISH_TF:-}" == "false" ]]; then
         launch_args+=("publish_tf:=false")
         echo "   publish_tf:=false" >&2
     fi
-    if [[ "${AGENTICROS_REALSENSE_ALIGN_DEPTH:-}" == "1" ]]; then
+    if [[ "${SYNAPSE_REALSENSE_ALIGN_DEPTH:-}" == "1" ]]; then
         launch_args+=("align_depth.enable:=true" "enable_sync:=true")
         echo "   align_depth.enable:=true  enable_sync:=true" >&2
     fi
@@ -152,11 +152,11 @@ realsense_launch_args() {
 
 # Optional args: pointcloud, full, model=D421
 # Default teleop start always stop+relaunch so a leftover full-res node cannot stick.
-# Set AGENTICROS_REALSENSE_KEEP=1 to keep an already-running node (old adopt behavior).
+# Set SYNAPSE_REALSENSE_KEEP=1 to keep an already-running node (old adopt behavior).
 start_realsense_camera() {
     echo "==> Starting RealSense camera (logs: $CAMERA_LOG)"
 
-    local keep_existing="${AGENTICROS_REALSENSE_KEEP:-0}"
+    local keep_existing="${SYNAPSE_REALSENSE_KEEP:-0}"
     local already_running=0
     if [[ -f "$CAMERA_PID_FILE" ]] && kill -0 "$(cat "$CAMERA_PID_FILE")" 2>/dev/null; then
         already_running=1
@@ -167,7 +167,7 @@ start_realsense_camera() {
     if [[ "$already_running" == "1" ]]; then
         if [[ "$keep_existing" == "1" ]]; then
             if [[ -f "$CAMERA_PID_FILE" ]] && kill -0 "$(cat "$CAMERA_PID_FILE")" 2>/dev/null; then
-                echo "   Already running (pid $(cat "$CAMERA_PID_FILE")) — keeping (AGENTICROS_REALSENSE_KEEP=1)"
+                echo "   Already running (pid $(cat "$CAMERA_PID_FILE")) — keeping (SYNAPSE_REALSENSE_KEEP=1)"
             else
                 local existing_pid
                 existing_pid=$(pgrep -f "realsense2_camera_node" | head -n 1)

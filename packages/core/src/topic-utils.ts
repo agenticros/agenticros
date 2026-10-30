@@ -1,11 +1,11 @@
-import type { AgenticROSConfig } from "./config.js";
+import type { SynapseConfig } from "./config.js";
 
 /**
  * Topic-utility module — the single source of truth for namespace
  * prefixing across all adapters and the mission runner.
  *
  * Phase 1.d (multi-robot) extends every public helper to accept *either*
- * the full AgenticROSConfig (uses config.robot.namespace, the legacy
+ * the full SynapseConfig (uses config.robot.namespace, the legacy
  * single-robot behaviour) *or* a bare namespace string. The string-arg
  * form is what per-tool `robot_id` routing goes through: callers resolve
  * a `ResolvedRobot` via `resolveRobot(config, robot_id)` and pass
@@ -32,12 +32,12 @@ function isRootLevelTopic(normalized: string): boolean {
 }
 
 /**
- * Resolve a namespace from either a string or an AgenticROSConfig. The
+ * Resolve a namespace from either a string or an SynapseConfig. The
  * config form pulls from config.robot.namespace (legacy single-robot
  * behaviour); the string form is taken verbatim. Empty/whitespace
  * collapses to "" so the rest of the prefix logic short-circuits.
  */
-function resolveNamespace(target: AgenticROSConfig | string): string {
+function resolveNamespace(target: SynapseConfig | string): string {
   if (typeof target === "string") return target.trim();
   return (target.robot?.namespace ?? "").trim();
 }
@@ -47,7 +47,7 @@ function resolveNamespace(target: AgenticROSConfig | string): string {
  * If the namespace is set and the name is root-level (e.g. cmd_vel, battery_state),
  * returns /<namespace>/<name>. Otherwise returns the normalized name as-is.
  *
- * The first argument may be either an `AgenticROSConfig` (legacy single-
+ * The first argument may be either an `SynapseConfig` (legacy single-
  * robot path) or a bare namespace string (used by per-tool `robot_id`
  * routing — pass `resolveRobot(config, robot_id).namespace`).
  *
@@ -55,7 +55,7 @@ function resolveNamespace(target: AgenticROSConfig | string): string {
  * Example: namespace "", topic "/cmd_vel" -> "/cmd_vel"
  * Example: namespace "robot-uuid", topic "/robot-uuid/odom" -> "/robot-uuid/odom" (unchanged)
  */
-export function toNamespacedTopic(target: AgenticROSConfig | string, topic: string): string {
+export function toNamespacedTopic(target: SynapseConfig | string, topic: string): string {
   const normalized = normalizeTopic(topic);
   const ns = resolveNamespace(target);
   if (!ns) return normalized;
@@ -70,14 +70,14 @@ export function toNamespacedTopic(target: AgenticROSConfig | string, topic: stri
  * zenoh-bridge-ros2dds or rmw_zenoh). If a namespace is set, returns /<namespace>/<topic>
  * unless the topic already starts with /<namespace>/.
  *
- * The first argument may be either an `AgenticROSConfig` or a bare
+ * The first argument may be either an `SynapseConfig` or a bare
  * namespace string (per-robot routing).
  *
  * Example: namespace "robot-uuid", topic "/cmd_vel" -> "/robot-uuid/cmd_vel"
  * Example: namespace "robot-uuid", topic "/camera/camera/color/image_raw/compressed" -> "/robot-uuid/camera/camera/color/image_raw/compressed"
  * Example: namespace "robot-uuid", topic "/robot-uuid/odom" -> "/robot-uuid/odom" (unchanged)
  */
-export function toNamespacedTopicFull(target: AgenticROSConfig | string, topic: string): string {
+export function toNamespacedTopicFull(target: SynapseConfig | string, topic: string): string {
   const normalized = normalizeTopic(topic);
   const ns = resolveNamespace(target);
   if (!ns) return normalized;
@@ -93,7 +93,7 @@ export function toNamespacedTopicFull(target: AgenticROSConfig | string, topic: 
  *
  * Teleop is single-robot today, so this still takes the full config.
  */
-export function toTeleopCameraTopicShort(config: AgenticROSConfig, topic: string): string {
+export function toTeleopCameraTopicShort(config: SynapseConfig, topic: string): string {
   const normalized = normalizeTopic(topic);
   const ns = (config.robot?.namespace ?? "").trim();
   if (!ns) return normalized;
@@ -113,10 +113,10 @@ export function toTeleopCameraTopicShort(config: AgenticROSConfig, topic: string
  * even when the namespace is set for cmd_vel. If the topic already starts with `/<namespace>/`, it is left as-is.
  * Other multi-segment paths get the namespace prefix (same as Full) for odd layouts.
  *
- * The first argument may be either an `AgenticROSConfig` or a bare
+ * The first argument may be either an `SynapseConfig` or a bare
  * namespace string (per-robot routing).
  */
-export function resolveCameraSubscribeTopic(target: AgenticROSConfig | string, topic: string): string {
+export function resolveCameraSubscribeTopic(target: SynapseConfig | string, topic: string): string {
   const normalized = normalizeTopic(topic);
   const ns = resolveNamespace(target);
   if (!ns) return normalized;

@@ -6,12 +6,12 @@
  *
  *   1. Add a new file to packages/core/src/ (e.g. capabilities.ts, mission.ts).
  *   2. Build core. The workspace's dist/ has the new file.
- *   3. External skill repos consume @agenticros/core via `file:` deps, so
+ *   3. External skill repos consume @corebrum/core via `file:` deps, so
  *      pnpm hardlinks them through a virtual store snapshot
- *      (.pnpm/@agenticros+core@file+..+agenticros+packages+core/...).
+ *      (.pnpm/@synapse+core@file+..+synapse+packages+core/...).
  *   4. That snapshot is taken once at install time and is NEVER refreshed
  *      automatically when the source's dist/ gains new files.
- *   5. The skill repo's @agenticros/core now silently lags behind. Imports
+ *   5. The skill repo's @corebrum/core now silently lags behind. Imports
  *      that reference the new file fail with ERR_MODULE_NOT_FOUND.
  *   6. `sync-skill-tools.mjs` runs, fails to import the skill, and (prior
  *      to the hardening done alongside this script) silently strips the
@@ -22,7 +22,7 @@
  *
  * This script detects + repairs that cascade. It compares the workspace's
  * packages/core/dist/ file list against each skill repo's resolved
- * @agenticros/core/dist/. If anything is missing, it refreshes the skill
+ * @corebrum/core/dist/. If anything is missing, it refreshes the skill
  * repo's node_modules (pnpm install, escalating to a clean reinstall if
  * pnpm decides to no-op).
  *
@@ -37,11 +37,11 @@
  *
  * Discovery order for skill paths (deduped):
  *   1. --skill <path> CLI flags
- *   2. AGENTICROS_SKILL_PATHS env var (colon-separated)
+ *   2. SYNAPSE_SKILL_PATHS env var (colon-separated)
  *   3. OpenClaw config (OPENCLAW_CONFIG or ~/.openclaw/openclaw.json)
- *      under plugins.entries.agenticros.config.skillPaths
- *   4. AgenticROS standalone config (AGENTICROS_CONFIG_PATH or
- *      ~/.agenticros/config.json) under skillPaths
+ *      under plugins.entries.synapse.config.skillPaths
+ *   4. Corebrum Synapse standalone config (SYNAPSE_CONFIG_PATH or
+ *      ~/.synapse/config.json) under skillPaths
  *
  * Exit codes:
  *   0 — nothing was stale, OR every stale repo was refreshed successfully
@@ -124,8 +124,8 @@ export function discoverSkillPaths({ extraSkillPaths = [] } = {}) {
   const out = new Set();
   for (const p of extraSkillPaths) if (p) out.add(resolve(p));
 
-  if (process.env.AGENTICROS_SKILL_PATHS) {
-    for (const p of process.env.AGENTICROS_SKILL_PATHS.split(":")) {
+  if (process.env.SYNAPSE_SKILL_PATHS) {
+    for (const p of process.env.SYNAPSE_SKILL_PATHS.split(":")) {
       if (p) out.add(resolve(p));
     }
   }
@@ -135,19 +135,19 @@ export function discoverSkillPaths({ extraSkillPaths = [] } = {}) {
     join(homedir(), ".openclaw", "openclaw.json");
   const openclawConfig = readJsonSafe(openclawConfigPath);
   const pluginCfg =
-    openclawConfig?.plugins?.entries?.agenticros?.config ??
-    openclawConfig?.plugins?.agenticros?.config ??
+    openclawConfig?.plugins?.entries?.synapse?.config ??
+    openclawConfig?.plugins?.synapse?.config ??
     null;
   if (pluginCfg?.skillPaths && Array.isArray(pluginCfg.skillPaths)) {
     for (const p of pluginCfg.skillPaths) if (p) out.add(resolve(p));
   }
 
-  const agenticrosConfigPath =
-    process.env.AGENTICROS_CONFIG_PATH ||
-    join(homedir(), ".agenticros", "config.json");
-  const agenticrosConfig = readJsonSafe(agenticrosConfigPath);
-  if (agenticrosConfig?.skillPaths && Array.isArray(agenticrosConfig.skillPaths)) {
-    for (const p of agenticrosConfig.skillPaths) if (p) out.add(resolve(p));
+  const synapseConfigPath =
+    process.env.SYNAPSE_CONFIG_PATH ||
+    join(homedir(), ".synapse", "config.json");
+  const synapseConfig = readJsonSafe(synapseConfigPath);
+  if (synapseConfig?.skillPaths && Array.isArray(synapseConfig.skillPaths)) {
+    for (const p of synapseConfig.skillPaths) if (p) out.add(resolve(p));
   }
 
   return [...out];
@@ -197,12 +197,12 @@ export function findMissingFiles(sourceFiles, targetFiles) {
  * Check one skill repo for staleness against the workspace core's dist/.
  *
  * Returns: { skillPath, hasCoreLink, missingFiles, sourceCount, targetCount }
- *   - hasCoreLink: false → skill doesn't depend on @agenticros/core (skip).
+ *   - hasCoreLink: false → skill doesn't depend on @corebrum/core (skip).
  *   - missingFiles: non-empty → STALE; needs refresh.
  */
 export function checkSkillStaleness(skillPath, opts = {}) {
   const sourceCoreDist = opts.sourceCoreDist ?? CORE_DIST;
-  const coreLink = join(skillPath, "node_modules", "@agenticros", "core");
+  const coreLink = join(skillPath, "node_modules", "@synapse", "core");
   if (!existsSync(coreLink)) {
     return {
       skillPath,
@@ -238,7 +238,7 @@ function log(opts, level, ...m) {
 }
 
 function runPnpm(args, cwd, opts) {
-  // --ignore-workspace prevents pnpm from picking up the agenticros
+  // --ignore-workspace prevents pnpm from picking up the synapse
   // workspace's pnpm-workspace.yaml when the skill repo sits next to it on
   // disk. Without it pnpm errors with "packages field missing or empty"
   // because it thinks the skill is part of a workspace that doesn't
@@ -307,13 +307,13 @@ async function main(argv) {
   const opts = parseArgs(argv);
   const skillPaths = discoverSkillPaths({ extraSkillPaths: opts.extraSkillPaths });
   if (skillPaths.length === 0) {
-    log(opts, "info", "No skill paths discovered (checked --skill, AGENTICROS_SKILL_PATHS, ~/.openclaw/openclaw.json, ~/.agenticros/config.json).");
+    log(opts, "info", "No skill paths discovered (checked --skill, SYNAPSE_SKILL_PATHS, ~/.openclaw/openclaw.json, ~/.synapse/config.json).");
     return 0;
   }
 
   log(opts, "info", `Checking ${skillPaths.length} skill path(s) against ${CORE_DIST}`);
   if (!existsSync(CORE_DIST)) {
-    log(opts, "error", `packages/core/dist/ does not exist. Run \`pnpm --filter @agenticros/core build\` first.`);
+    log(opts, "error", `packages/core/dist/ does not exist. Run \`pnpm --filter @corebrum/core build\` first.`);
     return 2;
   }
 
@@ -331,7 +331,7 @@ async function main(argv) {
     }
     const status = checkSkillStaleness(skillPath);
     if (!status.hasCoreLink && !opts.force) {
-      log(opts, "verbose", `· ${skillPath}: no @agenticros/core dep; skipping`);
+      log(opts, "verbose", `· ${skillPath}: no @corebrum/core dep; skipping`);
       skipped++;
       continue;
     }
@@ -345,7 +345,7 @@ async function main(argv) {
       log(
         opts,
         "info",
-        `· ${skillPath}: STALE — missing ${status.missingFiles.length} file(s) in @agenticros/core/dist` +
+        `· ${skillPath}: STALE — missing ${status.missingFiles.length} file(s) in @corebrum/core/dist` +
           (opts.verbose ? `: ${status.missingFiles.join(", ")}` : ""),
       );
     } else {

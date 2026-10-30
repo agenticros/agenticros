@@ -1,0 +1,106 @@
+/**
+ * Runner: `synapse up real`.
+ *
+ * Spawns scripts/start_demo.sh as a child process and streams its output.
+ * start_demo.sh always tries the RealSense camera (unless --no-camera) and
+ * starts the local motor controller via packages/synapse-robot
+ * (unless --no-motors).
+ */
+
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+
+import { execa } from "execa";
+
+import { getCliPaths } from "../util/paths.js";
+import { detectRosDistro } from "../util/env.js";
+import { err, header, info, ok } from "../util/logger.js";
+import { ensureWorkspaceReady } from "../util/workspace.js";
+import { getActiveRobotId, readConfigObject, readRobots } from "../util/robot-config.js";
+
+export interface RealRobotOptions {
+  rosDistro?: string;
+  camera?: boolean;
+  motors?: boolean;
+  map?: boolean;
+  wheelOdom?: boolean;
+}
+
+function activeRobotNamespace(): string {
+  const obj = readConfigObject();
+  const { robots } = readRobots(obj);
+  const activeId = getActiveRobotId(obj);
+  const match = robots.find((r) => r.id === activeId);
+  const fromRobot = (obj["robot"] as { namespace?: string } | undefined)?.namespace;
+  return (match?.namespace ?? fromRobot ?? "").trim();
+}
+
+export async function runRealRobot(opts: RealRobotOptions): Promise<void> {
+  header("Corebrum Synapse - real robot");
+
+  const paths = getCliPaths();
+  const script = join(paths.scriptsDir, "start_demo.sh");
+  if (!existsSync(script)) {
+    err(`start_demo.sh not found at ${script}.`);
+    err(
+      "Run `synapse init` first; if you're using `npx`, this is a CLI bug — file an issue.",
+    );
+    process.exit(1);
+  }
+
+  // Auto-recover if the workspace isn't installed/built. start_demo.sh would
+  // also try to build, but it doesn't run `pnpm install` first - so a partial
+  // ~/synapse (node_modules dir exists but no .pnpm, .bin missing) breaks
+  // it. Doing it here means picking "Launch with real robot" on a fresh
+  // install just works without the user having to know about `init` first.
+  if (paths.repoRoot) {
+    await ensureWorkspaceReady(paths.repoRoot, "the real-robot demo");
+  }
+
+  const ros = detectRosDistro(opts.rosDistro);
+  if (!ros.distro) {
+    err("No ROS 2 installation detected under /opt/ros/. Install ROS 2 Humble or Jazzy first.");
+    process.exit(1);
+  }
+
+  const env = { ...process.env };
+  if (opts.camera === false) env["SYNAPSE_NO_CAMERA"] = "1";
+  if (opts.motors === false) env["SYNAPSE_NO_MOTORS"] = "1";
+
+  info(`Sourcing /opt/ros/${ros.distro}/setup.bash then running start_demo.sh…`);
+  try {
+    await execa("bash", [script, ros.distro], {
+      env,
+      stdio: "inherit",
+    });
+  } catch (e) {
+    err(`start_demo.sh failed: ${e instanceof Error ? e.message : String(e)}`);
+    process.exit(1);
+  }
+
+  if (opts.map !== true) return;
+
+  const mapScript = join(paths.scriptsDir, "start_mapping.sh");
+  if (!existsSync(mapScript)) {
+    err(`start_mapping.sh not found at ${mapScript}.`);
+    process.exit(1);
+  }
+  const ns = activeRobotNamespace();
+  const mapEnv = {
+    ...env,
+    SYNAPSE_ROBOT_NAMESPACE: ns,
+    ...(opts.wheelOdom === true ? { SYNAPSE_WHEEL_ODOM: "1" } : {}),
+  };
+  header("Mapping stack (RTAB-Map + Nav2)");
+  info(`robot_namespace=${ns || "(none)"}  visual_odometry=${opts.wheelOdom ? "false (wheel /odom)" : "true"}`);
+  ok('Next after this stays up: synapse skills install --bundle mapping');
+  try {
+    await execa("bash", [mapScript, ros.distro], {
+      env: mapEnv,
+      stdio: "inherit",
+    });
+  } catch (e) {
+    err(`Mapping launch failed: ${e instanceof Error ? e.message : String(e)}`);
+    process.exit(1);
+  }
+}

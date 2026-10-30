@@ -1,7 +1,7 @@
 /**
  * `TransportPool` — Phase 1.d shared multi-robot transport pool.
  *
- * Lives in `@agenticros/core` so every adapter (Claude Code, Gemini,
+ * Lives in `@corebrum/core` so every adapter (Claude Code, Gemini,
  * future ones) can route per-robot transports through the same battle-
  * tested implementation. OpenClaw's plugin uses a thinner add-on
  * because its existing service has long-lived eager-connect / poll
@@ -42,7 +42,7 @@
  */
 
 import type {
-  AgenticROSConfig,
+  SynapseConfig,
   ResolvedRobot,
   RosTransport,
   TransportConfig,
@@ -68,7 +68,7 @@ export class TransportPool {
   private readonly inFlight = new Map<string, Promise<RosTransport>>();
   private readonly failSafeUnsub = new Map<string, () => void>();
   /** Last config passed to acquire — used to resolve which robots share a transport on drain. */
-  private lastConfig: AgenticROSConfig | undefined;
+  private lastConfig: SynapseConfig | undefined;
 
   constructor(private readonly factory: TransportFactory = createTransport) {}
 
@@ -76,7 +76,7 @@ export class TransportPool {
    * Acquire (lazy-connect on first call) the transport for this robot.
    * See the module docstring for the full key + caching contract.
    */
-  async acquire(config: AgenticROSConfig, robot: ResolvedRobot): Promise<RosTransport> {
+  async acquire(config: SynapseConfig, robot: ResolvedRobot): Promise<RosTransport> {
     this.lastConfig = config;
     const key = hasRobotTransportOverride(config, robot.id)
       ? robot.id
@@ -93,7 +93,7 @@ export class TransportPool {
    * adapters that want to pay the connect-latency tax upfront instead
    * of on the first tool call.
    */
-  async connectActive(config: AgenticROSConfig): Promise<void> {
+  async connectActive(config: SynapseConfig): Promise<void> {
     const robot = resolveRobot(config);
     await this.acquire(config, robot);
   }
@@ -205,7 +205,7 @@ async function connectWithTimeout(t: RosTransport): Promise<void> {
   await Promise.race([t.connect(), timeout]);
 }
 
-function robotsForPoolKey(config: AgenticROSConfig, key: string): ResolvedRobot[] {
+function robotsForPoolKey(config: SynapseConfig, key: string): ResolvedRobot[] {
   const robots = listRobots(config);
   if (key === TRANSPORT_POOL_GLOBAL_KEY) {
     return robots.filter((r) => !hasRobotTransportOverride(config, r.id));

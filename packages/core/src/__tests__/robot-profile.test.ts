@@ -30,7 +30,7 @@ test("profile: parseConfig accepts robots[].profile", () => {
         id: "warehouse",
         namespace: "wh",
         profile: {
-          schema: "agenticros.profile.v1",
+          schema: "synapse.profile.v1",
           features: ["base", "camera", "depth"],
           bindings: {
             cmd_vel: "/cmd_vel",
@@ -184,7 +184,7 @@ test("profile: inferProfileDraft from kind + cameraTopic + sensors", () => {
 });
 
 test("profile: featuresSatisfied / missingFeatures / unknownFeatures", () => {
-  const profile = { schema: "agenticros.profile.v1" as const, features: ["base"], bindings: {} };
+  const profile = { schema: "synapse.profile.v1" as const, features: ["base"], bindings: {} };
   assert.equal(featuresSatisfied(profile, ["base"]), true);
   assert.equal(featuresSatisfied(profile, ["base", "camera"]), false);
   assert.deepEqual(missingFeatures(profile, ["base", "camera"]), ["camera"]);
@@ -194,7 +194,7 @@ test("profile: featuresSatisfied / missingFeatures / unknownFeatures", () => {
 
 test("profile: featuresMissingBindings flags declared features without a v1 binding", () => {
   const missing = featuresMissingBindings({
-    schema: "agenticros.profile.v1",
+    schema: "synapse.profile.v1",
     features: ["base", "camera"],
     bindings: { cmd_vel: "/cmd_vel" },
   });

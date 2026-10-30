@@ -80,21 +80,21 @@ describe("person-gaze", () => {
     assert.equal(jpegFromCompressed({}), null);
   });
 
-  it("yolov8ModelExists is false for a missing AGENTICROS_YOLOV8_MODEL", () => {
-    const prev = process.env.AGENTICROS_YOLOV8_MODEL;
-    process.env.AGENTICROS_YOLOV8_MODEL = join(
+  it("yolov8ModelExists is false for a missing SYNAPSE_YOLOV8_MODEL", () => {
+    const prev = process.env.SYNAPSE_YOLOV8_MODEL;
+    process.env.SYNAPSE_YOLOV8_MODEL = join(
       tmpdir(),
-      "agenticros-no-such-yolo.onnx",
+      "synapse-no-such-yolo.onnx",
     );
     try {
       assert.equal(yolov8ModelExists(), false);
       assert.equal(
         yolov8ModelPath(),
-        process.env.AGENTICROS_YOLOV8_MODEL,
+        process.env.SYNAPSE_YOLOV8_MODEL,
       );
     } finally {
-      if (prev === undefined) delete process.env.AGENTICROS_YOLOV8_MODEL;
-      else process.env.AGENTICROS_YOLOV8_MODEL = prev;
+      if (prev === undefined) delete process.env.SYNAPSE_YOLOV8_MODEL;
+      else process.env.SYNAPSE_YOLOV8_MODEL = prev;
     }
   });
 
@@ -102,13 +102,13 @@ describe("person-gaze", () => {
     const dir = mkdtempSync(join(tmpdir(), "eyes-yolo-"));
     const file = join(dir, "yolov8n.onnx");
     writeFileSync(file, Buffer.alloc(1_000_001));
-    const prev = process.env.AGENTICROS_YOLOV8_MODEL;
-    process.env.AGENTICROS_YOLOV8_MODEL = file;
+    const prev = process.env.SYNAPSE_YOLOV8_MODEL;
+    process.env.SYNAPSE_YOLOV8_MODEL = file;
     try {
       assert.equal(yolov8ModelExists(), true);
     } finally {
-      if (prev === undefined) delete process.env.AGENTICROS_YOLOV8_MODEL;
-      else process.env.AGENTICROS_YOLOV8_MODEL = prev;
+      if (prev === undefined) delete process.env.SYNAPSE_YOLOV8_MODEL;
+      else process.env.SYNAPSE_YOLOV8_MODEL = prev;
       rmSync(dir, { recursive: true, force: true });
     }
   });

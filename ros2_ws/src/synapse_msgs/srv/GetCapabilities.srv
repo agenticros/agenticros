@@ -1,0 +1,5 @@
+string robot_namespace
+---
+synapse_msgs/CapabilityManifest manifest
+bool success
+string error_message

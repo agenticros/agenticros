@@ -1,10 +1,10 @@
 /**
- * @agenticros/core — Platform-agnostic ROS2 transport, config, and utilities.
+ * @corebrum/core — Platform-agnostic ROS2 transport, config, and utilities.
  */
 
-export type { AgenticROSConfig, RobotTransportOverride, RobotSafetyOverlay, WorkspaceLimits } from "./config.js";
+export type { SynapseConfig, RobotTransportOverride, RobotSafetyOverlay, WorkspaceLimits } from "./config.js";
 export {
-  AgenticROSConfigSchema,
+  SynapseConfigSchema,
   parseConfig,
   prepareConfigForPersistence,
   getTransportConfig,
@@ -92,9 +92,9 @@ export type {
 } from "./safety.js";
 export { isCdrTypeSupported } from "./transport/zenoh/cdr.js";
 export {
-  renderAgenticROSBanner,
-  agenticROSBannerLines,
-  type AgenticROSBannerOptions,
+  renderSynapseBanner,
+  synapseBannerLines,
+  type SynapseBannerOptions,
 } from "./banner.js";
 
 export { createMemory, resolveMemoryNamespace } from "./memory/index.js";

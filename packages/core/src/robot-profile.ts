@@ -68,7 +68,7 @@ export const FEATURE_REQUIRED_BINDING: Readonly<Partial<Record<FeatureName, Bind
   battery: "battery",
 };
 
-export const PROFILE_SCHEMA_ID = "agenticros.profile.v1";
+export const PROFILE_SCHEMA_ID = "synapse.profile.v1";
 
 export const RobotProfileSchema = z.object({
   schema: z.literal(PROFILE_SCHEMA_ID).default(PROFILE_SCHEMA_ID),
@@ -212,7 +212,7 @@ export interface InferProfileOptions {
 
 /**
  * Draft a profile from kind, cameraTopic, deprecated sensors, and
- * namespaced cmd_vel. Used by `agenticros robots profile infer`.
+ * namespaced cmd_vel. Used by `synapse robots profile infer`.
  * Does not write config.
  */
 export function inferProfileDraft(

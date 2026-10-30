@@ -2,7 +2,7 @@
 
 Assemble a small differential-drive robot, wire compute GPIOs to an **L298N** dual H-bridge, publish `/cmd_vel` and `/odom`, then hand the same stack to an AI agent (OpenClaw, Claude, Codex, Hermes, Gemini).
 
-**This page is hardware only.** After the base moves and RealSense publishes, continue with [Robot setup](robot-setup.md) (ROS 2 + OpenClaw plugin) and the [CLI README](../packages/agenticros-cli/README.md) (`npx agenticros init`).
+**This page is hardware only.** After the base moves and RealSense publishes, continue with [Robot setup](robot-setup.md) (ROS 2 + OpenClaw plugin) and the [CLI README](../packages/synapse-cli/README.md) (`npx @corebrum/synapse init`).
 
 ## What you are building
 
@@ -12,7 +12,7 @@ cmd_vel  →  motor controller  →  GPIO / Firmata  →  L298N  →  left + rig
 RealSense D4xx  →  /camera/...  (color + depth)
 ```
 
-The reference robot is a [DFRobot 2WD chassis](https://www.dfrobot.com/product-65.html) with two encoded TT motors, an L298N, a RealSense depth camera, and a Jetson Orin Nano. Swap the compute for a Raspberry Pi 5, RADXA X4, LattePanda Delta 3, or any x86 box plus an Arduino running Firmata — the L298N wiring pattern stays the same; only the pin numbers and `agenticros start motors -b` backend change.
+The reference robot is a [DFRobot 2WD chassis](https://www.dfrobot.com/product-65.html) with two encoded TT motors, an L298N, a RealSense depth camera, and a Jetson Orin Nano. Swap the compute for a Raspberry Pi 5, RADXA X4, LattePanda Delta 3, or any x86 box plus an Arduino running Firmata — the L298N wiring pattern stays the same; only the pin numbers and `synapse start motors -b` backend change.
 
 ## Bill of materials (reference)
 
@@ -42,7 +42,7 @@ Prices are approximate USD (what this kit cost to buy). Shop around; they move.
 | 1   | Adjustable AC/DC adapter (set to **19V** for the Orin Nano Dev Kit) | $15.49  | [Amazon](https://www.amazon.com/Adjustable-Universal-Switching-Minidodoca-Electronics/dp/B0C5QG946M) |
 
 
-**Reference total ≈ $973** with a D436. A [RealSense D421](https://store.realsenseai.com/) (~$85) drops the kit to **≈ $704**. D421 is depth-oriented; color snapshots and “what do you see?” work better on D436 / D435 / D435i. Start RealSense with `agenticros start realsense --model=D421` if that is the camera you have (also auto-selected when the cloud portal `camera` field is D421).
+**Reference total ≈ $973** with a D436. A [RealSense D421](https://store.realsenseai.com/) (~$85) drops the kit to **≈ $704**. D421 is depth-oriented; color snapshots and “what do you see?” work better on D436 / D435 / D435i. Start RealSense with `synapse start realsense --model=D421` if that is the camera you have (also auto-selected when the cloud portal `camera` field is D421).
 
 ### Optional: Arduino for encoder `/odom`
 
@@ -107,7 +107,7 @@ One module drives both wheels:
 | **+5V**         | Logic (see jumper note above)                                                    |
 
 
-`agenticros start motors` pin lists are **left-to-right**. If a side runs backward, swap that motor’s OUT leads or swap that side’s two IN numbers in `-p`.
+`synapse start motors` pin lists are **left-to-right**. If a side runs backward, swap that motor’s OUT leads or swap that side’s two IN numbers in `-p`.
 
 ---
 
@@ -150,7 +150,7 @@ Jetson 40-pin                         L298N                      motors
 Requires system [JETGPIO](https://github.com/Rubberazer/JETGPIO) (`libjetgpio.so`) and often root / `/dev/mem`. This backend is **never auto-selected**.
 
 ```bash
-agenticros start motors -b jetson -p 16,18,22,26 --odom
+synapse start motors -b jetson -p 16,18,22,26 --odom
 ```
 
 
@@ -171,7 +171,7 @@ BCM numbers (not physical pin numbers). Defaults: **27, 22, 17, 18**. Same two-p
 
 
 ```bash
-agenticros start motors -b rpi -p 27,22,17,18 --odom
+synapse start motors -b rpi -p 27,22,17,18 --odom
 ```
 
 
@@ -193,7 +193,7 @@ Six pins: **dir, cdir, pwm** per motor. PWM goes to **ENA/ENB** (remove those ju
 
 ```bash
 sudo usermod -aG dialout $USER   # once, then reboot
-agenticros start motors -b firmata -d /dev/ttyACM0 -p 3,4,5,7,8,9 --odom
+synapse start motors -b firmata -d /dev/ttyACM0 -p 3,4,5,7,8,9 --odom
 ```
 
 Flash **StandardFirmata** before this will enumerate: [Arduino Firmata README](https://github.com/firmata/arduino#usage) (IDE: **File → Examples → Firmata → StandardFirmata → Upload**). On LattePanda Delta 3, select board **Arduino Leonardo** and the onboard USB serial port.
@@ -204,7 +204,7 @@ Flash **StandardFirmata** before this will enumerate: [Arduino Firmata README](h
 
 ## `/odom` wiring
 
-Two modes share the same motor process. Geometry: DFRobot MiniQ + TT wheels are close to the code defaults **64 mm** diameter and **135 mm** track. Set those on the robot profile at `agenticros register`, or pass `--odom` to use the defaults.
+Two modes share the same motor process. Geometry: DFRobot MiniQ + TT wheels are close to the code defaults **64 mm** diameter and **135 mm** track. Set those on the robot profile at `synapse register`, or pass `--odom` to use the defaults.
 
 
 | Mode                        | Backends             | How it works                                                          |
@@ -216,7 +216,7 @@ Two modes share the same motor process. Geometry: DFRobot MiniQ + TT wheels are 
 Dead-reckon (any backend):
 
 ```bash
-agenticros start motors -b jetson -p 16,18,22,26 --odom
+synapse start motors -b jetson -p 16,18,22,26 --odom
 # or Pi / Firmata equivalents above
 ```
 
@@ -238,7 +238,7 @@ Each motor has a 2-pin motor cable (to L298N OUT) and a 4-pin encoder cable:
 Default `-e` is **13, 2, 12, 11** (leftA, leftB, rightA, rightB) — chosen so it does not collide with motor pins 3,4,5,7,8,9.
 
 ```bash
-agenticros start motors -b firmata -d /dev/ttyACM0 \
+synapse start motors -b firmata -d /dev/ttyACM0 \
   -p 3,4,5,7,8,9 \
   -e 13,2,12,11 \
   --tpr 960 --odom
@@ -257,22 +257,22 @@ On Jetson/Pi **without** Arduino, leave the encoder signal wires unconnected (ta
 On the robot, with ROS 2 Humble or Jazzy already installed (JetPack 6 → Ubuntu 22.04 → Humble is the usual Jetson path):
 
 ```bash
-npx agenticros init
-# optional cloud: agenticros login && agenticros register
+npx @corebrum/synapse init
+# optional cloud: synapse login && synapse register
 #   compute: "Nvidia Orin"  |  camera: D436 (or D421)  |  wheels: 64 mm / 135 mm
 
-agenticros start motors -b jetson -p 16,18,22,26 --odom
-agenticros start realsense
+synapse start motors -b jetson -p 16,18,22,26 --odom
+synapse start realsense
 ```
 
 Pi: `-b rpi -p 27,22,17,18`. Firmata boards: omit `-b jetson` / `-b rpi` and pass `-d /dev/ttyACM0`.
 
-One-shot demo stack (RealSense + motors + MCP): `agenticros up real` (add `--no-motors` / `--no-camera` as needed). Full flags: [CLI README](../packages/agenticros-cli/README.md).
+One-shot demo stack (RealSense + motors + MCP): `synapse up real` (add `--no-motors` / `--no-camera` as needed). Full flags: [CLI README](../packages/synapse-cli/README.md).
 
 **Check motion** (robot on blocks). Publish a slow Twist on the topic your controller subscribed to (`/cmd_vel` or `/<namespace>/cmd_vel`):
 
 ```bash
-# via AgenticROS MCP / OpenClaw later; for a smoke test from another ROS node:
+# via Corebrum Synapse MCP / OpenClaw later; for a smoke test from another ROS node:
 # geometry_msgs/Twist linear.x = 0.15, angular.z = 0
 ```
 
@@ -291,8 +291,8 @@ Wheels should both spin “forward.” Swap OUT leads or the two IN pins for a s
 Hardware is done when `/cmd_vel` turns wheels, `/odom` exists, and a camera topic is live. Then:
 
 1. **[Robot setup](robot-setup.md)** — ROS 2 workspace, rosbridge or local DDS, and **installing the OpenClaw plugin** (`./scripts/setup_gateway_plugin.sh`).
-2. **Root [README](../README.md)** — `npx agenticros`, **First-time setup**, `agenticros up real`.
-3. **[CLI reference](cli.md)** and **[packages/agenticros-cli/README.md](../packages/agenticros-cli/README.md)** — motors, RealSense, cloud login.
+2. **Root [README](../README.md)** — `npx @corebrum/synapse`, **First-time setup**, `synapse up real`.
+3. **[CLI reference](cli.md)** and **[packages/synapse-cli/README.md](../packages/synapse-cli/README.md)** — motors, RealSense, cloud login.
 4. **OpenClaw on the robot (Mode A)** or laptop (Mode B) — plugin tools, teleop, chat. LAN dashboard notes: [OpenClaw plugin routes](openclaw-releases-and-plugin-routes.md).
 5. **[Local VLM / Ollama](local-vlm.md)** — no cloud API key.
 6. Other agents, same robot: [MCP setup](mcp-setup.md), [Codex](codex-setup.md), [Hermes](hermes-setup.md), [NemoClaw on Jetson](nemoclaw.md).
@@ -309,7 +309,7 @@ Try: *“drive forward slowly”*, *“what do you see?”*, `/estop`.
 | Symptom                               | Check                                                                                                                          |
 | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | `start motors` does nothing on Jetson | You must pass `-b jetson`. Default for non-Pi compute is Firmata (expects `/dev/ttyACM0`). JETGPIO installed? May need `sudo`. |
-| `start motors` says started but `status` is idle | The controller crashed on boot. Check `agenticros logs motors`. After a Node.js upgrade this is usually a native addon ABI mismatch — run `agenticros init --force`. |
+| `start motors` says started but `status` is idle | The controller crashed on boot. Check `synapse logs motors`. After a Node.js upgrade this is usually a native addon ABI mismatch — run `synapse init --force`. |
 | One wheel dead                        | ENA/ENB jumper (Pi/Jetson) or PWM pin actually on ENA/ENB (Firmata). Common GND.                                               |
 | Both wheels spin the wrong way        | Invert by swapping both motors’ OUT leads, or swap each pair in `-p`.                                                          |
 | Encoders ignored                      | Only `-b firmata -e …`. Encoder VCC must be 5V, not 3.3V.                                                                      |

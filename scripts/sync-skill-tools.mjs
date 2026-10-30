@@ -2,24 +2,24 @@
 /**
  * sync-skill-tools.mjs
  *
- * Discover AgenticROS skill tool names and merge them into the agenticros plugin's
- * `contracts.tools` allowlist in `packages/agenticros/openclaw.plugin.json`.
+ * Discover Corebrum Synapse skill tool names and merge them into the synapse plugin's
+ * `contracts.tools` allowlist in `packages/synapse-openclaw/openclaw.plugin.json`.
  *
  * OpenClaw 2026+ enforces `contracts.tools` as a strict allowlist: any tool that a
  * plugin registers at runtime but that is not declared in the manifest is rejected
  * with `plugin must declare contracts.tools for: <name>` and silently dropped.
- * Since AgenticROS skills register their own tools dynamically (e.g. `follow_robot`),
+ * Since Corebrum Synapse skills register their own tools dynamically (e.g. `follow_robot`),
  * the manifest must list every skill tool that should be exposed.
  *
  * How it works
  * ------------
  * 1. Resolve the OpenClaw config (OPENCLAW_CONFIG or ~/.openclaw/openclaw.json).
- * 2. Read `plugins.entries.agenticros.config.skillPaths` and `.skillPackages`.
+ * 2. Read `plugins.entries.synapse.config.skillPaths` and `.skillPackages`.
  * 3. For each entry, locate the skill's built entry (dist/index.js), import it,
  *    and call `registerSkill(api, config, context)` with a stub `api` whose
  *    `registerTool` is a spy that just records `tool.name`.
  * 4. Merge the discovered tool names with the static core tool list and write
- *    them back into `packages/agenticros/openclaw.plugin.json`.
+ *    them back into `packages/synapse-openclaw/openclaw.plugin.json`.
  *
  * Usage
  * -----
@@ -41,12 +41,12 @@ import { createRequire } from "node:module";
 
 // Skills must not start long-lived side effects (mics, timers, network) while
 // we only need registerTool names. Jarvis and similar skills honor this.
-process.env.AGENTICROS_SKILL_DISCOVERY = "1";
+process.env.SYNAPSE_SKILL_DISCOVERY = "1";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const REPO_ROOT = resolve(__dirname, "..");
-const MANIFEST_PATH = join(REPO_ROOT, "packages/agenticros/openclaw.plugin.json");
+const MANIFEST_PATH = join(REPO_ROOT, "packages/synapse-openclaw/openclaw.plugin.json");
 
 const args = new Set(process.argv.slice(2));
 const DRY_RUN = args.has("--dry-run") || args.has("-n");
@@ -120,8 +120,8 @@ function readOpenClawConfig() {
 }
 
 function getSkillEntries(cfg) {
-  const skillPaths = cfg?.plugins?.entries?.agenticros?.config?.skillPaths ?? [];
-  const skillPackages = cfg?.plugins?.entries?.agenticros?.config?.skillPackages ?? [];
+  const skillPaths = cfg?.plugins?.entries?.synapse?.config?.skillPaths ?? [];
+  const skillPackages = cfg?.plugins?.entries?.synapse?.config?.skillPackages ?? [];
   return { skillPaths, skillPackages };
 }
 
@@ -142,8 +142,8 @@ function findSkillEntryFromPath(dirPath) {
     warn(`Invalid package.json in ${dirPath}: ${e?.message ?? e}`);
     return null;
   }
-  if (!pkg.agenticros || typeof pkg.agenticros !== "object" || typeof pkg.agenticros.id !== "string") {
-    warn(`Not an AgenticROS skill (missing "agenticros": { "id": "..." } block): ${dirPath}`);
+  if (!pkg.synapse || typeof pkg.synapse !== "object" || typeof pkg.synapse.id !== "string") {
+    warn(`Not a Corebrum Synapse skill (missing "synapse": { "id": "..." } block): ${dirPath}`);
     return null;
   }
   const main = pkg.main ?? "index.js";
@@ -229,11 +229,11 @@ async function discoverSkillTools(entryPath, packageName) {
     const errMsg = e?.message ?? String(e);
     warn(`Failed to import ${packageName} (${entryPath}): ${errMsg}`);
     // Detect the classic pnpm-hardlink-cascade signature: an
-    // ERR_MODULE_NOT_FOUND for something inside @agenticros/core/dist/.
+    // ERR_MODULE_NOT_FOUND for something inside @corebrum/core/dist/.
     // When we see it, surface it as a structured failure so the caller can
     // preserve the skill's previously-known tools instead of silently
     // stripping them.
-    const isCoreCascade = /@agenticros\+?core.*dist\/.+\.js/i.test(errMsg);
+    const isCoreCascade = /@synapse\+?core.*dist\/.+\.js/i.test(errMsg);
     return { tools: [], importFailed: true, cascadeSuspected: isCoreCascade };
   }
   const registerSkill =
@@ -244,7 +244,7 @@ async function discoverSkillTools(entryPath, packageName) {
   }
   const { tools, api } = createSpyApi();
   const ctx = createStubContext();
-  // Provide a config skeleton that matches AgenticROSConfig defaults loosely
+  // Provide a config skeleton that matches SynapseConfig defaults loosely
   // enough that registration doesn't crash on access paths like config.skills.x.
   const stubConfig = {
     transport: { mode: "rosbridge" },
@@ -311,7 +311,7 @@ async function main() {
     if (!entry) {
       // require.resolve() only sees packages linked into REPO_ROOT's
       // node_modules. Marketplace skills installed into
-      // ~/.agenticros/skills-cache are never there, so this is the common
+      // ~/.synapse/skills-cache are never there, so this is the common
       // case, not an edge case — treat it like an import failure so the
       // preservation logic below keeps this skill's previously-known tools
       // instead of silently dropping them from contracts.tools.
@@ -383,7 +383,7 @@ async function main() {
     const cascade = importFailures.some((f) => f.cascadeSuspected);
     if (cascade) {
       warn(
-        "Cascade signature detected (ERR_MODULE_NOT_FOUND inside @agenticros/core/dist). " +
+        "Cascade signature detected (ERR_MODULE_NOT_FOUND inside @corebrum/core/dist). " +
           "Run `pnpm refresh:skills` to repair the stale pnpm hardlinks, then re-run this sync.",
       );
     } else {

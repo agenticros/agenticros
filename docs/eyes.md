@@ -1,6 +1,6 @@
 # Robot eyes (on-robot face display)
 
-`@agenticros/eyes` is a fullscreen “robot face” for tablets and head units. Canvas eyes idle-blink and look left/right when anything publishes a turning Twist on the robot’s `cmd_vel` topic. When the robot is idle and YOLO is already installed (follow-me / `ros2_find_object`), the pupils follow a person in the RealSense color frame. Optional invisible **WASD** keyboard teleop lets an operator drive from the same screen. Procedural **R2D2-style chirps** play from the eyes Node process (idle chatter; excited bursts on active `cmd_vel`).
+`@corebrum/eyes` is a fullscreen “robot face” for tablets and head units. Canvas eyes idle-blink and look left/right when anything publishes a turning Twist on the robot’s `cmd_vel` topic. When the robot is idle and YOLO is already installed (follow-me / `ros2_find_object`), the pupils follow a person in the RealSense color frame. Optional invisible **WASD** keyboard teleop lets an operator drive from the same screen. Procedural **R2D2-style chirps** play from the eyes Node process (idle chatter; excited bursts on active `cmd_vel`).
 
 This is **not** the OpenClaw remote teleop page ([teleop.md](teleop.md)). Eyes run **on the robot** over local DDS (`rclnodejs`). Remote camera + twist controls stay in the OpenClaw plugin.
 
@@ -15,39 +15,39 @@ This is **not** the OpenClaw remote teleop page ([teleop.md](teleop.md)). Eyes r
 ## Launch
 
 ```bash
-# From a workspace or after `agenticros init`
-agenticros eyes
+# From a workspace or after `synapse init`
+synapse eyes
 
 # Gaze only — do not publish WASD twists (agents/operators drive)
-agenticros eyes --no-teleop
+synapse eyes --no-teleop
 
 # Skip idle person-follow even if YOLO is already installed
-agenticros eyes --no-person-gaze
+synapse eyes --no-person-gaze
 
 # Mute R2D2 chirps
-agenticros eyes --no-sound
+synapse eyes --no-sound
 
 # Serve UI without opening a browser
-agenticros eyes --no-browser
+synapse eyes --no-browser
 
 # Override topic / port (only needed if your robot namespaces cmd_vel)
-agenticros eyes --topic /cmd_vel --port 8765
+synapse eyes --topic /cmd_vel --port 8765
 
 # With the real-robot stack
-agenticros up real --eyes
-agenticros up real --eyes --eyes-no-teleop --eyes-no-sound
-agenticros up real --eyes --eyes-no-person-gaze
+synapse up real --eyes
+synapse up real --eyes --eyes-no-teleop --eyes-no-sound
+synapse up real --eyes --eyes-no-person-gaze
 ```
 
-Stop with `agenticros down` (or kill the process recorded in `/tmp/agenticros-eyes.pid`).
+Stop with `synapse down` (or kill the process recorded in `/tmp/synapse-eyes.pid`).
 
-Logs: `agenticros logs eyes` → `/tmp/agenticros-eyes.log`.
+Logs: `synapse logs eyes` → `/tmp/synapse-eyes.log`.
 
 Interactive menu: **Start robot eyes (local display)**.
 
 ## Config
 
-Topic and safety limits come from `~/.agenticros/config.json` (same file as the rest of AgenticROS):
+Topic and safety limits come from `~/.synapse/config.json` (same file as the rest of Corebrum Synapse):
 
 | Source | Effect |
 |--------|--------|
@@ -68,7 +68,7 @@ Sounds are synthesized in-process (no sample files) and played via the system au
 | Idle | Random chirp / warble / beeps every ~300–2500 ms |
 | Excited | Active `cmd_vel` (`|linear.x|` or `|angular.z|` above deadzone), rate-limited (~600 ms cooldown) |
 
-Mute with `--no-sound`, `up --eyes-no-sound`, or `AGENTICROS_EYES_NO_SOUND=1`. If no player is found, eyes still run and a one-time warning is logged.
+Mute with `--no-sound`, `up --eyes-no-sound`, or `SYNAPSE_EYES_NO_SOUND=1`. If no player is found, eyes still run and a one-time warning is logged.
 
 Optional env knobs:
 
@@ -105,31 +105,31 @@ Priority, highest first:
 - Idle + no person (or `--no-person-gaze`) → occasional blinks and subtle look-around
 - Recenters when motion commands stop (`|angular.z|` and `|linear.x|` below deadzone)
 
-Disable person-follow: `--no-person-gaze`, `up --eyes-no-person-gaze`, or `AGENTICROS_EYES_NO_PERSON_GAZE=1`.
+Disable person-follow: `--no-person-gaze`, `up --eyes-no-person-gaze`, or `SYNAPSE_EYES_NO_PERSON_GAZE=1`.
 
 ## Telepresence
 
 The same kiosk page can show an ARC operator and carry a two-way call. Teleop (joystick, WASD, robot camera) stays on the existing data-channel session. Video and voice use a second WebRTC connection between the ARC control page and this browser. Eyes keeps animating underneath; a live operator camera covers the canvas, and hanging up (or turning video off) shows the face again. Mic-only leaves the eyes up, plays the operator through the tablet speakers, and shows "On a call".
 
-`agenticros connect` relays the call's signaling from ARC to `ws://127.0.0.1:8765`. Eyes has to be running or the ARC Video / Mic buttons report that the display is offline. The robot microphone is the kiosk browser's mic (`echoCancellation` on). R2D2 chirps pause while the call is up.
+`synapse connect` relays the call's signaling from ARC to `ws://127.0.0.1:8765`. Eyes has to be running or the ARC Video / Mic buttons report that the display is offline. The robot microphone is the kiosk browser's mic (`echoCancellation` on). R2D2 chirps pause while the call is up.
 
 Chromium is launched with `--autoplay-policy=no-user-gesture-required` and `--use-fake-ui-for-media-stream` so the unattended tablet can capture the mic and play the operator. `http://127.0.0.1` is a secure context, so `getUserMedia` is allowed. Firefox kiosk does not auto-grant the microphone; use Chromium for telepresence.
 
-Override the Eyes port with `EYES_PORT` on the `agenticros connect` process if it is not 8765.
+Override the Eyes port with `EYES_PORT` on the `synapse connect` process if it is not 8765.
 
 ## Architecture
 
 ```
 Browser (canvas + optional WASD + telepresence video/audio)
     ↕ WebSocket (127.0.0.1:8765)
-@agenticros/eyes (rclnodejs node /robot_eyes)
+@corebrum/eyes (rclnodejs node /robot_eyes)
     ↕ local DDS                          ↕ synth → afplay/paplay/aplay
 cmd_vel Twist  ← also written by MCP / OpenClaw / motors consumers
 color CompressedImage  ← RealSense (idle person-follow if YOLO already installed)
 
 ARC control page  ←WebRTC media→  Eyes kiosk
         ↕ signaling relay
-agenticros connect (comms.js) ── local WebSocket ── Eyes
+synapse connect (comms.js) ── local WebSocket ── Eyes
 ```
 
 Package path: [`packages/robot-eyes`](../packages/robot-eyes).

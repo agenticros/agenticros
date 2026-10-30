@@ -3,13 +3,13 @@
  * camera feed, then stop. Used by the ros2_find_object MCP tool.
  */
 
-import type { AgenticROSConfig, ResolvedRobot, RosTransport } from "@agenticros/core";
-import { resolveCameraSubscribeTopic, toNamespacedTopic, resolveSafetyForRobot, hiveRecipeOn, isHiveEvent } from "@agenticros/core";
+import type { SynapseConfig, ResolvedRobot, RosTransport } from "@corebrum/core";
+import { resolveCameraSubscribeTopic, toNamespacedTopic, resolveSafetyForRobot, hiveRecipeOn, isHiveEvent } from "@corebrum/core";
 import {
   ROS_MSG_COMPRESSED_IMAGE,
   ROS_MSG_IMAGE,
   cameraSnapshotFromPlainMessage,
-} from "@agenticros/ros-camera";
+} from "@corebrum/ros-camera";
 import { PersonDetector } from "./detector.js";
 import { resolveCocoClassId, COCO_CLASSES } from "./coco-classes.js";
 
@@ -58,7 +58,7 @@ export interface FindObjectResult {
 
 export async function findObject(
   robot: ResolvedRobot,
-  config: AgenticROSConfig,
+  config: SynapseConfig,
   transport: RosTransport,
   opts: FindObjectOptions,
 ): Promise<FindObjectResult> {
@@ -226,7 +226,7 @@ function sleep(ms: number): Promise<void> {
  */
 async function tryHiveDetections(
   robot: ResolvedRobot,
-  config: AgenticROSConfig,
+  config: SynapseConfig,
   transport: RosTransport,
   target: string,
   minConfidence: number,
@@ -234,7 +234,7 @@ async function tryHiveDetections(
   if (!hiveRecipeOn(config, "detect")) return null;
   const classId = resolveCocoClassId(target);
   if (classId === null) return null;
-  const topic = toNamespacedTopic(robot.namespace, "agenticros/detections");
+  const topic = toNamespacedTopic(robot.namespace, "synapse/detections");
   const wanted = target.trim().toLowerCase();
   return new Promise((resolve) => {
     let settled = false;
@@ -334,7 +334,7 @@ function extractDetections(payload: unknown): {
   return out;
 }
 
-function resolveCmdVelTopic(config: AgenticROSConfig, robot: ResolvedRobot): string {
+function resolveCmdVelTopic(config: SynapseConfig, robot: ResolvedRobot): string {
   const raw = (config.teleop?.cmdVelTopic ?? "").trim() || "/cmd_vel";
   const namespaced = toNamespacedTopic(robot.namespace, raw);
   const match = namespaced.match(/^\/([^/]+)\/cmd_vel$/i);

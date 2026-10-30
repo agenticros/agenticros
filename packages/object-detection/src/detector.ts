@@ -5,9 +5,9 @@
  * frame. Image decoded with sharp; inference via onnxruntime-node (CPU).
  *
  * Model lookup order:
- *   1. AGENTICROS_YOLOV8_MODEL env var (absolute path)
- *   2. ~/.agenticros/models/yolov8n.onnx
- * If the file is missing it is downloaded from AGENTICROS_YOLOV8_URL (or a default
+ *   1. SYNAPSE_YOLOV8_MODEL env var (absolute path)
+ *   2. ~/.synapse/models/yolov8n.onnx
+ * If the file is missing it is downloaded from SYNAPSE_YOLOV8_URL (or a default
  * public mirror). 6 MB, one-time. Pass `{ download: false }` to `load()` to refuse
  * the download (used by robot eyes so it never fetches weights on its own).
  */
@@ -89,9 +89,9 @@ export interface LoadOptions {
 }
 
 function resolveModelPath(): string {
-  const fromEnv = process.env["AGENTICROS_YOLOV8_MODEL"];
+  const fromEnv = process.env["SYNAPSE_YOLOV8_MODEL"];
   if (fromEnv && fromEnv.trim().length > 0) return fromEnv.trim();
-  return path.join(os.homedir(), ".agenticros", "models", "yolov8n.onnx");
+  return path.join(os.homedir(), ".synapse", "models", "yolov8n.onnx");
 }
 
 function downloadFile(url: string, dest: string, redirectsLeft = 5): Promise<void> {
@@ -143,18 +143,18 @@ async function ensureModel(download = true): Promise<string> {
   if (!download) {
     throw new Error(
       `YOLOv8n model not found at ${modelPath}. ` +
-        `Set AGENTICROS_YOLOV8_MODEL to an existing file, or call load() without { download: false }.`,
+        `Set SYNAPSE_YOLOV8_MODEL to an existing file, or call load() without { download: false }.`,
     );
   }
-  const url = process.env["AGENTICROS_YOLOV8_URL"] || DEFAULT_MODEL_URL;
-  process.stderr.write(`[AgenticROS] follow-me: downloading YOLOv8n ONNX → ${modelPath}\n`);
+  const url = process.env["SYNAPSE_YOLOV8_URL"] || DEFAULT_MODEL_URL;
+  process.stderr.write(`[Corebrum Synapse] follow-me: downloading YOLOv8n ONNX → ${modelPath}\n`);
   try {
     await downloadFile(url, modelPath);
   } catch (err) {
     const hint = err instanceof Error ? err.message : String(err);
     throw new Error(
       `Failed to download YOLOv8n model from ${url}: ${hint}. ` +
-        `Set AGENTICROS_YOLOV8_MODEL to a local path or AGENTICROS_YOLOV8_URL to an accessible mirror.`,
+        `Set SYNAPSE_YOLOV8_MODEL to a local path or SYNAPSE_YOLOV8_URL to an accessible mirror.`,
     );
   }
   return modelPath;

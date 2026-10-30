@@ -3,8 +3,8 @@
  * Smoke-test Nav2 against sim-amr (--nav2).
  *
  * Prerequisites (already running):
- *   agenticros up sim-amr --nav2 --headless
- *   npx agenticros skills install @agenticros/navigate-to
+ *   synapse up sim-amr --nav2 --headless
+ *   npx @corebrum/synapse skills install @corebrum/navigate-to
  *
  * Sequence:
  *   1. list topics / capabilities (sanity)
@@ -21,7 +21,7 @@ import { dirname, join, resolve } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "..");
-const serverDist = join(repoRoot, "packages/agenticros-claude-code/dist/index.js");
+const serverDist = join(repoRoot, "packages/synapse-claude-code/dist/index.js");
 
 const GOAL = { x: 2.0, y: 1.0, yaw: 0.0 };
 const MISSION_TIMEOUT_MS = 120_000;
@@ -31,8 +31,8 @@ const child = spawn(process.execPath, [serverDist], {
   env: {
     ...process.env,
     // Sim publishes at graph root; empty namespace.
-    AGENTICROS_ROBOT_NAMESPACE: process.env.AGENTICROS_ROBOT_NAMESPACE ?? "",
-    AGENTICROS_USE_SIM_TIME: process.env.AGENTICROS_USE_SIM_TIME ?? "1",
+    SYNAPSE_ROBOT_NAMESPACE: process.env.SYNAPSE_ROBOT_NAMESPACE ?? "",
+    SYNAPSE_USE_SIM_TIME: process.env.SYNAPSE_USE_SIM_TIME ?? "1",
   },
 });
 
@@ -121,7 +121,7 @@ async function main() {
   console.log(capText.slice(0, 800));
   if (!capText.includes("navigate_to")) {
     console.warn(
-      "WARN: navigate_to not in capabilities — install @agenticros/navigate-to and restart MCP.",
+      "WARN: navigate_to not in capabilities — install @corebrum/navigate-to and restart MCP.",
     );
   }
 

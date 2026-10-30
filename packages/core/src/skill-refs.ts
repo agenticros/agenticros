@@ -1,16 +1,16 @@
 /**
- * skillRefs → ~/.agenticros/skills-cache resolver (marketplace auto-fetch).
+ * skillRefs → ~/.synapse/skills-cache resolver (marketplace auto-fetch).
  *
  * Declarative refs like `owner/skill`, `owner/skill@main`, or
- * `@agenticros/foo@^1.0.0` are resolved via the skills marketplace
- * install API (or directly from npm), cached under ~/.agenticros/skills-cache,
+ * `@corebrum/foo@^1.0.0` are resolved via the skills marketplace
+ * install API (or directly from npm), cached under ~/.synapse/skills-cache,
  * and returned as absolute skillPaths for capability reading / OpenClaw loading.
  *
  * Prefer npm when the install descriptor includes `npmPackage` (or the ref
  * is already a scoped npm name). Fall back to git clone + build.
  *
  * Never auto-upgrades: if the cache dir for a pin already exists, reuse it
- * (optional pull when AGENTICROS_SKILLS_CACHE_PULL=1 for git caches).
+ * (optional pull when SYNAPSE_SKILLS_CACHE_PULL=1 for git caches).
  */
 
 import {
@@ -26,10 +26,10 @@ import {
 import { tmpdir, homedir } from "node:os";
 import { basename, join } from "node:path";
 import { execFileSync } from "node:child_process";
-import type { AgenticROSConfig } from "./config.js";
+import type { SynapseConfig } from "./config.js";
 
-export const DEFAULT_SKILLS_API = "https://skills.agenticros.com/api";
-export const DEFAULT_SKILLS_CACHE_DIR = join(homedir(), ".agenticros", "skills-cache");
+export const DEFAULT_SKILLS_API = "https://skills.corebrum.com/api";
+export const DEFAULT_SKILLS_CACHE_DIR = join(homedir(), ".synapse", "skills-cache");
 
 export interface ParsedSkillRef {
   kind: "marketplace" | "npm";
@@ -128,14 +128,14 @@ export function parseSkillRef(raw: string): ParsedSkillRef | null {
 }
 
 export function skillsApiBase(override?: string): string {
-  return (override || process.env.AGENTICROS_SKILLS_API || DEFAULT_SKILLS_API).replace(
+  return (override || process.env.SYNAPSE_SKILLS_API || DEFAULT_SKILLS_API).replace(
     /\/+$/,
     "",
   );
 }
 
 export function skillsCacheDir(override?: string): string {
-  return override || process.env.AGENTICROS_SKILLS_CACHE || DEFAULT_SKILLS_CACHE_DIR;
+  return override || process.env.SYNAPSE_SKILLS_CACHE || DEFAULT_SKILLS_CACHE_DIR;
 }
 
 function skillApiPath(apiBase: string, ref: string): string {
@@ -301,7 +301,7 @@ export async function ensureNpmPackageCached(
     recursive: true,
   });
 
-  const tmp = mkdtempSync(join(tmpdir(), "agenticros-skill-npm-"));
+  const tmp = mkdtempSync(join(tmpdir(), "corebrum-skill-npm-"));
   try {
     const spec = `${npmPackage}@${resolvedVersion}`;
     log(`npm pack ${spec} → ${tmp}`);
@@ -320,7 +320,7 @@ export async function ensureNpmPackageCached(
     }
     renameSync(packedRoot, dir);
     writeFileSync(
-      join(dir, ".agenticros-skill-ref.json"),
+      join(dir, ".corebrum-skill-ref.json"),
       JSON.stringify(
         {
           kind: "npm",
@@ -369,7 +369,7 @@ export async function ensureSkillRefCached(
   const dir = cachePathForGit(cacheRoot, parsed.owner!, parsed.skill!, parsed.gitRef!);
 
   if (existsSync(join(dir, "package.json"))) {
-    if (opts.pullIfPresent || process.env.AGENTICROS_SKILLS_CACHE_PULL === "1") {
+    if (opts.pullIfPresent || process.env.SYNAPSE_SKILLS_CACHE_PULL === "1") {
       try {
         run("git", ["pull", "--ff-only"], dir, log);
       } catch (e) {
@@ -432,7 +432,7 @@ export async function ensureSkillRefCached(
 
   try {
     writeFileSync(
-      join(dir, ".agenticros-skill-ref.json"),
+      join(dir, ".corebrum-skill-ref.json"),
       JSON.stringify(
         {
           kind: "git",
@@ -494,9 +494,9 @@ export async function resolveSkillRefs(
  * Return a config copy with skillRefs resolved into skillPaths (deduped).
  */
 export async function withResolvedSkillRefs(
-  config: AgenticROSConfig,
+  config: SynapseConfig,
   opts: ResolveSkillRefsOptions = {},
-): Promise<{ config: AgenticROSConfig; errors: ResolveSkillRefsResult["errors"] }> {
+): Promise<{ config: SynapseConfig; errors: ResolveSkillRefsResult["errors"] }> {
   const refs = config.skillRefs ?? [];
   if (refs.length === 0) {
     return { config, errors: [] };
@@ -521,7 +521,7 @@ export async function withResolvedSkillRefs(
  * into skillPaths. No network — use CLI install / ensureSkillRefCached to
  * populate the cache first. Safe for OpenClaw's synchronous register().
  */
-export function applyCachedSkillRefs(config: AgenticROSConfig): AgenticROSConfig {
+export function applyCachedSkillRefs(config: SynapseConfig): SynapseConfig {
   const refs = config.skillRefs ?? [];
   if (refs.length === 0) return config;
   const cacheRoot = skillsCacheDir();

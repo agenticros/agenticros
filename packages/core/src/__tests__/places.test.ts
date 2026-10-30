@@ -14,7 +14,7 @@ import {
 } from "../places.js";
 
 test("places: save, get (case-insensitive), list, forget", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "agenticros-places-"));
+  const dir = await mkdtemp(join(tmpdir(), "synapse-places-"));
   const path = join(dir, "places.json");
   try {
     const saved = savePlace({ name: "Kitchen", x: 1.2, y: 3.4, yaw: 0.5 }, path);
@@ -33,7 +33,7 @@ test("places: save, get (case-insensitive), list, forget", async () => {
 });
 
 test("places: same name can exist on two maps", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "agenticros-places-"));
+  const dir = await mkdtemp(join(tmpdir(), "synapse-places-"));
   const path = join(dir, "places.json");
   try {
     savePlace({ name: "Door", x: 1, y: 1, map_id: "map-a" }, path);

@@ -1,0 +1,7 @@
+# Generated env hook — prepends the synapse_sim share/ tree onto the
+# Gazebo Harmonic resource search path so `gz sim synapse_indoor.sdf` and
+# `<uri>model://synapse_amr</uri>` resolve without absolute paths.
+
+ament_prepend_unique_value GZ_SIM_RESOURCE_PATH "@CMAKE_INSTALL_PREFIX@/share/@PROJECT_NAME@"
+ament_prepend_unique_value GZ_SIM_RESOURCE_PATH "@CMAKE_INSTALL_PREFIX@/share/@PROJECT_NAME@/models"
+ament_prepend_unique_value GZ_SIM_RESOURCE_PATH "@CMAKE_INSTALL_PREFIX@/share/@PROJECT_NAME@/worlds"

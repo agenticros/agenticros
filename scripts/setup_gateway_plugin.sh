@@ -1,11 +1,11 @@
 #!/bin/bash
-# setup_gateway_plugin.sh - One-time gateway-side setup for the AgenticROS plugin
+# setup_gateway_plugin.sh - One-time gateway-side setup for the Corebrum Synapse plugin
 #
 # Run this on the machine where the OpenClaw gateway runs (typically the robot
 # itself, since the default transport is now `local`).
 #
 # What this does:
-#   1. Builds all workspace packages (core, ros-camera, agenticros plugin)
+#   1. Builds all workspace packages (core, ros-camera, synapse plugin)
 #   2. Produces a flat deployment of the plugin via `pnpm deploy --prod`
 #      (required by OpenClaw 2026.6+: the install-time code safety scan
 #      rejects any node_modules symlink that points outside the install root,
@@ -19,9 +19,9 @@
 #   systemctl --user restart openclaw-gateway.service
 #
 # Usage: ./scripts/setup_gateway_plugin.sh [OPTIONS]
-#   --repo PATH         Path to agenticros repo (default: parent of scripts/)
+#   --repo PATH         Path to synapse repo (default: parent of scripts/)
 #   --deploy-dir PATH   Where to write the flat plugin deployment
-#                       (default: ~/.agenticros/plugin-deploy)
+#                       (default: ~/.synapse/plugin-deploy)
 #   --transport MODE    Transport mode: local | rosbridge | zenoh | webrtc
 #                       (default: leave plugin defaults; "local" out of the box)
 #   --rosbridge-url URL e.g. ws://localhost:9090 or ws://192.168.1.50:9090
@@ -39,13 +39,13 @@
 #   --no-systemd        Skip systemd service tweaks
 #   --no-restart        Don't restart the gateway at the end
 #   --skip-vision-deps  Skip installing pyrealsense2/mediapipe for
-#                       agenticros_follow_me (see below)
+#                       synapse_follow_me (see below)
 #   -h, --help          Show this help
 
 set -e
 
 REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-DEPLOY_DIR="$HOME/.agenticros/plugin-deploy"
+DEPLOY_DIR="$HOME/.synapse/plugin-deploy"
 TRANSPORT=""
 ROSBRIDGE_URL=""
 ZENOH_ENDPOINT=""
@@ -57,7 +57,7 @@ NO_SYSTEMD=false
 NO_RESTART=false
 SKIP_VISION_DEPS=false
 
-source "$REPO_ROOT/scripts/lib/agenticros-banner.sh" 2>/dev/null || true
+source "$REPO_ROOT/scripts/lib/synapse-banner.sh" 2>/dev/null || true
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -78,10 +78,10 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-PLUGIN_SRC="$REPO_ROOT/packages/agenticros"
+PLUGIN_SRC="$REPO_ROOT/packages/synapse-openclaw"
 
-if command -v agenticros_banner &>/dev/null; then agenticros_banner; fi
-echo "AgenticROS gateway plugin setup"
+if command -v synapse_banner &>/dev/null; then synapse_banner; fi
+echo "Corebrum Synapse gateway plugin setup"
 echo "  Repo:       $REPO_ROOT"
 echo "  Plugin src: $PLUGIN_SRC"
 echo "  Deploy to:  $DEPLOY_DIR"
@@ -108,18 +108,18 @@ if [[ "$SKIP_BUILD" != true ]]; then
   echo "[1/5] Installing workspace deps..."
   (cd "$REPO_ROOT" && pnpm install --frozen-lockfile 2>/dev/null || pnpm install)
   echo ""
-  echo "[2/5] Building required packages (core, ros-camera, object-detection, agenticros)..."
+  echo "[2/5] Building required packages (core, ros-camera, object-detection, synapse)..."
   (cd "$REPO_ROOT" && \
-    pnpm --filter @agenticros/core build && \
-    pnpm --filter @agenticros/ros-camera build && \
-    pnpm --filter @agenticros/object-detection build && \
-    pnpm --filter ./packages/agenticros build)
+    pnpm --filter @corebrum/core build && \
+    pnpm --filter @corebrum/ros-camera build && \
+    pnpm --filter @corebrum/object-detection build && \
+    pnpm --filter ./packages/synapse-openclaw build)
 else
   echo "[1-2/5] Skipping install + build (--skip-build)."
 fi
 echo ""
 
-# 2b. Refresh external skill repos so they pick up new @agenticros/core
+# 2b. Refresh external skill repos so they pick up new @corebrum/core
 # exports. Skips itself when no skill paths are configured. See
 # scripts/refresh-skill-deps.mjs for the cascade this prevents.
 if [[ "$SKIP_REFRESH_SKILLS" != true ]]; then
@@ -139,7 +139,7 @@ fi
 # bakes in JS bindings for every ROS2 message/service type visible on
 # AMENT_PREFIX_PATH at that moment. We source the ROS distro + any ros2_ws
 # overlay right here, into the same subshell that runs the deploy, so this
-# always includes custom types (e.g. agenticros_msgs/srv/FollowMeStart)
+# always includes custom types (e.g. synapse_msgs/srv/FollowMeStart)
 # regardless of what the invoking shell happened to have sourced. Skipping
 # this was exactly how a skill needing a custom service type broke silently
 # on 2026-07-31 — the workspace was built, but the deploy step ran without
@@ -173,23 +173,23 @@ fi
   set +u
   [[ -n "$DEPLOY_ROS_SETUP" ]] && source "$DEPLOY_ROS_SETUP"
   [[ -n "$DEPLOY_ROS_OVERLAY" ]] && source "$DEPLOY_ROS_OVERLAY"
-  cd "$REPO_ROOT" && pnpm --config.strict-peer-dependencies=false --filter ./packages/agenticros deploy --prod "$DEPLOY_DIR"
+  cd "$REPO_ROOT" && pnpm --config.strict-peer-dependencies=false --filter ./packages/synapse-openclaw deploy --prod "$DEPLOY_DIR"
 )
 # pnpm leaves a self-reference symlink (.pnpm/node_modules/<pkg> → the source
 # path) that OpenClaw's safety scan will reject. The plugin's npm name is
-# `@agenticros/openclaw` (scoped), so the symlink lives under @agenticros/.
-# Older builds used the bare name `agenticros`; clear both to be tolerant.
-rm -rf "$DEPLOY_DIR/node_modules/.pnpm/node_modules/@agenticros/openclaw"
-rm -f  "$DEPLOY_DIR/node_modules/.pnpm/node_modules/agenticros"
+# `@corebrum/openclaw` (scoped), so the symlink lives under @corebrum/.
+# Older builds used the bare name `synapse`; clear both to be tolerant.
+rm -rf "$DEPLOY_DIR/node_modules/.pnpm/node_modules/@corebrum/openclaw"
+rm -f  "$DEPLOY_DIR/node_modules/.pnpm/node_modules/synapse"
 
 # Native transport optionals (rclnodejs, node-datachannel) stay as
-# @agenticros/core optionalDependencies in source/npm so install is automatic
+# @corebrum/core optionalDependencies in source/npm so install is automatic
 # (main-compatible). `pnpm deploy --prod` sometimes fails to materialise them
 # inside $DEPLOY_DIR; reconstruct from the workspace store when missing.
 # After modules are present we strip optionalDependencies from the *deployed*
 # core package.json so OpenClaw plugin admission does not re-hash those native
 # trees on every gateway start (see docs/openclaw-startup-performance.md).
-CORE_DEPLOY_MOD=$(find "$DEPLOY_DIR/node_modules/.pnpm" -maxdepth 3 -type d -path "*@agenticros+core*/node_modules" 2>/dev/null | head -1)
+CORE_DEPLOY_MOD=$(find "$DEPLOY_DIR/node_modules/.pnpm" -maxdepth 3 -type d -path "*@synapse+core*/node_modules" 2>/dev/null | head -1)
 
 # Reconstruct a missing native optional into CORE_DEPLOY_MOD from the workspace.
 # Usage: ensure_core_optional_native <pkg-name>
@@ -256,8 +256,8 @@ ensure_core_optional_native node-datachannel
 # regenerate it here first, against the same ROS env (distro + ros2_ws
 # overlay) resolved above, rather than trusting whatever was last generated
 # by some earlier `pnpm install`. This is also the exact rclnodejs copy the
-# Claude Code MCP server (`packages/agenticros-claude-code`) resolves via
-# `@agenticros/core` — regenerating it here keeps that in sync too, though
+# Claude Code MCP server (`packages/synapse-claude-code`) resolves via
+# `@corebrum/core` — regenerating it here keeps that in sync too, though
 # the MCP server process needs a restart (`pnpm mcp:kill`, or `/mcp` reload
 # in Claude Code) to pick up newly-added message types.
 RCLN_DEPLOY=$(find "$DEPLOY_DIR/node_modules/.pnpm" -maxdepth 3 -type d -name rclnodejs 2>/dev/null | head -1)
@@ -267,7 +267,7 @@ if [[ -n "$RCLN_DEPLOY" ]]; then
   # robot-eyes pins a different one than core), and a bare `find | head -1`
   # picks whichever the filesystem lists first, non-deterministically. Core's
   # copy is the one that actually matters: the plugin and the Claude Code MCP
-  # server both resolve rclnodejs through @agenticros/core.
+  # server both resolve rclnodejs through @corebrum/core.
   if [[ -e "$REPO_ROOT/packages/core/node_modules/rclnodejs" ]]; then
     RCLN_WS=$(cd "$REPO_ROOT/packages/core/node_modules/rclnodejs" && pwd -P)
   else
@@ -304,10 +304,10 @@ fi
 # IMPORTANT: pnpm deploy hardlinks package.json from the workspace — unlink
 # before write so we never mutate packages/core/package.json in the repo.
 CORE_PKG_JSON=""
-if [[ -n "$CORE_DEPLOY_MOD" && -f "$CORE_DEPLOY_MOD/@agenticros/core/package.json" ]]; then
-  CORE_PKG_JSON="$CORE_DEPLOY_MOD/@agenticros/core/package.json"
+if [[ -n "$CORE_DEPLOY_MOD" && -f "$CORE_DEPLOY_MOD/@corebrum/core/package.json" ]]; then
+  CORE_PKG_JSON="$CORE_DEPLOY_MOD/@corebrum/core/package.json"
 else
-  CORE_PKG_JSON=$(find "$DEPLOY_DIR/node_modules/.pnpm" -path "*@agenticros+core*/node_modules/@agenticros/core/package.json" 2>/dev/null | head -1)
+  CORE_PKG_JSON=$(find "$DEPLOY_DIR/node_modules/.pnpm" -path "*@synapse+core*/node_modules/@corebrum/core/package.json" 2>/dev/null | head -1)
 fi
 if [[ -n "$CORE_PKG_JSON" ]]; then
   node -e "
@@ -329,7 +329,7 @@ if [[ -n "$CORE_PKG_JSON" ]]; then
       console.error('  ERROR: workspace packages/core/package.json lost optionalDependencies after deploy strip — aborting.');
       process.exit(1);
     }
-    console.log('  Stripped optionalDependencies from deployed @agenticros/core package.json (OpenClaw admission).');
+    console.log('  Stripped optionalDependencies from deployed @corebrum/core package.json (OpenClaw admission).');
   " "$CORE_PKG_JSON" "$REPO_ROOT/packages/core"
 fi
 
@@ -341,14 +341,14 @@ echo ""
 #    loop forever if ROS isn't reachable). We wait for a success log line,
 #    then kill the supervisor. OpenClaw 2026.3–2026.7 wording varies slightly.
 echo "[4/5] Registering plugin with OpenClaw..."
-LOG="$(mktemp -t agenticros-install.XXXX.log)"
+LOG="$(mktemp -t synapse-install.XXXX.log)"
 # Match common success strings across OpenClaw releases (case-insensitive).
 SUCCESS_RE='Linked plugin path|Successfully linked|Plugin linked|linked plugin|already (installed|linked)|Installed plugin|plugin install(ed|ation) (complete|succeeded)'
 FAIL_RE='installation blocked|Plugin .* installation blocked|Invalid path:|must stay within extensions|code safety scan|symlink.*outside'
 ( openclaw plugins install -l --force --accept-capabilities "$DEPLOY_DIR" >"$LOG" 2>&1 ) &
 INSTALL_PID=$!
 # ARM / Jetson deploys are slower; allow up to 90s before we stop waiting for logs.
-INSTALL_WAIT_SECS="${AGENTICROS_PLUGIN_INSTALL_WAIT_SECS:-90}"
+INSTALL_WAIT_SECS="${SYNAPSE_PLUGIN_INSTALL_WAIT_SECS:-90}"
 SAW_SUCCESS=false
 SAW_FAIL=false
 for _ in $(seq 1 "$INSTALL_WAIT_SECS"); do
@@ -373,21 +373,21 @@ plugin_config_points_at_deploy() {
   if command -v jq &>/dev/null; then
     local p
     p=$(jq -r '
-      .plugins.installs.agenticros.sourcePath
-      // .plugins.installs.agenticros.source
-      // .plugins.installs.agenticros.path
-      // .plugins.entries.agenticros.path
+      .plugins.installs.synapse.sourcePath
+      // .plugins.installs.synapse.source
+      // .plugins.installs.synapse.path
+      // .plugins.entries.synapse.path
       // empty
     ' "$oc_json" 2>/dev/null || true)
     [[ -n "$p" && "$p" == "$DEPLOY_DIR"* ]] && return 0
     # Entry enabled + no path field (older layouts) — accept if deploy exists.
     local enabled
-    enabled=$(jq -r '.plugins.entries.agenticros.enabled // empty' "$oc_json" 2>/dev/null || true)
+    enabled=$(jq -r '.plugins.entries.synapse.enabled // empty' "$oc_json" 2>/dev/null || true)
     [[ "$enabled" == "true" && -f "$DEPLOY_DIR/openclaw.plugin.json" && -z "$p" ]] && return 0
     return 1
   fi
-  # Fallback without jq: require deploy dir + "agenticros" mentioned near install path.
-  grep -q 'plugin-deploy' "$oc_json" 2>/dev/null && grep -q 'agenticros' "$oc_json" 2>/dev/null
+  # Fallback without jq: require deploy dir + "synapse" mentioned near install path.
+  grep -q 'plugin-deploy' "$oc_json" 2>/dev/null && grep -q 'synapse' "$oc_json" 2>/dev/null
 }
 
 if [[ "$SAW_FAIL" == true ]]; then
@@ -403,7 +403,7 @@ if [[ "$SAW_SUCCESS" != true ]] && ! plugin_config_points_at_deploy; then
   tail -40 "$LOG"
   echo ""
   echo "Tip: on OpenClaw 2026.6+, the plugin must be linked from the flattened"
-  echo "deploy dir (this script's -l target), not packages/agenticros."
+  echo "deploy dir (this script's -l target), not packages/synapse-openclaw."
   rm -f "$LOG"
   exit 1
 fi
@@ -415,7 +415,7 @@ fi
 # loads THAT tree, not the -l source. Without this copy, `plugin-deploy` is
 # fresh and the gateway keeps running a weeks-old snapshot (no ros2_* tools
 # in chat, stale transport).
-EXT_DIR="${OPENCLAW_HOME:-$HOME/.openclaw}/extensions/agenticros"
+EXT_DIR="${OPENCLAW_HOME:-$HOME/.openclaw}/extensions/synapse"
 if [[ -d "$DEPLOY_DIR/dist" ]]; then
   mkdir -p "$EXT_DIR"
   rm -rf "$EXT_DIR/dist"
@@ -443,14 +443,14 @@ elif [[ -n "$TRANSPORT$ROSBRIDGE_URL$ZENOH_ENDPOINT$ROBOT_NAMESPACE$CAMERA_TOPIC
       '
         .plugins = (.plugins // {}) |
         .plugins.entries = (.plugins.entries // {}) |
-        .plugins.entries.agenticros = (.plugins.entries.agenticros // {}) |
-        .plugins.entries.agenticros.enabled = true |
-        .plugins.entries.agenticros.config = (.plugins.entries.agenticros.config // {}) |
-        ( if $transport != "" then .plugins.entries.agenticros.config.transport = { mode: $transport } else . end ) |
-        ( if $rb       != "" then .plugins.entries.agenticros.config.rosbridge = { url: $rb } else . end ) |
-        ( if $zenoh    != "" then .plugins.entries.agenticros.config.zenoh     = { routerEndpoint: $zenoh } else . end ) |
+        .plugins.entries.synapse = (.plugins.entries.synapse // {}) |
+        .plugins.entries.synapse.enabled = true |
+        .plugins.entries.synapse.config = (.plugins.entries.synapse.config // {}) |
+        ( if $transport != "" then .plugins.entries.synapse.config.transport = { mode: $transport } else . end ) |
+        ( if $rb       != "" then .plugins.entries.synapse.config.rosbridge = { url: $rb } else . end ) |
+        ( if $zenoh    != "" then .plugins.entries.synapse.config.zenoh     = { routerEndpoint: $zenoh } else . end ) |
         ( if $ns       != "" or $cam != "" then
-            .plugins.entries.agenticros.config.robot = ( (.plugins.entries.agenticros.config.robot // {})
+            .plugins.entries.synapse.config.robot = ( (.plugins.entries.synapse.config.robot // {})
               + ( if $ns  != "" then { namespace: $ns } else {} end )
               + ( if $cam != "" then { cameraTopic: $cam } else {} end ) )
           else . end )
@@ -467,7 +467,7 @@ elif [[ -n "$TRANSPORT$ROSBRIDGE_URL$ZENOH_ENDPOINT$ROBOT_NAMESPACE$CAMERA_TOPIC
 import json, os, pathlib
 p = pathlib.Path(os.environ["OPENCLAW_JSON"])
 d = json.loads(p.read_text())
-ag = d.setdefault("plugins", {}).setdefault("entries", {}).setdefault("agenticros", {})
+ag = d.setdefault("plugins", {}).setdefault("entries", {}).setdefault("synapse", {})
 ag["enabled"] = True
 cfg = ag.setdefault("config", {})
 t  = os.environ.get("TRANSPORT") or ""
@@ -486,7 +486,7 @@ p.write_text(json.dumps(d, indent=2) + "\n")
 PYEOF
     echo "  Config patched (via python3 fallback; install jq for the canonical path)."
   else
-    echo "  Neither jq nor python3 is available; set these manually under plugins.entries.agenticros.config:"
+    echo "  Neither jq nor python3 is available; set these manually under plugins.entries.synapse.config:"
     [[ -n "$TRANSPORT" ]]       && echo "    transport.mode = \"$TRANSPORT\""
     [[ -n "$ROSBRIDGE_URL" ]]   && echo "    rosbridge.url = \"$ROSBRIDGE_URL\""
     [[ -n "$ZENOH_ENDPOINT" ]]  && echo "    zenoh.routerEndpoint = \"$ZENOH_ENDPOINT\""
@@ -516,7 +516,7 @@ if [[ "$NO_SYSTEMD" != true ]]; then
       done
     fi
     if [[ -n "$ROS_SETUP" ]]; then
-      ENV_FILE="$HOME/.agenticros/gateway-ros.env"
+      ENV_FILE="$HOME/.synapse/gateway-ros.env"
       mkdir -p "$(dirname "$ENV_FILE")"
       # Diff env before/after sourcing ROS so we only export ROS-relevant vars.
       # NB: also forward any colcon overlay if one is present in $HOME/<ros2_ws>/install.
@@ -543,7 +543,7 @@ done
 EOSH
       # Corebrum's ROS graph is rmw_zenoh_cpp on the one local router.
       # A systemd gateway does not source the desktop profile, so record it here.
-      if [[ -f /etc/corebrum/ros/rmw || -x /usr/local/lib/corebrum/agenticros-with-ros.sh ]]; then
+      if [[ -f /etc/corebrum/ros/rmw || -x /usr/local/lib/corebrum/synapse-with-ros.sh ]]; then
         grep -v '^RMW_IMPLEMENTATION=' "$ENV_FILE" > "${ENV_FILE}.tmp" || true
         printf 'RMW_IMPLEMENTATION=rmw_zenoh_cpp\n' >> "${ENV_FILE}.tmp"
         mv "${ENV_FILE}.tmp" "$ENV_FILE"
@@ -589,7 +589,7 @@ PY
 
       # 6b. Drop-in pointing the gateway at the env file.
       DROPIN_DIR="$HOME/.config/systemd/user/openclaw-gateway.service.d"
-      DROPIN="$DROPIN_DIR/agenticros-ros.conf"
+      DROPIN="$DROPIN_DIR/synapse-ros.conf"
       mkdir -p "$DROPIN_DIR"
       cat > "$DROPIN" <<EOF
 # Auto-generated by scripts/setup_gateway_plugin.sh. Re-run that script after
@@ -620,12 +620,12 @@ echo ""
 
 # Optional: install Python deps needed for real (non-mock) sensing in
 # on-robot ROS2 skills that ship in this workspace. Currently just
-# agenticros_follow_me (RealSense depth + MediaPipe pose) — its README lists
+# synapse_follow_me (RealSense depth + MediaPipe pose) — its README lists
 # pyrealsense2/mediapipe as "optional", but a fresh setup should still try to
 # get them so the skill works out of the box instead of silently degrading
 # to mock detection.
-if [[ "$SKIP_VISION_DEPS" != true && -d "$REPO_ROOT/ros2_ws/src/agenticros_follow_me" ]]; then
-  echo "Checking optional vision deps for agenticros_follow_me (RealSense + MediaPipe)..."
+if [[ "$SKIP_VISION_DEPS" != true && -d "$REPO_ROOT/ros2_ws/src/synapse_follow_me" ]]; then
+  echo "Checking optional vision deps for synapse_follow_me (RealSense + MediaPipe)..."
   if ! python3 -m pip --version &>/dev/null; then
     echo "  WARN: python3 -m pip not available. Install it, then re-run:"
     echo "    sudo apt install -y python3-pip python3-venv librealsense2-dev"
@@ -637,7 +637,7 @@ if [[ "$SKIP_VISION_DEPS" != true && -d "$REPO_ROOT/ros2_ws/src/agenticros_follo
     if [[ "$NEED_INSTALL" == true ]]; then
       echo "  Installing pyrealsense2 + mediapipe (pip --break-system-packages)..."
       python3 -m pip install --break-system-packages pyrealsense2 mediapipe || \
-        echo "  WARN: pip install failed; agenticros_follow_me will fall back to mock detection. See ros2_ws/src/agenticros_follow_me/README.md." >&2
+        echo "  WARN: pip install failed; synapse_follow_me will fall back to mock detection. See ros2_ws/src/synapse_follow_me/README.md." >&2
       # mediapipe pulls in opencv-contrib-python, which on some platforms
       # drags numpy to 2.x. That breaks anything on this system still built
       # against numpy 1.x's ABI (apt's scipy/matplotlib, in particular) —
@@ -648,9 +648,9 @@ if [[ "$SKIP_VISION_DEPS" != true && -d "$REPO_ROOT/ros2_ws/src/agenticros_follo
       echo "  pyrealsense2 + mediapipe already installed."
     fi
     if python3 -c "import pyrealsense2, mediapipe" 2>/dev/null; then
-      echo "  OK: agenticros_follow_me can use real RealSense + MediaPipe detection."
+      echo "  OK: synapse_follow_me can use real RealSense + MediaPipe detection."
     else
-      echo "  WARN: pyrealsense2/mediapipe still not importable; agenticros_follow_me will use mock detection."
+      echo "  WARN: pyrealsense2/mediapipe still not importable; synapse_follow_me will use mock detection."
     fi
   fi
   echo ""
@@ -658,11 +658,11 @@ fi
 
 echo "Gateway plugin setup complete."
 echo ""
-echo "Verify with:  openclaw plugins list | grep -i agenticros"
-echo "              agenticros doctor   # red openclaw-plugin-deploy = path/deploy issue"
+echo "Verify with:  openclaw plugins list | grep -i synapse"
+echo "              synapse doctor   # red openclaw-plugin-deploy = path/deploy issue"
 echo "Logs:         tail -f /tmp/openclaw/openclaw-$(date +%Y-%m-%d).log"
 echo ""
-echo "Plugin UI:    http://127.0.0.1:18789/plugins/agenticros/  (trailing slash optional)"
+echo "Plugin UI:    http://127.0.0.1:18789/plugins/synapse/  (trailing slash optional)"
 echo ""
 echo "Next time the plugin source changes, re-run this script (with --skip-build"
 echo "if you've already run pnpm build) to refresh the deployment in $DEPLOY_DIR."

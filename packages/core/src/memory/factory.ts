@@ -1,4 +1,4 @@
-import type { AgenticROSConfig } from "../config.js";
+import type { SynapseConfig } from "../config.js";
 import type { MemoryProvider } from "./types.js";
 
 /**
@@ -11,7 +11,7 @@ import type { MemoryProvider } from "./types.js";
  * dependency. Users on `backend: "local"` never load it.
  */
 export async function createMemory(
-  config: AgenticROSConfig,
+  config: SynapseConfig,
 ): Promise<MemoryProvider | null> {
   if (!config.memory?.enabled) return null;
 
@@ -49,7 +49,7 @@ export async function createMemory(
  * Argument > config.memory.namespace > config.robot.namespace.
  */
 export function resolveMemoryNamespace(
-  config: AgenticROSConfig,
+  config: SynapseConfig,
   argNamespace?: string,
 ): string {
   return (

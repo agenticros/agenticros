@@ -1,5 +1,5 @@
 #!/bin/bash
-# setup_robot.sh - One-time robot-side setup for AgenticROS (no Docker)
+# setup_robot.sh - One-time robot-side setup for Corebrum Synapse (no Docker)
 #
 # Run this on the robot after cloning the repo. It builds the workspace,
 # installs rosbridge (apt or from source), and prepares run scripts.
@@ -14,7 +14,7 @@ REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 ROS2_WS="$REPO_ROOT/ros2_ws"
 SKIP_APT=false
 ROS_DISTRO=""
-source "$REPO_ROOT/scripts/lib/agenticros-banner.sh"
+source "$REPO_ROOT/scripts/lib/synapse-banner.sh"
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -24,8 +24,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-agenticros_banner
-echo "AgenticROS robot setup"
+synapse_banner
+echo "Corebrum Synapse robot setup"
 echo ""
 
 # Detect ROS distro if not set
@@ -50,7 +50,7 @@ fi
 
 # 1. Build ros2_ws
 echo ""
-echo "[1/3] Building ROS2 workspace (agenticros_msgs, agenticros_discovery, agenticros_agent)..."
+echo "[1/3] Building ROS2 workspace (synapse_msgs, synapse_discovery, synapse_agent)..."
 source "/opt/ros/$ROS_DISTRO/setup.bash"
 cd "$ROS2_WS"
 if [[ ! -f install/setup.bash ]]; then
@@ -94,7 +94,7 @@ if ros2 pkg list 2>/dev/null | grep -q rosbridge_server; then
 else
   echo "WARNING: rosbridge_server still not found. Run: ./scripts/install_rosbridge_from_source.sh $ROS_DISTRO"
 fi
-for pkg in agenticros_msgs agenticros_discovery; do
+for pkg in synapse_msgs synapse_discovery; do
   if ros2 pkg list 2>/dev/null | grep -q "^${pkg}$"; then echo "$pkg: OK"; else echo "$pkg: missing"; fi
 done
 echo ""

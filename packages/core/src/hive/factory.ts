@@ -1,4 +1,4 @@
-import type { AgenticROSConfig } from "../config.js";
+import type { SynapseConfig } from "../config.js";
 import { HiveHttpClient, type HiveClientHooks, type HiveClientOverrides } from "./client.js";
 import type { HiveClient } from "./types.js";
 
@@ -7,7 +7,7 @@ import type { HiveClient } from "./types.js";
  * Dynamic-import friendly: callers that never enable hive never construct this.
  */
 export function createHiveClient(
-  config: AgenticROSConfig,
+  config: SynapseConfig,
   overrides?: HiveClientOverrides,
   hooks?: HiveClientHooks,
 ): HiveClient | null {
@@ -16,7 +16,7 @@ export function createHiveClient(
 }
 
 export function hiveRecipeOn(
-  config: AgenticROSConfig,
+  config: SynapseConfig,
   id: "detect" | "describe" | "health",
 ): boolean {
   return !!config.hive?.enabled && !!config.hive.recipes?.[id];

@@ -3,7 +3,7 @@
 
 Why this exists:
 
-    In a NemoClaw / OpenShell hybrid setup, the AgenticROS plugin runs
+    In a NemoClaw / OpenShell hybrid setup, the Corebrum Synapse plugin runs
     inside the gateway process, which lives in the OpenShell-created
     sandbox network namespace. From that netns:
 
@@ -25,7 +25,7 @@ Why this exists:
 
 How the connection flows:
 
-    AgenticROS plugin (sandbox netns)
+    Corebrum Synapse plugin (sandbox netns)
         |
         | ws://10.200.0.1:9090
         v

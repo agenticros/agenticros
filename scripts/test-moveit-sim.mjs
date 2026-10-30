@@ -3,8 +3,8 @@
  * Smoke-test MoveIt2 against sim-arm (--moveit).
  *
  * Prerequisites (already running):
- *   agenticros up sim-arm --moveit --headless
- *   npx agenticros skills install @agenticros/moveit-pick
+ *   synapse up sim-arm --moveit --headless
+ *   npx @corebrum/synapse skills install @corebrum/moveit-pick
  *
  * Sequence:
  *   1. list topics (expect /joint_states, /arm/*/cmd_pos, /move_action)
@@ -23,7 +23,7 @@ import { dirname, join, resolve } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "..");
-const serverDist = join(repoRoot, "packages/agenticros-claude-code/dist/index.js");
+const serverDist = join(repoRoot, "packages/synapse-claude-code/dist/index.js");
 
 const READY = {
   shoulder_pan_joint: 0.6,
@@ -40,8 +40,8 @@ const child = spawn(process.execPath, [serverDist], {
   stdio: ["pipe", "pipe", "pipe"],
   env: {
     ...process.env,
-    AGENTICROS_ROBOT_NAMESPACE: process.env.AGENTICROS_ROBOT_NAMESPACE ?? "",
-    AGENTICROS_USE_SIM_TIME: process.env.AGENTICROS_USE_SIM_TIME ?? "1",
+    SYNAPSE_ROBOT_NAMESPACE: process.env.SYNAPSE_ROBOT_NAMESPACE ?? "",
+    SYNAPSE_USE_SIM_TIME: process.env.SYNAPSE_USE_SIM_TIME ?? "1",
   },
 });
 
@@ -188,7 +188,7 @@ async function main() {
   }
   const hasMoveAction = topicText.includes("/move_action");
   if (!hasMoveAction) {
-    console.error("FAIL: /move_action not listed. Bring up: agenticros up sim-arm --moveit --headless");
+    console.error("FAIL: /move_action not listed. Bring up: synapse up sim-arm --moveit --headless");
     child.kill("SIGTERM");
     process.exit(1);
   }
@@ -211,7 +211,7 @@ async function main() {
   const hasPick = capText.includes("pick_object");
   if (!hasPick) {
     console.warn(
-      "WARN: pick_object not in capabilities — falling back to ros2_action_goal. Install @agenticros/moveit-pick to exercise run_mission.",
+      "WARN: pick_object not in capabilities — falling back to ros2_action_goal. Install @corebrum/moveit-pick to exercise run_mission.",
     );
   }
 

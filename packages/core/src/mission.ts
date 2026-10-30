@@ -1,5 +1,5 @@
 /**
- * Mission runner — Phase 1.c of the AgenticROS strategy.
+ * Mission runner — Phase 1.c of the Corebrum Synapse strategy.
  *
  * A mission is a declarative sequence of capability invocations. Each step
  * names a capability (from the registry exposed by `ros2_list_capabilities`)

@@ -1,16 +1,19 @@
-# @agenticros/eyes
+# @corebrum/eyes
+
+This project was previously known as AgenticROS.
+
 
 Fullscreen robot eyes for an Ubuntu tablet or robot display, driven by ROS 2 `cmd_vel` (`geometry_msgs/Twist`). Includes procedural R2D2-style chirps (idle + excited on motion). When idle, the pupils can follow a person in the RealSense camera if YOLO is already installed.
 
-Part of the [AgenticROS](https://github.com/agenticros/agenticros) monorepo. Prefer launching via the CLI:
+Part of the [Corebrum Synapse](https://github.com/Corebrum/corebrum-synapse) monorepo. Prefer launching via the CLI:
 
 ```bash
-agenticros eyes
-agenticros eyes --no-browser
-agenticros eyes --no-teleop          # gaze only (no WASD publish)
-agenticros eyes --no-sound           # mute R2D2 chirps
-agenticros eyes --no-person-gaze     # skip idle person-follow even if YOLO is present
-agenticros up real --eyes            # start eyes after the real-robot stack
+synapse eyes
+synapse eyes --no-browser
+synapse eyes --no-teleop          # gaze only (no WASD publish)
+synapse eyes --no-sound           # mute R2D2 chirps
+synapse eyes --no-person-gaze     # skip idle person-follow even if YOLO is present
+synapse up real --eyes            # start eyes after the real-robot stack
 ```
 
 See [docs/eyes.md](../../docs/eyes.md) for setup, config, sounds, keyboard teleop, and ARC telepresence (operator video and two-way audio on this page).
@@ -28,18 +31,18 @@ Priority, highest first:
 
 Person-follow gaze uses the same YOLOv8n detector as follow-me / `ros2_find_object`. Eyes **do not** add YOLO as a dependency and **do not** download `yolov8n.onnx`. It only runs when:
 
-- Weights already exist at `~/.agenticros/models/yolov8n.onnx` (or `AGENTICROS_YOLOV8_MODEL`)
-- `@agenticros/object-detection` (and `onnxruntime-node` / `sharp`) are already present from another adapter
+- Weights already exist at `~/.synapse/models/yolov8n.onnx` (or `SYNAPSE_YOLOV8_MODEL`)
+- `@corebrum/object-detection` (and `onnxruntime-node` / `sharp`) are already present from another adapter
 
 Startup log: `Person gaze enabled (YOLO) on <camera topic>`.
 
-Color topic comes from `robot.cameraTopic` in `~/.agenticros/config.json` (raw Image paths get `/compressed` appended). Default: `/camera/camera/color/image_raw/compressed`.
+Color topic comes from `robot.cameraTopic` in `~/.synapse/config.json` (raw Image paths get `/compressed` appended). Default: `/camera/camera/color/image_raw/compressed`.
 
 Disable even when YOLO is present:
 
 ```bash
-agenticros eyes --no-person-gaze
-agenticros up real --eyes --eyes-no-person-gaze
+synapse eyes --no-person-gaze
+synapse up real --eyes --eyes-no-person-gaze
 ```
 
 ### If YOLO is not installed

@@ -1,6 +1,6 @@
 # Teaching a robot to find things, two ways at once
 
-I added a new skill to AgenticROS this week called **Find Object**, and it gave me an excuse to do something I've been meaning to ship for a while: publish the same robot capability as both a Claude Code MCP tool and a standalone OpenClaw skill plugin, from one piece of detection code.
+I added a new skill to Corebrum Synapse this week called **Find Object**, and it gave me an excuse to do something I've been meaning to ship for a while: publish the same robot capability as both a Claude Code MCP tool and a standalone OpenClaw skill plugin, from one piece of detection code.
 
 The chat experience is what you'd expect. I say "find the bottle." The robot rotates in place, watches its camera feed, and stops the moment YOLO sees a bottle. The agent then tells me which way to look — left, right, or dead center — and how confident it was. No prompt engineering, no demo scaffolding. Just a tool call.
 
@@ -23,13 +23,13 @@ This is the part I think is more interesting than the YOLO wrapper.
 
 Find Object ships in two places. The first is a built-in MCP tool inside the **Claude Code adapter**, exposed as `ros2_find_object`. The MCP server runs over stdio, so the same tool lights up across Claude Code in the terminal, the Claude desktop app on macOS, and Claude Dispatch on iPhone when paired to the Mac. The agent just sees one more `ros2_*` tool next to `ros2_publish`, `ros2_camera_snapshot`, and friends.
 
-The second is a standalone npm-style **OpenClaw skill plugin** called `agenticros-skill-find`, living in its own repo. It exports a single `registerSkill(api, config, context)` function — the AgenticROS skill contract — and the OpenClaw gateway picks it up at boot through its skill loader. There's no fork, no patch to the core plugin: you add one line to your config and the gateway loads the skill alongside everything else.
+The second is a standalone npm-style **OpenClaw skill plugin** called `corebrum-skill-find`, living in its own repo. It exports a single `registerSkill(api, config, context)` function — the Corebrum Synapse skill contract — and the OpenClaw gateway picks it up at boot through its skill loader. There's no fork, no patch to the core plugin: you add one line to your config and the gateway loads the skill alongside everything else.
 
-Both versions call the same `findObject(config, transport, opts)` function under the hood, written against `@agenticros/core`. That means it doesn't care whether the transport underneath is Zenoh, rosbridge, WebRTC, or local DDS — the namespacing, the `cmd_vel` resolution, the `Twist` publish all go through one interface. Build it once, get it on every agent surface AgenticROS supports.
+Both versions call the same `findObject(config, transport, opts)` function under the hood, written against `@corebrum/core`. That means it doesn't care whether the transport underneath is Zenoh, rosbridge, WebRTC, or local DDS — the namespacing, the `cmd_vel` resolution, the `Twist` publish all go through one interface. Build it once, get it on every agent surface Corebrum Synapse supports.
 
 ## Under the hood
 
-I deliberately kept the implementation inside the gateway / MCP process. There is **no extra ROS2 node** for this skill. Detection runs in-process with `onnxruntime-node` on CPU and `sharp` for image preprocessing. On first call, the skill pulls `yolov8n.onnx` (about 6 MB) from a public Ultralytics mirror into `~/.agenticros/models/`, then reuses the cache forever. You can override the path or URL with `AGENTICROS_YOLOV8_MODEL` and `AGENTICROS_YOLOV8_URL` env vars if you're working offline or behind a proxy.
+I deliberately kept the implementation inside the gateway / MCP process. There is **no extra ROS2 node** for this skill. Detection runs in-process with `onnxruntime-node` on CPU and `sharp` for image preprocessing. On first call, the skill pulls `yolov8n.onnx` (about 6 MB) from a public Ultralytics mirror into `~/.synapse/models/`, then reuses the cache forever. You can override the path or URL with `SYNAPSE_YOLOV8_MODEL` and `SYNAPSE_YOLOV8_URL` env vars if you're working offline or behind a proxy.
 
 The control loop is small and boring, which is exactly what I want for a safety-relevant skill. Every tick republishes the rotation twist (some robots time out their cmd_vel if you stop talking), snapshots a frame, runs inference, and exits the loop the moment NMS produces a detection. A `finally` block guarantees a zero-velocity stop publish on success, on timeout, and on any thrown error. Angular velocity is clamped to `safety.maxAngularVelocity` before it ever reaches the wire.
 
@@ -61,7 +61,7 @@ And here's the entire OpenClaw config change to enable the skill on the gateway 
 
 ```json
 {
-  "skillPackages": ["agenticros-skill-find"],
+  "skillPackages": ["corebrum-skill-find"],
   "skills": {
     "find": {
       "defaultAngularSpeed": 0.3,
@@ -76,7 +76,7 @@ Restart the gateway and `find_object` shows up next to the rest of your tools.
 
 ## Why I built it this way
 
-The skill contract — `registerSkill(api, config, context)` plus an `agenticrosSkill: true` flag in `package.json` — is the part of AgenticROS I'm most invested in long-term. It means anyone can ship a new robot capability as a separate repo or npm package, without touching the core, the adapters, or each other's skills. Find Object is now the second reference for that pattern after Follow Me, and it's deliberately smaller and more self-contained so it's a cleaner template to copy.
+The skill contract — `registerSkill(api, config, context)` plus an `synapseSkill: true` flag in `package.json` — is the part of Corebrum Synapse I'm most invested in long-term. It means anyone can ship a new robot capability as a separate repo or npm package, without touching the core, the adapters, or each other's skills. Find Object is now the second reference for that pattern after Follow Me, and it's deliberately smaller and more self-contained so it's a cleaner template to copy.
 
 The two-distribution story matters for the same reason. If a skill is good enough, you want it everywhere your agent already lives. MCP gets you Claude's surfaces. The OpenClaw skill loader gets you the gateway, any LLM the gateway is wired to, and eventually the Gemini adapter once it speaks the same contract.
 
@@ -84,14 +84,14 @@ The two-distribution story matters for the same reason. If a skill is good enoug
 
 Next on the list: multi-class search ("find a cup or a bottle"), depth fusion with `ros2_depth_distance` so the result carries a distance estimate, and a `go_to_object` skill that uses the horizontal offset and depth to close the gap. After that, swappable detectors so you can drop in your own ONNX without forking the skill.
 
-If you want to try Find Object, the AgenticROS repo is at [github.com/agenticros/agenticros](https://github.com/agenticros/agenticros) and the skill package is at [github.com/agenticros/agenticros-skill-find](https://github.com/agenticros/agenticros-skill-find). Issues and PRs welcome — especially if you point a robot at it and break it in an interesting way.
+If you want to try Find Object, the Corebrum Synapse repo is at [github.com/Corebrum/corebrum-synapse](https://github.com/Corebrum/corebrum-synapse) and the skill package is at [github.com/Corebrum/corebrum-skill-find](https://github.com/Corebrum/corebrum-skill-find). Issues and PRs welcome — especially if you point a robot at it and break it in an interesting way.
 
 ## Code references
 
 For anyone reading from LinkedIn who wants to dig in:
 
-- MCP tool registration: `packages/agenticros-claude-code/src/tools.ts` (`ros2_find_object`)
-- MCP implementation: `packages/agenticros-claude-code/src/find-object/find-object.ts`
-- OpenClaw skill loader: `packages/agenticros/src/skill-loader.ts`
-- Skill package: `agenticros-skill-find/src/find-object.ts`, `agenticros-skill-find/src/detector.ts`
+- MCP tool registration: `packages/synapse-claude-code/src/tools.ts` (`ros2_find_object`)
+- MCP implementation: `packages/synapse-claude-code/src/find-object/find-object.ts`
+- OpenClaw skill loader: `packages/synapse-openclaw/src/skill-loader.ts`
+- Skill package: `corebrum-skill-find/src/find-object.ts`, `corebrum-skill-find/src/detector.ts`
 - Skill contract docs: `docs/skills.md`

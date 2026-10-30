@@ -2,7 +2,7 @@
  * Pure helpers for idle person-follow gaze.
  *
  * Maps a YOLO person bbox to canvas pupil targets in [-1, 1]. Does not
- * import @agenticros/object-detection — callers load that opportunistically.
+ * import @corebrum/object-detection — callers load that opportunistically.
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -16,11 +16,11 @@ export function clamp(value, lo, hi) {
   return Math.min(hi, Math.max(lo, value));
 }
 
-/** Same lookup as @agenticros/object-detection PersonDetector. */
+/** Same lookup as @corebrum/object-detection PersonDetector. */
 export function yolov8ModelPath() {
-  const fromEnv = process.env.AGENTICROS_YOLOV8_MODEL;
+  const fromEnv = process.env.SYNAPSE_YOLOV8_MODEL;
   if (fromEnv && fromEnv.trim().length > 0) return fromEnv.trim();
-  return path.join(os.homedir(), ".agenticros", "models", "yolov8n.onnx");
+  return path.join(os.homedir(), ".synapse", "models", "yolov8n.onnx");
 }
 
 export function yolov8ModelExists() {

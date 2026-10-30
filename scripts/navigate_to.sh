@@ -1,7 +1,7 @@
 #!/bin/bash
 # Send one Nav2 navigate_to_pose goal in the map frame, then wait for the result.
 #
-# Called by `agenticros navigate`. Arguments are already numeric; the namespace
+# Called by `synapse navigate`. Arguments are already numeric; the namespace
 # comes from the environment (the robot's own config), not from the network.
 #
 # Usage: ./scripts/navigate_to.sh <ros-distro> <x> <y> <qz> <qw>
@@ -22,7 +22,7 @@ for v in "$X" "$Y" "$QZ" "$QW"; do
   fi
 done
 
-NS="${AGENTICROS_ROBOT_NAMESPACE:-}"
+NS="${SYNAPSE_ROBOT_NAMESPACE:-}"
 if [[ -n "$NS" && ! "$NS" =~ ^[A-Za-z0-9_./-]+$ ]]; then
   echo "Refusing robot namespace: $NS" >&2
   exit 2

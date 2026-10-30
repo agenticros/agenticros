@@ -1,24 +1,24 @@
 #!/usr/bin/env bash
 # configure_for_sim.sh
 #
-# One-shot helper: copy the simulation-tuned AgenticROS config template into
-# ~/.agenticros/config.json. Use this when you want the MCP server + OpenClaw
+# One-shot helper: copy the simulation-tuned Corebrum Synapse config template into
+# ~/.synapse/config.json. Use this when you want the MCP server + OpenClaw
 # plugin to talk to the sim AMR's topics (which use no robot-namespace
 # prefix - so a fresh "real robot" config with a UUID namespace would miss
 # every topic).
 #
 # Usage:
-#   ./scripts/configure_for_sim.sh            # writes ~/.agenticros/config.json
+#   ./scripts/configure_for_sim.sh            # writes ~/.synapse/config.json
 #   ./scripts/configure_for_sim.sh --backup   # back up an existing config first
 #   ./scripts/configure_for_sim.sh --print    # print the template to stdout
 #
-# After running, restart the MCP server (or run `agenticros up sim-amr`).
+# After running, restart the MCP server (or run `synapse up sim-amr`).
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SRC="$ROOT/ros2_ws/src/agenticros_sim/config/agenticros-sim.config.json"
-DEST_DIR="$HOME/.agenticros"
+SRC="$ROOT/ros2_ws/src/synapse_sim/config/synapse-sim.config.json"
+DEST_DIR="$HOME/.synapse"
 DEST="$DEST_DIR/config.json"
 
 PRINT_ONLY=false
@@ -60,5 +60,5 @@ fi
 
 cp "$SRC" "$DEST"
 echo "[configure_for_sim] Wrote $DEST"
-echo "[configure_for_sim] Inspect with: agenticros config show"
-echo "[configure_for_sim] Bring up sim with: agenticros up sim-amr"
+echo "[configure_for_sim] Inspect with: synapse config show"
+echo "[configure_for_sim] Bring up sim with: synapse up sim-amr"

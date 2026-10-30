@@ -26,7 +26,7 @@ of `profile.features` is not advertised.
 Published skills that omit `requires` stay visible on every robot
 (current behaviour). New skills should declare `requires`.
 
-## Schema (`agenticros.profile.v1`)
+## Schema (`synapse.profile.v1`)
 
 ```jsonc
 {
@@ -36,7 +36,7 @@ Published skills that omit `requires` stay visible on every robot
       "namespace": "warehouse-01",
       "kind": "amr",
       "profile": {
-        "schema": "agenticros.profile.v1",
+        "schema": "synapse.profile.v1",
         "features": ["base", "camera", "depth", "lidar"],
         "bindings": {
           "cmd_vel": "/cmd_vel",
@@ -52,7 +52,7 @@ Published skills that omit `requires` stay visible on every robot
 ```
 
 Relative binding names are prefixed with `robot.namespace` the same way
-other AgenticROS topics are.
+other Corebrum Synapse topics are.
 
 ### Frozen features
 
@@ -95,15 +95,15 @@ Builtin verbs:
 ## CLI
 
 ```bash
-agenticros robots add warehouse-01 \
+synapse robots add warehouse-01 \
   --kind=amr \
   --features=base,camera,depth \
   --binding cmd_vel=/cmd_vel \
   --binding camera.rgb=/camera/color/image_raw/compressed
 
-agenticros robots profile show warehouse-01
-agenticros robots profile infer warehouse-01          # print draft
-agenticros robots profile infer warehouse-01 --apply  # write draft
+synapse robots profile show warehouse-01
+synapse robots profile infer warehouse-01          # print draft
+synapse robots profile infer warehouse-01 --apply  # write draft
 ```
 
 `infer` drafts from `kind`, `cameraTopic`, deprecated `sensors`, and
@@ -111,11 +111,11 @@ namespaced `/cmd_vel` plus `/odom` when `base` is present. It does not
 overwrite unless `--apply`. `odom` is optional — it is not required for
 the `base` feature.
 
-`agenticros skills install` still installs on the gateway (mixed fleets
+`synapse skills install` still installs on the gateway (mixed fleets
 need that). It **warns** per configured robot whose profile fails the
 skill's `requires`. It never hard-fails.
 
-`agenticros doctor` static checks (no live graph):
+`synapse doctor` static checks (no live graph):
 
 - Unknown feature or binding key → red
 - Declared feature missing its v1 binding → red
@@ -123,7 +123,7 @@ skill's `requires`. It never hard-fails.
 - No profile on any robot → yellow (“verbs are gateway-wide”)
 - Inverted `workspaceLimits` (xMin > xMax) → red
 
-`agenticros doctor --live` connects over the configured transport and
+`synapse doctor --live` connects over the configured transport and
 checks each profile binding against the graph:
 
 - Declared topic/action missing → red
@@ -155,7 +155,7 @@ overlays velocity ceilings and an optional map-frame geofence:
 - Twist publishes over the cap are **blocked** (MCP / OpenClaw / Gemini).
 - Teleop and find-object **clamp** to the cap.
 - `workspaceLimits` is optional; omit it to leave navigation unfenced.
-- On transport loss (and again on reconnect), AgenticROS publishes a
+- On transport loss (and again on reconnect), Corebrum Synapse publishes a
   zero Twist to every robot whose profile has `base` (legacy kind other
   than `arm` if no profile).
 

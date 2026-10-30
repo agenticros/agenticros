@@ -1,0 +1,67 @@
+# synapse_explore
+
+This project was previously known as AgenticROS.
+
+
+ROS 2 node that advertises **`explore`** and **`wander`** actions. It reads `/map`, picks poses (occupancy-grid frontiers or random free cells), and sends Nav2 `NavigateToPose`. Obstacle avoidance stays in Nav2.
+
+The marketplace skill [`@corebrum/explore`](https://www.npmjs.com/package/@corebrum/explore) dispatches those actions. Corebrum Synapse does not launch this node for you.
+
+## Dependencies
+
+Jazzy (Humble: `ros-humble-…`):
+
+```bash
+sudo apt-get install -y \
+  ros-jazzy-navigation2 \
+  ros-jazzy-nav2-bringup \
+  ros-jazzy-rtabmap-ros
+```
+
+`navigation2` is the Nav2 metapackage (planner, controller, `navigate_to_pose`). `nav2-bringup` is launches/params. `rtabmap-ros` is required for live mapping (`/map`); skip it only if another node already publishes the occupancy grid (e.g. `sim-amr --nav2`).
+
+## Build
+
+```bash
+cd ros2_ws
+source /opt/ros/jazzy/setup.bash
+colcon build --packages-select synapse_msgs synapse_explore
+source install/setup.bash
+```
+
+## Run
+
+```bash
+# Combined RealSense + RTAB-Map + Nav2 (no AMCL) + this node:
+ros2 launch synapse_bringup rtabmap_nav2.launch.py
+
+# Node only (Nav2 + /map already up):
+ros2 launch synapse_explore explore.launch.py
+# or: ros2 run synapse_explore explore_node
+```
+
+Parameters:
+
+| Param | Default | Meaning |
+|---|---|---|
+| `map_topic` | `map` | Occupancy grid |
+| `navigate_action` | `navigate_to_pose` | Nav2 action |
+| `map_frame` | `map` | Goal / TF parent |
+| `base_frame` | `base_footprint` | Robot frame (`base_link` fallback) |
+| `default_explore_timeout_s` | `180` | Used when the goal sends `timeout_s: 0` |
+| `default_wander_timeout_s` | `60` | Same for wander |
+| `goal_timeout_s` | `30` | Per Nav2 goal |
+| `min_frontier_m` | `0.5` | Ignore tiny frontier clusters |
+| `wander_min_sep_m` | `1.0` | Minimum distance for a wander hop |
+| `map_wait_s` | `15` | Wait for first `/map` |
+
+## Actions
+
+| Action | Type | Behaviour |
+|---|---|---|
+| `explore` | `synapse_msgs/action/Explore` | Drive to frontiers until none remain, timeout, or cancel |
+| `wander` | `synapse_msgs/action/Explore` | Random free-space poses until timeout or cancel |
+
+Goal fields: `mode` (optional; the server forces explore vs wander from the action name), `timeout_s`, `min_frontier_m`, `max_goals`.
+
+See [docs/mapping.md](../../../../docs/mapping.md) for the RealSense + RTAB-Map + Nav2 stack.

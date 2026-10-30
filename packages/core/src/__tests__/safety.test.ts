@@ -146,7 +146,7 @@ test("safety: robotHasMobileBase uses profile.features, else kind !== arm", () =
     robotHasMobileBase({
       namespace: "",
       cameraTopic: "",
-      profile: { schema: "agenticros.profile.v1", features: ["base"], bindings: {} },
+      profile: { schema: "synapse.profile.v1", features: ["base"], bindings: {} },
     }),
     true,
   );
@@ -155,7 +155,7 @@ test("safety: robotHasMobileBase uses profile.features, else kind !== arm", () =
       namespace: "",
       cameraTopic: "",
       kind: "arm",
-      profile: { schema: "agenticros.profile.v1", features: ["arm"], bindings: {} },
+      profile: { schema: "synapse.profile.v1", features: ["arm"], bindings: {} },
     }),
     false,
   );
@@ -177,7 +177,7 @@ test("safety: publishStopForBases publishes zero Twist only for bases", async ()
       namespace: "wh",
       cameraTopic: "",
       profile: {
-        schema: "agenticros.profile.v1",
+        schema: "synapse.profile.v1",
         features: ["base"],
         bindings: { cmd_vel: "/cmd_vel" },
       },
@@ -186,7 +186,7 @@ test("safety: publishStopForBases publishes zero Twist only for bases", async ()
       namespace: "arm",
       cameraTopic: "",
       kind: "arm",
-      profile: { schema: "agenticros.profile.v1", features: ["arm"], bindings: {} },
+      profile: { schema: "synapse.profile.v1", features: ["arm"], bindings: {} },
     },
   ]);
 
@@ -213,7 +213,7 @@ test("safety: emergencyStopRobot publishes zero Twist five times", () => {
       namespace: "wh",
       cameraTopic: "",
       profile: {
-        schema: "agenticros.profile.v1",
+        schema: "synapse.profile.v1",
         features: ["base"],
         bindings: { cmd_vel: "/cmd_vel" },
       },
@@ -264,7 +264,7 @@ test("safety: emergencyStopRobot skips arm-only robots", () => {
     namespace: "arm",
     cameraTopic: "",
     kind: "arm",
-    profile: { schema: "agenticros.profile.v1", features: ["arm"], bindings: {} },
+    profile: { schema: "synapse.profile.v1", features: ["arm"], bindings: {} },
   });
 
   assert.equal(result.skipped, "no_mobile_base");
@@ -291,7 +291,7 @@ test("safety: attachDisconnectFailSafe publishes stop on drop after connect", as
     namespace: "bot",
     cameraTopic: "",
     profile: {
-      schema: "agenticros.profile.v1" as const,
+      schema: "synapse.profile.v1" as const,
       features: ["base"],
       bindings: { cmd_vel: "/cmd_vel" },
     },
@@ -315,7 +315,7 @@ test("safety: checkLiveBindings flags missing cmd_vel red and type mismatch yell
         id: "amr",
         namespace: "amr",
         profile: {
-          schema: "agenticros.profile.v1",
+          schema: "synapse.profile.v1",
           features: ["base", "camera"],
           bindings: {
             cmd_vel: "/cmd_vel",

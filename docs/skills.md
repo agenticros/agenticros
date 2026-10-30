@@ -1,99 +1,99 @@
-# AgenticROS Skills
+# Corebrum Skills
 
-Skills are optional packages that add tools and behaviors to the AgenticROS plugin. They're loaded at gateway start from **`skillPackages`** (npm package names), **`skillPaths`** (directories), and **`skillRefs`** (marketplace refs or `@agenticros/*` pins auto-fetched into `~/.agenticros/skills-cache/`). Each skill reads its runtime config from **`config.skills.<skillId>`** (distinct from `skillRefs`).
+Skills are optional packages that add tools and behaviors to the Corebrum Synapse plugin. They're loaded at gateway start from **`skillPackages`** (npm package names), **`skillPaths`** (directories), and **`skillRefs`** (marketplace refs or `@corebrum/*` pins auto-fetched into `~/.synapse/skills-cache/`). Each skill reads its runtime config from **`config.skills.<skillId>`** (distinct from `skillRefs`).
 
-A central marketplace at **[skills.agenticros.com](https://skills.agenticros.com)** lists every published skill and supplies the install descriptors the CLI uses. Each skill has a **namespaced ref** `owner/skill-id` (your GitHub login + `agenticros.id`), e.g. `chrismatthieu/followme`, and preferably an npm package under **`@agenticros/*`**. Legacy flat slugs still resolve for older listings. The marketplace stores **metadata** (including `npmPackage` when published); source also lives on GitHub.
+A central marketplace at **[skills.corebrum.com](https://skills.corebrum.com)** lists every published skill and supplies the install descriptors the CLI uses. Each skill has a **namespaced ref** `owner/skill-id` (your GitHub login + `synapse.id`), e.g. `chrismatthieu/followme`, and preferably an npm package under **`@corebrum/*`**. Legacy flat slugs still resolve for older listings. The marketplace stores **metadata** (including `npmPackage` when published); source also lives on GitHub.
 
-This catalog is **AgenticROS robot skills** (npm packages with an `agenticros` block). Third-party [Agent Skills](https://agentskills.io/home) (`SKILL.md`) are not listed or installed through this marketplace. Official maker catalogs live on **[skills.sh/official](https://www.skills.sh/official)**; Jetson Device and BSP workflows are documented at **[Jetson Agent Skills](https://www.jetson-ai-lab.com/tutorials/jetson-agent-skills/)**.
+This catalog is **Corebrum Synapse robot skills** (npm packages with a `synapse` block). Third-party [Agent Skills](https://agentskills.io/home) (`SKILL.md`) are not listed or installed through this marketplace. Official maker catalogs live on **[skills.sh/official](https://www.skills.sh/official)**; Jetson Device and BSP workflows are documented at **[Jetson Agent Skills](https://www.jetson-ai-lab.com/tutorials/jetson-agent-skills/)**.
 
 ## Quick install — from the marketplace
 
 ```bash
 # Search the marketplace.
-npx agenticros skills search follow
+npx @corebrum/synapse skills search follow
 
 # Marketplace ref (prefers npm when the listing advertises npmPackage;
 # otherwise git clone + build). Registers skillPaths/skillRefs, syncs
 # contracts.tools, and auto-restarts the OpenClaw gateway.
-npx agenticros skills install chrismatthieu/followme
+npx @corebrum/synapse skills install chrismatthieu/followme
 
 # Or install directly from the scoped npm package:
-npx agenticros skills install @agenticros/followme
+npx @corebrum/synapse skills install @corebrum/followme
 
 # Skip the automatic gateway restart:
-npx agenticros skills install chrismatthieu/followme --no-restart
+npx @corebrum/synapse skills install chrismatthieu/followme --no-restart
 ```
 
 True mid-session tool injection without a gateway restart is still blocked on OpenClaw’s sync `register()` snapshot — Marketplace UX v2 uses **npm distribution + automatic gateway restart** instead.
 
-Run `agenticros skills` for the full subcommand list (create · dev · publish · search · install · list · discover · add · remove · sync).
+Run `synapse skills` for the full subcommand list (create · dev · publish · search · install · list · discover · add · remove · sync).
 
 ## Create and publish a skill (CLI)
 
 ### Quick start (hello world)
 
 ```bash
-npx agenticros create-skill my-first-skill
-cd agenticros-skill-my-first-skill   # folder name; package is @agenticros/my-first-skill
+npx @corebrum/synapse create-skill my-first-skill
+cd corebrum-skill-my-first-skill   # folder name; package is @corebrum/my-first-skill
 npm install
 npm run dev          # → Skill loaded: my-first-skill
 ```
 
-The default `hello` template is for **local learning** (`agenticros.tutorial: true`). It stays off the public browse catalog unless you customize and publish with `--graduate`.
+The default `hello` template is for **local learning** (`synapse.tutorial: true`). It stays off the public browse catalog unless you customize and publish with `--graduate`.
 
 ### Progressive templates
 
 ```bash
-npx agenticros create-skill wave-hand --template robot
-npx agenticros create-skill describe-scene --template camera
-npx agenticros create-skill measure-distance --template depth
+npx @corebrum/synapse create-skill wave-hand --template robot
+npx @corebrum/synapse create-skill describe-scene --template camera
+npx @corebrum/synapse create-skill measure-distance --template depth
 ```
 
 ### Publish to the marketplace
 
 ```bash
-cd agenticros-skill-wave-hand
-npx agenticros publish
+cd corebrum-skill-wave-hand
+npx @corebrum/synapse publish
 ```
 
-Requires `gh auth login -s public_repo` (or `GH_TOKEN`). The CLI validates `package.json`, builds, pushes to GitHub, submits to [skills.agenticros.com](https://skills.agenticros.com), and — when `package.json` name is `@agenticros/<slug>` — runs `npm publish --access public`.
+Requires `gh auth login -s public_repo` (or `GH_TOKEN`). The CLI validates `package.json`, builds, pushes to GitHub, submits to [skills.corebrum.com](https://skills.corebrum.com), and — when `package.json` name is `@corebrum/<slug>` — runs `npm publish --access public`.
 
-Published skills use **namespaced URLs**: `https://skills.agenticros.com/<github-handle>/<skill-id>` (e.g. `chrismatthieu/wave-hand`). Install with:
+Published skills use **namespaced URLs**: `https://skills.corebrum.com/<github-handle>/<skill-id>` (e.g. `chrismatthieu/wave-hand`). Install with:
 
 ```bash
-npx agenticros skills install chrismatthieu/wave-hand
+npx @corebrum/synapse skills install chrismatthieu/wave-hand
 # or
-npx agenticros skills install @agenticros/wave-hand
+npx @corebrum/synapse skills install @corebrum/wave-hand
 ```
 
-Maintainer profile: `https://skills.agenticros.com/chrismatthieu`
+Maintainer profile: `https://skills.corebrum.com/chrismatthieu`
 
 ### Web submit (alternative)
 
-1. Sign in at **[skills.agenticros.com/login](https://skills.agenticros.com/login)** with GitHub.
+1. Sign in at **[skills.corebrum.com/login](https://skills.corebrum.com/login)** with GitHub.
 2. Open **Submit a skill** and paste your repo URL.
 3. Re-sync from the skill edit page after pushing updates.
 
-See [`agenticros-skill-followme`](https://github.com/agenticros/agenticros-skill-followme) on the marketplace at [chrismatthieu/followme](https://skills.agenticros.com/chrismatthieu/followme) as a working reference.
+See [`corebrum-skill-followme`](https://github.com/Corebrum/corebrum-skill-followme) on the marketplace at [chrismatthieu/followme](https://skills.corebrum.com/chrismatthieu/followme) as a working reference.
 
 ## Skill contract
 
-Every skill is an npm package whose `package.json` declares a single `agenticros` block:
+Every skill is an npm package whose `package.json` declares a single `synapse` block:
 
 ```jsonc
 {
-  "name": "@agenticros/followme",
+  "name": "@corebrum/followme",
   "version": "0.2.0",
   "publishConfig": { "access": "public" },
   "main": "dist/index.js",
   "repository": {
     "type": "git",
-    "url": "https://github.com/agenticros/agenticros-skill-followme.git"
+    "url": "https://github.com/Corebrum/corebrum-skill-followme.git"
   },
-  "homepage": "https://github.com/agenticros/agenticros-skill-followme#readme",
-  "bugs": "https://github.com/agenticros/agenticros-skill-followme/issues",
-  "keywords": ["agenticros", "follow", "vision"],
-  "agenticros": {
+  "homepage": "https://github.com/Corebrum/corebrum-skill-followme#readme",
+  "bugs": "https://github.com/Corebrum/corebrum-skill-followme/issues",
+  "keywords": ["synapse", "follow", "vision"],
+  "synapse": {
     "id": "followme",
     "displayName": "Follow Me",
     "description": "Depth-based person following with optional Ollama / VLM, turn-to-follow, and search-when-lost behaviors.",
@@ -111,12 +111,12 @@ Every skill is an npm package whose `package.json` declares a single `agenticros
     ]
   },
   "dependencies": {
-    "@agenticros/core": "^0.6.0"
+    "@corebrum/core": "^0.6.0"
   }
 }
 ```
 
-### `agenticros` block fields
+### `synapse` block fields
 
 | Field | Required | Description |
 |---|---|---|
@@ -126,7 +126,7 @@ Every skill is an npm package whose `package.json` declares a single `agenticros
 | `categories` | optional | List of marketplace facets (e.g. `navigation`, `vision`, `manipulation`, `human-interaction`, `search`, `audio`, `communication`, `telemetry`). |
 | `screenshots` | recommended | Array of repo-relative paths to PNG/JPG previews shown on the marketplace listing. |
 | `demoVideoUrl` | optional | Link to a hosted demo video. |
-| `tutorial` | optional | When `true`, the skill is a learning scaffold. Tutorial listings stay **unlisted** on the public browse catalog unless the author publishes with `agenticros publish --graduate` after customizing the source. |
+| `tutorial` | optional | When `true`, the skill is a learning scaffold. Tutorial listings stay **unlisted** on the public browse catalog unless the author publishes with `synapse publish --graduate` after customizing the source. |
 | `capabilities` | recommended | Capability registry entries used by the planner. See *Capabilities* below. |
 
 ### Code
@@ -134,7 +134,7 @@ Every skill is an npm package whose `package.json` declares a single `agenticros
 The skill's `main` entry must export `registerSkill(api, config, context)`:
 
 ```ts
-import type { RegisterSkill, SkillContext } from "@agenticros/agenticros";
+import type { RegisterSkill, SkillContext } from "@corebrum/synapse";
 
 export const registerSkill: RegisterSkill = (api, config, context) => {
   const opts = (config.skills?.followme as { speed?: number }) ?? {};
@@ -156,18 +156,18 @@ export const registerSkill: RegisterSkill = (api, config, context) => {
 The plugin passes:
 
 - **`api`** — the OpenClaw plugin API (same one the plugin's own tools use).
-- **`config`** — the parsed `AgenticROSConfig`. Skill-specific options live under `config.skills.<id>`.
+- **`config`** — the parsed `SynapseConfig`. Skill-specific options live under `config.skills.<id>`.
 - **`context`**:
   - **`context.getTransport()`** — active ROS2 transport (throws if not connected).
   - **`context.getDepthDistance(transport, topic, timeoutMs?)`** — median depth at the image center.
   - **`context.getDepthSectors(transport, topic, timeoutMs?)`** — left/center/right depth thirds.
   - **`context.logger`** — plugin logger.
 
-Types for `SkillContext`, `RegisterSkill`, and `DepthSampleResult` are exported from `@agenticros/agenticros` for use by skill packages.
+Types for `SkillContext`, `RegisterSkill`, and `DepthSampleResult` are exported from `@corebrum/synapse` for use by skill packages.
 
 ### Capabilities
 
-The `agenticros.capabilities[]` array tells the **planner** what verbs the skill exposes — independent of how those verbs map to MCP tool names. Each entry:
+The `synapse.capabilities[]` array tells the **planner** what verbs the skill exposes — independent of how those verbs map to MCP tool names. Each entry:
 
 ```jsonc
 {
@@ -188,15 +188,15 @@ robot (including bodies with no profile). When a robot **has** a
 profile, the verb is advertised only if every required feature is in
 `profile.features`. See [robot-profile.md](robot-profile.md).
 
-`@agenticros/core`'s `listAllCapabilities(config)` merges the 6 built-in robot verbs (`drive_base`, `take_snapshot`, …) with every skill's declared capabilities, tagging each with its source. `listCapabilitiesForRobot(config, robotId)` then intersects that list with the robot's allowlist and hardware profile.
+`@corebrum/core`'s `listAllCapabilities(config)` merges the 6 built-in robot verbs (`drive_base`, `take_snapshot`, …) with every skill's declared capabilities, tagging each with its source. `listCapabilitiesForRobot(config, robotId)` then intersects that list with the robot's allowlist and hardware profile.
 
 ### Chaining your skill in missions
 
-Once a skill is registered, its capabilities appear in **`ros2_list_capabilities`** and are chainable via **`run_mission`**. Bindings are built dynamically in `@agenticros/core` (`buildMissionBindings`) — you do **not** edit three adapter tables for a new skill.
+Once a skill is registered, its capabilities appear in **`ros2_list_capabilities`** and are chainable via **`run_mission`**. Bindings are built dynamically in `@corebrum/core` (`buildMissionBindings`) — you do **not** edit three adapter tables for a new skill.
 
 **What you need as a skill author:**
 
-1. Declare one or more entries in `package.json` → `agenticros.capabilities[]` (or a sibling `capabilities.json`). Include `id`, `verb`, `description`, optional `inputs` / `outputs`.
+1. Declare one or more entries in `package.json` → `synapse.capabilities[]` (or a sibling `capabilities.json`). Include `id`, `verb`, `description`, optional `inputs` / `outputs`.
 2. For **in-process** skills: register tools in `registerSkill()` named `ros2_<capability_id>` (or set an explicit `tool` field on the capability).
 3. For **external ROS nodes**: set `implementation.kind` to `"external_ros_node"` with `action` / `service` / `topic` + `msg_type`. The mission runner dispatches via the transport; `launch` is metadata only (operator-owned bringup). See [examples/navigate-to](../examples/navigate-to/).
 
@@ -242,60 +242,60 @@ Experienced ROS developers can wrap Nav2, MoveIt, YOLO nodes, etc. without rewri
 Install via the marketplace (preferred) or `skillPaths` / `skillRefs`:
 
 ```bash
-npx agenticros skills install @agenticros/navigate-to
-npx agenticros skills install @agenticros/navigate-through-poses
-npx agenticros skills install @agenticros/detect-humans
-npx agenticros skills install @agenticros/start-slam
-npx agenticros skills install @agenticros/explore
-npx agenticros skills install @agenticros/follow-me-ros
-npx agenticros skills install @agenticros/moveit-pick
-npx agenticros skills install @agenticros/dock-to-charger
+npx @corebrum/synapse skills install @corebrum/navigate-to
+npx @corebrum/synapse skills install @corebrum/navigate-through-poses
+npx @corebrum/synapse skills install @corebrum/detect-humans
+npx @corebrum/synapse skills install @corebrum/start-slam
+npx @corebrum/synapse skills install @corebrum/explore
+npx @corebrum/synapse skills install @corebrum/follow-me-ros
+npx @corebrum/synapse skills install @corebrum/moveit-pick
+npx @corebrum/synapse skills install @corebrum/dock-to-charger
 ```
 
-`@agenticros/explore` needs the Nav2 metapackage on the robot (`ros-jazzy-navigation2` **and** `ros-jazzy-nav2-bringup`). Live mapping also needs `ros-jazzy-rtabmap-ros`. See **[Mapping a room](mapping.md)**.
+`@corebrum/explore` needs the Nav2 metapackage on the robot (`ros-jazzy-navigation2` **and** `ros-jazzy-nav2-bringup`). Live mapping also needs `ros-jazzy-rtabmap-ros`. See **[Mapping a room](mapping.md)**.
 
 Or pin in config (auto-fetch on MCP/Gemini startup; OpenClaw merges already-cached paths):
 
 ```jsonc
 {
   "skillRefs": [
-    "@agenticros/navigate-to",
+    "@corebrum/navigate-to",
     "chrismatthieu/detect-humans@main",
-    "@agenticros/dock-to-charger"
+    "@corebrum/dock-to-charger"
   ]
 }
 ```
 
-`ros2_list_capabilities` also returns **discoverable** marketplace capabilities (`discoverable: true`, `install_ref`) that are not installed yet, so an agent can propose `agenticros skills install <install_ref>`.
+`ros2_list_capabilities` also returns **discoverable** marketplace capabilities (`discoverable: true`, `install_ref`) that are not installed yet, so an agent can propose `synapse skills install <install_ref>`.
 Agents can also pass a natural-language **`goal`** (*"find a chair and drive toward it"*) and the local planner compiles the same plan when `find_object` is in the registry.
 
 Full orchestration guide: **[docs/missions.md](missions.md)**.
 
 ## How loading works
 
-1. The OpenClaw config file (e.g. `~/.openclaw/openclaw.json`) sets `plugins.entries.agenticros.config.skillPackages` and / or `skillPaths`.
+1. The OpenClaw config file (e.g. `~/.openclaw/openclaw.json`) sets `plugins.entries.synapse.config.skillPackages` and / or `skillPaths`.
 2. At gateway start, the plugin's `register(api)` runs synchronously:
-   - For each `skillPackages` entry, it resolves the npm name, reads the package's `package.json` to find `agenticros.id`, and `require()`s the `main` entry inline.
+   - For each `skillPackages` entry, it resolves the npm name, reads the package's `package.json` to find `synapse.id`, and `require()`s the `main` entry inline.
    - For each `skillPaths` directory, it does the same starting from `<dir>/package.json`.
-   - Any skill whose `package.json` doesn't declare a valid `agenticros` block is rejected with a warning.
+   - Any skill whose `package.json` doesn't declare a valid `synapse` block is rejected with a warning.
 3. The skill's `registerSkill(api, config, context)` runs inline, registering its tools before OpenClaw snapshots the plugin's tool list.
 4. `sync-skill-tools.mjs` (run by the CLI on every add/install/remove) merges the registered tool names into the plugin manifest's `contracts.tools` allowlist so OpenClaw 2026+ will actually expose them to the chat agent.
 
-> **No back-compat with the old `agenticrosSkill: true` boolean.** The single `agenticros` block is now the only manifest form the loader recognizes.
+> **No back-compat with the old `synapseSkill: true` boolean.** The single `synapse` block is now the only manifest form the loader recognizes.
 
 ## Manual install (without the marketplace)
 
 If your skill isn't published, you can still register a local clone with the CLI:
 
 ```bash
-# Clone and build the skill anywhere on disk (a sibling of the agenticros
+# Clone and build the skill anywhere on disk (a sibling of the synapse
 # repo is the conventional location).
-git clone https://github.com/you/agenticros-skill-yours ../agenticros-skill-yours
-cd ../agenticros-skill-yours && pnpm install && pnpm build && cd -
+git clone https://github.com/you/corebrum-skill-yours ../corebrum-skill-yours
+cd ../corebrum-skill-yours && pnpm install && pnpm build && cd -
 
 # Register it (resolves bare ids against discovered clones).
-agenticros skills add yours
-agenticros skills sync
+synapse skills add yours
+synapse skills sync
 systemctl --user restart openclaw-gateway.service
 ```
 
@@ -305,9 +305,9 @@ Or paste the OpenClaw config by hand:
 {
   "plugins": {
     "entries": {
-      "agenticros": {
+      "synapse": {
         "config": {
-          "skillPaths": ["/abs/path/to/agenticros-skill-yours"],
+          "skillPaths": ["/abs/path/to/corebrum-skill-yours"],
           "skills": {
             "yours": { "speed": 0.3 }
           }
@@ -320,10 +320,10 @@ Or paste the OpenClaw config by hand:
 
 ## Related: Agent Skills
 
-AgenticROS skills are robot plugins (`registerSkill`, capabilities, missions). [Agent Skills](https://agentskills.io/home) are a separate `SKILL.md` format used by coding and on-device agents. We do not index those catalogs here.
+Corebrum Synapse skills are robot plugins (`registerSkill`, capabilities, missions). [Agent Skills](https://agentskills.io/home) are a separate `SKILL.md` format used by coding and on-device agents. We do not index those catalogs here.
 
 - **[Official Agent Skills catalogs](https://www.skills.sh/official)** — maker catalogs on skills.sh (Anthropic, NVIDIA, OpenAI, and others)
 - **[Jetson Agent Skills](https://www.jetson-ai-lab.com/tutorials/jetson-agent-skills/)** — Device and BSP workflows for a live Jetson
 - **[Agent Skills spec](https://agentskills.io/home)** — the SKILL.md format
 
-Install those catalogs with their own tools (`npx skills add …` or the Jetson `install.sh`). Keep using `npx agenticros skills install owner/skill-id` for robot skills.
+Install those catalogs with their own tools (`npx skills add …` or the Jetson `install.sh`). Keep using `npx @corebrum/synapse skills install owner/skill-id` for robot skills.

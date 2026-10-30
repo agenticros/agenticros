@@ -1,4 +1,4 @@
-# TurtleBot3 Gazebo + rosbridge (AgenticROS stack). Use with the base compose file:
+# TurtleBot3 Gazebo + rosbridge (Corebrum Synapse stack). Use with the base compose file:
 #   docker compose -f docker-compose.yml -f docker-compose.sim.yml up ros2
 #
 # Plugin on the host still uses: ws://localhost:9090
@@ -7,4 +7,4 @@ version: "3.8"
 
 services:
   ros2:
-    command: ["ros2", "launch", "agenticros_bringup", "rosbridge_gazebo.launch.py"]
+    command: ["ros2", "launch", "synapse_bringup", "rosbridge_gazebo.launch.py"]

@@ -2,38 +2,38 @@
 /**
  * pack-runtime.mjs
  *
- * Pre-publish helper for the `agenticros` npm package.
+ * Pre-publish helper for the `synapse` npm package.
  *
- * Produces `packages/agenticros-cli/runtime/`: a near-complete snapshot of the
+ * Produces `packages/synapse-cli/runtime/`: a near-complete snapshot of the
  * monorepo source that ships inside the published tarball. After
- * `npx agenticros init`, this runtime/ tree is copied into ~/agenticros (or
- * $AGENTICROS_HOME) and treated as the user's workspace - so the layout
+ * `npx @corebrum/synapse init`, this runtime/ tree is copied into ~/synapse (or
+ * $SYNAPSE_HOME) and treated as the user's workspace - so the layout
  * matches the live repo exactly. Contributors get live edits without ever
  * going through this script.
  *
  * What ships:
  *   - scripts/                      shell helpers, install scripts, sim entrypoints
- *   - ros2_ws/src/agenticros_*      our ROS 2 packages (msgs + Python nodes)
- *   - packages/{core,ros-camera,agenticros,agenticros-claude-code,agenticros-gemini,robot-eyes,agenticros-desktop}
+ *   - ros2_ws/src/synapse_*      our ROS 2 packages (msgs + Python nodes)
+ *   - packages/{core,ros-camera,synapse,synapse-claude-code,synapse-gemini,robot-eyes,synapse-desktop}
  *                                   TypeScript/JS sources for the workspace, NO dist or node_modules
- *   - packages/agenticros-claude-code/dist  (pre-built so `npx agenticros` works without colcon)
+ *   - packages/synapse-claude-code/dist  (pre-built so `npx @corebrum/synapse` works without colcon)
  *   - package.json / pnpm-workspace.yaml / tsconfig.base.json   monorepo manifests
  *   - patches/                      pnpm patchedDependencies (zenoh-ts, ...)
  *                                   without this `pnpm install` ENOENTs after init
- *   - docs/cli.md                   reference for the CLI (used by `agenticros logs --help`)
+ *   - docs/cli.md                   reference for the CLI (used by `synapse logs --help`)
  *   - README.md / LICENSE           top-level docs
  *
  * What we deliberately drop:
- *   - .git/                         massive, and `agenticros init` doesn't need history
- *   - node_modules/                 reinstalled by `agenticros init`
- *   - All packages/* dist/ except agenticros-claude-code/dist
+ *   - .git/                         massive, and `synapse init` doesn't need history
+ *   - node_modules/                 reinstalled by `synapse init`
+ *   - All packages/* dist/ except synapse-claude-code/dist
  *   - ros2_ws/build / install / log
  *   - The CLI's own source (it's already installed by npm)
  *   - .pnpm-store, .cache, .ccache, generated logs
  *
  * Invocation:
  *   node scripts/pack-runtime.mjs            # from repo root
- *   pnpm --filter agenticros pack:runtime    # via the CLI package's scripts
+ *   pnpm --filter @corebrum/synapse pack:runtime    # via the CLI package's scripts
  */
 
 import { execSync } from "node:child_process";
@@ -46,24 +46,24 @@ import { validateRosPackageXmlsOrExit } from "./validate-ros-package-xml.mjs";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const REPO_ROOT = resolve(__dirname, "..");
-const CLI_PKG_DIR = join(REPO_ROOT, "packages", "agenticros-cli");
+const CLI_PKG_DIR = join(REPO_ROOT, "packages", "synapse-cli");
 const RUNTIME_DIR = join(CLI_PKG_DIR, "runtime");
 
 const INCLUDED_PACKAGES = [
   "core",
   "ros-camera",
   "object-detection",
-  "agenticros",
-  "agenticros-claude-code",
-  "agenticros-gemini",
-  "agenticros-robot",
+  "synapse-openclaw",
+  "synapse-claude-code",
+  "synapse-gemini",
+  "synapse-robot",
   "robot-eyes",
-  "agenticros-desktop",
+  "synapse-desktop",
 ];
 
 // NOTE: .npmrc is deliberately absent here. npm pack strips .npmrc from
 // every published tarball (hardcoded denylist), so bundling it is pointless.
-// The CLI writes ~/agenticros/.npmrc inline at init/heal time instead.
+// The CLI writes ~/synapse/.npmrc inline at init/heal time instead.
 const TOP_LEVEL_FILES = [
   "package.json",
   "pnpm-workspace.yaml",
@@ -157,18 +157,18 @@ function copyScripts() {
 }
 
 function copyRos2Ws() {
-  logStep("Copying ros2_ws/src/agenticros_*");
+  logStep("Copying ros2_ws/src/synapse_*");
   const dest = join(RUNTIME_DIR, "ros2_ws", "src");
   mkdirSync(dest, { recursive: true });
-  // Only include AgenticROS packages, not arbitrary upstream sources.
+  // Only include Corebrum Synapse packages, not arbitrary upstream sources.
   const srcRoot = join(REPO_ROOT, "ros2_ws", "src");
   if (!existsSync(srcRoot)) {
     logSubstep("skip (missing ros2_ws/src)");
     return;
   }
   for (const entry of readdirSync(srcRoot)) {
-    if (!entry.startsWith("agenticros_")) {
-      logSubstep(`skip non-agenticros pkg: ${entry}`);
+    if (!entry.startsWith("synapse_")) {
+      logSubstep(`skip non-synapse pkg: ${entry}`);
       continue;
     }
     copyTree(join(srcRoot, entry), join(dest, entry));
@@ -181,7 +181,7 @@ function copyPackages() {
   const dest = join(RUNTIME_DIR, "packages");
   mkdirSync(dest, { recursive: true });
   for (const pkg of INCLUDED_PACKAGES) {
-    const allowDist = pkg === "agenticros-claude-code";
+    const allowDist = pkg === "synapse-claude-code";
     if (allowDist) {
       logSubstep(`${pkg} (including pre-built dist/)`);
     } else {
@@ -223,28 +223,28 @@ function copyDocs() {
 function copyPatches() {
   // pnpm requires patches/* on disk because package.json -> pnpm.patchedDependencies
   // references "patches/<name>.patch". Without these files `pnpm install` aborts
-  // with ENOENT during `agenticros init`. Bundle the whole patches/ dir verbatim.
+  // with ENOENT during `synapse init`. Bundle the whole patches/ dir verbatim.
   logStep("Copying patches/");
   copyTree(join(REPO_ROOT, "patches"), join(RUNTIME_DIR, "patches"));
 }
 
 // NOTE: We intentionally do NOT ship runtime/.npmrc here. npm strips .npmrc
 // from every published tarball (hardcoded denylist alongside .gitignore), so
-// any .npmrc we write into runtime/ vanishes from the user's `npx agenticros`
-// install. Instead, the CLI writes ~/agenticros/.npmrc from inline content at
+// any .npmrc we write into runtime/ vanishes from the user's `npx @corebrum/synapse`
+// install. Instead, the CLI writes ~/synapse/.npmrc from inline content at
 // init/heal time (see commands/init.ts -> writeInitNpmrcInline).
 
 function writeBundleManifest() {
   const manifestPath = join(RUNTIME_DIR, "BUNDLE.json");
   const manifest = {
     packedAt: new Date().toISOString(),
-    repo: "https://github.com/PlaiPin/agenticros",
-    note: "This directory is a snapshot of the agenticros monorepo source. `agenticros init` will copy it to ~/agenticros and run pnpm install + colcon build there.",
+    repo: "https://github.com/PlaiPin/synapse",
+    note: "This directory is a snapshot of the synapse monorepo source. `synapse init` will copy it to ~/synapse and run pnpm install + colcon build there.",
     layout: {
       scripts: "scripts/",
-      ros2_packages: "ros2_ws/src/agenticros_*",
+      ros2_packages: "ros2_ws/src/synapse_*",
       js_packages: "packages/*",
-      mcp_prebuilt: "packages/agenticros-claude-code/dist/index.js",
+      mcp_prebuilt: "packages/synapse-claude-code/dist/index.js",
     },
   };
   writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));

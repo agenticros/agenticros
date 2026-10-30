@@ -10,10 +10,10 @@ services:
     environment:
       - ROS_DOMAIN_ID=0
 
-  agenticros:
+  synapse:
     volumes:
       - ../packages:/app/packages
       - ../extensions:/app/extensions
     environment:
       - NODE_ENV=development
-      - AGENTICROS_ROSBRIDGE_URL=ws://ros2:9090
+      - SYNAPSE_ROSBRIDGE_URL=ws://ros2:9090

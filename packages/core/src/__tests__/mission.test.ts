@@ -45,13 +45,13 @@ const CAPS: Capability[] = [
     id: "find_object",
     verb: "find",
     description: "find",
-    source: { kind: "skill", skillId: "find", package: "agenticros-skill-find" },
+    source: { kind: "skill", skillId: "find", package: "corebrum-skill-find" },
   },
   {
     id: "no_binding_cap",
     verb: "demo",
     description: "Registered but has no binding entry.",
-    source: { kind: "skill", skillId: "demo", package: "agenticros-skill-demo" },
+    source: { kind: "skill", skillId: "demo", package: "corebrum-skill-demo" },
   },
 ];
 

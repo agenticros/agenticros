@@ -28,7 +28,7 @@ export interface PlacesStore {
 const STORE_VERSION = 1 as const;
 
 export function defaultPlacesPath(): string {
-  return join(homedir(), ".agenticros", "places.json");
+  return join(homedir(), ".synapse", "places.json");
 }
 
 function emptyStore(): PlacesStore {

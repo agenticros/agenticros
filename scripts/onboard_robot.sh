@@ -1,7 +1,7 @@
 #!/bin/bash
-# onboard_robot.sh - Interactive onboarding for a new AgenticROS robot
+# onboard_robot.sh - Interactive onboarding for a new Corebrum Synapse robot
 #
-# Run from the agenticros repo root. Asks whether you're on the robot or the
+# Run from the synapse repo root. Asks whether you're on the robot or the
 # gateway, then runs the right setup and prints a checklist.
 #
 # Usage: ./scripts/onboard_robot.sh
@@ -10,18 +10,18 @@ set -e
 
 REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$REPO_ROOT"
-source "$REPO_ROOT/scripts/lib/agenticros-banner.sh"
+source "$REPO_ROOT/scripts/lib/synapse-banner.sh"
 
 echo ""
-agenticros_banner
+synapse_banner
 echo ""
-echo "  AgenticROS - Onboard a new robot"
+echo "  Corebrum Synapse - Onboard a new robot"
 echo ""
 
 # Where are we?
 echo "Where is this script running?"
 echo "  1) On the ROBOT (Ubuntu + ROS2) — set up rosbridge and run bridges"
-echo "  2) On the GATEWAY (where OpenClaw runs) — set up the AgenticROS plugin"
+echo "  2) On the GATEWAY (where OpenClaw runs) — set up the Corebrum Synapse plugin"
 echo "  3) Do BOTH (robot and gateway on this machine)"
 echo ""
 read -p "Choice [1/2/3]: " choice
@@ -67,7 +67,7 @@ fi
 if [[ "$choice" == "2" || "$choice" == "3" ]]; then
   echo "  On the gateway:"
   echo "    [ ] Restart OpenClaw:  systemctl --user restart openclaw-gateway.service"
-  echo "    [ ] Enable AgenticROS plugin in the dashboard (Plugins, not Channels)"
+  echo "    [ ] Enable Corebrum Synapse plugin in the dashboard (Plugins, not Channels)"
   echo "    [ ] Set plugin config: rosbridge URL, robot namespace (if needed)"
 fi
 echo ""

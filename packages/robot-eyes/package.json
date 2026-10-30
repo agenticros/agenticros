@@ -1,11 +1,11 @@
 {
-  "name": "@agenticros/eyes",
+  "name": "@corebrum/eyes",
   "version": "1.2.2",
   "description": "Fullscreen robot eyes for tablet/display devices, driven by ROS 2 cmd_vel Twist, with optional idle person-follow gaze and R2D2-style sounds",
   "type": "module",
   "main": "./src/index.js",
   "bin": {
-    "agenticros-eyes": "./src/index.js"
+    "synapse-eyes": "./src/index.js"
   },
   "files": [
     "src",
@@ -31,7 +31,7 @@
     "rclnodejs": "^1.9.0"
   },
   "keywords": [
-    "agenticros",
+    "synapse",
     "ros2",
     "robot",
     "eyes",
@@ -43,7 +43,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/agenticros/agenticros.git",
+    "url": "git+https://github.com/Corebrum/corebrum-synapse.git",
     "directory": "packages/robot-eyes"
   },
   "author": "PlaiPin",

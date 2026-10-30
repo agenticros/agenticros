@@ -1,0 +1,933 @@
+#!/usr/bin/env node
+/**
+ * Corebrum Synapse CLI - `synapse`.
+ *
+ * Entry point: parses argv with commander and dispatches to a subcommand.
+ * If no argv is provided (bare `synapse`), opens the interactive menu.
+ *
+ * Published to npm as the unscoped package name `synapse`. Inside the
+ * monorepo the source dir is `packages/synapse-cli/` (`pnpm --filter @corebrum/synapse`).
+ */
+
+import { Command } from "commander";
+
+import { upCommand } from "./commands/up.js";
+import { downCommand } from "./commands/down.js";
+import { initCommand } from "./commands/init.js";
+import { doctorCommand } from "./commands/doctor.js";
+import { statusCommand } from "./commands/status.js";
+import { logsCommand } from "./commands/logs.js";
+import { configCommand } from "./commands/config.js";
+import { eyesCommand } from "./commands/eyes.js";
+import { desktopCommand } from "./commands/desktop.js";
+import { webCommand } from "./commands/web.js";
+import { skillsCommand } from "./commands/skills.js";
+import { createSkillCommand } from "./commands/create-skill.js";
+import { publishSkillCommand } from "./commands/publish-skill.js";
+import { skillsDevCommand } from "./commands/skills-dev.js";
+import { robotsCommand } from "./commands/robots.js";
+import { claudeDoctorCommand, claudeSetupCommand } from "./commands/claude.js";
+import { codexDoctorCommand, codexSetupCommand } from "./commands/codex.js";
+import { hermesDoctorCommand, hermesSetupCommand } from "./commands/hermes.js";
+import { agyDoctorCommand, agyRunCommand, agySetupCommand } from "./commands/agy.js";
+import { mcpDoctorCliCommand, mcpSetupCliCommand } from "./commands/mcp.js";
+import { runMenu } from "./menu.js";
+import {
+  connectCommand,
+  disconnectCommand,
+  idCommand,
+  setCommand,
+  startServiceCommand,
+  stopServiceCommand,
+  navigateCommand,
+} from "./commands/robot-hw.js";
+import {
+  loginCommand,
+  logoutCommand,
+  whoamiCommand,
+} from "./commands/cloud-auth.js";
+import { registerCommand } from "./commands/register.js";
+import { hiveCommand } from "./commands/hive.js";
+import { remoteCommand } from "./commands/remote.js";
+import { mapsCommand } from "./commands/maps.js";
+import { gatewayCommand } from "./commands/gateway.js";
+import { err } from "./util/logger.js";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+
+/**
+ * Read the runtime version from the published package.json so `--version`
+ * never drifts from the npm tag. (Previously we hard-coded "0.1.0" here and
+ * it lagged behind the package.json bump on each release.)
+ */
+function readVersion(): string {
+  try {
+    const here = dirname(fileURLToPath(import.meta.url));
+    // dist/index.js -> ../package.json
+    const pkg = JSON.parse(readFileSync(join(here, "..", "package.json"), "utf8")) as {
+      version?: string;
+    };
+    return pkg.version ?? "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+}
+
+const VERSION = readVersion();
+
+const program = new Command();
+
+program
+  .name("synapse")
+  .description(
+    "Corebrum Synapse - agentic AI for ROS-powered robots. Run with no arguments for an interactive menu.",
+  )
+  .version(VERSION, "-v, --version", "Print the synapse CLI version")
+  .showHelpAfterError("(use 'synapse --help' for available subcommands)");
+
+program
+  .command("up [target]")
+  .description(
+    "Bring up a robot stack. target = real | sim-amr | sim-arm (default prompts).",
+  )
+  .option("--ros-distro <distro>", "ROS 2 distribution (humble, jazzy, ...)")
+  .option("--namespace <ns>", "Robot namespace override")
+  .option("--rviz", "Open RViz alongside the sim (sim targets only)", false)
+  .option("--headless", "Run gz-sim with no GUI (auto-enabled on Jetson or when $DISPLAY is unset)")
+  .option("--no-headless", "Force gz-sim GUI on (override Jetson auto-headless)")
+  .option("--nav2", "sim-amr only: also launch Nav2 (map + AMCL + navigation)", false)
+  .option(
+    "--real-camera",
+    "sim-amr only: live RealSense eyes on the simulated AMR body (implies --rviz)",
+    false,
+  )
+  .option("--moveit", "sim-arm only: also launch MoveIt2 move_group + trajectory bridge", false)
+  .option("--map", "real only: also launch RTAB-Map + Nav2 (synapse_bringup)", false)
+  .option("--wheel-odom", "real --map: use wheel /odom instead of RTAB-Map visual odom", false)
+  .option("--no-camera", "Skip starting the RealSense camera (real target only)")
+  .option("--no-motors", "Skip starting the motor controller (real target only)")
+  .option("--eyes", "Also start robot eyes on the local display (tablets / face screens)", false)
+  .option("--eyes-no-teleop", "With --eyes: gaze only (do not publish WASD cmd_vel)", false)
+  .option("--eyes-no-browser", "With --eyes: serve UI but do not open a kiosk browser", false)
+  .option("--eyes-no-sound", "With --eyes: mute R2D2 idle/excited chirps", false)
+  .option(
+    "--eyes-no-person-gaze",
+    "With --eyes: skip idle person-follow gaze even if YOLO is already installed",
+    false,
+  )
+  .action(async (target: string | undefined, opts) => {
+    await upCommand({
+      target,
+      ...opts,
+      realCamera: opts.realCamera === true,
+      eyesNoTeleop: opts.eyesNoTeleop === true,
+      eyesNoBrowser: opts.eyesNoBrowser === true,
+      eyesNoSound: opts.eyesNoSound === true,
+      eyesNoPersonGaze: opts.eyesNoPersonGaze === true,
+    });
+  });
+
+program
+  .command("eyes")
+  .description(
+    "Start fullscreen robot eyes on a local display (cmd_vel gaze, optional idle person-follow if YOLO is already installed, WASD teleop, R2D2 sounds). See docs/eyes.md.",
+  )
+  // Commander maps `--no-browser` / `--no-teleop` / `--no-sound` / `--no-person-gaze`
+  // to `browser|teleop|sound|personGaze: false`.
+  .option("--no-browser", "Serve the UI but do not open a kiosk browser")
+  .option("--no-teleop", "Gaze only — do not publish WASD cmd_vel")
+  .option("--no-sound", "Mute R2D2 idle/excited chirps")
+  .option(
+    "--no-person-gaze",
+    "Skip idle person-follow gaze even if YOLO is already installed",
+  )
+  .option("--port <n>", "HTTP / WebSocket port (default 8765)")
+  .option("--topic <path>", "Override cmd_vel topic (default from ~/.synapse/config.json)")
+  .action(async (opts: {
+    browser?: boolean;
+    teleop?: boolean;
+    sound?: boolean;
+    personGaze?: boolean;
+    port?: string;
+    topic?: string;
+  }) => {
+    await eyesCommand({
+      noBrowser: opts.browser === false,
+      noTeleop: opts.teleop === false,
+      noSound: opts.sound === false,
+      noPersonGaze: opts.personGaze === false,
+      port: opts.port,
+      topic: opts.topic,
+    });
+  });
+
+program
+  .command("desktop")
+  .description(
+    "Share the Hyprland session with Corebrum Cloud (screen, mouse, and keyboard). Run inside the Wayland session. See packages/synapse-desktop/README.md.",
+  )
+  .option("--foreground", "Stay in the foreground (systemd user unit)", false)
+  .option("--test-pattern", "Send a GStreamer test pattern instead of the portal capture", false)
+  .option("--port <n>", "Local signaling port (default 8766)")
+  .option("--width <px>", "Encoded width (default 1280)")
+  .option("--height <px>", "Encoded height (default 720)")
+  .option("--fps <n>", "Encoded frame rate (default 15)")
+  .action(async (opts: {
+    foreground?: boolean;
+    testPattern?: boolean;
+    port?: string;
+    width?: string;
+    height?: string;
+    fps?: string;
+  }) => {
+    await desktopCommand({
+      foreground: opts.foreground === true,
+      testPattern: opts.testPattern === true,
+      port: opts.port,
+      width: opts.width,
+      height: opts.height,
+      fps: opts.fps,
+    });
+  });
+
+program
+  .command("web")
+  .description(
+    "Open the OpenClaw web dashboard (Corebrum Synapse config + teleop) in a browser.",
+  )
+  .option("--no-open", "Print the URL(s) without launching a browser")
+  .action(async (opts: { open?: boolean }) => {
+    await webCommand({ open: opts.open });
+  });
+
+program
+  .command("down")
+  .description(
+    "Stop Corebrum Synapse processes (sim, camera, mcp, rosbridge, eyes). Leaves the OpenClaw gateway running by default.",
+  )
+  .option("--keep-camera", "Leave the RealSense camera running", false)
+  .option("--stop-gateway", "Also stop the openclaw-gateway service (default: keep it running)", false)
+  .action(async (opts) => {
+    await downCommand(opts);
+  });
+
+program
+  .command("init")
+  .description(
+    "First-time setup: workspace build, OpenClaw plugin install, robot config, OpenAI key. Idempotent.",
+  )
+  .option("--force", "Re-run every step even if it appears done", false)
+  .option("--yes", "Non-interactive: real robot on local ROS, skip cloud and OpenAI, couple installed agents", false)
+  .option(
+    "--install-dir <path>",
+    "Where to place the Corebrum Synapse source tree (npm-install mode). Default: ~/synapse.",
+  )
+  .action(async (opts) => {
+    await initCommand({
+      force: opts.force === true,
+      installDir: opts.installDir,
+      yes: opts.yes === true,
+    });
+  });
+
+program
+  .command("doctor")
+  .description("Run health checks and print a green/yellow/red status table.")
+  .option("--json", "Emit a JSON object instead of a human-readable table", false)
+  .option("--live", "Probe the live ROS graph and verify hardware-profile bindings", false)
+  .action(async (opts) => {
+    const exitCode = await doctorCommand(opts);
+    if (exitCode !== 0) process.exit(exitCode);
+  });
+
+program
+  .command("status")
+  .description(
+    "Show which Corebrum Synapse components are running (PIDs, topic count, namespace).",
+  )
+  .option("--json", "Emit a JSON object instead of a table", false)
+  .action(async (opts) => {
+    await statusCommand(opts);
+  });
+
+program
+  .command("connect")
+  .description(
+    "Connect the robot to Corebrum Synapse cloud (default wss://cloud.corebrum.com).",
+  )
+  .option("-s, --server <host>", "Override signaling server (ws:// or host:port)")
+  .action(async (opts: { server?: string }) => {
+    await connectCommand({ server: opts.server });
+  });
+
+program
+  .command("disconnect")
+  .description("Disconnect the robot from cloud/edge (stops comms.js).")
+  .action(async () => {
+    await disconnectCommand();
+  });
+
+program
+  .command("login")
+  .description(
+    "Log in to Corebrum Cloud via browser (device code + GitHub). Saves API token like `set --token`.",
+  )
+  .option("--no-open", "Print the URL without launching a browser")
+  .action(async (opts: { open?: boolean }) => {
+    await loginCommand({ noOpen: opts.open === false });
+  });
+
+program
+  .command("logout")
+  .description("Clear the stored Corebrum Cloud API token (keeps ROBOT ID).")
+  .action(async () => {
+    await logoutCommand();
+  });
+
+program
+  .command("whoami")
+  .description("Show Corebrum Cloud login status and robot registration.")
+  .action(async () => {
+    await whoamiCommand();
+  });
+
+program
+  .command("remote")
+  .description(
+    "Run a preset CLI action on an online Corebrum Cloud robot (motors, cameras, skills, gateway).",
+  )
+  .argument(
+    "[action]",
+    "list | start_motors | stop_motors | start_realsense | stop_realsense | start_camera | stop_camera | start_mapping | stop_mapping | navigate_to | list_maps | create_map | rename_map | use_map | delete_map | status | skills_list | skills_sync | skills_remove | gateway_restart",
+  )
+  .option("--robot <id>", "Target robot UUID (default: prompt, or sole/local robot)")
+  .option("--skill <id>", "Skill id for skills_remove (e.g. followme)")
+  .option("--x <meters>", "navigate_to: map-frame x")
+  .option("--y <meters>", "navigate_to: map-frame y")
+  .option("--yaw <radians>", "navigate_to: map-frame yaw (default 0)")
+  .option("--map <id>", "Map id for rename_map, use_map, and delete_map")
+  .option("--label <name>", "Room label for create_map and rename_map")
+  .option("--json", "Emit JSON instead of human-readable output", false)
+  .action(
+    async (
+      action: string | undefined,
+      opts: {
+        robot?: string;
+        skill?: string;
+        x?: string;
+        y?: string;
+        yaw?: string;
+        map?: string;
+        label?: string;
+        json?: boolean;
+      },
+    ) => {
+      await remoteCommand({
+        action,
+        robot: opts.robot,
+        skill: opts.skill,
+        x: opts.x,
+        y: opts.y,
+        yaw: opts.yaw,
+        map: opts.map,
+        label: opts.label,
+        json: opts.json,
+      });
+    },
+  );
+
+const maps = program.command("maps").description("Name, switch, and delete room maps on this robot.");
+maps
+  .command("list", { isDefault: true })
+  .description("List room maps. The active map is marked.")
+  .option("--json", "Emit the public catalog as JSON", false)
+  .action(async (opts: { json?: boolean }) => {
+    await mapsCommand({ action: "list", json: opts.json });
+  });
+maps
+  .command("create")
+  .description("Add a room map. --start launches mapping into a fresh database.")
+  .requiredOption("--label <name>", "Room name (letters, numbers, spaces, . _ -)")
+  .option("--start", "Start mapping this room now", false)
+  .option("--json", "Emit the public catalog as JSON", false)
+  .action(async (opts: { label: string; start?: boolean; json?: boolean }) => {
+    await mapsCommand({
+      action: "create",
+      label: opts.label,
+      start: opts.start === true,
+      json: opts.json,
+    });
+  });
+maps
+  .command("rename <id>")
+  .description("Rename a room map by id or current label.")
+  .requiredOption("--label <name>", "New room name")
+  .option("--json", "Emit the public catalog as JSON", false)
+  .action(async (id: string, opts: { label: string; json?: boolean }) => {
+    await mapsCommand({ action: "rename", target: id, label: opts.label, json: opts.json });
+  });
+maps
+  .command("use <id>")
+  .description("Make a room the active map and relaunch it in localization mode.")
+  .option("--json", "Emit the public catalog as JSON", false)
+  .action(async (id: string, opts: { json?: boolean }) => {
+    await mapsCommand({ action: "use", target: id, json: opts.json });
+  });
+maps
+  .command("delete <id>")
+  .description("Delete a room map and the places saved on it.")
+  .option("-y, --yes", "Skip the confirmation prompt", false)
+  .option("--json", "Emit the public catalog as JSON", false)
+  .action(async (id: string, opts: { yes?: boolean; json?: boolean }) => {
+    await mapsCommand({ action: "delete", target: id, yes: opts.yes === true, json: opts.json });
+  });
+
+program
+  .command("gateway [action]")
+  .description("OpenClaw gateway helpers. Action: restart.")
+  .option("--json", "Emit JSON instead of human-readable output", false)
+  .action(async (action: string | undefined, opts: { json?: boolean }) => {
+    await gatewayCommand({ action, json: opts.json });
+  });
+
+program
+  .command("register")
+  .description(
+    "Register this robot on Corebrum Cloud (wizard: name, camera, compute). Uses the local ROBOT ID.",
+  )
+  .option("--name <name>", "Robot display name")
+  .option("--camera <camera>", "Camera model (e.g. None, 2D, D435i)")
+  .option("--compute <compute>", "Compute platform (e.g. Raspberry Pi)")
+  .option("--type <type>", "Robot type (AMR, AGV, Arm, Drone, Humanoid)")
+  .option("--defaults", "Skip advanced prompts (type/wheels/namespace)", false)
+  .option("-y, --yes", "Non-interactive where possible (no login prompt)", false)
+  .action(
+    async (opts: {
+      name?: string;
+      camera?: string;
+      compute?: string;
+      type?: string;
+      defaults?: boolean;
+      yes?: boolean;
+    }) => {
+      await registerCommand(opts);
+    },
+  );
+
+program
+  .command("id")
+  .description("Print this robot's cloud ROBOT ID (creates one if missing).")
+  .action(async () => {
+    await idCommand();
+  });
+
+program
+  .command("set")
+  .description(
+    "Save cloud credentials manually. Prefer `synapse login` when possible.",
+  )
+  .option("--token <token>", "Developer API token")
+  .option("--id <robotId>", "Robot ID")
+  .action(async (opts: { token?: string; id?: string }) => {
+    await setCommand(opts);
+  });
+
+program
+  .command("start <target>")
+  .description(
+    "Start an on-robot service. target = motors | realsense | camera | mapping",
+  )
+  .option(
+    "-b, --backend <name>",
+    "motors only: rpi | firmata | jetson (jetson is opt-in; never auto-selected)",
+  )
+  .option(
+    "-p, --pins [list]",
+    "motors: pin list; realsense: -p with no value enables pointcloud",
+  )
+  .option("-e, --encoderpins <list>", "motors (firmata): encoder pins")
+  .option("--odom", "motors: force-enable /odom (uses ARC wheel geometry; defaults if unset)")
+  .option("--no-odom", "motors: disable /odom")
+  .option("--tpr <n>", "motors: encoder ticks per revolution")
+  .option("-d, --device <path>", "motors firmata device or camera /dev/videoN")
+  .option("-r, --resolution <WxH>", "camera resolution (e.g. 672x672)")
+  .option("-f, --fps <n>", "camera FPS")
+  .option("--pointcloud", "realsense: enable pointcloud", false)
+  .option(
+    "--full",
+    "realsense: stock rs_launch.py defaults (higher res; slower WebRTC)",
+    false,
+  )
+  .option(
+    "--model <name>",
+    "realsense: camera model from cloud (e.g. D421); default teleop profile otherwise",
+  )
+  .action(
+    async (
+      target: string,
+      opts: {
+        backend?: string;
+        pins?: string | boolean;
+        encoderpins?: string;
+        odom?: boolean;
+        noOdom?: boolean;
+        tpr?: string;
+        device?: string;
+        resolution?: string;
+        fps?: string;
+        pointcloud?: boolean;
+        full?: boolean;
+        model?: string;
+      },
+    ) => {
+      // `synapse start realsense -p` → pointcloud (boolean -p with no value)
+      const pointcloud =
+        opts.pointcloud === true ||
+        (target.toLowerCase() === "realsense" && opts.pins === true);
+      const pins = typeof opts.pins === "string" ? opts.pins : undefined;
+      await startServiceCommand(target, {
+        backend: opts.backend,
+        pins,
+        encoderpins: opts.encoderpins,
+        odom: opts.odom === true,
+        noOdom: opts.noOdom === true || opts.odom === false,
+        tpr: opts.tpr,
+        device: opts.device,
+        resolution: opts.resolution,
+        fps: opts.fps,
+        pointcloud,
+        full: opts.full === true,
+        model: opts.model,
+      });
+    },
+  );
+
+program
+  .command("stop <target>")
+  .description(
+    "Stop an on-robot service. target = motors | realsense | camera | mapping | eyes",
+  )
+  .action(async (target: string) => {
+    await stopServiceCommand(target);
+  });
+
+program
+  .command("navigate")
+  .description("Send a Nav2 navigate_to_pose goal in the map frame. Requires the mapping stack.")
+  .requiredOption("--x <meters>", "map-frame x")
+  .requiredOption("--y <meters>", "map-frame y")
+  .option("--yaw <radians>", "map-frame yaw", "0")
+  .action(async (opts: { x: string; y: string; yaw: string }) => {
+    await navigateCommand({
+      x: Number(opts.x),
+      y: Number(opts.y),
+      yaw: Number(opts.yaw),
+    });
+  });
+
+// robotics-style aliases: `synapse motors start` / `synapse camera stop`
+for (const service of ["motors", "realsense", "camera"] as const) {
+  const svc = program.command(service).description(`Alias for start/stop ${service}`);
+  svc
+    .command("start")
+    .option("-b, --backend <name>", "rpi | firmata | jetson")
+    .option("-p, --pins [list]", "pin list or realsense -p for pointcloud")
+    .option("-e, --encoderpins <list>", "encoder pins")
+    .option("--odom", "force-enable /odom (uses ARC wheel geometry; defaults if unset)")
+    .option("--no-odom", "disable /odom")
+    .option("--tpr <n>", "encoder ticks per revolution")
+    .option("-d, --device <path>", "device path")
+    .option("-r, --resolution <WxH>", "camera resolution")
+    .option("-f, --fps <n>", "camera FPS")
+    .option("--pointcloud", "realsense pointcloud", false)
+    .option("--full", "realsense: stock high-res launch", false)
+    .option("--model <name>", "realsense: camera model (e.g. D421)")
+    .action(
+      async (opts: {
+        backend?: string;
+        pins?: string | boolean;
+        encoderpins?: string;
+        odom?: boolean;
+        noOdom?: boolean;
+        tpr?: string;
+        device?: string;
+        resolution?: string;
+        fps?: string;
+        pointcloud?: boolean;
+        full?: boolean;
+        model?: string;
+      }) => {
+        const pointcloud =
+          opts.pointcloud === true ||
+          (service === "realsense" && opts.pins === true);
+        const pins = typeof opts.pins === "string" ? opts.pins : undefined;
+        await startServiceCommand(service, {
+          backend: opts.backend,
+          pins,
+          encoderpins: opts.encoderpins,
+          odom: opts.odom === true,
+          noOdom: opts.noOdom === true || opts.odom === false,
+          tpr: opts.tpr,
+          device: opts.device,
+          resolution: opts.resolution,
+          fps: opts.fps,
+          pointcloud,
+          full: opts.full === true,
+          model: opts.model,
+        });
+      },
+    );
+  svc.command("stop").action(async () => {
+    await stopServiceCommand(service);
+  });
+}
+
+program
+  .command("logs [target]")
+  .description(
+    "Tail logs. target = camera | mcp | gateway | sim | eyes | desktop | motors | comms (default: print available logs).",
+  )
+  .option("-f, --follow", "Tail the log (tail -F). Default prints last N lines and exits.", false)
+  .option("-n, --lines <n>", "Number of lines from the end to start at", "200")
+  .action(async (target: string | undefined, opts) => {
+    await logsCommand({ target, ...opts });
+  });
+
+program
+  .command("config [action] [keyValue]")
+  .description(
+    "Read or edit ~/.synapse/config.json. action = show | get | set | edit | reset | use.",
+  )
+  .action(async (action: string | undefined, keyValue: string | undefined) => {
+    await configCommand({ action, keyValue });
+  });
+
+// Shorter alias for the most common mode-switching workflow.
+program
+  .command("mode [target]")
+  .description(
+    "Switch ~/.synapse/config.json between profiles. target = real | sim. Equivalent to `synapse config use <target>`.",
+  )
+  .action(async (target: string | undefined) => {
+    await configCommand({ action: "use", keyValue: target });
+  });
+
+program
+  .command("create-skill <slug>")
+  .description("Scaffold a new Corebrum Synapse skill in ./corebrum-skill-<slug>/")
+  .option("--template <name>", "Template: hello | robot | camera | depth (default: hello)")
+  .action(async (slug: string, opts: { template?: string }) => {
+    await createSkillCommand({ slug, template: opts.template });
+  });
+
+program
+  .command("publish")
+  .description("Validate, push, and publish the skill in the current directory to skills.corebrum.com")
+  .option("--graduate", "Publish a customized tutorial skill to the public catalog", false)
+  .option("-y, --yes", "Skip interactive prompts", false)
+  .action(async (opts: { graduate?: boolean; yes?: boolean }) => {
+    await publishSkillCommand({ graduate: opts.graduate, yes: opts.yes });
+  });
+
+program
+  .command("skills [action] [arg]")
+  .description(
+    "Manage Corebrum Synapse skills. create | create-local | dev | publish | search | install <owner/skill> | list | discover | add | remove | sync.",
+  )
+  .option("--template <name>", "With `skills create` or `skills create-local`: hello | robot | camera | depth")
+  .option("--graduate", "With `skills publish`: graduate a tutorial skill", false)
+  .option("--invoke <tool>", "With `skills dev`: run a tool handler")
+  .option("--live", "With `skills dev`: allow live transport", false)
+  .option("--no-restart", "Skip automatic OpenClaw gateway restart after install/sync", false)
+  .option("-y, --yes", "Non-interactive; skip confirm prompts (install/remove)", false)
+  .option("--json", "With `skills list`: emit JSON", false)
+  .option("--bundle <name>", "With `skills install`: install a named bundle (mapping)")
+  .action(async (action: string | undefined, arg: string | undefined, opts) => {
+    const act = (action ?? "list").toLowerCase();
+    if (act === "create" || act === "create-local") {
+      if (act === "create-local") {
+        await skillsCommand({
+          action: "create-local",
+          arg,
+          template: opts.template,
+          yes: opts.yes === true,
+        });
+        return;
+      }
+      await createSkillCommand({ slug: arg ?? "", template: opts.template });
+      return;
+    }
+    if (act === "dev") {
+      await skillsDevCommand({ invoke: opts.invoke, live: opts.live });
+      return;
+    }
+    if (act === "publish") {
+      await publishSkillCommand({ graduate: opts.graduate, yes: opts.yes === true });
+      return;
+    }
+    await skillsCommand({
+      action,
+      arg,
+      noRestart: opts.restart === false,
+      yes: opts.yes === true,
+      json: opts.json === true,
+      bundle: typeof opts.bundle === "string" ? opts.bundle : undefined,
+    });
+  });
+
+const mcpCmd = program
+  .command("mcp")
+  .description("Configure all MCP clients (Codex, Hermes, Claude, Antigravity) for Corebrum Synapse.");
+
+mcpCmd
+  .command("setup")
+  .description(
+    "Register synapse MCP in Codex, Hermes, Claude, and Antigravity configs (default: all hosts).",
+  )
+  .option("--all", "Configure all hosts (default)", true)
+  .option("--codex", "Configure Codex only (~/.codex/config.toml)", false)
+  .option("--hermes", "Configure Hermes only (~/.hermes/config.yaml)", false)
+  .option("--claude", "Configure Claude only (desktop + project .mcp.json)", false)
+  .option("--agy", "Configure Antigravity only (~/.gemini/config/mcp_config.json)", false)
+  .option("--cursor", "Configure Cursor only (~/.cursor/mcp.json)", false)
+  .option("--grok", "Configure Grok only (~/.grok/config.toml)", false)
+  .option("--openclaw", "Configure OpenClaw only", false)
+  .option("--installed", "Configure only agents whose CLI is already on PATH", false)
+  .option("--quiet", "Do not print progress", false)
+  .option("--project", "Also write project-scoped configs (.codex/config.toml, .mcp.json, .agents/mcp_config.json)", false)
+  .option("--desktop", "Claude Desktop config only (with --claude)", false)
+  .action(async (opts: {
+    all?: boolean;
+    codex?: boolean;
+    hermes?: boolean;
+    claude?: boolean;
+    agy?: boolean;
+    cursor?: boolean;
+    grok?: boolean;
+    openclaw?: boolean;
+    installed?: boolean;
+    quiet?: boolean;
+    project?: boolean;
+    desktop?: boolean;
+  }) => {
+    const hostFlags = opts.codex || opts.hermes || opts.claude || opts.agy || opts.cursor || opts.grok || opts.openclaw;
+    await mcpSetupCliCommand({
+      all: hostFlags || opts.installed ? false : opts.all,
+      codex: opts.codex,
+      hermes: opts.hermes,
+      claude: opts.claude,
+      agy: opts.agy,
+      cursor: opts.cursor,
+      grok: opts.grok,
+      openclaw: opts.openclaw,
+      onlyInstalled: opts.installed === true,
+      quiet: opts.quiet === true,
+      project: opts.project,
+      desktop: opts.desktop,
+    });
+  });
+
+mcpCmd
+  .command("doctor")
+  .description("Validate MCP configs for Codex, Hermes, Claude, and Antigravity.")
+  .option("--json", "Emit JSON instead of a table", false)
+  .option("--codex", "Check Codex only", false)
+  .option("--hermes", "Check Hermes only", false)
+  .option("--claude", "Check Claude only", false)
+  .option("--agy", "Check Antigravity only", false)
+  .action(async (opts: {
+    json?: boolean;
+    codex?: boolean;
+    hermes?: boolean;
+    claude?: boolean;
+    agy?: boolean;
+  }) => {
+    const exitCode = await mcpDoctorCliCommand(opts);
+    if (exitCode !== 0) process.exit(exitCode);
+  });
+
+const claudeCmd = program
+  .command("claude")
+  .description("Configure Claude Code / Claude Desktop to use the Corebrum Synapse MCP server.");
+
+claudeCmd
+  .command("setup")
+  .description("Register synapse MCP in Claude Desktop and/or project .mcp.json.")
+  .option("--desktop", "Claude Desktop claude_desktop_config.json only", false)
+  .option("--project", "Project .mcp.json only (repo root)", false)
+  .action(async (opts: { desktop?: boolean; project?: boolean }) => {
+    await claudeSetupCommand(opts);
+  });
+
+claudeCmd
+  .command("doctor")
+  .description("Validate Claude MCP config (desktop + project .mcp.json).")
+  .option("--json", "Emit JSON instead of a table", false)
+  .action(async (opts: { json?: boolean }) => {
+    const exitCode = await claudeDoctorCommand(opts);
+    if (exitCode !== 0) process.exit(exitCode);
+  });
+
+const codexCmd = program
+  .command("codex")
+  .description("Configure OpenAI Codex CLI to use the Corebrum Synapse MCP server.");
+
+codexCmd
+  .command("setup")
+  .description("Register synapse MCP in ~/.codex/config.toml (or project .codex/config.toml).")
+  .option("--project", "Write .codex/config.toml in the current repo root instead of global config", false)
+  .action(async (opts: { project?: boolean }) => {
+    await codexSetupCommand({ scope: opts.project ? "project" : "global" });
+  });
+
+codexCmd
+  .command("doctor")
+  .description("Validate Codex MCP config (path, namespace policy, MCP binary).")
+  .option("--json", "Emit JSON instead of a table", false)
+  .action(async (opts: { json?: boolean }) => {
+    const exitCode = await codexDoctorCommand(opts);
+    if (exitCode !== 0) process.exit(exitCode);
+  });
+
+const hermesCmd = program
+  .command("hermes")
+  .description("Configure Hermes Agent to use the Corebrum Synapse MCP server.");
+
+hermesCmd
+  .command("setup")
+  .description("Register synapse MCP in ~/.hermes/config.yaml.")
+  .action(async () => {
+    await hermesSetupCommand();
+  });
+
+hermesCmd
+  .command("doctor")
+  .description("Validate Hermes MCP config (path, namespace policy, MCP binary).")
+  .option("--json", "Emit JSON instead of a table", false)
+  .action(async (opts: { json?: boolean }) => {
+    const exitCode = await hermesDoctorCommand(opts);
+    if (exitCode !== 0) process.exit(exitCode);
+  });
+
+const agyCmd = program
+  .command("agy")
+  .description("Configure Google Antigravity CLI (agy) to use the Corebrum Synapse MCP server.");
+
+agyCmd
+  .command("setup")
+  .description(
+    "Register synapse in ~/.gemini/config/mcp_config.json (and .agents/ in a repo) and install the Corebrum Synapse skill.",
+  )
+  .action(async () => {
+    await agySetupCommand();
+  });
+
+agyCmd
+  .command("doctor")
+  .description("Validate Antigravity MCP config (path, namespace policy, skill).")
+  .option("--json", "Emit JSON instead of a table", false)
+  .action(async (opts: { json?: boolean }) => {
+    const exitCode = await agyDoctorCommand(opts);
+    if (exitCode !== 0) process.exit(exitCode);
+  });
+
+agyCmd
+  .command("run <prompt...>")
+  .description("Run one prompt through agy using your Antigravity subscription (no GEMINI_API_KEY).")
+  .option("--model <model>", "Model slug for this run (see `agy models`)")
+  .option("--yes", "Auto-approve every tool call, including robot motion", false)
+  .action(async (promptParts: string[], opts: { model?: string; yes?: boolean }) => {
+    await agyRunCommand(promptParts.join(" "), { model: opts.model, yes: opts.yes === true });
+  });
+
+program
+  .command("hive [action]")
+  .description(
+    "Optional fleet hive (off by default). action = on | off | doctor | recipes. See docs/hive.md.",
+  )
+  .action(async (action: string | undefined) => {
+    const code = await hiveCommand({ action });
+    if (code !== 0) process.exit(code);
+  });
+
+program
+  .command("robots [action] [arg] [extra]")
+  .description(
+    "Manage the multi-robot fleet (~/.synapse/config.json). action = list | discover | add [id] | remove <id> | set-default <id> | set-transport <id> [shorthand] | clear-transport <id> | profile show [id] | profile infer [id].",
+  )
+  .option("--name <name>", "Display name for the robot (used by add)")
+  .option("--namespace <ns>", "ROS2 namespace for the robot (used by add)")
+  .option("--camera <topic>", "Default camera topic for the robot (used by add)")
+  .option("--default", "Mark this robot as the default (used by add)", false)
+  .option(
+    "--kind <kind>",
+    "Robot kind for fleet filtering (amr | arm | drone | rover). Used by ros2_find_robots_for. Defaults to 'amr' when unset.",
+  )
+  .option(
+    "--sensors <list>",
+    "Comma-separated sensor tags. Recognized: has_realsense, has_lidar, has_arm. Prefix with '!' to set false. Example: --sensors=has_realsense,has_lidar,!has_arm",
+  )
+  .option(
+    "--capabilities <list>",
+    "Comma-separated capability allowlist (e.g. drive_base,follow_person). Overrides the gateway-wide registry for ros2_find_robots_for on this robot. Pass an empty value (--capabilities='') to clear.",
+  )
+  .option(
+    "--features <list>",
+    "Comma-separated hardware features for robots[i].profile (e.g. base,camera,depth). Used by add.",
+  )
+  .option(
+    "--binding <pair>",
+    "Repeatable profile binding key=/topic (e.g. --binding camera.rgb=/cam/compressed). Used by add.",
+    (val: string, acc: string[]) => [...acc, val],
+    [] as string[],
+  )
+  .option("--apply", "Write the inferred profile (used by `robots profile infer`)", false)
+  .option(
+    "--transport <shorthand>",
+    "Per-robot transport override. Examples: zenoh, zenoh:ws://farm:10000, rosbridge:ws://10.0.0.5:9090, local:1, webrtc:wss://sig.example/signal",
+  )
+  .option(
+    "--transport-json <json>",
+    'Full per-robot transport override as JSON (for fields the shorthand doesn\'t cover). Example: \'{"mode":"webrtc","webrtc":{"signalingUrl":"wss://sig.example/signal"}}\'',
+  )
+  .action(async (action: string | undefined, arg: string | undefined, extra: string | undefined, opts) => {
+    await robotsCommand({
+      action,
+      arg,
+      extra,
+      name: opts.name,
+      namespace: opts.namespace,
+      camera: opts.camera,
+      default: opts.default === true ? true : undefined,
+      kind: opts.kind,
+      sensors: opts.sensors,
+      capabilities: opts.capabilities,
+      features: opts.features,
+      bindings: Array.isArray(opts.binding) && opts.binding.length > 0 ? opts.binding : undefined,
+      apply: opts.apply === true,
+      transport: opts.transport,
+      transportJson: opts.transportJson,
+    });
+  });
+
+async function main(): Promise<void> {
+  // Bare `synapse` (no subcommand, no flags) opens the menu.
+  if (process.argv.length <= 2) {
+    try {
+      await runMenu();
+    } catch (e) {
+      err(e instanceof Error ? e.message : String(e));
+      process.exit(1);
+    }
+    return;
+  }
+  try {
+    await program.parseAsync(process.argv);
+  } catch (e) {
+    err(e instanceof Error ? e.message : String(e));
+    process.exit(1);
+  }
+}
+
+await main();

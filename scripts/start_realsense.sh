@@ -1,5 +1,5 @@
 #!/bin/bash
-# Standalone RealSense start (used by `agenticros start realsense`).
+# Standalone RealSense start (used by `synapse start realsense`).
 # Usage: ./scripts/start_realsense.sh [jazzy|humble] [--pointcloud] [--full] [--model=D421]
 #
 # Default: teleop profiles (low res/FPS for WebRTC), matching robotics-npm.
@@ -21,8 +21,8 @@ for arg in "$@"; do
 done
 
 REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-CAMERA_LOG=/tmp/agenticros-camera.log
-CAMERA_PID_FILE=/tmp/agenticros-camera.pid
+CAMERA_LOG=/tmp/synapse-camera.log
+CAMERA_PID_FILE=/tmp/synapse-camera.pid
 
 # shellcheck source=lib/realsense.sh
 source "$REPO_ROOT/scripts/lib/realsense.sh"

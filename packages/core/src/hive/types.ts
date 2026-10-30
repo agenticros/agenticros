@@ -5,7 +5,7 @@
 
 export const DEFAULT_HIVE_URL = "http://127.0.0.1:6502";
 
-export const HIVE_EVENT_SCHEMA = "agenticros.event.v1" as const;
+export const HIVE_EVENT_SCHEMA = "synapse.event.v1" as const;
 
 export const HIVE_RECIPE_IDS = ["detect", "describe", "health"] as const;
 export type HiveRecipeId = (typeof HIVE_RECIPE_IDS)[number];

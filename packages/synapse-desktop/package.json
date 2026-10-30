@@ -1,0 +1,50 @@
+{
+  "name": "@corebrum/desktop",
+  "version": "0.1.0",
+  "description": "Hyprland remote desktop for Corebrum Cloud. Captures the Wayland session and injects pointer and keyboard over the synapse connect relay.",
+  "type": "module",
+  "main": "./src/index.js",
+  "bin": {
+    "synapse-desktop": "./src/index.js"
+  },
+  "files": [
+    "src",
+    "lib",
+    "synapse-desktop.service",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "node -e \"process.exit(0)\"",
+    "typecheck": "node -e \"process.exit(0)\"",
+    "start": "node src/index.js",
+    "test": "node --test lib/*.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "dbus-next": "^0.10.2",
+    "werift": "^0.22.7",
+    "ws": "^8.18.0"
+  },
+  "optionalDependencies": {
+    "koffi": "^2.16.3"
+  },
+  "keywords": [
+    "synapse",
+    "hyprland",
+    "wayland",
+    "webrtc",
+    "remote-desktop"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Corebrum/corebrum-synapse.git",
+    "directory": "packages/synapse-desktop"
+  },
+  "author": "PlaiPin",
+  "license": "Apache-2.0"
+}

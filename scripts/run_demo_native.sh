@@ -1,5 +1,5 @@
 #!/bin/bash
-# run_demo_native.sh - Start rosbridge + discovery for AgenticROS demo (no Docker)
+# run_demo_native.sh - Start rosbridge + discovery for Corebrum Synapse demo (no Docker)
 #
 # Prerequisites (one-time):
 #   sudo apt install -y ros-jazzy-rosbridge-suite   # or ros-humble-rosbridge-suite
@@ -11,9 +11,9 @@ set -e
 
 ROS_DISTRO="${1:-jazzy}"
 REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-source "$REPO_ROOT/scripts/lib/agenticros-banner.sh"
-agenticros_banner
-echo "Starting AgenticROS native ROS bridge stack"
+source "$REPO_ROOT/scripts/lib/synapse-banner.sh"
+synapse_banner
+echo "Starting Corebrum Synapse native ROS bridge stack"
 echo ""
 
 source "/opt/ros/$ROS_DISTRO/setup.bash"
@@ -30,13 +30,13 @@ if ! ros2 pkg list 2>/dev/null | grep -q rosbridge_server; then
     exit 1
 fi
 
-echo "Starting rosbridge WebSocket on port 9090 and agenticros_discovery..."
+echo "Starting rosbridge WebSocket on port 9090 and synapse_discovery..."
 echo "Connect OpenClaw plugin to: ws://localhost:9090"
 echo "Press Ctrl+C to stop."
 echo ""
 
 # Start discovery in background; rosbridge in foreground so we see logs
-ros2 run agenticros_discovery discovery_node &
+ros2 run synapse_discovery discovery_node &
 DISC_PID=$!
 trap "kill $DISC_PID 2>/dev/null" EXIT
 

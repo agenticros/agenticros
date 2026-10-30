@@ -3,7 +3,7 @@
  *
  * WebRTC (Mode C) is the only transport that needs it. Sandboxed installs
  * (NemoClaw, minimal Docker images) often lack the toolchain to build it,
- * so it lives in @agenticros/core's optionalDependencies and is imported
+ * so it lives in @corebrum/core's optionalDependencies and is imported
  * only when transport.mode === "webrtc".
  */
 

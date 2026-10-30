@@ -1,12 +1,18 @@
 # Detect Humans
 
+This project was previously known as AgenticROS.
+
+
+This project was previously known as Corebrum Synapse.
+
+
 Install the adjacent skill:
 
 ```bash
-npx agenticros skills install @agenticros/detect-humans
-# or: npx agenticros skills install chrismatthieu/detect-humans
+npx @corebrum/synapse skills install @corebrum/detect-humans
+# or: npx @corebrum/synapse skills install chrismatthieu/detect-humans
 ```
 
 Capability: `detect_humans` — subscribe once to a `vision_msgs/Detection2DArray` topic from your on-robot vision stack.
 
-Repo: https://github.com/agenticros/agenticros-skill-detect-humans
+Repo: https://github.com/Corebrum/corebrum-skill-detect-humans

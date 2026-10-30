@@ -1,5 +1,11 @@
 # TurtleBot3 Chat Control Demo
 
+This project was previously known as AgenticROS.
+
+
+This project was previously known as Corebrum Synapse.
+
+
 Control a TurtleBot3 in Gazebo simulation using natural language through WhatsApp, Telegram, Discord, or Slack.
 
 ## Prerequisites
@@ -17,7 +23,7 @@ Control a TurtleBot3 in Gazebo simulation using natural language through WhatsAp
    ```
    (Rosbridge-only: `docker compose up ros2` — see [docker/README.md](../../docker/README.md). Full launch options: [README.md](../../README.md) **“RViz2 and Gazebo”**.)
 
-2. Install the AgenticROS plugin in your OpenClaw instance:
+2. Install the Corebrum Synapse plugin in your OpenClaw instance:
    ```
    Configure the plugin with rosbridge URL: ws://localhost:9090
    ```
@@ -43,5 +49,5 @@ Control a TurtleBot3 in Gazebo simulation using natural language through WhatsAp
 ## Architecture
 
 ```
-Your phone → OpenClaw → AgenticROS plugin → rosbridge → Gazebo TurtleBot3
+Your phone → OpenClaw → Corebrum Synapse plugin → rosbridge → Gazebo TurtleBot3
 ```

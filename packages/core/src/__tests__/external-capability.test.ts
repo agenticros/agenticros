@@ -124,7 +124,7 @@ test("buildExternalGoal maps timeout_s onto Explore (wander action forces mode)"
     {
       kind: "external_ros_node",
       action: "wander",
-      msg_type: "agenticros_msgs/action/Explore",
+      msg_type: "synapse_msgs/action/Explore",
     },
     { timeout_s: 45 },
   );

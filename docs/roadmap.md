@@ -1,4 +1,4 @@
-# AgenticROS Roadmap
+# Corebrum Synapse Roadmap
 
 > Dual roadmap for the open-source platform and monetizable services.
 > Complements the positioning memo in
@@ -12,7 +12,7 @@
 
 ## Positioning (one paragraph)
 
-AgenticROS accelerates physical AI by giving AI agents a body: agents
+Corebrum Synapse accelerates physical AI by giving AI agents a body: agents
 (Grok, OpenClaw, Claude, Codex, Gemini, …) see through RealSense and
 other sensors, act through ROS 2 (`cmd_vel`, actions, services), and
 compose behavior via a **skills marketplace**, **mission chaining**, and
@@ -32,23 +32,23 @@ premium skills — never on the real-time control path.
 | Capabilities, `run_mission`, NL planner, cancel, pause/resume | Shipped |
 | Mission retries / backoff + mid-step cancel (interruptible) | Shipped |
 | Fleet list / find-for / heartbeat online / `fleet.json` | Shipped |
-| Robot hardware profiles (features + ROS bindings, verb gating) | Shipped (`@agenticros/core` 0.8.4) |
+| Robot hardware profiles (features + ROS bindings, verb gating) | Shipped (`@corebrum/core` 0.8.4) |
 | Dynamic mission bindings + Gemini find/follow | Shipped |
 | External ROS-node skill loader | Shipped |
 | Seed catalog — navigate / through-poses / detect / slam (+load) / explore+wander / follow-ros / moveit-pick / dock | Shipped (operator bringup on real robots) |
-| Sim AMR + Nav2 (`agenticros up sim-amr --nav2`) | Shipped (`/odom` fixed; map + AMCL + Nav2; smoke script) |
-| Sim arm MoveIt2 (named pose, local smoke) | Shipped (`agenticros up sim-arm --moveit`; no GHA) |
+| Sim AMR + Nav2 (`synapse up sim-amr --nav2`) | Shipped (`/odom` fixed; map + AMCL + Nav2; smoke script) |
+| Sim arm MoveIt2 (named pose, local smoke) | Shipped (`synapse up sim-arm --moveit`; no GHA) |
 | Headless GHA mission CI | Planned |
-| `skillRefs` + `~/.agenticros/skills-cache/` (git + npm) | Shipped |
+| `skillRefs` + `~/.synapse/skills-cache/` (git + npm) | Shipped |
 | Discoverable marketplace capabilities in `ros2_list_capabilities` | Shipped |
-| Marketplace npm `@agenticros/*` + CLI auto-restart | Shipped (true mid-session hot-reload still blocked on OpenClaw) |
-| Skills marketplace (metadata + git/npm install) | Live at [skills.agenticros.com](https://skills.agenticros.com) (robot skills). Third-party Agent Skills: [skills.sh/official](https://www.skills.sh/official) |
+| Marketplace npm `@corebrum/*` + CLI auto-restart | Shipped (true mid-session hot-reload still blocked on OpenClaw) |
+| Skills marketplace (metadata + git/npm install) | Live at [skills.corebrum.com](https://skills.corebrum.com) (robot skills). Third-party Agent Skills: [skills.sh/official](https://www.skills.sh/official) |
 | Cross-adapter memory (local / mem0) | Shipped, off by default |
-| Safety (per-robot velocity, optional `workspaceLimits`, fail-safe stop, `doctor --live`) | Shipped (`@agenticros/core` 0.8.5); MCP/Gemini `ros2_estop` shipped; `blocks_base` mutex still open |
-| AgenticROS Cloud (ARC) — P2P teleop, live map, click-to-navigate, start mapping, room maps, navigate-to missions, register, presence | Live at [cloud.agenticros.com](https://cloud.agenticros.com) (CLI 0.7.27) |
+| Safety (per-robot velocity, optional `workspaceLimits`, fail-safe stop, `doctor --live`) | Shipped (`@corebrum/core` 0.8.5); MCP/Gemini `ros2_estop` shipped; `blocks_base` mutex still open |
+| Corebrum Cloud — P2P teleop, live map, click-to-navigate, start mapping, room maps, navigate-to missions, register, presence | Live at [cloud.corebrum.com](https://cloud.corebrum.com) (CLI 0.7.27) |
 | ARC organizations + teams (invite by GitHub, shared fleet) | Shipped on Teams / Enterprise |
 | Antigravity CLI (`agy`) as an MCP host | Shipped (CLI 0.7.25) |
-| Published packages | `@agenticros/core` **0.8.10**, CLI `agenticros` **0.7.27** |
+| Published packages | `@corebrum/core` **0.8.10**, CLI `synapse` **0.7.27** |
 | Parallel mission steps + true hot-reload + paid licenses | Planned |
 | Spatial memory | Planned |
 | ACP / A2A multi-agent mesh | Planned |
@@ -90,7 +90,7 @@ Write-ups: [contract layer](blog/phase-1-complete.md) · [seed catalog & skillRe
 
 ## Roadmap 1 — Open source
 
-Goal: make AgenticROS the default **open contract + skill catalog** for
+Goal: make Corebrum Synapse the default **open contract + skill catalog** for
 embodied agents.
 
 ### Shipped — contract layer + marketplace UX v2 + mission runner v2 (partial)
@@ -99,11 +99,11 @@ embodied agents.
   mid-step cancel for interruptible skills), fleet heartbeats /
   `fleet.json`, hardware profiles, per-robot safety / `workspaceLimits`,
   dynamic bindings, Gemini find/follow, `external_ros_node` dispatch.
-- **Seeds (adjacent repos / npm `@agenticros/*`):** `navigate-to`,
+- **Seeds (adjacent repos / npm `@corebrum/*`):** `navigate-to`,
   `navigate-through-poses`, `detect-humans`, `start-slam` (+ `load_map`),
   `explore` / `wander`, `follow-me-ros`, `moveit-pick`, `dock-to-charger`, plus in-process
   `find` / `followme`. Nav2 on Gazebo AMR shipped (`--nav2`); sim-arm `--moveit` shipped (local smoke, no GHA).
-- **Marketplace UX v1+v2:** `skillRefs` → `~/.agenticros/skills-cache/`
+- **Marketplace UX v1+v2:** `skillRefs` → `~/.synapse/skills-cache/`
   (git **and** npm pack), discoverable caps, CLI install prefers npm when
   advertised, auto-restarts OpenClaw gateway (`--no-restart` to skip).
   True mid-session tool injection still blocked on OpenClaw sync register.
@@ -178,7 +178,7 @@ empty market.
 
 ### Tier B — Cloud control plane (fleet SaaS)
 
-[AgenticROS Cloud (ARC)](https://cloud.agenticros.com) is live: P2P teleop with a live occupancy map and click-to-navigate (CLI 0.7.23), robot
+[Corebrum Cloud](https://cloud.corebrum.com) is live: P2P teleop with a live occupancy map and click-to-navigate (CLI 0.7.23), robot
 register / presence, CLI `login` / `register` / `connect` / `remote` (CLI 0.7.24). Remote CLI and Missions can start mapping and send a navigate-to goal.
 **Organizations and teams** shipped on Teams / Enterprise — create an org,
 invite teammates by GitHub username, share teleop, APIs, and dashboards
@@ -187,7 +187,7 @@ across the same fleet. Individual accounts stay single-user.
 | Product | Model | Notes |
 |---------|--------|--------|
 | **Organizations + teams** (shipped) | Teams / Enterprise | Shared org membership, GitHub invites, one fleet for every member |
-| **Fleet registry & remote ops** | Per-robot / month | Cloud discovery (extends Mode C WebRTC), online status, `agenticros remote` presets. Capability inventory + remote **mission** dispatch still to build |
+| **Fleet registry & remote ops** | Per-robot / month | Cloud discovery (extends Mode C WebRTC), online status, `synapse remote` presets. Capability inventory + remote **mission** dispatch still to build |
 | **Mission console** | Included in fleet plan or add-on | Live timeline, cancel, replay, multi-agent attribution — remaining SaaS surface on top of orgs |
 | **Hosted signaling / TURN** | Usage-based | Productize Mode C for NAT; keep data plane optional (edge-first) |
 | **Config & skill rollout** | Fleet plan | Push `fleet.json` / skill versions to N robots; audit log |
@@ -200,7 +200,7 @@ OpenClaw / Grok.”
 | Product | Model | Notes |
 |---------|--------|--------|
 | **Hosted semantic memory** | Per-robot or per-GB | Cross-site sync, backup, retention — local mem0/JSON stays free |
-| **Fleet hive** | Org add-on (Teams+ for managed hosting) | Shared fleet notes + camera-watch recipes via optional Corebrum (`:6502`). Self-host with `agenticros hive on`; ARC org checkbox for managed. Not a `memory.backend`. See [hive.md](hive.md). |
+| **Fleet hive** | Org add-on (Teams+ for managed hosting) | Shared fleet notes + camera-watch recipes via optional Corebrum (`:6502`). Self-host with `synapse hive on`; ARC org checkbox for managed. Not a `memory.backend`. See [hive.md](hive.md). |
 | **Spatial memory cloud** | Premium | Map-linked recall, multi-robot shared maps, ReMEmbR-class pipelines |
 | **Embedder / VLM gateway** | Usage | Optional cloud embeddings/VLM when Ollama isn’t available |
 | **Mission transcript vault** | Retention add-on | Compliance, debugging; customer-owned data |
@@ -209,8 +209,8 @@ OpenClaw / Grok.”
 
 | Product | Model |
 |---------|--------|
-| **Support / SLA** | Annual for teams integrating AgenticROS |
-| **Certified robot profiles** | Partner fee (“AgenticROS Ready” OEMs) |
+| **Support / SLA** | Annual for teams integrating Corebrum Synapse |
+| **Certified robot profiles** | Partner fee (“Corebrum Synapse Ready” OEMs) |
 | **Professional services** | Custom skill packs, plant integration |
 | **Training / certification** | Skill-author courses |
 
@@ -233,7 +233,7 @@ OSS contract (capabilities, missions, safety, seed skills, profiles)  ← shippe
         ↓ compounds
 Marketplace UX v1 (skillRefs, discoverable)                           ← shipped
         ↓ compounds
-Marketplace UX v2 (npm @agenticros/* + auto-restart)                  ← shipped
+Marketplace UX v2 (npm @corebrum/* + auto-restart)                  ← shipped
         ↓ compounds
 ARC orgs + teams (shared fleet, GitHub invites)                       ← shipped
         ↓ needs ops
@@ -246,7 +246,7 @@ Hosted / spatial memory + multi-agent mesh
 |-------|-----------|------------|
 | **Contract layer** (shipped) | Capabilities, missions, fleet, external ROS nodes, hardware profiles | — |
 | **Marketplace UX v1** (shipped) | `skillRefs`, skills-cache, discoverable caps | — |
-| **Marketplace UX v2** (shipped) | npm `@agenticros/*`, CLI auto-restart | — |
+| **Marketplace UX v2** (shipped) | npm `@corebrum/*`, CLI auto-restart | — |
 | **True hot-reload** | Mid-session OpenClaw tool injection | — |
 | **ARC identity** (shipped) | CLI `login` / `register` / `connect` / `remote` | Organizations + teams on Teams / Enterprise |
 | **Marketplace economy** | Client license hooks (open) | Paid skills + commissions |
@@ -275,5 +275,5 @@ Hosted / spatial memory + multi-agent mesh
 - [Memory](memory.md) — cross-adapter memory backends and recipes
 - [Simulation](simulation.md) — Gazebo AMR / arm status and sharp edges
 - [Architecture](architecture.md) — transports and deployment modes
-- [CLI](cli.md) — `agenticros` commands including robots, skills, and Cloud login
-- [AgenticROS Cloud](https://cloud.agenticros.com) — P2P teleop, live map, orgs/teams, remote ops
+- [CLI](cli.md) — `synapse` commands including robots, skills, and Cloud login
+- [Corebrum Cloud](https://cloud.corebrum.com) — P2P teleop, live map, orgs/teams, remote ops

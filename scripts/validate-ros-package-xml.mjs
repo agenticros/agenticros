@@ -4,9 +4,9 @@
  *
  * XML 1.0 §2.5: comments cannot contain the string `--`. colcon /
  * ament_package_xml parse manifests with Expat, which rejects that as
- * "not well-formed (invalid token)". That shipped in agenticros@0.7.19
- * (`<!-- ... agenticros up sim-arm --moveit -->`) and broke
- * `npx agenticros init` after the JS workspace had already built.
+ * "not well-formed (invalid token)". That shipped in synapse@0.7.19
+ * (`<!-- ... synapse up sim-arm --moveit -->`) and broke
+ * `npx @corebrum/synapse init` after the JS workspace had already built.
  *
  * `--moveit` in READMEs, Python, JS, or `<description>` text is fine.
  * Only XML comments are restricted.

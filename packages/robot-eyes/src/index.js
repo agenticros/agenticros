@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * @agenticros/eyes — fullscreen robot face driven by ROS 2 cmd_vel Twist.
+ * @corebrum/eyes — fullscreen robot face driven by ROS 2 cmd_vel Twist.
  *
  * Subscribes to CMD_VEL_TOPIC for gaze (left/right turns). Optionally publishes
  * the same topic from invisible WASD keyboard teleop (disabled with --no-teleop).
@@ -11,7 +11,7 @@
  * disable with --no-person-gaze). An ARC operator can share camera and mic
  * onto this page; the robot microphone is sent back on the same call.
  *
- * Env (set by `agenticros eyes` from ~/.agenticros/config.json):
+ * Env (set by `synapse eyes` from ~/.synapse/config.json):
  *   CMD_VEL_TOPIC, CAMERA_TOPIC, MAX_LINEAR_VELOCITY, MAX_ANGULAR_VELOCITY, PORT, …
  */
 import { createRequire } from "module";
@@ -37,7 +37,7 @@ try {
 } catch (e) {
   console.error(
     "Failed to load rclnodejs. Source ROS 2 and reinstall deps on the robot:\n" +
-      "  source /opt/ros/<distro>/setup.bash && pnpm install --filter @agenticros/eyes\n" +
+      "  source /opt/ros/<distro>/setup.bash && pnpm install --filter @corebrum/eyes\n" +
       String(e instanceof Error ? e.message : e),
   );
   process.exit(1);
@@ -57,13 +57,13 @@ const PERSON_TRACK_TIMEOUT_MS = Number(process.env.PERSON_TRACK_TIMEOUT_MS || 80
 const NO_BROWSER = process.argv.includes("--no-browser");
 const NO_TELEOP =
   process.argv.includes("--no-teleop") ||
-  process.env.AGENTICROS_EYES_NO_TELEOP === "1";
+  process.env.SYNAPSE_EYES_NO_TELEOP === "1";
 const NO_SOUND =
   process.argv.includes("--no-sound") ||
-  process.env.AGENTICROS_EYES_NO_SOUND === "1";
+  process.env.SYNAPSE_EYES_NO_SOUND === "1";
 const NO_PERSON_GAZE =
   process.argv.includes("--no-person-gaze") ||
-  process.env.AGENTICROS_EYES_NO_PERSON_GAZE === "1";
+  process.env.SYNAPSE_EYES_NO_PERSON_GAZE === "1";
 const CAMERA_TOPIC =
   process.env.CAMERA_TOPIC ||
   "/camera/camera/color/image_raw/compressed";

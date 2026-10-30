@@ -26,7 +26,7 @@ export interface LocalTransportOptions {
 }
 
 /** Internal ROS2 topics/services to filter from introspection results. */
-const INTERNAL_TOPIC_PREFIXES = ["/rosout", "/parameter_events", "/agenticros/"];
+const INTERNAL_TOPIC_PREFIXES = ["/rosout", "/parameter_events", "/synapse/"];
 const INTERNAL_SERVICE_SUFFIXES = [
   "/describe_parameters",
   "/get_parameter_types",
@@ -88,12 +88,12 @@ export class LocalTransport implements RosTransport {
         LocalTransport.rclInitialized = true;
       }
 
-      // Use a process-unique node name. If two AgenticROS adapters (e.g. the
+      // Use a process-unique node name. If two Corebrum Synapse adapters (e.g. the
       // OpenClaw gateway plugin + the Claude Code MCP server) share the host,
       // a fixed name collides on the DDS bus: rcl logs "Publisher already
       // registered for provided node name" and DDS discovery on the duplicate
       // becomes slow/lossy — listTopics() then returns 0 right after connect.
-      const nodeName = `agenticros_local_${process.pid}`;
+      const nodeName = `synapse_local_${process.pid}`;
       this.node = this.rclnodejs!.createNode(nodeName);
       this.rclnodejs!.spin(this.node);
       this.entityCache = new EntityCache();

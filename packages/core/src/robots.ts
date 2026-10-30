@@ -1,5 +1,5 @@
 /**
- * Multi-robot support — Phase 1.d of the AgenticROS strategy.
+ * Multi-robot support — Phase 1.d of the Corebrum Synapse strategy.
  *
  * For most deployments today the gateway talks to a single robot, so
  * config.robot (a single object) is all that's used. Phase 1.d adds a
@@ -7,7 +7,7 @@
  * address multiple robots by id.
  *
  * This module is the source of truth for that resolution: from the raw
- * AgenticROSConfig, what robots does the agent see, and which one is the
+ * SynapseConfig, what robots does the agent see, and which one is the
  * active default? Adapters call into it from:
  *   - `ros2_list_robots` (this phase) — list everything the gateway knows about.
  *   - `ros2_list_capabilities(robot_id?)` (next iteration) — scope to one robot.
@@ -22,7 +22,7 @@
  * default so it's selected by `getActiveRobotId()`.
  */
 
-import type { AgenticROSConfig, RobotSafetyOverlay } from "./config.js";
+import type { SynapseConfig, RobotSafetyOverlay } from "./config.js";
 import { getTransportConfig } from "./config.js";
 import type { TransportConfig } from "./transport/types.js";
 import { applyFleetOverride } from "./fleet-config.js";
@@ -96,8 +96,8 @@ const DEFAULT_SENSORS: RobotSensors = {
   has_arm: false,
 };
 
-export function listRobots(config: AgenticROSConfig): ResolvedRobot[] {
-  // Phase 1.d — ~/.agenticros/fleet.json (or AGENTICROS_FLEET_PATH) wins
+export function listRobots(config: SynapseConfig): ResolvedRobot[] {
+  // Phase 1.d — ~/.synapse/fleet.json (or SYNAPSE_FLEET_PATH) wins
   // over config.robots when present and non-empty.
   const effective = applyFleetOverride(config);
   const explicit = Array.isArray(effective.robots) ? effective.robots : [];
@@ -150,7 +150,7 @@ export function listRobots(config: AgenticROSConfig): ResolvedRobot[] {
  * the legacy fallback always produces at least one — but the guard is
  * there for robustness against a corrupted config.
  */
-export function getActiveRobotId(config: AgenticROSConfig, override?: string): string {
+export function getActiveRobotId(config: SynapseConfig, override?: string): string {
   if (override && override.trim().length > 0) return override.trim();
   const explicit = Array.isArray(config.robots) ? config.robots : [];
   const flagged = explicit.find((r) => r.default === true);
@@ -172,7 +172,7 @@ export function getActiveRobotId(config: AgenticROSConfig, override?: string): s
  * tool error so the agent self-corrects via `ros2_list_robots`.
  */
 export function resolveRobotFromArgs(
-  config: AgenticROSConfig,
+  config: SynapseConfig,
   args: Record<string, unknown>,
 ): ResolvedRobot {
   const raw = args["robot_id"];
@@ -186,7 +186,7 @@ export function resolveRobotFromArgs(
  * doesn't match any configured robot, throws with the available ids in
  * the message so the agent can correct itself.
  */
-export function resolveRobot(config: AgenticROSConfig, robotId?: string): ResolvedRobot {
+export function resolveRobot(config: SynapseConfig, robotId?: string): ResolvedRobot {
   const robots = listRobots(config);
   if (!robotId || robotId.trim().length === 0) {
     const activeId = getActiveRobotId(config);
@@ -234,7 +234,7 @@ export function resolveRobot(config: AgenticROSConfig, robotId?: string): Resolv
  * (delegated to `resolveRobot`'s error path).
  */
 export function getTransportConfigForRobot(
-  config: AgenticROSConfig,
+  config: SynapseConfig,
   robotId?: string,
 ): TransportConfig {
   // No explicit robots[] AND no override possible — fast path.
@@ -254,7 +254,7 @@ export function getTransportConfigForRobot(
   // in one place — if a new transport mode is added, only
   // getTransportConfig needs to change.
   const override = raw.transport;
-  const synthetic: AgenticROSConfig = {
+  const synthetic: SynapseConfig = {
     ...config,
     transport: { mode: override.mode },
     rosbridge:
@@ -284,7 +284,7 @@ export function getTransportConfigForRobot(
  * "build a per-robot one via `getTransportConfigForRobot`" (pool path).
  */
 export function hasRobotTransportOverride(
-  config: AgenticROSConfig,
+  config: SynapseConfig,
   robotId?: string,
 ): boolean {
   const explicit = Array.isArray(config.robots) ? config.robots : [];

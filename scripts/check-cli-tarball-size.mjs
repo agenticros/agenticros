@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * Tarball-size gate for the `agenticros` npm package.
+ * Tarball-size gate for the `synapse` npm package.
  *
- * Runs `npm pack --dry-run --json` inside packages/agenticros-cli/, parses the
+ * Runs `npm pack --dry-run --json` inside packages/synapse-cli/, parses the
  * JSON metadata, prints a human summary, and exits non-zero if the unpacked
  * tarball would exceed MAX_UNPACKED_MB. Used as part of the prepublishOnly
  * pipeline so accidental fat dependencies don't slip into a release.
@@ -16,7 +16,7 @@ const MAX_UNPACKED_MB = 20;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const CLI_PKG_DIR = resolve(__dirname, "..", "packages", "agenticros-cli");
+const CLI_PKG_DIR = resolve(__dirname, "..", "packages", "synapse-cli");
 
 const out = execSync("npm pack --dry-run --json", {
   cwd: CLI_PKG_DIR,

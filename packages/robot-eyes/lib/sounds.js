@@ -1,5 +1,5 @@
 /**
- * Idle + excited R2D2 sound loop for @agenticros/eyes.
+ * Idle + excited R2D2 sound loop for @corebrum/eyes.
  *
  * Plays synthesized WAV via afplay (macOS), paplay, or aplay (Linux).
  * Excited bursts are triggered by active cmd_vel (see exciteFromTwist).
@@ -161,7 +161,7 @@ async function cleanupTemp(path) {
 
 async function playGesture(excited) {
   const { wav } = excited ? synthesizeExcited() : synthesizeRandom();
-  const wavPath = join(tmpdir(), `agenticros-eyes-${randomUUID()}.wav`);
+  const wavPath = join(tmpdir(), `synapse-eyes-${randomUUID()}.wav`);
   tempFiles.add(wavPath);
 
   try {

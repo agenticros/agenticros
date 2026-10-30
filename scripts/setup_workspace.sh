@@ -1,8 +1,8 @@
 #!/bin/bash
-# setup_workspace.sh - Cross-platform setup for AgenticROS development environment
+# setup_workspace.sh - Cross-platform setup for Corebrum Synapse development environment
 #
 # DESCRIPTION:
-#   This script performs the initial setup required for AgenticROS development.
+#   This script performs the initial setup required for Corebrum Synapse development.
 #   It supports both Ubuntu (native ROS2) and macOS (RoboStack with mamba).
 #   The script installs dependencies, creates the appropriate environment,
 #   and builds all ROS2 packages. Run this script once before using the
@@ -78,7 +78,7 @@ log_error() {
 # Help function
 show_help() {
     cat << EOF
-AgenticROS Development Environment Setup
+Corebrum Synapse Development Environment Setup
 
 USAGE:
     $0 [options]
@@ -279,7 +279,7 @@ setup_ubuntu() {
     fi
 
     # Step 4: Install agent-specific Python packages
-    log_info "[4/5] Installing Python packages for agenticros_agent..."
+    log_info "[4/5] Installing Python packages for synapse_agent..."
     source "$VENV_PATH/bin/activate"
     pip install --upgrade pip
     pip install aiortc websockets
@@ -345,7 +345,7 @@ setup_macos() {
     log_success "ROS2 and development tools installed"
 
     # Step 4: Install agent-specific Python packages
-    log_info "[4/5] Installing Python packages for agenticros_agent..."
+    log_info "[4/5] Installing Python packages for synapse_agent..."
     pip install aiortc websockets
     log_success "Python packages installed (aiortc, websockets)"
 
@@ -393,7 +393,7 @@ validate_setup() {
 
     # Test if our packages are available
     local all_found=true
-    for pkg in agenticros_msgs agenticros_discovery agenticros_agent; do
+    for pkg in synapse_msgs synapse_discovery synapse_agent; do
         if ros2 pkg list 2>/dev/null | grep -q "$pkg"; then
             log_success "Package found: $pkg"
         else
@@ -421,10 +421,10 @@ validate_setup() {
 
 # Main execution
 main() {
-    # shellcheck source=scripts/lib/agenticros-banner.sh
-    source "$REPO_ROOT/scripts/lib/agenticros-banner.sh"
-    agenticros_banner
-    echo "AgenticROS Development Setup"
+    # shellcheck source=scripts/lib/synapse-banner.sh
+    source "$REPO_ROOT/scripts/lib/synapse-banner.sh"
+    synapse_banner
+    echo "Corebrum Synapse Development Setup"
     echo ""
 
     parse_args "$@"
@@ -474,10 +474,10 @@ main() {
     echo "     source $REPO_ROOT/scripts/activate_workspace.sh"
     echo ""
     echo "  2. Test discovery node:"
-    echo "     ros2 run agenticros_discovery discovery_node"
+    echo "     ros2 run synapse_discovery discovery_node"
     echo ""
     echo "  3. Test agent node (requires signaling server):"
-    echo "     AGENTICROS_SIGNALING_URL=ws://localhost:8000 ros2 run agenticros_agent agent_node"
+    echo "     SYNAPSE_SIGNALING_URL=ws://localhost:8000 ros2 run synapse_agent agent_node"
     echo ""
 }
 

@@ -1,7 +1,7 @@
 /**
  * Static fleet file — Phase 1.d hybrid discovery.
  *
- * Precedence: `AGENTICROS_FLEET_PATH` → `~/.agenticros/fleet.json` →
+ * Precedence: `SYNAPSE_FLEET_PATH` → `~/.synapse/fleet.json` →
  * `config.robots[]` (via listRobots). When a fleet file exists and
  * parses as a non-empty robot array (or `{ robots: [...] }`), it wins.
  */
@@ -9,16 +9,16 @@
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { AgenticROSConfig } from "./config.js";
-import { AgenticROSConfigSchema } from "./config.js";
+import type { SynapseConfig } from "./config.js";
+import { SynapseConfigSchema } from "./config.js";
 
 export const DEFAULT_FLEET_FILENAME = "fleet.json";
 
-/** Resolve the fleet file path (env override or default under ~/.agenticros). */
+/** Resolve the fleet file path (env override or default under ~/.synapse). */
 export function resolveFleetPath(env: NodeJS.ProcessEnv = process.env): string {
-  const override = env.AGENTICROS_FLEET_PATH?.trim();
+  const override = env.SYNAPSE_FLEET_PATH?.trim();
   if (override) return override;
-  return join(homedir(), ".agenticros", DEFAULT_FLEET_FILENAME);
+  return join(homedir(), ".synapse", DEFAULT_FLEET_FILENAME);
 }
 
 export interface FleetFileResult {
@@ -27,7 +27,7 @@ export interface FleetFileResult {
   /** True when the file exists and was used. */
   used: boolean;
   /** Parsed robot entries (empty when unused / invalid). */
-  robots: NonNullable<AgenticROSConfig["robots"]>;
+  robots: NonNullable<SynapseConfig["robots"]>;
   /** Human-readable error when the file exists but failed to parse. */
   error?: string;
 }
@@ -56,7 +56,7 @@ export function loadFleetFile(path?: string): FleetFileResult {
         error: "fleet.json must be an array of robots or { robots: [...] }",
       };
     }
-    const parsed = AgenticROSConfigSchema.pick({ robots: true }).safeParse({ robots: robotsRaw });
+    const parsed = SynapseConfigSchema.pick({ robots: true }).safeParse({ robots: robotsRaw });
     if (!parsed.success) {
       return {
         path: fleetPath,
@@ -84,7 +84,7 @@ export function loadFleetFile(path?: string): FleetFileResult {
  * Return a config view where `robots` comes from fleet.json when present.
  * Does not mutate the input config object.
  */
-export function applyFleetOverride(config: AgenticROSConfig, fleetPath?: string): AgenticROSConfig {
+export function applyFleetOverride(config: SynapseConfig, fleetPath?: string): SynapseConfig {
   const fleet = loadFleetFile(fleetPath);
   if (!fleet.used) return config;
   return { ...config, robots: fleet.robots };

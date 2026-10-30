@@ -29,5 +29,5 @@ else
 fi
 # Also finish docker group + isaac init
 sudo usermod -aG docker "$USER_NAME"
-sudo bash /home/${USER_NAME}/Projects/agenticros/scripts/bootstrap_isaac_nemoclaw_host.sh || true
+sudo bash /home/${USER_NAME}/Projects/synapse/scripts/bootstrap_isaac_nemoclaw_host.sh || true
 echo "Log out/in or run: newgrp docker"

@@ -1,6 +1,6 @@
 # Missions — capability chaining and fleet orchestration
 
-AgenticROS sits a **contract layer** between AI agents and ROS 2. Agents plan in **intentions** (*"find the chair and drive toward it"*); the platform validates those intentions against a typed **capability registry**, compiles them into structured steps, and only then dispatches to ROS tools.
+Corebrum Synapse sits a **contract layer** between AI agents and ROS 2. Agents plan in **intentions** (*"find the chair and drive toward it"*); the platform validates those intentions against a typed **capability registry**, compiles them into structured steps, and only then dispatches to ROS tools.
 
 ```
 Agent (reasoning)  →  Contract layer  →  ROS 2  →  Robot
@@ -13,13 +13,13 @@ Every adapter exposes the same surface — OpenClaw, Claude Code / Desktop / Dis
 
 ## Prerequisites
 
-1. **A running robot or sim** — `agenticros up real`, `agenticros up sim-amr`, or your own stack with Zenoh / rosbridge / local DDS connected.
-2. **An agent with AgenticROS tools** — MCP clients: `agenticros mcp setup`; OpenClaw: plugin installed via `agenticros init`.
-3. **Optional skills** — compound missions like *find → approach* need `find_object` and `follow_person` in the registry. Install from the [Skills Marketplace](https://skills.agenticros.com):
+1. **A running robot or sim** — `synapse up real`, `synapse up sim-amr`, or your own stack with Zenoh / rosbridge / local DDS connected.
+2. **An agent with Corebrum Synapse tools** — MCP clients: `synapse mcp setup`; OpenClaw: plugin installed via `synapse init`.
+3. **Optional skills** — compound missions like *find → approach* need `find_object` and `follow_person` in the registry. Install from the [Skills Marketplace](https://skills.corebrum.com):
 
    ```bash
-   npx agenticros skills install chrismatthieu/find
-   npx agenticros skills install chrismatthieu/followme
+   npx @corebrum/synapse skills install chrismatthieu/find
+   npx @corebrum/synapse skills install chrismatthieu/followme
    # CLI syncs contracts.tools and auto-restarts the OpenClaw gateway
    ```
 
@@ -33,7 +33,7 @@ If a capability is missing, install the skill that provides it and restart the g
 
 ## Step 2 — Run a simple mission (natural language)
 
-For common verbs, pass a **`goal`** string to **`run_mission`**. A deterministic local planner in `@agenticros/core` compiles it against the live registry — no extra LLM required.
+For common verbs, pass a **`goal`** string to **`run_mission`**. A deterministic local planner in `@corebrum/core` compiles it against the live registry — no extra LLM required.
 
 **Agent prompt examples** (the agent calls the tool for you):
 
@@ -126,11 +126,11 @@ Steps run **sequentially**. Each step's structured outputs are available to late
 
 ## Step 4 — Fleet setup (multi-robot)
 
-Register robots in `~/.agenticros/config.json` with the CLI:
+Register robots in `~/.synapse/config.json` with the CLI:
 
 ```bash
 # AMR with RealSense — inherits gateway-wide capabilities unless narrowed
-agenticros robots add warehouse-amr \
+synapse robots add warehouse-amr \
   --name="Warehouse AMR" \
   --namespace=robot3946b404c33e4aa39a8d16deb1c5c593 \
   --kind=amr \
@@ -138,7 +138,7 @@ agenticros robots add warehouse-amr \
   --capabilities=drive_base,take_snapshot,find_object,follow_person
 
 # Arm robot — only this robot can run arm skills when you narrow capabilities
-agenticros robots add lab-arm \
+synapse robots add lab-arm \
   --name="Lab Arm" \
   --namespace=lab_arm_01 \
   --kind=arm \
@@ -164,7 +164,7 @@ Example query:
 }
 ```
 
-Robots publish a 1 Hz heartbeat on `<namespace>/agenticros/robot_info` so the online filter reflects reachability.
+Robots publish a 1 Hz heartbeat on `<namespace>/synapse/robot_info` so the online filter reflects reachability.
 
 ### Route a mission to one robot
 
@@ -239,9 +239,9 @@ Use this for handoffs, debugging, or post-mortems without re-querying ROS.
 
 ## Fleet config (`fleet.json`)
 
-When `~/.agenticros/fleet.json` exists (or `AGENTICROS_FLEET_PATH` points at a file), that robot list **wins** over `config.robots[]`. The file may be a JSON array of robot entries or `{ "robots": [ ... ] }` using the same shape as `config.robots`.
+When `~/.synapse/fleet.json` exists (or `SYNAPSE_FLEET_PATH` points at a file), that robot list **wins** over `config.robots[]`. The file may be a JSON array of robot entries or `{ "robots": [ ... ] }` using the same shape as `config.robots`.
 
-Online status prefers the `agenticros_discovery` heartbeat on `<ns>/agenticros/robot_info` (5 s staleness). `<ns>/cmd_vel` remains a fallback when no heartbeats are present.
+Online status prefers the `synapse_discovery` heartbeat on `<ns>/synapse/robot_info` (5 s staleness). `<ns>/cmd_vel` remains a fallback when no heartbeats are present.
 
 ## Contract layer — what gets validated
 
@@ -259,13 +259,13 @@ Failed validation returns structured step errors — the agent sees *why* a step
 
 ```bash
 # 1. Stack + MCP
-agenticros up sim-amr
-agenticros mcp setup
+synapse up sim-amr
+synapse mcp setup
 
 # 2. Skills for find / follow
-npx agenticros skills install chrismatthieu/find
-npx agenticros skills install chrismatthieu/followme
-agenticros skills sync
+npx @corebrum/synapse skills install chrismatthieu/find
+npx @corebrum/synapse skills install chrismatthieu/followme
+synapse skills sync
 
 # 3. In Claude Code / Codex / OpenClaw chat:
 #    "List capabilities"           → ros2_list_capabilities
@@ -277,7 +277,7 @@ See also: [find-and-approach example](../examples/find-and-approach/README.md).
 
 ## Supported capabilities in missions today
 
-Builtin bindings live in `@agenticros/core` (`buildMissionBindings`). Skill-declared capabilities are auto-bound to `ros2_<id>` (or `external:<id>` for `external_ros_node`).
+Builtin bindings live in `@corebrum/core` (`buildMissionBindings`). Skill-declared capabilities are auto-bound to `ros2_<id>` (or `external:<id>` for `external_ros_node`).
 
 | Capability | Underlying tool |
 |---|---|
@@ -289,17 +289,17 @@ Builtin bindings live in `@agenticros/core` (`buildMissionBindings`). Skill-decl
 | `subscribe_once` | `ros2_subscribe_once` |
 | `follow_person` | `ros2_follow_me_start` (skill / Gemini / MCP) |
 | `find_object` | `ros2_find_object` (skill / Gemini / MCP) |
-| `save_place` / `list_places` / `navigate_to_place` | `ros2_save_place` / `ros2_list_places` / `ros2_navigate_to_place` (builtin; Nav2 via `@agenticros/navigate-to`) |
-| `navigate_to` | external Nav2 action (`npx agenticros skills install --bundle mapping`) |
-| `navigate_through_poses` | external Nav2 through-poses (`@agenticros/navigate-through-poses`) |
-| `detect_humans` | external vision topic subscribe (`@agenticros/detect-humans`) |
-| `start_slam` / `stop_slam` / `save_map` / `load_map` / `set_mapping_mode` / `set_localization_mode` | external RTAB-Map services (`@agenticros/start-slam`) |
-| `explore` / `wander` | external `agenticros_explore` actions (`@agenticros/explore`) |
-| `follow_person_ros` / `stop_follow_person_ros` | external `agenticros_follow_me` services (`@agenticros/follow-me-ros`) |
-| `pick_object` | external MoveIt MoveGroup (`@agenticros/moveit-pick`; `agenticros up sim-arm --moveit` or operator bringup) |
-| `dock_to_charger` | external OpenNav DockRobot (`@agenticros/dock-to-charger`; operator bringup) |
+| `save_place` / `list_places` / `navigate_to_place` | `ros2_save_place` / `ros2_list_places` / `ros2_navigate_to_place` (builtin; Nav2 via `@corebrum/navigate-to`) |
+| `navigate_to` | external Nav2 action (`npx @corebrum/synapse skills install --bundle mapping`) |
+| `navigate_through_poses` | external Nav2 through-poses (`@corebrum/navigate-through-poses`) |
+| `detect_humans` | external vision topic subscribe (`@corebrum/detect-humans`) |
+| `start_slam` / `stop_slam` / `save_map` / `load_map` / `set_mapping_mode` / `set_localization_mode` | external RTAB-Map services (`@corebrum/start-slam`) |
+| `explore` / `wander` | external `synapse_explore` actions (`@corebrum/explore`) |
+| `follow_person_ros` / `stop_follow_person_ros` | external `synapse_follow_me` services (`@corebrum/follow-me-ros`) |
+| `pick_object` | external MoveIt MoveGroup (`@corebrum/moveit-pick`; `synapse up sim-arm --moveit` or operator bringup) |
+| `dock_to_charger` | external OpenNav DockRobot (`@corebrum/dock-to-charger`; operator bringup) |
 
-Skills you author can add new ids via `agenticros.capabilities[]` in `package.json` (or sibling `capabilities.json`); once registered, they appear in `ros2_list_capabilities` and are chainable in `run_mission` without editing three adapter binding tables. See [skills.md — Chaining your skill in missions](skills.md#chaining-your-skill-in-missions).
+Skills you author can add new ids via `synapse.capabilities[]` in `package.json` (or sibling `capabilities.json`); once registered, they appear in `ros2_list_capabilities` and are chainable in `run_mission` without editing three adapter binding tables. See [skills.md — Chaining your skill in missions](skills.md#chaining-your-skill-in-missions).
 
 ## Related docs
 
@@ -307,4 +307,4 @@ Skills you author can add new ids via `agenticros.capabilities[]` in `package.js
 - [Mapping a room](mapping.md) — Nav2 + RTAB-Map apt packages, explore/wander bringup
 - [Memory](memory.md) — mission transcripts and cross-agent recall
 - [Strategy memo](strategy-ai-agents-plus-ros.md) — Phase 1 design and roadmap
-- [MCP adapter README](../packages/agenticros-claude-code/README.md#tools) — full tool list
+- [MCP adapter README](../packages/synapse-claude-code/README.md#tools) — full tool list

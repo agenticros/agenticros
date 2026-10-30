@@ -1,6 +1,12 @@
 # Navigate To (Nav2)
 
-Canonical package: **[agenticros-skill-navigate-to](https://github.com/agenticros/agenticros-skill-navigate-to)** (`@agenticros/navigate-to`).
+This project was previously known as AgenticROS.
+
+
+This project was previously known as Corebrum Synapse.
+
+
+Canonical package: **[corebrum-skill-navigate-to](https://github.com/Corebrum/corebrum-skill-navigate-to)** (`@corebrum/navigate-to`).
 
 ## Sim walkthrough (Gazebo AMR + Nav2)
 
@@ -8,10 +14,10 @@ Requires ROS 2 Humble/Jazzy, Gazebo Harmonic, and `ros-$ROS_DISTRO-navigation2` 
 
 ```bash
 # 1. Bring up Gazebo AMR with map + AMCL + Nav2 (headless OK)
-agenticros up sim-amr --nav2 --headless
+synapse up sim-amr --nav2 --headless
 
-# 2. Install the skill (npm pack into ~/.agenticros/skills-cache/)
-npx agenticros skills install @agenticros/navigate-to
+# 2. Install the skill (npm pack into ~/.synapse/skills-cache/)
+npx @corebrum/synapse skills install @corebrum/navigate-to
 
 # 3. From an MCP client (Claude / Codex) or OpenClaw:
 #    run_mission with capability navigate_to
@@ -36,15 +42,15 @@ node scripts/test-navigate-sim.mjs
 Direct launch without the CLI:
 
 ```bash
-ros2 launch agenticros_sim sim_amr_nav2.launch.py gui:=false
+ros2 launch synapse_sim sim_amr_nav2.launch.py gui:=false
 ```
 
 ## Install only
 
 ```bash
-npx agenticros skills install @agenticros/navigate-to
-# or: npx agenticros skills install chrismatthieu/navigate-to
-# or pin: "skillRefs": ["@agenticros/navigate-to"]
+npx @corebrum/synapse skills install @corebrum/navigate-to
+# or: npx @corebrum/synapse skills install chrismatthieu/navigate-to
+# or pin: "skillRefs": ["@corebrum/navigate-to"]
 ```
 
-Then `run_mission` with capability `navigate_to` and inputs `{ "x", "y", "yaw?" }`. On a real robot, bring up your own Nav2 stack; AgenticROS only dispatches the action.
+Then `run_mission` with capability `navigate_to` and inputs `{ "x", "y", "yaw?" }`. On a real robot, bring up your own Nav2 stack; Corebrum Synapse only dispatches the action.

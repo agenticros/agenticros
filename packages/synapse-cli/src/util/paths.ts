@@ -1,0 +1,214 @@
+/**
+ * Path discovery for the Corebrum Synapse CLI.
+ *
+ * The CLI can be invoked three ways:
+ *   1. Workspace mode  - from a cloned monorepo. Scripts live under
+ *      <repo-root>/scripts/, ros2 sources under <repo-root>/ros2_ws/src/, and
+ *      built MCP under <repo-root>/packages/synapse-claude-code/dist/.
+ *   2. Installed mode  - after `npx @corebrum/synapse init` has copied the bundled
+ *      snapshot into ~/synapse (the install dir). Same layout as workspace
+ *      mode but rooted at the install dir. This is the "post-init" steady state.
+ *   3. Bundle mode  - first invocation of `npx @corebrum/synapse` before init has run.
+ *      Paths point into the package's own runtime/ directory, populated at
+ *      publish time by scripts/pack-runtime.mjs. Only read-only tools (doctor,
+ *      version, --help) are guaranteed to work in bundle mode.
+ *
+ * Workspace mode is preferred when detected so contributors see their live edits.
+ * Installed mode is preferred over bundle mode so that init-time builds (which
+ * write dist artifacts into ~/synapse) are honoured on subsequent invocations.
+ */
+
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const moduleDir = dirname(fileURLToPath(import.meta.url));
+
+export type CliMode = "workspace" | "installed" | "bundle";
+
+export interface CliPaths {
+  /** Discovered execution mode. */
+  mode: CliMode;
+  /** Backwards-compat alias for code that just wants the workspace/installed branch. */
+  workspaceMode: boolean;
+  /** Directory containing the synapse CLI package (where runtime/ would live). */
+  pkgDir: string;
+  /**
+   * Active "repo root" the CLI is operating against. For workspace mode this is
+   * the cloned monorepo. For installed mode this is the install dir. For bundle
+   * mode this is undefined (no writable repo root yet).
+   */
+  repoRoot: string | undefined;
+  /** Directory where Corebrum Synapse user data lives ($HOME/.synapse). */
+  userDataDir: string;
+  /** Default install directory written by `synapse init` (~/synapse). */
+  installDir: string;
+  /** Path to the scripts/ directory (live workspace or bundled snapshot). */
+  scriptsDir: string;
+  /** Path to ros2_ws/src/ source root (live workspace or bundled snapshot). */
+  ros2WsSrcDir: string;
+  /** Path to the MCP server build directory (synapse-claude-code/dist or runtime/mcp). */
+  mcpDistDir: string;
+  /** Path to bundled sample configs (only meaningful in npm mode; falls back to repo docs/). */
+  configsDir: string;
+  /**
+   * Path to the bundled snapshot of the monorepo (only set in bundle mode and
+   * for `synapse init` in installed mode where it's the source-of-truth for
+   * the initial copy). Undefined in workspace mode.
+   */
+  bundleDir: string | undefined;
+}
+
+/**
+ * True when `dir` looks like a Corebrum Synapse monorepo root (live or installed
+ * snapshot): its package.json is `corebrum-synapse`.
+ *
+ * Exported so `synapse init` can use the same predicate `getCliPaths()`
+ * does when deciding whether an existing install dir is complete enough to
+ * skip a re-copy. Keeping the two checks in sync avoids "skipped copy but
+ * still detected as bundle mode -> CLI bug" loops after a crashed previous
+ * install left a half-empty target dir behind.
+ */
+export function isSynapseMonorepo(dir: string): boolean {
+  const pkgPath = join(dir, "package.json");
+  if (!existsSync(pkgPath)) return false;
+  try {
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as { name?: string };
+    return pkg.name === "corebrum-synapse";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Walk up from `startDir` looking for an corebrum-synapse package.json.
+ * Returns the repo root or undefined.
+ */
+function findRepoRoot(startDir: string): string | undefined {
+  let dir = startDir;
+  for (let i = 0; i < 8; i++) {
+    if (isSynapseMonorepo(dir)) return dir;
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return undefined;
+}
+
+let cached: CliPaths | undefined;
+
+export function getCliPaths(): CliPaths {
+  if (cached) return cached;
+
+  // moduleDir is .../packages/synapse-cli/dist/util in workspace, or
+  // .../node_modules/synapse/dist/util in npm install. The published bundle
+  // is a single file dist/index.js, so moduleDir will be .../dist.
+  // Walk up to find the package dir (the one with our package.json).
+  let pkgDir = moduleDir;
+  for (let i = 0; i < 5; i++) {
+    if (existsSync(join(pkgDir, "package.json"))) break;
+    pkgDir = dirname(pkgDir);
+  }
+
+  // Prefer a monorepo found from cwd so `npx @corebrum/synapse` / global installs
+  // still use a local clone or ~/synapse when the user is sitting in it.
+  // Falling back to walking from the CLI package dir covers contributors who
+  // invoke the workspace-built binary.
+  const workspaceRoot =
+    findRepoRoot(process.cwd()) ?? findRepoRoot(pkgDir);
+
+  const home = process.env["HOME"] ?? process.env["USERPROFILE"] ?? ".";
+  const userDataDir = join(home, ".synapse");
+  const installDir = process.env["SYNAPSE_HOME"] ?? join(home, "synapse");
+  const bundleDir = join(pkgDir, "runtime");
+
+  // Workspace mode wins outright: contributors get live edits.
+  if (workspaceRoot) {
+    cached = {
+      mode: "workspace",
+      workspaceMode: true,
+      pkgDir,
+      repoRoot: workspaceRoot,
+      userDataDir,
+      installDir,
+      scriptsDir: join(workspaceRoot, "scripts"),
+      ros2WsSrcDir: join(workspaceRoot, "ros2_ws", "src"),
+      mcpDistDir: join(
+        workspaceRoot,
+        "packages",
+        "synapse-claude-code",
+        "dist",
+      ),
+      configsDir: join(workspaceRoot, "docs"),
+      bundleDir: existsSync(bundleDir) ? bundleDir : undefined,
+    };
+    return cached;
+  }
+
+  // Installed mode: ~/synapse has been populated by a prior `synapse init`.
+  if (isSynapseMonorepo(installDir)) {
+    cached = {
+      mode: "installed",
+      workspaceMode: true,
+      pkgDir,
+      repoRoot: installDir,
+      userDataDir,
+      installDir,
+      scriptsDir: join(installDir, "scripts"),
+      ros2WsSrcDir: join(installDir, "ros2_ws", "src"),
+      mcpDistDir: join(
+        installDir,
+        "packages",
+        "synapse-claude-code",
+        "dist",
+      ),
+      configsDir: join(installDir, "docs"),
+      bundleDir: existsSync(bundleDir) ? bundleDir : undefined,
+    };
+    return cached;
+  }
+
+  // Bundle mode: first invocation of `npx @corebrum/synapse` before init.
+  cached = {
+    mode: "bundle",
+    workspaceMode: false,
+    pkgDir,
+    repoRoot: undefined,
+    userDataDir,
+    installDir,
+    scriptsDir: join(bundleDir, "scripts"),
+    ros2WsSrcDir: join(bundleDir, "ros2_ws", "src"),
+    mcpDistDir: join(bundleDir, "packages", "synapse-claude-code", "dist"),
+    configsDir: join(bundleDir, "docs"),
+    bundleDir,
+  };
+  return cached;
+}
+
+/** For tests / dev — reset cached path detection. */
+export function resetPathsCache(): void {
+  cached = undefined;
+}
+
+/**
+ * Resolve a script under scripts/ (or a relative path like `sim/run_sim.sh`).
+ * Prefers the active workspace/install scriptsDir; if the file is missing
+ * there (stale ~/synapse from before a CLI upgrade), falls back to the
+ * published package's runtime/scripts snapshot.
+ */
+export function resolveScriptPath(name: string): string {
+  const paths = getCliPaths();
+  const primary = resolve(paths.scriptsDir, name);
+  if (existsSync(primary)) return primary;
+
+  const fallbacks: string[] = [];
+  if (paths.bundleDir) {
+    fallbacks.push(resolve(paths.bundleDir, "scripts", name));
+  }
+  fallbacks.push(resolve(paths.pkgDir, "runtime", "scripts", name));
+
+  for (const candidate of fallbacks) {
+    if (existsSync(candidate)) return candidate;
+  }
+  return primary;
+}

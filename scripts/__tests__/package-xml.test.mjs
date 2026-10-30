@@ -1,8 +1,8 @@
 /**
  * Regression tests for ROS package.xml well-formedness.
  *
- * Pins the agenticros@0.7.19 failure: `--` inside an XML comment
- * (`<!-- ... agenticros up sim-arm --moveit -->`) is rejected by Expat /
+ * Pins the synapse@0.7.19 failure: `--` inside an XML comment
+ * (`<!-- ... synapse up sim-arm --moveit -->`) is rejected by Expat /
  * ament_package_xml / colcon as "not well-formed (invalid token)".
  */
 import { test } from "node:test";
@@ -25,8 +25,8 @@ test("findIllegalXmlCommentDashes: rejects -- inside a comment (0.7.19 case)", (
   const xml = [
     '<?xml version="1.0"?>',
     "<package format=\"3\">",
-    "  <!-- Optional MoveIt2 stack (sim_arm_moveit.launch.py / agenticros up sim-arm --moveit) -->",
-    "  <name>agenticros_sim</name>",
+    "  <!-- Optional MoveIt2 stack (sim_arm_moveit.launch.py / synapse up sim-arm --moveit) -->",
+    "  <name>synapse_sim</name>",
     "</package>",
     "",
   ].join("\n");
@@ -40,7 +40,7 @@ test("findIllegalXmlCommentDashes: allows -- outside comments", () => {
   const xml = [
     '<?xml version="1.0"?>',
     "<package format=\"3\">",
-    "  <description>agenticros up sim-arm [--moveit]</description>",
+    "  <description>synapse up sim-arm [--moveit]</description>",
     "  <!-- Optional MoveIt2 stack for sim_arm_moveit.launch.py -->",
     "</package>",
     "",
@@ -51,7 +51,7 @@ test("findIllegalXmlCommentDashes: allows -- outside comments", () => {
 test("validateRosPackageXmls: reports the illegal comment with a path and line", () => {
   const root = mkdtempSync(join(tmpdir(), "pkg-xml-"));
   try {
-    const pkgDir = join(root, "agenticros_sim");
+    const pkgDir = join(root, "synapse_sim");
     mkdirSync(pkgDir);
     writeFileSync(
       join(pkgDir, "package.xml"),
@@ -75,10 +75,10 @@ test("ros2_ws/src: every package.xml is well-formed", () => {
   assert.deepEqual(failures, [], failures.join("\n"));
 });
 
-test("ros2_ws/src/agenticros_sim/package.xml: no -- inside XML comments", () => {
+test("ros2_ws/src/synapse_sim/package.xml: no -- inside XML comments", () => {
   const files = findPackageXmls(ROS2_SRC);
-  const sim = files.find((p) => p.endsWith(join("agenticros_sim", "package.xml")));
-  assert.ok(sim, "agenticros_sim/package.xml must ship in ros2_ws/src");
+  const sim = files.find((p) => p.endsWith(join("synapse_sim", "package.xml")));
+  assert.ok(sim, "synapse_sim/package.xml must ship in ros2_ws/src");
   const contents = readFileSync(sim, "utf8");
   assert.deepEqual(findIllegalXmlCommentDashes(contents), []);
   // Command-line --moveit is fine in description text; just not in comments.

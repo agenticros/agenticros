@@ -272,7 +272,7 @@ export class RosbridgeClient {
   }
 
   /** Generate a unique message ID. */
-  nextId(prefix = "agenticros"): string {
+  nextId(prefix = "synapse"): string {
     return `${prefix}_${++this.idCounter}`;
   }
 

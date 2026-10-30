@@ -1,5 +1,11 @@
 # Multi-Robot Fleet Patrol Demo
 
+This project was previously known as AgenticROS.
+
+
+This project was previously known as Corebrum Synapse.
+
+
 Manage a fleet of robots performing patrol missions through a single chat interface.
 
 ## Status
@@ -10,7 +16,7 @@ Manage a fleet of robots performing patrol missions through a single chat interf
 
 See **[docs/missions.md](../../docs/missions.md)** for the full orchestration guide. At a high level:
 
-1. Register robots: `agenticros robots add <id> --kind=amr --capabilities=...`
+1. Register robots: `synapse robots add <id> --kind=amr --capabilities=...`
 2. Discover who is online: `ros2_discover_robots` / `ros2_find_robots_for`
 3. Run a patrol-style sequence with `run_mission` — declarative steps or NL goals like *"take a picture then drive forward"*
 4. Cancel in flight: `mission_cancel({ mission_id })`

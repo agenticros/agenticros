@@ -1,6 +1,6 @@
 version: "3.8"
 
-# Mode C: Robot-side — ROS2 + agenticros_agent on the robot.
+# Mode C: Robot-side — ROS2 + synapse_agent on the robot.
 # The agent connects outbound to the signaling server and bridges
 # WebRTC data channel messages to local ROS2 DDS.
 
@@ -10,26 +10,26 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.ros2
-    image: agenticros/ros2:latest
+    image: synapse/ros2:latest
     environment:
       - ROS_DOMAIN_ID=0
       - GAZEBO_MODEL_PATH=/opt/ros/jazzy/share/turtlebot3_gazebo/models
       - TURTLEBOT3_MODEL=burger
     network_mode: host
 
-  # AgenticROS agent node (connects to signaling server, bridges to DDS)
-  agenticros-agent:
+  # Corebrum Synapse agent node (connects to signaling server, bridges to DDS)
+  synapse-agent:
     build:
       context: .
       dockerfile: Dockerfile.ros2
-    image: agenticros/ros2:latest
-    command: ["ros2", "run", "agenticros_agent", "agent_node"]
+    image: synapse/ros2:latest
+    command: ["ros2", "run", "synapse_agent", "agent_node"]
     environment:
       - ROS_DOMAIN_ID=0
-      - AGENTICROS_SIGNALING_URL=${SIGNALING_URL}
-      - AGENTICROS_ROBOT_TOKEN=${ROBOT_TOKEN}
-      - AGENTICROS_ROBOT_KEY=${ROBOT_KEY}
-      - AGENTICROS_ROBOT_ID=${ROBOT_ID}
+      - SYNAPSE_SIGNALING_URL=${SIGNALING_URL}
+      - SYNAPSE_ROBOT_TOKEN=${ROBOT_TOKEN}
+      - SYNAPSE_ROBOT_KEY=${ROBOT_KEY}
+      - SYNAPSE_ROBOT_ID=${ROBOT_ID}
     depends_on:
       - ros2
     network_mode: host

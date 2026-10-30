@@ -1,18 +1,18 @@
-# AgenticROS on NVIDIA NemoClaw
+# Corebrum Synapse on NVIDIA NemoClaw
 
 [NVIDIA NemoClaw](https://github.com/NVIDIA/NemoClaw) packages OpenClaw inside an OpenShell sandbox container with policy-enforced egress and managed inference. This guide covers:
 
 1. **Installing NemoClaw** on a Jetson (or any Linux box).
-2. **Two ways to give the agent access to ROS 2, RealSense, and the AgenticROS plugin:**
-   - **Method A — Hybrid (recommended):** ROS / RealSense / rosbridge on the **host**, only the AgenticROS plugin **inside the sandbox**, bridged over `host.docker.internal:9090`.
-   - **Method B — Full embed:** ROS / RealSense / AgenticROS baked into a custom NemoClaw sandbox image via `nemoclaw onboard --from`.
+2. **Two ways to give the agent access to ROS 2, RealSense, and the Corebrum Synapse plugin:**
+   - **Method A — Hybrid (recommended):** ROS / RealSense / rosbridge on the **host**, only the Corebrum Synapse plugin **inside the sandbox**, bridged over `host.docker.internal:9090`.
+   - **Method B — Full embed:** ROS / RealSense / Corebrum Synapse baked into a custom NemoClaw sandbox image via `nemoclaw onboard --from`.
 3. **Daily commands** — what to type after the install to start, stop, watch logs, redeploy, and chat.
 
 > Method A is the path the rest of this repo's scripts target. Method B is a sketch with a starting-point Dockerfile and the open issues you have to solve (USB passthrough, custom egress policy).
 
 > **Vanilla OpenClaw or Hermes on your laptop?** See **[local-vlm.md](local-vlm.md)** for Ollama setup without NemoClaw. This guide adds sandbox policy, Jetson tuning, and `nemoclaw inference set` on top of that.
 
-> **Jetson Agent Skills** (`SKILL.md` for device diagnostics, memory, LLM serve) are separate from AgenticROS robot skills. Install them with NVIDIA’s catalog or `./install.sh` — see [Jetson Agent Skills](https://www.jetson-ai-lab.com/tutorials/jetson-agent-skills/) and [official maker catalogs](https://www.skills.sh/official). AgenticROS skills still install with `npx agenticros skills install`.
+> **Jetson Agent Skills** (`SKILL.md` for device diagnostics, memory, LLM serve) are separate from Corebrum Synapse robot skills. Install them with NVIDIA’s catalog or `./install.sh` — see [Jetson Agent Skills](https://www.jetson-ai-lab.com/tutorials/jetson-agent-skills/) and [official maker catalogs](https://www.skills.sh/official). Corebrum Synapse skills still install with `npx @corebrum/synapse skills install`.
 
 ## Part 1 — Installing NemoClaw
 
@@ -89,24 +89,24 @@ sandbox@…:/sandbox$ openclaw tui      # local TUI chat (alt to the browser UI)
 
 `Ctrl-C`, `/exit`, then `exit` returns you to the host shell.
 
-At this point the agent has no robot capabilities — it's just `qwen3-vl:8b-instruct` talking to itself. The next part adds AgenticROS, RealSense, and ROS 2.
+At this point the agent has no robot capabilities — it's just `qwen3-vl:8b-instruct` talking to itself. The next part adds Corebrum Synapse, RealSense, and ROS 2.
 
-## Part 2 — Two ways to add ROS 2 + RealSense + AgenticROS
+## Part 2 — Two ways to add ROS 2 + RealSense + Corebrum Synapse
 
-### Method A — Hybrid (host-side ROS, sandbox-side AgenticROS)
+### Method A — Hybrid (host-side ROS, sandbox-side Corebrum Synapse)
 
 #### Why this method
 
 The NemoClaw sandbox image is based on `node:22-trixie-slim` (Debian 13). Official ROS 2 binaries (Humble / Jazzy) are built for Ubuntu, and the librealsense apt repo is keyed to Ubuntu. Embedding the whole stack means either swapping the NemoClaw base for Ubuntu or building both from source for Debian trixie on arm64 — plus arranging USB device passthrough that NemoClaw doesn't expose by default.
 
-The hybrid layout keeps ROS 2 and the RealSense driver on the host (where they already work on Jetson) and only puts the small AgenticROS Node plugin inside the sandbox. NemoClaw's policy model handles this cleanly: a single custom egress preset opens `host.docker.internal:9090` for the OpenClaw `node` binary, and nothing else changes in the base image.
+The hybrid layout keeps ROS 2 and the RealSense driver on the host (where they already work on Jetson) and only puts the small Corebrum Synapse Node plugin inside the sandbox. NemoClaw's policy model handles this cleanly: a single custom egress preset opens `host.docker.internal:9090` for the OpenClaw `node` binary, and nothing else changes in the base image.
 
 ```
 ┌──────────────── host (Jetson / Linux box) ────────────────┐
 │                                                           │
 │   /opt/ros/<distro>   +   librealsense2                   │
 │                                                           │
-│   ros2 launch agenticros_bringup realsense_rosbridge.launch.py
+│   ros2 launch synapse_bringup realsense_rosbridge.launch.py
 │       realsense2_camera   →  /camera/camera/color/image_raw[/compressed]
 │                              /camera/camera/depth/image_rect_raw
 │                              /camera/camera/aligned_depth_to_color/image_raw
@@ -119,8 +119,8 @@ The hybrid layout keeps ROS 2 and the RealSense driver on the host (where they a
                            │   (host.docker.internal:9090)
                            ▼
 ┌───────────────── NemoClaw sandbox ────────────────────────┐
-│   OpenClaw 2026.x   +   @agenticros/agenticros plugin     │
-│   plugins.entries.agenticros.config.rosbridge.url         │
+│   OpenClaw 2026.x   +   @corebrum/synapse plugin     │
+│   plugins.entries.synapse.config.rosbridge.url         │
 │       = ws://host.docker.internal:9090                    │
 └───────────────────────────────────────────────────────────┘
 ```
@@ -130,7 +130,7 @@ The hybrid layout keeps ROS 2 and the RealSense driver on the host (where they a
 For ROS 2 Humble (what's installed on a Jetson Orin with JetPack 6 / Ubuntu 22.04):
 
 ```bash
-# ROS 2 base + the three things AgenticROS needs on the host
+# ROS 2 base + the three things Corebrum Synapse needs on the host
 sudo apt-get install -y \
   ros-humble-ros-base \
   ros-humble-realsense2-camera \
@@ -150,19 +150,19 @@ ros2 pkg list | grep -E 'realsense2|rosbridge|image_transport'
 
 If you're on a different distro (`jazzy` / `iron`), substitute the distro everywhere.
 
-#### A.2 Build the AgenticROS plugin into an offline-ready bundle
+#### A.2 Build the Corebrum Synapse plugin into an offline-ready bundle
 
 The NemoClaw sandbox sets `NPM_CONFIG_OFFLINE=true`, so the plugin needs every workspace dependency materialised on disk before we copy it in. `pnpm deploy --prod` does exactly that.
 
 ```bash
-cd ~/Projects/agenticros
+cd ~/Projects/synapse
 pnpm install
 pnpm build
-rm -rf /tmp/agenticros-deploy
-pnpm --filter @agenticros/agenticros deploy --prod /tmp/agenticros-deploy
+rm -rf /tmp/synapse-deploy
+pnpm --filter @corebrum/synapse deploy --prod /tmp/synapse-deploy
 
 # pnpm leaves a self-reference symlink that docker cp refuses; drop it.
-rm -f /tmp/agenticros-deploy/node_modules/.pnpm/node_modules/@agenticros/agenticros
+rm -f /tmp/synapse-deploy/node_modules/.pnpm/node_modules/@corebrum/synapse
 ```
 
 #### A.3 Copy the bundle into the sandbox
@@ -171,32 +171,32 @@ The OpenShell sandbox is just a Docker container; `docker cp` works. The plugin 
 
 ```bash
 CONTAINER=$(docker ps --format '{{.Names}}' | grep '^openshell-nemo-')
-docker exec "$CONTAINER" rm -rf /sandbox/agenticros
-docker exec "$CONTAINER" mkdir -p /sandbox/agenticros
-docker cp /tmp/agenticros-deploy/. "$CONTAINER:/sandbox/agenticros/"
-docker exec "$CONTAINER" chown -R sandbox:sandbox /sandbox/agenticros
+docker exec "$CONTAINER" rm -rf /sandbox/synapse
+docker exec "$CONTAINER" mkdir -p /sandbox/synapse
+docker cp /tmp/synapse-deploy/. "$CONTAINER:/sandbox/synapse/"
+docker exec "$CONTAINER" chown -R sandbox:sandbox /sandbox/synapse
 ```
 
 #### A.4 Register the plugin with OpenClaw inside the sandbox
 
-`-l` (link) mode skips the npm-install step that would otherwise fail on the offline registry. The CLI writes `plugins.entries.agenticros = { enabled: true }` and `plugins.installs.agenticros = { source: path, sourcePath: /sandbox/agenticros, ... }` into `/sandbox/.openclaw/openclaw.json`.
+`-l` (link) mode skips the npm-install step that would otherwise fail on the offline registry. The CLI writes `plugins.entries.synapse = { enabled: true }` and `plugins.installs.synapse = { source: path, sourcePath: /sandbox/synapse, ... }` into `/sandbox/.openclaw/openclaw.json`.
 
 ```bash
 # HOME=/sandbox is required — without it openclaw writes to /root/.openclaw.
 docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" \
-    openclaw plugins install -l /sandbox/agenticros
+    openclaw plugins install -l /sandbox/synapse
 ```
 
 When the CLI prints the OpenClaw banner and starts spamming `ROS2 transport status: connecting/disconnected`, the plugin is loaded. Hit `Ctrl-C` (or `pkill -f "openclaw plugins"` from another shell).
 
-#### A.5 Add the AgenticROS config block
+#### A.5 Add the Corebrum Synapse config block
 
 Edit the sandbox `openclaw.json` so the plugin knows where rosbridge lives, what your robot's ROS namespace is, and which camera topic to snapshot. Replace `<YOUR_NAMESPACE>` with your robot's namespace (UUID with dashes is fine; many setups also use no-dashes form):
 
 ```bash
 docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" sh -c '
   cd /sandbox/.openclaw && \
-  jq ".plugins.entries.agenticros = {
+  jq ".plugins.entries.synapse = {
     enabled: true,
     config: {
       transport: { mode: \"rosbridge\" },
@@ -214,11 +214,11 @@ docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" sh -c '
 
 #### A.6 Open the host port in NemoClaw's network policy
 
-NemoClaw enforces per-binary egress. Apply the `agenticros-rosbridge` preset that ships with this repo:
+NemoClaw enforces per-binary egress. Apply the `synapse-rosbridge` preset that ships with this repo:
 
 ```bash
-cd ~/Projects/agenticros
-nemoclaw nemo policy-add --from-file scripts/agenticros-rosbridge.policy.yaml --yes
+cd ~/Projects/synapse
+nemoclaw nemo policy-add --from-file scripts/synapse-rosbridge.policy.yaml --yes
 ```
 
 The preset whitelists `host.docker.internal:9090` and `host.openshell.internal:9090` (both resolve to the docker bridge gateway, e.g. `172.19.0.1`) for the OpenClaw `node` process, and uses `access: full, tls: skip` so the OPA proxy treats it as a raw L4 CONNECT tunnel (no HTTP/2 ALPN negotiation, no body inspection) — that's what `ws://` over WebSocket needs.
@@ -231,7 +231,7 @@ To peek at what the gateway is actually running, dump the live policy bundle:
 openshell policy get --full nemo | sed -n '/network_policies:/,/^[a-z_]*:$/p'
 ```
 
-Look for `policy:agenticros_rosbridge engine:opa` in `/var/log/openshell.*.log` inside the sandbox container to confirm allows; look for `engine:ssrf` to spot SSRF denials separately.
+Look for `policy:synapse_rosbridge engine:opa` in `/var/log/openshell.*.log` inside the sandbox container to confirm allows; look for `engine:ssrf` to spot SSRF denials separately.
 
 #### A.7 Restart the sandbox gateway
 
@@ -242,7 +242,7 @@ nemoclaw nemo recover
 `recover` restarts the OpenClaw gateway with the updated config. Verify the plugin picked it up:
 
 ```bash
-docker logs $(docker ps --format '{{.Names}}' | grep '^openshell-nemo-') 2>&1 | grep -i agenticros | tail -5
+docker logs $(docker ps --format '{{.Names}}' | grep '^openshell-nemo-') 2>&1 | grep -i synapse | tail -5
 # Look for: "Connecting to ROS2 via rosbridge transport..." followed by either
 #   - "WebSocket error connecting to ws://host.docker.internal:9090"  (rosbridge not up yet) OR
 #   - "ROS2 transport status: connected"                              (success)
@@ -250,10 +250,10 @@ docker logs $(docker ps --format '{{.Names}}' | grep '^openshell-nemo-') 2>&1 | 
 
 #### A.8 Start the host stack
 
-`scripts/run_nemoclaw_host_stack.sh` sources Humble, sources the local workspace install (building `agenticros_msgs` and `agenticros_bringup` if needed), and runs `agenticros_bringup realsense_rosbridge.launch.py`, which brings up RealSense + rosbridge + a cmd_vel relay.
+`scripts/run_nemoclaw_host_stack.sh` sources Humble, sources the local workspace install (building `synapse_msgs` and `synapse_bringup` if needed), and runs `synapse_bringup realsense_rosbridge.launch.py`, which brings up RealSense + rosbridge + a cmd_vel relay.
 
 ```bash
-cd ~/Projects/agenticros
+cd ~/Projects/synapse
 ./scripts/run_nemoclaw_host_stack.sh humble \
     robot_namespace:=<YOUR_NAMESPACE> \
     align_depth:=true
@@ -277,7 +277,7 @@ Leave the launch running in its own terminal. The gateway log should flip from `
 
 #### A.9 Verify the bridge end-to-end
 
-`scripts/smoke_test_nemoclaw.sh` runs six checks in order — container up, policy loaded with `allowed_ips`, rosbridge bound on `:9090`, last proxy decision was `ALLOWED policy:agenticros_rosbridge`, a live WebSocket call to `/rosapi/topics` through the proxy returns a topic list, and the dashboard HTTP endpoint serves a non-empty body. Run it any time you suspect something has drifted:
+`scripts/smoke_test_nemoclaw.sh` runs six checks in order — container up, policy loaded with `allowed_ips`, rosbridge bound on `:9090`, last proxy decision was `ALLOWED policy:synapse_rosbridge`, a live WebSocket call to `/rosapi/topics` through the proxy returns a topic list, and the dashboard HTTP endpoint serves a non-empty body. Run it any time you suspect something has drifted:
 
 ```bash
 ./scripts/smoke_test_nemoclaw.sh
@@ -287,9 +287,9 @@ A healthy hybrid stack looks like:
 
 ```
 PASS sandbox container: openshell-nemo-<uuid>
-PASS agenticros_rosbridge policy is loaded with allowed_ips (SSRF guard satisfied)
+PASS synapse_rosbridge policy is loaded with allowed_ips (SSRF guard satisfied)
 PASS rosbridge_server is listening on host :9090
-PASS last proxy decision: ALLOWED via agenticros_rosbridge
+PASS last proxy decision: ALLOWED via synapse_rosbridge
 PASS WebSocket roundtrip: {"count":24,"sample":[".../color/image_raw", ...]}
 PASS dashboard at http://127.0.0.1:18790/ returns 2742-byte body
     URL with token: http://127.0.0.1:18790/#token=...
@@ -316,28 +316,28 @@ Then ask the agent things like:
 - "How far is the nearest obstacle in front?" → `ros2_depth_distance`
 - "Drive forward at 0.2 m/s for 1 second, then stop." → `ros2_publish` to `/<namespace>/cmd_vel`
 
-If the model doesn't reach for the tools, prompt it explicitly: *"Use the AgenticROS tools — call `ros2_list_topics` and then `ros2_camera_snapshot`."* Small local models (the 8 B `qwen3-vl:8b-instruct`) sometimes need that nudge on the first turn while the prompt cache is cold; larger or function-tuned models pick it up on their own.
+If the model doesn't reach for the tools, prompt it explicitly: *"Use the Corebrum Synapse tools — call `ros2_list_topics` and then `ros2_camera_snapshot`."* Small local models (the 8 B `qwen3-vl:8b-instruct`) sometimes need that nudge on the first turn while the prompt cache is cold; larger or function-tuned models pick it up on their own.
 
 #### A.11 Updating the plugin after a code change
 
-The plugin lives at `/sandbox/agenticros` in the sandbox, and OpenClaw's `plugins.installs.agenticros.sourcePath` points there, so a redeploy + gateway restart is all that's needed — no `openclaw plugins install` again:
+The plugin lives at `/sandbox/synapse` in the sandbox, and OpenClaw's `plugins.installs.synapse.sourcePath` points there, so a redeploy + gateway restart is all that's needed — no `openclaw plugins install` again:
 
 ```bash
-cd ~/Projects/agenticros
+cd ~/Projects/synapse
 pnpm build
-pnpm --filter @agenticros/agenticros deploy --prod /tmp/agenticros-deploy
-rm -f /tmp/agenticros-deploy/node_modules/.pnpm/node_modules/@agenticros/agenticros
+pnpm --filter @corebrum/synapse deploy --prod /tmp/synapse-deploy
+rm -f /tmp/synapse-deploy/node_modules/.pnpm/node_modules/@corebrum/synapse
 
 CONTAINER=$(docker ps --format '{{.Names}}' | grep '^openshell-nemo-')
-docker exec "$CONTAINER" rm -rf /sandbox/agenticros
-docker cp /tmp/agenticros-deploy/. "$CONTAINER:/sandbox/agenticros/"
-docker exec "$CONTAINER" chown -R sandbox:sandbox /sandbox/agenticros
+docker exec "$CONTAINER" rm -rf /sandbox/synapse
+docker cp /tmp/synapse-deploy/. "$CONTAINER:/sandbox/synapse/"
+docker exec "$CONTAINER" chown -R sandbox:sandbox /sandbox/synapse
 nemoclaw nemo recover
 ```
 
 ### Method B — Full embed (custom NemoClaw sandbox image)
 
-Build a custom sandbox image with ROS 2, RealSense, and AgenticROS baked in, then point NemoClaw at it. Heavier, but gives you a single deployable artifact and no host-side ROS install.
+Build a custom sandbox image with ROS 2, RealSense, and Corebrum Synapse baked in, then point NemoClaw at it. Heavier, but gives you a single deployable artifact and no host-side ROS install.
 
 #### Trade-offs vs. hybrid
 
@@ -347,13 +347,13 @@ Build a custom sandbox image with ROS 2, RealSense, and AgenticROS baked in, the
 | Host install | Needs ROS 2 + RealSense + rosbridge | None — runs only Docker |
 | RealSense USB | Just works (host udev) | Needs `--device /dev/bus/usb` passthrough into the sandbox |
 | Build time | ~10 s plugin redeploy | 30+ min per sandbox image rebuild |
-| Egress policy | One preset (`agenticros-rosbridge.policy.yaml`) | Add presets for `packages.ros.org`, `librealsense.intel.com`, etc., **at build time** to allow apt installs |
+| Egress policy | One preset (`synapse-rosbridge.policy.yaml`) | Add presets for `packages.ros.org`, `librealsense.intel.com`, etc., **at build time** to allow apt installs |
 | Single artifact | No | Yes |
 | Recommended when | Host already runs ROS / robot is the host | Need a portable image with everything embedded |
 
 #### B.1 Author a custom Dockerfile
 
-Start from the NemoClaw base reference at `~/.nemoclaw/source/Dockerfile.base` and overlay ROS + RealSense + AgenticROS. Key things you must preserve from the NemoClaw base:
+Start from the NemoClaw base reference at `~/.nemoclaw/source/Dockerfile.base` and overlay ROS + RealSense + Corebrum Synapse. Key things you must preserve from the NemoClaw base:
 
 - `sandbox` / `gateway` users (uid 998), `/sandbox` workdir.
 - `/sandbox/.openclaw` directory layout with `agents/`, `credentials/`, `plugins/`, `extensions/`, etc.
@@ -361,10 +361,10 @@ Start from the NemoClaw base reference at `~/.nemoclaw/source/Dockerfile.base` a
 - OpenClaw CLI at `/usr/local/bin/openclaw`.
 - `pip install pyyaml==6.0.3`.
 
-A minimal starting point (save somewhere outside the agenticros repo so `nemoclaw onboard --from` can find it):
+A minimal starting point (save somewhere outside the synapse repo so `nemoclaw onboard --from` can find it):
 
 ```dockerfile
-# Custom NemoClaw sandbox image with ROS 2 Humble + RealSense + AgenticROS.
+# Custom NemoClaw sandbox image with ROS 2 Humble + RealSense + Corebrum Synapse.
 # Replaces node:22-trixie-slim with Ubuntu 22.04 so ROS Humble apt packages work.
 
 FROM ubuntu:22.04 AS base
@@ -419,17 +419,17 @@ RUN groupadd -g 1000 gateway && useradd -u 1000 -g 1000 -m -s /bin/bash gateway 
  && groupadd -g 998  sandbox && useradd -u 998  -g 998  -m -d /sandbox -s /bin/bash sandbox \
  && mkdir -p /sandbox/.openclaw && chown -R sandbox:sandbox /sandbox
 
-# --- Pre-bake the AgenticROS plugin -----------------------------------------
-# Run `pnpm --filter @agenticros/agenticros deploy --prod ./agenticros-bundle`
+# --- Pre-bake the Corebrum Synapse plugin -----------------------------------------
+# Run `pnpm --filter @corebrum/synapse deploy --prod ./synapse-bundle`
 # in the build context first, then COPY it in.
-COPY --chown=sandbox:sandbox agenticros-bundle /sandbox/agenticros
+COPY --chown=sandbox:sandbox synapse-bundle /sandbox/synapse
 
 USER sandbox
 WORKDIR /sandbox
 
 # Register the plugin against the sandbox user's openclaw config.
 ENV HOME=/sandbox
-RUN openclaw plugins install -l /sandbox/agenticros || true
+RUN openclaw plugins install -l /sandbox/synapse || true
 
 USER root
 ENTRYPOINT ["/usr/local/bin/nemoclaw-start"]
@@ -468,7 +468,7 @@ If you ever rebuild inside the sandbox (e.g. `apt-get install ros-humble-…`) y
 - `librealsense.intel.com:443`
 - `archive.ubuntu.com:80,443`, `security.ubuntu.com:80,443` (transitive apt deps)
 
-Author the preset the same way `scripts/agenticros-rosbridge.policy.yaml` is structured, then apply with `nemoclaw nemo policy-add --from-file <preset>.yaml --yes`.
+Author the preset the same way `scripts/synapse-rosbridge.policy.yaml` is structured, then apply with `nemoclaw nemo policy-add --from-file <preset>.yaml --yes`.
 
 #### B.5 Configure + use
 
@@ -493,7 +493,7 @@ sandbox@…$ openclaw tui                    # local terminal chat
 nemoclaw nemo logs --follow                # all sandbox stdout/stderr
 nemoclaw nemo logs -n 200                  # last 200 lines, no follow
 docker logs $(docker ps --format '{{.Names}}' | grep '^openshell-nemo-') -f \
-    2>&1 | grep -i agenticros              # just AgenticROS plugin lines
+    2>&1 | grep -i synapse              # just Corebrum Synapse plugin lines
 
 # Restart / recover
 nemoclaw nemo recover                      # restart gateway only (keeps state)
@@ -509,7 +509,7 @@ nemoclaw nemo destroy --yes                # stop + remove sandbox
 
 ```bash
 # Terminal 1 — host ROS stack (RealSense + rosbridge + cmd_vel relay)
-cd ~/Projects/agenticros
+cd ~/Projects/synapse
 ./scripts/run_nemoclaw_host_stack.sh humble \
     robot_namespace:=<YOUR_NAMESPACE> \
     align_depth:=true
@@ -522,20 +522,20 @@ sandbox@…$ openclaw tui
 
 # Terminal 3 — watch the bridge
 docker logs $(docker ps --format '{{.Names}}' | grep '^openshell-nemo-') -f \
-    2>&1 | grep -E "agenticros|ROS2 transport|rosbridge"
+    2>&1 | grep -E "synapse|ROS2 transport|rosbridge"
 
 # One-shot health check — runs 6 assertions (container, policy, rosbridge,
 # proxy decision, live WS roundtrip, dashboard body). Exits 0 if all green.
 ./scripts/smoke_test_nemoclaw.sh
 
 # Plugin redeploy after code change
-cd ~/Projects/agenticros
-pnpm build && pnpm --filter @agenticros/agenticros deploy --prod /tmp/agenticros-deploy
-rm -f /tmp/agenticros-deploy/node_modules/.pnpm/node_modules/@agenticros/agenticros
+cd ~/Projects/synapse
+pnpm build && pnpm --filter @corebrum/synapse deploy --prod /tmp/synapse-deploy
+rm -f /tmp/synapse-deploy/node_modules/.pnpm/node_modules/@corebrum/synapse
 CONTAINER=$(docker ps --format '{{.Names}}' | grep '^openshell-nemo-')
-docker exec "$CONTAINER" rm -rf /sandbox/agenticros
-docker cp /tmp/agenticros-deploy/. "$CONTAINER:/sandbox/agenticros/"
-docker exec "$CONTAINER" chown -R sandbox:sandbox /sandbox/agenticros
+docker exec "$CONTAINER" rm -rf /sandbox/synapse
+docker cp /tmp/synapse-deploy/. "$CONTAINER:/sandbox/synapse/"
+docker exec "$CONTAINER" chown -R sandbox:sandbox /sandbox/synapse
 nemoclaw nemo recover
 ```
 
@@ -562,12 +562,12 @@ sandbox@…$ openclaw tui
 # Inspect current policies
 nemoclaw nemo policy-list
 
-# Add the AgenticROS rosbridge preset (Method A)
-cd ~/Projects/agenticros
-nemoclaw nemo policy-add --from-file scripts/agenticros-rosbridge.policy.yaml --yes
+# Add the Corebrum Synapse rosbridge preset (Method A)
+cd ~/Projects/synapse
+nemoclaw nemo policy-add --from-file scripts/synapse-rosbridge.policy.yaml --yes
 
 # Remove a preset
-nemoclaw nemo policy-remove agenticros-rosbridge --yes
+nemoclaw nemo policy-remove synapse-rosbridge --yes
 
 # Dry-run any policy change
 nemoclaw nemo policy-add --from-file ./mypolicy.yaml --dry-run
@@ -582,9 +582,9 @@ nemoclaw nemo hosts-add my-robot.local 192.168.1.50
 ```bash
 CONTAINER=$(docker ps --format '{{.Names}}' | grep '^openshell-nemo-')
 
-# Show the AgenticROS plugin entry only
+# Show the Corebrum Synapse plugin entry only
 docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" \
-    jq '.plugins.entries.agenticros' /sandbox/.openclaw/openclaw.json
+    jq '.plugins.entries.synapse' /sandbox/.openclaw/openclaw.json
 
 # Show all enabled plugins
 docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" \
@@ -666,7 +666,7 @@ docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" sh -c '
 #    pure overhead. Skip this step if you also want a guaranteed text
 #    description embedded in the tool result text (belt and suspenders).
 docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" sh -c '
-  jq ".plugins.entries.agenticros.config.describer.enabled = false" \
+  jq ".plugins.entries.synapse.config.describer.enabled = false" \
      /sandbox/.openclaw/openclaw.json > /sandbox/.openclaw/openclaw.json.tmp && \
   mv /sandbox/.openclaw/openclaw.json.tmp /sandbox/.openclaw/openclaw.json
 '
@@ -695,7 +695,7 @@ Flow (one user prompt → ~6 minutes wall-clock on the first turn, ~1 minute on 
 user prompt
    │ ~3–4 min prompt processing on cold cache
    ▼
-qwen3-vl:8b-instruct ── tool_calls: [ros2_camera_snapshot] ──▶ agenticros plugin
+qwen3-vl:8b-instruct ── tool_calls: [ros2_camera_snapshot] ──▶ synapse plugin
                                                                     │
                                                           captured JPEG bytes
                                                                     │
@@ -1023,19 +1023,19 @@ docker exec $(docker ps --format '{{.Names}}' | grep '^openshell-nemo-') \
 
 ## Troubleshooting
 
-- **`docker cp` complains `invalid symlink … -> "../../../../../../home/nvidia/Projects/agenticros/..."`** — pnpm leaves a self-reference symlink in `node_modules/.pnpm/node_modules/@agenticros/agenticros` that points back into the source tree. Delete it before `docker cp`:
+- **`docker cp` complains `invalid symlink … -> "../../../../../../home/nvidia/Projects/synapse/..."`** — pnpm leaves a self-reference symlink in `node_modules/.pnpm/node_modules/@corebrum/synapse` that points back into the source tree. Delete it before `docker cp`:
   ```bash
-  rm -f /tmp/agenticros-deploy/node_modules/.pnpm/node_modules/@agenticros/agenticros
+  rm -f /tmp/synapse-deploy/node_modules/.pnpm/node_modules/@corebrum/synapse
   ```
 
 - **`EACCES: permission denied, mkdir '/root/.openclaw/...'`** when running `openclaw plugins install` as the sandbox user — the default `HOME` inherited from `docker exec` is `/root`, not the sandbox user's home. Pass `-e HOME=/sandbox`:
   ```bash
-  docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" openclaw plugins install -l /sandbox/agenticros
+  docker exec -u sandbox -e HOME=/sandbox "$CONTAINER" openclaw plugins install -l /sandbox/synapse
   ```
 
 - **Gateway logs `WebSocket error connecting to ws://host.docker.internal:9090` forever** — four usual causes:
   1. Rosbridge isn't running on the host yet — start `./scripts/run_nemoclaw_host_stack.sh humble …` and check `ss -ltnp | grep 9090` shows it bound to `0.0.0.0:9090`.
-  2. The policy preset wasn't applied — re-run `nemoclaw nemo policy-add --from-file scripts/agenticros-rosbridge.policy.yaml --yes`.
+  2. The policy preset wasn't applied — re-run `nemoclaw nemo policy-add --from-file scripts/synapse-rosbridge.policy.yaml --yes`.
   3. Rosbridge bound to `127.0.0.1` instead of `0.0.0.0` — pass `rosbridge_address:=0.0.0.0` (the default in our launch file).
   4. The policy preset is loaded but missing `allowed_ips` — see the SSRF bullet below.
 
@@ -1049,11 +1049,11 @@ docker exec $(docker ps --format '{{.Names}}' | grep '^openshell-nemo-') \
   docker exec "$CONTAINER" tail -50 /var/log/openshell.$(date +%Y-%m-%d).log | grep host.docker.internal
   ```
   - `engine:opa` with `reason:endpoint host.docker.internal:9090 not in policy 'X'` — the preset isn't loaded at all. Apply it and `nemoclaw nemo recover`.
-  - `engine:ssrf` with `reason:host.docker.internal resolves to internal address 172.19.0.1, connection rejected` — the preset is loaded but the SSRF guard, which runs *in front of* OPA, default-denies private IPs. Add `allowed_ips: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]` to each endpoint in `scripts/agenticros-rosbridge.policy.yaml`, re-apply with `nemoclaw nemo policy-add --yes …`, and verify with `openshell policy get --full nemo | grep -A 12 agenticros_rosbridge`.
+  - `engine:ssrf` with `reason:host.docker.internal resolves to internal address 172.19.0.1, connection rejected` — the preset is loaded but the SSRF guard, which runs *in front of* OPA, default-denies private IPs. Add `allowed_ips: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]` to each endpoint in `scripts/synapse-rosbridge.policy.yaml`, re-apply with `nemoclaw nemo policy-add --yes …`, and verify with `openshell policy get --full nemo | grep -A 12 synapse_rosbridge`.
 
-  The shipped `scripts/agenticros-rosbridge.policy.yaml` already includes both `access: full, tls: skip` (so the proxy makes a raw L4 CONNECT tunnel for `ws://`) and `allowed_ips`. If you regenerate the file by hand, both blocks are required.
+  The shipped `scripts/synapse-rosbridge.policy.yaml` already includes both `access: full, tls: skip` (so the proxy makes a raw L4 CONNECT tunnel for `ws://`) and `allowed_ips`. If you regenerate the file by hand, both blocks are required.
 
-- **`openclaw plugins list` hangs** — listing instantiates plugins, and AgenticROS's reconnect loop keeps it alive. Inspect the registered config directly instead (see "Inspecting the sandbox config" above).
+- **`openclaw plugins list` hangs** — listing instantiates plugins, and Corebrum Synapse's reconnect loop keeps it alive. Inspect the registered config directly instead (see "Inspecting the sandbox config" above).
 
 - **Multimodal primary describes a generic scene instead of the actual frame, and the gateway log contains `tool image omitted: model does not support images`** — OpenClaw's `resolveGatewayModelSupportsImages` checks the active model's `input` array in `/sandbox/.openclaw/openclaw.json → models.providers.inference.models[]`. `nemoclaw inference set` writes `input: ["text"]` for every new model regardless of its actual capabilities, so even after switching to `qwen3-vl:8b-instruct` the gateway thinks it's text-only and filters the image bytes out before the second LLM call. **Fix**: patch the `input` field for the model in *both* the root `openclaw.json` and the per-agent `agents/main/agent/models.json`:
   ```bash
@@ -1138,7 +1138,7 @@ docker exec $(docker ps --format '{{.Names}}' | grep '^openshell-nemo-') \
   ```bash
   ros2 topic info /camera/camera/color/image_raw/compressed
   ```
-  If only `/image_raw` is published, install `ros-<distro>-image-transport-plugins`. If you don't have compressed transport at all, set `robot.cameraTopic` in the sandbox config to `/camera/camera/color/image_raw` (raw); the AgenticROS plugin handles both `Image` and `CompressedImage`.
+  If only `/image_raw` is published, install `ros-<distro>-image-transport-plugins`. If you don't have compressed transport at all, set `robot.cameraTopic` in the sandbox config to `/camera/camera/color/image_raw` (raw); the Corebrum Synapse plugin handles both `Image` and `CompressedImage`.
 
 - **`Sandbox 'connect' does not exist.`** — `nemoclaw connect` (no sandbox name) doesn't work in this CLI version; always use `nemoclaw <name> connect` (e.g. `nemoclaw nemo connect`).
 
@@ -1158,15 +1158,15 @@ docker exec $(docker ps --format '{{.Names}}' | grep '^openshell-nemo-') \
 | OpenClaw config | — | `/sandbox/.openclaw/openclaw.json` |
 | Built-in plugins | — | `/usr/local/lib/node_modules/openclaw/dist/extensions/` |
 | Custom plugin extensions | — | `/sandbox/.openclaw/extensions/<plugin>` |
-| AgenticROS plugin (Method A) | `~/Projects/agenticros/packages/agenticros` | `/sandbox/agenticros` (deploy bundle) |
-| AgenticROS sources | `~/Projects/agenticros/` | — |
+| Corebrum Synapse plugin (Method A) | `~/Projects/synapse/packages/synapse-openclaw` | `/sandbox/synapse` (deploy bundle) |
+| Corebrum Synapse sources | `~/Projects/synapse/` | — |
 | ROS 2 | `/opt/ros/humble/` | (Method B only) |
-| ROS workspace install | `~/Projects/agenticros/ros2_ws/install/` | — |
+| ROS workspace install | `~/Projects/synapse/ros2_ws/install/` | — |
 | librealsense | `/usr/lib/aarch64-linux-gnu/librealsense2.so.*` | (Method B only) |
 | RealSense udev rules | `/lib/udev/rules.d/99-realsense-libusb.rules` | — |
 | Docker daemon config | `/etc/docker/daemon.json` | — |
-| NemoClaw policy preset (this repo) | `~/Projects/agenticros/scripts/agenticros-rosbridge.policy.yaml` | — |
-| Host launch script | `~/Projects/agenticros/scripts/run_nemoclaw_host_stack.sh` | — |
-| Host launch file | `~/Projects/agenticros/ros2_ws/src/agenticros_bringup/launch/realsense_rosbridge.launch.py` | — |
-| Hybrid smoke test | `~/Projects/agenticros/scripts/smoke_test_nemoclaw.sh` | — |
+| NemoClaw policy preset (this repo) | `~/Projects/synapse/scripts/synapse-rosbridge.policy.yaml` | — |
+| Host launch script | `~/Projects/synapse/scripts/run_nemoclaw_host_stack.sh` | — |
+| Host launch file | `~/Projects/synapse/ros2_ws/src/synapse_bringup/launch/realsense_rosbridge.launch.py` | — |
+| Hybrid smoke test | `~/Projects/synapse/scripts/smoke_test_nemoclaw.sh` | — |
 | Sandbox decision log | — | `/var/log/openshell.YYYY-MM-DD.log` (read with `docker exec`) |

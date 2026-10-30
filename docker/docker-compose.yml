@@ -6,7 +6,7 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.ros2
-    image: agenticros/ros2:latest
+    image: synapse/ros2:latest
     ports:
       - "9090:9090"   # rosbridge WebSocket
       - "11311:11311" # ROS master (if needed)
@@ -15,22 +15,22 @@ services:
       - GAZEBO_MODEL_PATH=/opt/ros/jazzy/share/turtlebot3_gazebo/models
       - TURTLEBOT3_MODEL=burger
     networks:
-      - agenticros
+      - synapse
 
-  # AgenticROS plugin (runs within OpenClaw)
-  agenticros:
+  # Corebrum Synapse plugin (runs within OpenClaw)
+  synapse:
     build:
       context: ..
-      dockerfile: docker/Dockerfile.agenticros
-    image: agenticros/plugin:latest
+      dockerfile: docker/Dockerfile.synapse
+    image: synapse/plugin:latest
     environment:
-      - AGENTICROS_TRANSPORT_MODE=rosbridge
-      - AGENTICROS_ROSBRIDGE_URL=ws://ros2:9090
+      - SYNAPSE_TRANSPORT_MODE=rosbridge
+      - SYNAPSE_ROSBRIDGE_URL=ws://ros2:9090
     depends_on:
       - ros2
     networks:
-      - agenticros
+      - synapse
 
 networks:
-  agenticros:
+  synapse:
     driver: bridge

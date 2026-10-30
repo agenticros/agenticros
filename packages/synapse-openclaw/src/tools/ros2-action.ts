@@ -1,0 +1,64 @@
+import { Type } from "../schema.js";
+import type { OpenClawPluginApi } from "../plugin-api.js";
+import type { SynapseConfig } from "@corebrum/core";
+import { toNamespacedTopic, checkActionGoalSafety } from "@corebrum/core";
+import { getTransportForRobot } from "../service.js";
+import { ROBOT_ID_SCHEMA, resolveRobotForTool } from "./_robot-helpers.js";
+
+/**
+ * Register the ros2_action_goal tool with the AI agent.
+ * Sends action goals with progress feedback streaming.
+ */
+export function registerActionTool(api: OpenClawPluginApi, config: SynapseConfig): void {
+  api.registerTool({
+    name: "ros2_action_goal",
+    label: "ROS2 Action Goal",
+    description:
+      "Send a goal to a ROS2 action server and stream feedback. " +
+      "Use this for long-running operations like navigation or arm movements. " +
+      "Pass robot_id (from ros2_list_robots) to target a specific robot.",
+    parameters: Type.Object({
+      action: Type.String({ description: "The ROS2 action server name (e.g., '/navigate_to_pose')" }),
+      actionType: Type.String({ description: "The ROS2 action type (e.g., 'nav2_msgs/action/NavigateToPose')" }),
+      goal: Type.Record(Type.String(), Type.Unknown(), {
+        description: "The action goal parameters",
+      }),
+      ...ROBOT_ID_SCHEMA,
+    }),
+
+    async execute(_toolCallId, params) {
+      const resolved = resolveRobotForTool(config, params);
+      if ("error" in resolved) return resolved.error;
+      const { robot } = resolved;
+
+      const rawAction = params["action"] as string;
+      const action = toNamespacedTopic(robot.namespace, rawAction);
+      const actionType = params["actionType"] as string;
+      const goal = params["goal"] as Record<string, unknown>;
+      const fence = checkActionGoalSafety(config, { goal }, robot);
+      if (fence.block) {
+        return {
+          content: [{ type: "text", text: fence.blockReason ?? "Blocked by safety." }],
+          details: { success: false, error: fence.blockReason },
+        };
+      }
+
+      const transport = await getTransportForRobot(config, robot);
+      const actionResult = await transport.sendActionGoal({
+        action,
+        actionType,
+        args: goal,
+      });
+
+      const result = {
+        success: actionResult.result,
+        action,
+        result: actionResult.values,
+      };
+      return {
+        content: [{ type: "text", text: JSON.stringify(result) }],
+        details: result,
+      };
+    },
+  });
+}

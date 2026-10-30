@@ -1,12 +1,12 @@
 /**
  * RobotInfo heartbeat helpers — Phase 1.d completion.
  *
- * `agenticros_discovery` publishes `<ns>/agenticros/robot_info` at 1 Hz.
+ * `synapse_discovery` publishes `<ns>/synapse/robot_info` at 1 Hz.
  * Consumers treat a robot as online when the last stamp is within
  * {@link DEFAULT_HEARTBEAT_STALENESS_MS} (5 s per strategy memo).
  *
  * Topic-scan path: when adapters only have `listTopics()`, presence of
- * `/<ns>/agenticros/robot_info` on the graph is a weak online signal
+ * `/<ns>/synapse/robot_info` on the graph is a weak online signal
  * (same as cmd_vel). Prefer {@link mergeRobotHeartbeats} when message
  * payloads with stamps are available.
  */
@@ -18,7 +18,7 @@ import type { RobotSensors } from "./robots.js";
 /** Default staleness window — strategy §4(d): 1 Hz + 5 s. */
 export const DEFAULT_HEARTBEAT_STALENESS_MS = 5_000;
 
-/** Parsed robot_info payload (subset of agenticros_msgs/RobotInfo). */
+/** Parsed robot_info payload (subset of synapse_msgs/RobotInfo). */
 export interface RobotHeartbeat {
   /** Stable id (falls back to namespace). */
   id: string;
@@ -42,23 +42,23 @@ export interface HeartbeatOnlineOptions {
 }
 
 /**
- * Extract namespace from `/<ns>/agenticros/robot_info` (or without leading slash).
- * Returns "" for unnamespaced `/agenticros/robot_info`.
+ * Extract namespace from `/<ns>/synapse/robot_info` (or without leading slash).
+ * Returns "" for unnamespaced `/synapse/robot_info`.
  */
 export function namespaceFromRobotInfoTopic(topic: string): string {
-  const m = topic.match(/^\/?([^/]+)\/agenticros\/robot_info$/);
+  const m = topic.match(/^\/?([^/]+)\/synapse\/robot_info$/);
   if (m) return m[1]!;
-  if (topic === "/agenticros/robot_info" || topic === "agenticros/robot_info") return "";
+  if (topic === "/synapse/robot_info" || topic === "synapse/robot_info") return "";
   return "";
 }
 
 /** True when the topic name is a robot_info heartbeat topic. */
 export function isRobotInfoTopic(topic: string): boolean {
-  return /(?:^|\/)agenticros\/robot_info$/.test(topic);
+  return /(?:^|\/)synapse\/robot_info$/.test(topic);
 }
 
 /**
- * Detect namespaces that advertise `agenticros/robot_info` on the topic graph
+ * Detect namespaces that advertise `synapse/robot_info` on the topic graph
  * (no stamp available — treat as online for discovery fallback).
  */
 export function detectHeartbeatNamespacesFromTopics(topics: TopicInfo[]): string[] {

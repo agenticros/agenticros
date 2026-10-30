@@ -8,7 +8,7 @@
 #
 #     ┌──────────────── host (Jetson) ────────────────┐
 #     │  /opt/ros/humble  +  librealsense2            │
-#     │  ros2 launch agenticros_bringup …             │
+#     │  ros2 launch synapse_bringup …             │
 #     │      realsense2_camera   → /camera/camera/*   │
 #     │      rosbridge_server    on 0.0.0.0:9090      │
 #     │      cmd_vel_relay       /<ns>/cmd_vel→/cmd_vel│
@@ -16,7 +16,7 @@
 #                         │  ws on 172.19.0.1:9090
 #                         ▼
 #     ┌──────────── NemoClaw sandbox ─────────────────┐
-#     │  OpenClaw + AgenticROS plugin                 │
+#     │  OpenClaw + Corebrum Synapse plugin                 │
 #     │  rosbridge.url = ws://host.docker.internal:9090│
 #     └───────────────────────────────────────────────┘
 #
@@ -35,9 +35,9 @@ ROS_DISTRO="${1:-humble}"
 shift || true
 
 REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-source "$REPO_ROOT/scripts/lib/agenticros-banner.sh"
-agenticros_banner
-echo "Starting AgenticROS host stack for NemoClaw"
+source "$REPO_ROOT/scripts/lib/synapse-banner.sh"
+synapse_banner
+echo "Starting Corebrum Synapse host stack for NemoClaw"
 echo ""
 SETUP="/opt/ros/${ROS_DISTRO}/setup.bash"
 
@@ -52,10 +52,10 @@ source "$SETUP"
 
 WS_INSTALL="$REPO_ROOT/ros2_ws/install/setup.bash"
 if [[ ! -f "$WS_INSTALL" ]]; then
-  echo "agenticros_bringup not built yet. Building agenticros_msgs + agenticros_bringup …"
+  echo "synapse_bringup not built yet. Building synapse_msgs + synapse_bringup …"
   (
     cd "$REPO_ROOT/ros2_ws"
-    colcon build --packages-select agenticros_msgs agenticros_bringup
+    colcon build --packages-select synapse_msgs synapse_bringup
   )
 fi
 # shellcheck disable=SC1090
@@ -81,11 +81,11 @@ for pkg in rosbridge_server realsense2_camera image_transport_plugins; do
   fi
 done
 
-echo "── agenticros: host stack for NemoClaw ─────────────────────────"
+echo "── synapse: host stack for NemoClaw ─────────────────────────"
 echo "  ROS:        ${ROS_DISTRO}"
 echo "  RealSense:  realsense2_camera (color + depth, aligned)"
 echo "  Rosbridge:  ws://0.0.0.0:9090   (sandbox connects via host.docker.internal:9090)"
 echo "  cmd_vel:    /<robot_namespace>/cmd_vel → /cmd_vel"
 echo "────────────────────────────────────────────────────────────────"
 
-exec ros2 launch agenticros_bringup realsense_rosbridge.launch.py "$@"
+exec ros2 launch synapse_bringup realsense_rosbridge.launch.py "$@"

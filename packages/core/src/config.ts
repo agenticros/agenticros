@@ -152,7 +152,7 @@ const RobotTransportOverrideSchema = z.discriminatedUnion("mode", [
 
 export type RobotTransportOverride = z.infer<typeof RobotTransportOverrideSchema>;
 
-export const AgenticROSConfigSchema = z.object({
+export const SynapseConfigSchema = z.object({
   transport: z
     .object({
       /**
@@ -223,7 +223,7 @@ export const AgenticROSConfigSchema = z.object({
          * robots have a depth camera" without subscribing to topics or
          * inspecting the URDF. All flags default to false — set them
          * explicitly per robot via the CLI (`--sensors=has_realsense`)
-         * or by hand-editing `~/.agenticros/config.json`.
+         * or by hand-editing `~/.synapse/config.json`.
          *
          * The list is intentionally short for Phase 1; expand it as we
          * accumulate seed-catalog skills that depend on a specific
@@ -398,7 +398,7 @@ export const AgenticROSConfigSchema = z.object({
       local: z
         .object({
           /** JSON-on-disk store path. Supports leading "~/". */
-          storePath: z.string().default("~/.agenticros/memory.json"),
+          storePath: z.string().default("~/.synapse/memory.json"),
         })
         .default({}),
       mem0: z
@@ -412,7 +412,7 @@ export const AgenticROSConfigSchema = z.object({
           /** SQLite history db path (mem0 historyDbPath). Supports leading "~/". */
           historyDbPath: z
             .string()
-            .default("~/.agenticros/memory-history.db"),
+            .default("~/.synapse/memory-history.db"),
           /**
            * Embedder passed verbatim to `new Memory({ embedder })`.
            * When omitted, the factory auto-detects: Ollama (if reachable)
@@ -472,29 +472,29 @@ export const AgenticROSConfigSchema = z.object({
   /** Per-skill config. Keys are skill ids (e.g. followme). Each skill validates its own slice. */
   skills: z.record(z.string(), z.unknown()).default({}),
 
-  /** Directories to scan for skill packages (package.json with an `agenticros` block). Resolved at gateway start. */
+  /** Directories to scan for skill packages (package.json with a `synapse` block). Resolved at gateway start. */
   skillPaths: z.array(z.string()).default([]),
 
   /** Npm (or local) package names to load as skills. Resolved via require.resolve from plugin context. */
   skillPackages: z.array(z.string()).default([]),
 
   /**
-   * Marketplace skill refs to auto-fetch into `~/.agenticros/skills-cache/`
-   * (e.g. `agenticros/navigate-to` or `owner/skill@main`). Resolved at
+   * Marketplace skill refs to auto-fetch into `~/.synapse/skills-cache/`
+   * (e.g. `synapse/navigate-to` or `owner/skill@main`). Resolved at
    * adapter startup into effective skillPaths. Never auto-upgrades pins.
    * Distinct from `skills` (per-skill runtime config object).
    */
   skillRefs: z.array(z.string()).default([]),
 });
 
-export type AgenticROSConfig = z.infer<typeof AgenticROSConfigSchema>;
+export type SynapseConfig = z.infer<typeof SynapseConfigSchema>;
 
 /**
  * Parse and validate raw config against the schema.
  * Returns a fully-defaulted, typed config object.
  * Backward compat: if raw.followMe is set, it is merged into raw.skills.followme before parsing.
  */
-export function parseConfig(raw: Record<string, unknown>): AgenticROSConfig {
+export function parseConfig(raw: Record<string, unknown>): SynapseConfig {
   const normalized = { ...raw };
   const followMe = raw.followMe;
   if (followMe !== undefined && followMe !== null && typeof followMe === "object") {
@@ -505,7 +505,7 @@ export function parseConfig(raw: Record<string, unknown>): AgenticROSConfig {
       (normalized as Record<string, unknown>).skills = { ...skills, followme: followMe };
     }
   }
-  return AgenticROSConfigSchema.parse(normalized);
+  return SynapseConfigSchema.parse(normalized);
 }
 
 /**
@@ -515,7 +515,7 @@ export function parseConfig(raw: Record<string, unknown>): AgenticROSConfig {
  * strict plugin configSchema when that field isn't declared yet.
  */
 export function prepareConfigForPersistence(
-  parsed: AgenticROSConfig,
+  parsed: SynapseConfig,
   raw: Record<string, unknown>,
 ): Record<string, unknown> {
   const out = JSON.parse(JSON.stringify(parsed)) as Record<string, unknown>;
@@ -534,7 +534,7 @@ export function prepareConfigForPersistence(
 /**
  * Build TransportConfig from full config for createTransport().
  */
-export function getTransportConfig(config: AgenticROSConfig): TransportConfig {
+export function getTransportConfig(config: SynapseConfig): TransportConfig {
   const mode = config.transport?.mode ?? "local";
   switch (mode) {
     case "rosbridge":

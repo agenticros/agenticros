@@ -1,0 +1,13 @@
+[Unit]
+Description=Corebrum Synapse Hyprland remote desktop
+After=graphical-session.target pipewire.service wireplumber.service xdg-desktop-portal.service
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/synapse desktop --foreground
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target

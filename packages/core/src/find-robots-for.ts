@@ -40,7 +40,7 @@
  * inherited one without inventing fuzzy matching.
  */
 
-import type { AgenticROSConfig } from "./config.js";
+import type { SynapseConfig } from "./config.js";
 import { listAllCapabilities, listCapabilitiesForRobot } from "./capabilities.js";
 import { listRobots, type ResolvedRobot } from "./robots.js";
 
@@ -88,7 +88,7 @@ export interface FindRobotsForResult {
  * non-determinism, no time-of-day effects).
  */
 export function findRobotsFor(
-  config: AgenticROSConfig,
+  config: SynapseConfig,
   query: FindRobotsForQuery,
   onlineIds?: ReadonlySet<string>,
 ): FindRobotsForResult {

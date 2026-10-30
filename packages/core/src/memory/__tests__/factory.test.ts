@@ -23,7 +23,7 @@ test("factory: returns null when memory block omitted entirely", async () => {
 });
 
 test("factory: builds local provider when enabled with backend=local", async () => {
-  const dir = await mkdtemp(path.join(tmpdir(), "agenticros-fac-"));
+  const dir = await mkdtemp(path.join(tmpdir(), "synapse-fac-"));
   try {
     const config = parseConfig({
       memory: {

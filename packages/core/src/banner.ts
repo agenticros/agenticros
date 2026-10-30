@@ -1,4 +1,4 @@
-export interface AgenticROSBannerOptions {
+export interface SynapseBannerOptions {
   color?: boolean;
   tagline?: boolean;
 }
@@ -16,17 +16,17 @@ const LOGO = String.raw`
 /_/   \_\__, |\___|_| |_|\__|_|\___||_| \_\___/|____/
         |___/`;
 
-export function renderAgenticROSBanner(options: AgenticROSBannerOptions = {}): string {
+export function renderSynapseBanner(options: SynapseBannerOptions = {}): string {
   const tagline = options.tagline ?? true;
   if (!options.color) {
-    return tagline ? `${LOGO}\n  AgenticROS - agentic AI for ROS-powered robots` : LOGO;
+    return tagline ? `${LOGO}\n  Corebrum Synapse - agentic AI for ROS-powered robots` : LOGO;
   }
   const coloredLogo = `${ANSI_GREEN}${LOGO}${ANSI_RESET}`;
   return tagline
-    ? `${coloredLogo}\n${ANSI_YELLOW}  AgenticROS${ANSI_RESET} ${ANSI_DIM}- agentic AI for ROS-powered robots${ANSI_RESET}`
+    ? `${coloredLogo}\n${ANSI_YELLOW}  Corebrum Synapse${ANSI_RESET} ${ANSI_DIM}- agentic AI for ROS-powered robots${ANSI_RESET}`
     : coloredLogo;
 }
 
-export function agenticROSBannerLines(options: AgenticROSBannerOptions = {}): string[] {
-  return renderAgenticROSBanner(options).split("\n");
+export function synapseBannerLines(options: SynapseBannerOptions = {}): string[] {
+  return renderSynapseBanner(options).split("\n");
 }

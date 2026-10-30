@@ -3,7 +3,7 @@
  * check-cli-tarball-install.mjs
  *
  * Pre-publish guard that pretends to be a brand-new user on a fresh machine
- * running `npx agenticros init`. Catches the entire class of bugs we hit
+ * running `npx @corebrum/synapse init`. Catches the entire class of bugs we hit
  * across 0.1.2 -> 0.1.5:
  *
  *   * patches/ missing from the published tarball  (0.1.2 ENOENT)
@@ -13,7 +13,7 @@
  *   * etc.
  *
  * Flow:
- *   1. `npm pack` the agenticros CLI into a tmpdir
+ *   1. `npm pack` the synapse CLI into a tmpdir
  *   2. Extract the tarball
  *   3. Sanity-check the extracted tree against CRITICAL_BUNDLE_FILES
  *   4. Copy runtime/ to a sibling install dir (what init.ts does)
@@ -28,7 +28,7 @@
  *   node scripts/check-cli-tarball-install.mjs
  *
  * Skip (e.g. air-gapped CI):
- *   AGENTICROS_SKIP_TARBALL_INSTALL=1 node scripts/check-cli-tarball-install.mjs
+ *   SYNAPSE_SKIP_TARBALL_INSTALL=1 node scripts/check-cli-tarball-install.mjs
  */
 
 import { execSync, spawnSync } from "node:child_process";
@@ -52,9 +52,9 @@ import { validateRosPackageXmls } from "./validate-ros-package-xml.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, "..");
-const CLI_DIR = join(REPO_ROOT, "packages", "agenticros-cli");
+const CLI_DIR = join(REPO_ROOT, "packages", "synapse-cli");
 
-// Mirror of CRITICAL_BUNDLE_FILES in packages/agenticros-cli/src/commands/init.ts.
+// Mirror of CRITICAL_BUNDLE_FILES in packages/synapse-cli/src/commands/init.ts.
 // Keep these in sync (small surface area, low maintenance cost).
 const REQUIRED_RUNTIME_FILES = [
   "patches",
@@ -62,8 +62,8 @@ const REQUIRED_RUNTIME_FILES = [
   "pnpm-workspace.yaml",
   "pnpm-lock.yaml",
   "package.json",
-  "ros2_ws/src/agenticros_sim",
-  "ros2_ws/src/agenticros_sim/urdf/agenticros_amr.urdf.xacro",
+  "ros2_ws/src/synapse_sim",
+  "ros2_ws/src/synapse_sim/urdf/synapse_amr.urdf.xacro",
   "scripts/sim/run_sim.sh",
 ];
 
@@ -103,15 +103,15 @@ function detectPnpm() {
 
 // ---------- main ----------
 
-if (process.env.AGENTICROS_SKIP_TARBALL_INSTALL === "1") {
-  step("AGENTICROS_SKIP_TARBALL_INSTALL=1 set; skipping.");
+if (process.env.SYNAPSE_SKIP_TARBALL_INSTALL === "1") {
+  step("SYNAPSE_SKIP_TARBALL_INSTALL=1 set; skipping.");
   process.exit(0);
 }
 
 const pnpmVer = detectPnpm();
 step(`Using pnpm ${pnpmVer}`);
 
-const work = mkdtempSync(join(tmpdir(), "agenticros-tarball-test-"));
+const work = mkdtempSync(join(tmpdir(), "synapse-tarball-test-"));
 const packDir = join(work, "pack");
 const extractDir = join(work, "extract");
 const installDir = join(work, "install");
@@ -144,7 +144,7 @@ try {
   ok(`Extracted to ${pkgDir}`);
 
   // 3a. published package.json must not contain pnpm workspace: protocol
-  // (npm / npx consumers cannot resolve workspace:* — broke agenticros@0.4.0).
+  // (npm / npx consumers cannot resolve workspace:* — broke synapse@0.4.0).
   step("Checking published package.json has no workspace: dependencies...");
   const publishedPkg = JSON.parse(
     readFileSync(join(pkgDir, "package.json"), "utf8"),
@@ -162,7 +162,7 @@ try {
   if (badDeps.length > 0) {
     fail(
       `Published package.json still has workspace: protocol (npm cannot install this):\n    ${badDeps.join("\n    ")}\n` +
-        `Use a semver range against the published @agenticros/core (e.g. "^0.7.0").`,
+        `Use a semver range against the published @corebrum/core (e.g. "^0.7.0").`,
     );
     process.exit(1);
   }
@@ -180,8 +180,8 @@ try {
   ok(`All ${REQUIRED_RUNTIME_FILES.length} critical runtime files present.`);
 
   // 3b. every shipped package.xml must be well-formed XML (no `--` in comments).
-  // agenticros@0.7.19 shipped `<!-- ... --moveit -->` and colcon/Expat
-  // rejected it after `npx agenticros init` refreshed the install from the bundle.
+  // synapse@0.7.19 shipped `<!-- ... --moveit -->` and colcon/Expat
+  // rejected it after `npx @corebrum/synapse init` refreshed the install from the bundle.
   step("Validating shipped ros2_ws package.xml manifests...");
   const shippedRosSrc = join(runtimeInTar, "ros2_ws", "src");
   const xmlReport = validateRosPackageXmls(shippedRosSrc);
@@ -197,7 +197,7 @@ try {
   ok(`${xmlReport.files.length} shipped package.xml manifest(s) are well-formed.`);
 
   // 4. simulate init: cp -a runtime/. installDir/
-  step("Copying runtime/ into a fresh install dir (simulating `agenticros init`)...");
+  step("Copying runtime/ into a fresh install dir (simulating `synapse init`)...");
   run("cp", ["-a", `${runtimeInTar}/.`, installDir]);
   ok(`Install dir populated at ${installDir}`);
 

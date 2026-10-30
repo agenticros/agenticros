@@ -1,9 +1,15 @@
 # Dock To Charger (OpenNav)
 
-Canonical package: **[@agenticros/dock-to-charger](https://www.npmjs.com/package/@agenticros/dock-to-charger)** · [GitHub](https://github.com/agenticros/agenticros-skill-dock-to-charger).
+This project was previously known as AgenticROS.
+
+
+This project was previously known as Corebrum Synapse.
+
+
+Canonical package: **[@corebrum/dock-to-charger](https://www.npmjs.com/package/@corebrum/dock-to-charger)** · [GitHub](https://github.com/Corebrum/corebrum-skill-dock-to-charger).
 
 ```bash
-npx agenticros skills install @agenticros/dock-to-charger
+npx @corebrum/synapse skills install @corebrum/dock-to-charger
 # or: chrismatthieu/dock-to-charger
 ```
 

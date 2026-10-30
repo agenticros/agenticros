@@ -1,7 +1,7 @@
 /**
  * Unit tests for the local JSON-on-disk memory backend.
  *
- * Run via `pnpm --filter @agenticros/core test` (after build).
+ * Run via `pnpm --filter @corebrum/core test` (after build).
  * Uses Node's built-in node:test runner — no extra deps.
  */
 import { test } from "node:test";
@@ -15,7 +15,7 @@ import { LocalMemoryProvider } from "../local/provider.js";
 async function withTempStore<T>(
   fn: (provider: LocalMemoryProvider, dir: string) => Promise<T>,
 ): Promise<T> {
-  const dir = await mkdtemp(path.join(tmpdir(), "agenticros-mem-test-"));
+  const dir = await mkdtemp(path.join(tmpdir(), "synapse-mem-test-"));
   const storePath = path.join(dir, "memory.json");
   const provider = new LocalMemoryProvider({ storePath });
   try {

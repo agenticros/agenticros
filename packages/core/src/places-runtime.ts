@@ -2,7 +2,7 @@
  * Runtime helpers for named-place tools (pose snapshot + Nav2 dispatch).
  */
 
-import type { AgenticROSConfig } from "./config.js";
+import type { SynapseConfig } from "./config.js";
 import { listCapabilitiesForRobot, type Capability } from "./capabilities.js";
 import { executeExternalCapability } from "./external-capability.js";
 import { activeMap } from "./maps.js";
@@ -83,12 +83,12 @@ export async function savePlaceFromArgs(
   });
 }
 
-export function findNavigateToCapability(config: AgenticROSConfig, robotId?: string): Capability | undefined {
+export function findNavigateToCapability(config: SynapseConfig, robotId?: string): Capability | undefined {
   return listCapabilitiesForRobot(config, robotId).find((c) => c.id === "navigate_to");
 }
 
 export async function executeNavigateToPlace(
-  config: AgenticROSConfig,
+  config: SynapseConfig,
   robot: ResolvedRobot,
   name: string,
   transport: RosTransport,
@@ -105,8 +105,8 @@ export async function executeNavigateToPlace(
   if (!cap || cap.implementation?.kind !== "external_ros_node") {
     return {
       text:
-        "navigate_to is not installed. Run `agenticros skills install --bundle mapping` " +
-        "(or `agenticros skills install @agenticros/navigate-to`) and restart the agent.",
+        "navigate_to is not installed. Run `synapse skills install --bundle mapping` " +
+        "(or `synapse skills install @corebrum/navigate-to`) and restart the agent.",
       isError: true,
     };
   }
