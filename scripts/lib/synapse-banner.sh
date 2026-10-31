@@ -16,13 +16,16 @@ synapse_banner() {
     dim="$(tput dim || true)"
   fi
 
-  cat <<EOF
-${green}    _                     _   _       ____   ___  ____
-   / \   __ _  ___ _ __ | |_(_) ___ |  _ \ / _ \/ ___|
-  / _ \ / _\` |/ _ \ '_ \| __| |/ __|| |_) | | | \___ \\
- / ___ \ (_| |  __/ | | | |_| | (__ |  _ <| |_| |___) |
-/_/   \_\__, |\___|_| |_|\__|_|\___||_| \_\\___/|____/
-        |___/${reset}
-${yellow}  Corebrum Synapse${reset} ${dim}- agentic AI for ROS-powered robots${reset}
+  printf '%s' "$green"
+  cat <<'EOF'
+  ____                                   
+ / ___| _   _ _ __   __ _ _ __  ___  ___ 
+ \___ \| | | | '_ \ / _` | '_ \/ __|/ _ \
+  ___) | |_| | | | | (_| | |_) \__ \  __/
+ |____/ \__, |_| |_|\__,_| .__/|___/\___|
+        |___/            |_|             
 EOF
+  printf '%s\n' "$reset"
+  printf '%s  Corebrum Synapse%s %s- agentic AI for ROS-powered robots%s\n' \
+    "$yellow" "$reset" "$dim" "$reset"
 }

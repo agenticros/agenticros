@@ -45,9 +45,9 @@ import {
 import { registerCommand } from "./commands/register.js";
 import { mapsCommand } from "./commands/maps.js";
 import { remoteControlInteractive } from "./commands/remote.js";
-import { publicCatalog } from "@corebrum/core";
+import { publicCatalog, renderSynapseBanner } from "@corebrum/core";
 import { CLOUD_REST, getApiToken } from "./util/robot-cloud-config.js";
-import { header, info, isTty, dim, ok } from "./util/logger.js";
+import { info, isTty, dim, ok } from "./util/logger.js";
 import { readState, formatAge } from "./util/state.js";
 import { listSkills } from "./util/skills.js";
 
@@ -68,7 +68,7 @@ export async function runMenu(): Promise<void> {
     return;
   }
 
-  header("Corebrum Synapse - agentic AI for ROS-powered robots");
+  process.stdout.write(renderSynapseBanner({ color: isTty }) + "\n\n");
 
   while (true) {
     const shouldExit = await runMenuOnce();
