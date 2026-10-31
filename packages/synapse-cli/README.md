@@ -34,7 +34,7 @@ synapse down
 | Method | Command |
 |--------|---------|
 | One-off | `npx @corebrum/synapse …` |
-| Global | `npm install -g @corebrum/synapse` (or `pnpm add -g synapse`) |
+| Global | `npm install -g @corebrum/synapse` |
 | Contributor | Clone the monorepo, `pnpm install && pnpm build`, run `./synapse` |
 
 Requires **Node.js ≥ 20**. Real robot / sim also need **ROS 2** Humble or Jazzy.

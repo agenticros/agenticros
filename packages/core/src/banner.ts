@@ -9,12 +9,12 @@ const ANSI_DIM = "\x1b[2m";
 const ANSI_RESET = "\x1b[0m";
 
 const LOGO = String.raw`
-    _                     _   _       ____   ___  ____
-   / \   __ _  ___ _ __ | |_(_) ___ |  _ \ / _ \/ ___|
-  / _ \ / _` + "`" + String.raw` |/ _ \ '_ \| __| |/ __|| |_) | | | \___ \
- / ___ \ (_| |  __/ | | | |_| | (__ |  _ <| |_| |___) |
-/_/   \_\__, |\___|_| |_|\__|_|\___||_| \_\___/|____/
-        |___/`;
+  ____                                   
+ / ___| _   _ _ __   __ _ _ __  ___  ___ 
+ \___ \| | | | '_ \ / _` + "`" + String.raw` | '_ \/ __|/ _ \
+  ___) | |_| | | | | (_| | |_) \__ \  __/
+ |____/ \__, |_| |_|\__,_| .__/|___/\___|
+        |___/            |_|             `;
 
 export function renderSynapseBanner(options: SynapseBannerOptions = {}): string {
   const tagline = options.tagline ?? true;

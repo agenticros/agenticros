@@ -1,6 +1,6 @@
 {
   "name": "@corebrum/core",
-  "version": "0.8.15",
+  "version": "0.8.16",
   "type": "module",
   "description": "Corebrum Synapse core — platform-agnostic ROS2 transport, types, and config (the dep every Corebrum Synapse skill imports).",
   "keywords": [

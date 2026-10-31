@@ -238,7 +238,7 @@ function writeBundleManifest() {
   const manifestPath = join(RUNTIME_DIR, "BUNDLE.json");
   const manifest = {
     packedAt: new Date().toISOString(),
-    repo: "https://github.com/PlaiPin/synapse",
+    repo: "https://github.com/Corebrum/corebrum-synapse",
     note: "This directory is a snapshot of the synapse monorepo source. `synapse init` will copy it to ~/synapse and run pnpm install + colcon build there.",
     layout: {
       scripts: "scripts/",

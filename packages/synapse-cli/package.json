@@ -1,6 +1,6 @@
 {
   "name": "@corebrum/synapse",
-  "version": "0.7.38",
+  "version": "0.7.39",
   "type": "module",
   "description": "Corebrum Synapse - agentic AI for ROS-powered robots. Single CLI to launch real-robot or simulated demos, manage configuration, and inspect status.",
   "keywords": [
@@ -46,7 +46,7 @@
     "prepublishOnly": "pnpm run clean && pnpm run build && pnpm run pack:runtime && pnpm run size:check && pnpm run tarball:check"
   },
   "dependencies": {
-    "@corebrum/core": "workspace:*",
+    "@corebrum/core": "^0.8.16",
     "@inquirer/prompts": "^7.0.0",
     "commander": "^12.1.0",
     "configstore": "^7.0.0",
