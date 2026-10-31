@@ -13,7 +13,7 @@
  *   * etc.
  *
  * Flow:
- *   1. `npm pack` the synapse CLI into a tmpdir
+ *   1. `pnpm pack` the synapse CLI into a tmpdir (rewrites workspace: deps)
  *   2. Extract the tarball
  *   3. Sanity-check the extracted tree against CRITICAL_BUNDLE_FILES
  *   4. Copy runtime/ to a sibling install dir (what init.ts does)
@@ -120,9 +120,10 @@ mkdirSync(extractDir);
 mkdirSync(installDir);
 
 try {
-  // 1. npm pack
-  step("npm pack...");
-  const packResult = run("npm", ["pack", "--pack-destination", packDir, "--silent"], {
+  // 1. pnpm pack rewrites workspace:* to the workspace package version.
+  // npm pack leaves the protocol in place, which this check then rejects.
+  step("pnpm pack...");
+  run("pnpm", ["pack", "--pack-destination", packDir], {
     cwd: CLI_DIR,
   });
   const tgz = readdirSync(packDir).find((f) => f.endsWith(".tgz"));
